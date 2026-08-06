@@ -102,7 +102,7 @@ I test 36–38 sono definiti su `voidAssignment`: l'undo è stato eliminato dal 
   Verifica: il documento esiste, descrive tutto ciò che è stato costruito in Fase 0, niente elenchi di file.
   Dipende: F0-08
 
-- [ ] **F0-16 — GATE Fase 0**
+- [x] **F0-16 — GATE Fase 0**
   Verifica dei criteri ✅ del piano: login Google funzionante, `display_name` obbligatorio al primo accesso. Aggiorna la riga "Fase corrente" in `CLAUDE.md`.
   Verifica: entrambi i criteri dimostrati manualmente; `pnpm test` e `pnpm lint` verdi.
   Dipende: tutti i F0-*
@@ -114,7 +114,7 @@ I test 36–38 sono definiti su `voidAssignment`: l'undo è stato eliminato dal 
 
 ---
 
-## Fase 1 — Setup asta
+## Fase 1 — Setup asta - "Fase corrente"
 
 - [ ] **F1-01 — Schema Drizzle completo**
   Tutte le tabelle di §3 (auctions, members, invites, players, lots, lot_rounds, round_eligibility, bids, assignments, ledger, events) con indici unici parziali `one_open_lot_per_auction` e `one_owner_per_player`, indice auto-pick su players, colonna `include_out_of_list` su auctions ⚠ P7.
