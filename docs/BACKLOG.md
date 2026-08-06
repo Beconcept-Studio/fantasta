@@ -32,72 +32,72 @@ I test 36–38 sono definiti su `voidAssignment`: l'undo è stato eliminato dal 
   Verifica: i nomi canonici esistono su disco; i riferimenti incrociati nei due file restano validi.
   Dipende: — *(fatto in kickoff, 2026-08-06)*
 
-- [ ] **F0-02 — Scaffold Next.js 15**
+- [x] **F0-02 — Scaffold Next.js 15**
   App Router, TypeScript strict, `output: 'standalone'`, pnpm.
   Verifica: `pnpm dev` serve una pagina senza errori né warning di build.
   Dipende: —
 
-- [ ] **F0-03 — Tailwind + shadcn/ui**
+- [x] **F0-03 — Tailwind + shadcn/ui**
   Init shadcn con Tailwind e un componente di prova (Button) in una pagina.
   Verifica: il Button shadcn renderizza con gli stili corretti in `pnpm dev`.
   Dipende: F0-02
 
-- [ ] **F0-04 — Postgres in Docker**
+- [x] **F0-04 — Postgres in Docker**
   `docker-compose.yml` come da §15 (postgres:16-alpine, volume, porta 5432).
   Verifica: `docker compose up -d` e connessione psql al db `asta` riuscita.
   Dipende: —
 
-- [ ] **F0-05 — Drizzle + schema `users` + `db:push`**
+- [x] **F0-05 — Drizzle + schema `users` + `db:push`**
   Setup drizzle-kit, tabella `users` (§3) con `google_sub UNIQUE`, script `pnpm db:push`.
   Verifica: `\d users` mostra tutte le colonne di §3; push idempotente.
   Dipende: F0-02, F0-04
 
-- [ ] **F0-06 — Auth.js v5 con Google** ⚠ P17
+- [x] **F0-06 — Auth.js v5 con Google** ⚠ P17
   Provider Google, session strategy JWT (nessuna tabella adapter), upsert utente su `google_sub` al login.
   Verifica: login Google su localhost crea la riga `users` al primo accesso e la riusa al secondo; lo stesso account loggato su due dispositivi vede gli stessi dati.
   Dipende: F0-05
 
-- [ ] **F0-07 — Onboarding `display_name` obbligatorio**
+- [x] **F0-07 — Onboarding `display_name` obbligatorio**
   Utente senza `display_name` viene rediretto a un form nome+cognome prima di qualsiasi altra pagina.
   Verifica: nuovo utente non raggiunge `/dashboard` finché non compila; dopo il salvataggio sì.
   Dipende: F0-06
 
-- [ ] **F0-08 — Credentials provider `dev`**
+- [x] **F0-08 — Credentials provider `dev`**
   Provider `dev` registrato solo con `NODE_ENV !== 'production'`; pagina signin in dev mostra "Entra come <utente seeded>".
   Verifica: un click su un utente seeded apre una sessione valida senza Google.
   Dipende: F0-06, F0-12
 
-- [ ] **F0-09 — Test: provider `dev` assente in produzione**
+- [x] **F0-09 — Test: provider `dev` assente in produzione**
   Test automatico che con `NODE_ENV=production` la lista provider non contiene `dev` (§15).
   Verifica: test verde in `pnpm test`.
   Dipende: F0-08, F0-10
 
-- [ ] **F0-10 — Vitest con fake timers**
+- [x] **F0-10 — Vitest con fake timers**
   Config Vitest, `vi.useFakeTimers()` nel setup condiviso, script `pnpm test`.
   Verifica: un test di esempio che avanza timer finti passa; nessun `sleep` reale.
   Dipende: F0-02
 
-- [ ] **F0-11 — Regola ESLint su `lib/db`**
+- [x] **F0-11 — Regola ESLint su `lib/db`**
   Import di `lib/db` vietato fuori da `lib/engine/**` (`no-restricted-imports` o eslint-plugin-boundaries).
   Verifica: file di prova che importa `lib/db` da `components/` fa fallire `pnpm lint`; da `lib/engine/` passa.
   Dipende: F0-02
 
-- [ ] **F0-12 — Seed base: 12 utenti**
+- [x] **F0-12 — Seed base: 12 utenti**
   `pnpm db:seed` crea 12 utenti fittizi con nome e cognome; parsing del flag `--auction-status` presente (gli stati non ancora generabili falliscono con messaggio chiaro).
   Verifica: seed idempotente; 12 righe in `users`; `--auction-status=live` stampa "non ancora supportato".
   Dipende: F0-05
 
-- [ ] **F0-13 — Script `dev:lan`**
+- [x] **F0-13 — Script `dev:lan`**
   `next dev -H 0.0.0.0` per test da telefono in LAN.
   Verifica: app raggiungibile da `http://<ip-lan>:3000` da un secondo dispositivo.
   Dipende: F0-02
 
-- [ ] **F0-14 — RUNBOOK: sviluppo locale**
+- [x] **F0-14 — RUNBOOK: sviluppo locale**
   Sezione "come far girare l'app in locale" in `docs/RUNBOOK.md` (docker, push, seed, dev, login dev).
   Verifica: seguendo solo il runbook da checkout pulito si arriva a una sessione loggata.
   Dipende: F0-08
 
-- [ ] **F0-15 — ARCHITECTURE: prima stesura**
+- [x] **F0-15 — ARCHITECTURE: prima stesura**
   `docs/ARCHITECTURE.md` in prosa: stack, perché un solo processo Node, com'è organizzata l'auth (incluso il provider dev).
   Verifica: il documento esiste, descrive tutto ciò che è stato costruito in Fase 0, niente elenchi di file.
   Dipende: F0-08
@@ -106,6 +106,11 @@ I test 36–38 sono definiti su `voidAssignment`: l'undo è stato eliminato dal 
   Verifica dei criteri ✅ del piano: login Google funzionante, `display_name` obbligatorio al primo accesso. Aggiorna la riga "Fase corrente" in `CLAUDE.md`.
   Verifica: entrambi i criteri dimostrati manualmente; `pnpm test` e `pnpm lint` verdi.
   Dipende: tutti i F0-*
+  *Stato al 2026-08-07: `pnpm test`, `pnpm lint`, `pnpm typecheck` e `pnpm build` verdi; il
+  cancello dell'onboarding è stato dimostrato end-to-end col provider `dev` (utente senza
+  `display_name` → `/` e `/dashboard` rimandano a `/onboarding`; scritto il nome, `/dashboard`
+  si apre e `/onboarding` rimanda indietro). **Resta il login con un account Google vero, che
+  deve fare l'owner**: fatto quello, spunta questo task e aggiorna la riga "Fase corrente".*
 
 ---
 

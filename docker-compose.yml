@@ -1,0 +1,24 @@
+# Postgres in Docker, app sull'host (PLAN §15): HMR più veloce e debug diretto.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fantasta-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: asta
+    ports:
+      # 5433 sull'host, non 5432: sulla macchina di sviluppo c'è già un altro
+      # Postgres di un altro progetto su 5432. Dentro il container la porta
+      # resta quella standard. Vedi docs/DECISIONS.md (2026-08-07).
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d asta"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

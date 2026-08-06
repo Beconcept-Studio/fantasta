@@ -21,7 +21,7 @@ inventando: annota la domanda e aspetta. Un'assunzione silenziosa qui costa un'a
 
 ## Fase corrente
 
-> **FASE 0 — Scaffold**
+> **FASE 0 — Scaffold** · codice completo, gate in attesa del login Google manuale dell'owner (F0-16).
 > Aggiorna questa riga a ogni passaggio di fase.
 
 Le fasi sono cancelli sequenziali (`docs/PLAN.md` §11). Non si apre una fase finché tutti i
@@ -74,8 +74,8 @@ radicalmente la concorrenza. Se pensi che serva altro, chiedi prima.
 
 ```bash
 pnpm dev                  # app in sviluppo
-pnpm dev:lan              # next dev -H 0.0.0.0, per testare da telefono
-docker compose up -d      # postgres
+pnpm dev:lan              # come sopra ma raggiungibile dal telefono in LAN (stampa l'URL)
+docker compose up -d      # postgres (host: porta 5433, vedi DECISIONS 2026-08-07)
 pnpm db:push              # applica lo schema drizzle
 pnpm db:seed              # utenti, listone, aste di prova
 pnpm db:seed -- --auction-status=mid   # asta LIVE già a metà

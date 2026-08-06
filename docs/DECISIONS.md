@@ -91,3 +91,63 @@ budget per-membro. Le uniche variazioni individuali passano dal `ledger` (rettif
 idoneo è il chiamante, non si attende `bid_seconds`: il lotto passa direttamente a LOT_REVEAL,
 assegnato a 1 (comportamento coperto dal test §12.41). Motivazione: a fine ruolo questi lotti
 possono essere molti di fila; countdown dall'esito già scritto sono minuti persi in diretta.
+
+---
+
+## 2026-08-07 — Fase 0, scaffold
+
+**Postgres su porta 5433, non 5432.** `docker-compose.yml` mappa `5433:5432` invece del
+`5432:5432` di PLAN §15. Motivazione: sulla macchina di sviluppo la 5432 è già occupata dal
+Postgres di un altro progetto, e `docker compose up` falliva. Dentro il container la porta resta
+quella standard; cambia solo `DATABASE_URL`. In produzione la questione non esiste.
+
+**Eccezioni esplicite alla regola ESLint su `lib/db`.** La regola vieta l'import di `lib/db`
+dappertutto tranne da un elenco enumerato in `eslint.config.mjs`: `lib/db/**`, `lib/engine/**`,
+`lib/auth.ts`, `scripts/**`, `drizzle.config.ts`, `tests/**`. Motivazione: la lettera della
+regola ("solo da `lib/engine/**`") è incompatibile con PLAN §15, che mostra `lib/auth.ts` che
+interroga il database, e col seed di §15 che deve scriverci. L'intento della regola sono le
+regole 3 e 4, cioè lo **stato dell'asta**: è da `app/**` e `components/**` che la scorciatoia
+farebbe danno, e lì il divieto è pieno e verificato. Ogni eccezione è una riga di elenco, quindi
+aggiungerne una si vede nel diff.
+
+**Tutti gli accessi alla tabella `users` in `lib/auth.ts`.** Compreso `setDisplayName`, che è una
+scrittura di profilo e non di autenticazione. Motivazione: PLAN §10 non prevede un `lib/users.ts`,
+e le quattro operazioni sulla tabella (upsert da Google, rilettura per la sessione, scrittura del
+nome, lista degli utenti dev) sono tutte al servizio dell'identità. Un modulo in più sarebbe
+un'astrazione prima del secondo chiamante (regola 8).
+
+**`display_name` non viene mai preso dal profilo Google.** All'upsert resta `NULL` e lo scrive
+l'utente nell'onboarding; il nome Google serve solo a precompilare il campo. Motivazione: PLAN §2
+richiede che nome e cognome siano compilati al primo accesso, e se li deducessimo da Google il
+cancello dell'onboarding non scatterebbe mai — il criterio ✅ della Fase 0 sarebbe indimostrabile.
+
+**`google_sub NULL` distingue gli utenti di prova.** Gli utenti creati dal seed non hanno
+`google_sub`; è il filtro con cui la pagina di login costruisce la lista "Entra come …" e la
+condizione che il provider `dev` verifica prima di aprire una sessione (un account Google vero non
+è impersonabile). L'indice unico su `google_sub` ammette più NULL, quindi non serve altro.
+
+**Nessun `middleware.ts` in Fase 0.** Il cancello dell'onboarding è una guardia server-side
+(`requireUser()`) chiamata dalle pagine, non un middleware. Motivazione: il middleware girerebbe
+su runtime edge, dove `node-postgres` non esiste; farlo funzionare richiederebbe di spezzare la
+configurazione Auth.js in due file, o il runtime Node sperimentale. La guardia nelle pagine dà lo
+stesso risultato osservabile.
+
+**Sessione JWT: nel token solo l'id utente.** Nome e `is_admin` si rileggono dal database a ogni
+richiesta (`currentUser()`), non si portano nel token. Motivazione: è la ratifica pratica di P17 —
+lo stesso account su due dispositivi vede le stesse informazioni, e il nome scritto
+nell'onboarding ha effetto subito senza rifare il login.
+
+**`pnpm dev:lan` è uno script, non `next dev -H 0.0.0.0`.** Con Next in ascolto su `0.0.0.0`
+l'URL che arriva ai route handler ha per host `0.0.0.0`, e Auth.js ci costruisce sopra i redirect:
+dal telefono, dopo il login, si finisce su `http://0.0.0.0:3000/`, che non esiste.
+`scripts/dev-lan.ts` trova l'IP di LAN, lo passa come `AUTH_URL` e lo stampa a video. Motivazione:
+il collaudo da telefono vero è un criterio di chiusura della Fase 5, e questo bug si sarebbe
+manifestato proprio lì.
+
+**`vitest` fissato a `~4.0.6`.** La 4.1 tira `vite@8.2`, che dipende da un `lightningcss` non
+ancora pubblicato: `pnpm install` fallisce. La 4.0 usa `vite@7` e non ha il problema. Da
+rimuovere quando la catena a monte si sistema.
+
+**`drizzle-kit` con `strict: false`.** Con `strict: true` `pnpm db:push` chiede conferma statement
+per statement e serve un TTY, quindi non è usabile da script. `verbose` resta attivo: l'SQL si
+vede comunque prima di essere eseguito.

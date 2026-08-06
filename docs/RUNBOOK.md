@@ -78,7 +78,90 @@ tenere a mente questa tabella.
 
 ## Sviluppo locale
 
-*(Sezione da compilare in Fase 0, task F0-14: docker, db:push, seed, dev, login dev.)*
+### Da checkout pulito a sessione loggata
+
+Servono **Node 20+**, **pnpm** e **Docker Desktop acceso**. Cinque comandi:
+
+```bash
+pnpm install
+cp .env.example .env          # poi apri .env e riempilo, vedi sotto
+docker compose up -d          # Postgres 16 su localhost:5433
+pnpm db:push                  # crea le tabelle
+pnpm db:seed                  # 12 utenti di prova
+pnpm dev                      # http://localhost:3000
+```
+
+Apri `http://localhost:3000`: vieni rediretto a `/signin`, dove sotto il pulsante Google c'è la
+lista **"Entra come …"** con i 12 utenti seeded. Un click e sei dentro. È tutto.
+
+### Cosa mettere in `.env`
+
+`.env.example` è il modello con i commenti. I quattro valori che contano:
+
+| Variabile | Da dove viene |
+|---|---|
+| `DATABASE_URL` | Già giusta nell'esempio: `postgres://postgres:dev@localhost:5433/asta` |
+| `AUTH_SECRET` | Generala: `openssl rand -base64 32` |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google Cloud Console → Credenziali → OAuth Client ID (Applicazione web), con redirect URI `http://localhost:3000/api/auth/callback/google` |
+
+`AUTH_URL` in locale può restare vuota. **Senza le credenziali Google il resto funziona
+comunque**: il provider `dev` non passa da Google. Servono solo per provare il login vero.
+
+> **La porta è 5433, non 5432.** Sulla macchina di sviluppo la 5432 era già occupata da un altro
+> progetto. Vedi `docs/DECISIONS.md` (2026-08-07).
+
+### I due modi di entrare
+
+- **Google**, l'unico che esisterà in produzione. Al primo accesso l'app chiede **nome e
+  cognome** e non ti lascia andare altrove finché non li scrivi.
+- **"Entra come `<nome>`"**, la lista degli utenti seeded, presente **solo fuori produzione**.
+  Serve perché collaudare un'asta a 8 richiederebbe 8 account Google veri. Un test automatico
+  (`pnpm test`) verifica che in produzione questi pulsanti non esistano.
+
+Per avere più utenti loggati insieme sulla stessa macchina: una finestra normale, una in
+incognito, e per il terzo e il quarto un altro browser. Ogni finestra ha i suoi cookie, quindi la
+sua sessione.
+
+### Test dal telefono
+
+```bash
+pnpm dev:lan
+```
+
+Stampa l'indirizzo da digitare sul telefono (`http://192.168.x.x:3000`) — telefono e Mac sulla
+stessa rete Wi-Fi. Non usare `next dev -H 0.0.0.0` a mano: senza `AUTH_URL` impostata all'IP
+vero, dopo il login il telefono finisce su `http://0.0.0.0:3000`, che non esiste. Lo script se ne
+occupa da sé.
+
+Il login Google **non funziona** da IP di LAN (il redirect URI autorizzato è su `localhost`): dal
+telefono si entra col provider `dev`, che è esattamente il motivo per cui esiste.
+
+### Tutti i comandi
+
+```bash
+pnpm dev                  # app in sviluppo su localhost:3000
+pnpm dev:lan              # idem, raggiungibile dal telefono in LAN
+pnpm build                # build di produzione (output standalone)
+pnpm test                 # vitest, fake timers sempre attivi
+pnpm lint                 # eslint, compresa la regola sugli import di lib/db
+pnpm typecheck            # tsc --noEmit
+docker compose up -d      # Postgres
+docker compose down       # ferma Postgres (i dati restano nel volume)
+pnpm db:push              # applica lo schema drizzle al database
+pnpm db:seed              # utenti di prova (idempotente)
+pnpm db:studio            # ispezione del database dal browser
+```
+
+### Quando qualcosa non va
+
+| Sintomo | Cosa fare |
+|---|---|
+| `DATABASE_URL non è impostata` | Manca il `.env`: `cp .env.example .env` e riempilo |
+| `ECONNREFUSED ... 5433` | Docker Desktop è spento, o `docker compose up -d` non è stato dato |
+| `port is already allocated` su 5433 | Un altro container occupa la porta: `docker ps` e fermalo |
+| La lista "Entra come …" è vuota | Manca il seed: `pnpm db:seed` |
+| Dopo il login Google resti sull'onboarding | È il comportamento giusto: scrivi nome e cognome |
+| Ripartire da zero col database | `docker compose down -v && docker compose up -d && pnpm db:push && pnpm db:seed` |
 
 ## Produzione e serata dell'asta
 
