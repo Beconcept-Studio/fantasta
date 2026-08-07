@@ -38,7 +38,8 @@ di ogni client resta appesa a un `ReadableStream` tenuto in una `Map` in memoria
 diventa gestibile perché tutte le mutazioni passano da un unico punto, sotto un lock di riga
 Postgres, invece di essere sparse su N istanze che non si conoscono.
 
-In Fase 0 niente di tutto questo esiste ancora: esistono le fondamenta su cui poggerà.
+Alla fine della Fase 1 niente di tutto questo esiste ancora: esistono le fondamenta su cui
+poggerà, più tutto ciò che serve *prima* che un'asta cominci.
 
 ---
 
@@ -51,7 +52,18 @@ Ogni pagina è un server component che legge lo stato e lo rende; le scritture p
 Action dichiarate in file `actions.ts` accanto alla pagina che le usa.
 
 `lib/` è la logica. `lib/db/` è lo schema Drizzle e la connessione; `lib/auth.ts`
-l'autenticazione; da Fase 2 si aggiungerà `lib/engine/`, che è dove vivrà il motore dell'asta.
+l'autenticazione; `lib/engine/` è dove vive tutto ciò che tocca lo stato di un'asta — oggi il
+setup, da Fase 2 il motore vero e proprio; `lib/import/` legge il file del listone; `lib/domain.ts`
+contiene il vocabolario condiviso (i quattro ruoli, gli stati di un'asta, i tagli di partecipanti
+ammessi).
+
+Quel `lib/domain.ts` merita una riga di spiegazione, perché la sua esistenza è la conseguenza di
+due vincoli che si sono incontrati. I nomi dei ruoli servono anche a un componente che gira nel
+browser, ma stavano dentro `lib/db/schema.ts`; e importare `lib/db` da un componente è vietato per
+regola di lint — giustamente, perché nessun linter sa distinguere «importo quattro stringhe» da
+«apro una query». Per di più `schema.ts` si porta dietro l'ORM: farlo viaggiare fino al telefono
+per quattro stringhe sarebbe stato uno spreco. Le costanti si sono spostate in un file che non
+dipende da niente, e la regola di lint è rimasta assoluta.
 
 `components/` sono i componenti riusabili, compresi quelli di shadcn/ui in `components/ui/`.
 
@@ -93,9 +105,11 @@ ogni salvataggio, e senza quella cache si accumulerebbe un pool di connessioni p
 finché Postgres non rifiuta le connessioni. La stessa precauzione servirà, per la stessa ragione,
 allo scheduler dei timer.
 
-In Fase 0 esiste una sola tabella, `users`: identità Google, email, nome visualizzato, un flag di
-amministratore di piattaforma. Tutto il resto — aste, membri, lotti, offerte, assegnazioni,
-movimenti di budget — arriva in Fase 1.
+Dalla Fase 1 lo schema è completo: `users`, `auctions`, `members`, `invites`, `players`, `lots`,
+`lot_rounds`, `round_eligibility`, `bids`, `assignments`, `ledger`, `events`. Le tabelle del gioco
+esistono ma sono ancora vuote — le riempirà il motore in Fase 3 — e sono già lì perché due
+invarianti dovevano diventare vincoli del database prima che qualcuno scrivesse la prima riga che
+li potrebbe violare. Se ne parla nel capitolo che segue.
 
 ---
 
@@ -158,12 +172,25 @@ in sviluppo.
 ## Il seed, e perché cresce insieme al progetto
 
 `pnpm db:seed` è idempotente — si può rilanciare quante volte si vuole senza duplicare niente — e
-in Fase 0 crea i dodici utenti fittizi che alimentano il provider `dev`.
+crea i dodici utenti fittizi che alimentano il provider `dev`. Con
+`pnpm db:seed --auction-status=ready` costruisce anche un'asta a otto con il listone importato e
+tutti i posti pieni; con `draft` la stessa asta ma con un posto libero. Gli stati di un'asta già
+avviata (`live`, `mid`, `completed`) rispondono ancora con un messaggio che spiega in quale fase
+diventeranno generabili: li produrrà la Fase 3, facendo girare il motore.
 
-Accetta già il flag `--auction-status=draft|ready|live|mid|completed` previsto dal piano, ma per
-ora ogni valore risponde con un messaggio che spiega in quale fase quello stato diventerà
-generabile. È una scelta consapevole: il comando che l'owner impara oggi è lo stesso che userà in
-Fase 5 per farsi consegnare un'asta già a metà partita, senza rigiocarla a mano ogni volta.
+Il dettaglio che conta è **come** li costruisce: non con `INSERT` artigianali, ma chiamando le
+stesse funzioni che usa la UI — `createAuction`, `importPlayers`, `createInvite`, `joinAuction`.
+Uno stato prodotto dal seed è quindi, per costruzione, uno stato che l'applicazione sa produrre.
+Un seed che scrive righe a mano è un seed che prima o poi fabbrica configurazioni impossibili, e
+si passa un pomeriggio a capire perché la UI ci si comporta in modo strano.
+
+Ha anche un effetto collaterale utile: siccome `--auction-status=draft` ottiene lo stato DRAFT
+lasciando un posto vuoto — e non impostando la colonna — ogni esecuzione del seed verifica di
+passaggio che la derivazione DRAFT ↔ READY funzioni davvero.
+
+L'asta di prova viene ricreata da zero a ogni esecuzione. Ripartire da uno stato noto vale più di
+conservare quello vecchio: uno stato ereditato da un seed precedente è la cosa più fastidiosa da
+diagnosticare.
 
 ---
 
@@ -177,19 +204,196 @@ capire perché. Con i timer finti il tempo passa solo quando lo si fa passare
 davvero bisogno del tempo vero chiama `vi.useRealTimers()` al proprio interno: la deroga resta
 esplicita e locale.
 
-In Fase 0 i test sono due: uno verifica l'harness stesso (che i timer siano finti), l'altro che il
-provider `dev` non esista in produzione. Da Fase 2 questa cartella diventerà il posto dove vive
-la garanzia di correttezza dell'intera asta.
+I test sono di due specie, e la distinzione conta.
+
+I **test puri** non hanno bisogno di niente per girare: validazione della configurazione di
+un'asta, permutazioni di `role_order`, invariante I9, parsing del listone. Sono la maggioranza, e
+sono quelli che in Fase 2 diventeranno la garanzia di correttezza dell'intero motore.
+
+I **test di integrazione** (`tests/db/`) parlano con un Postgres vero. Non è pigrizia: metà di ciò
+che c'è da verificare nel setup *è* il database — che due join simultanei non prendano lo stesso
+posto, che i posti si ricompattino rispettando il vincolo di unicità, che il lock di riga
+serializzi davvero. Un mock direbbe sempre di sì. Se il database non risponde, quella suite si
+salta con un avviso invece di fallire, così `pnpm test` resta eseguibile su una macchina appena
+clonata; il gate di fase, però, si verifica con Docker acceso.
+
+---
+
+## Il setup di un'asta
+
+Questo è il capitolo della Fase 1: tutto ciò che succede **prima** che l'asta cominci. Creare
+un'asta, decidere com'è fatta, caricare l'elenco dei calciatori, invitare le persone, aspettare
+che entrino.
+
+### Una macchina a due stati, che nessuno imposta a mano
+
+Un'asta nasce in `DRAFT` e diventa `READY` quando tre cose sono vere insieme: i posti sono tutti
+occupati, il listone è stato importato, e per ogni ruolo ci sono abbastanza calciatori. Non c'è
+nessun pulsante "conferma": lo stato viene **ricalcolato dopo ogni modifica del setup**, e la
+funzione che lo fa (`recomputeStatus`) è chiamata alla fine di ogni mutazione.
+
+La conseguenza importante è che il passaggio è reversibile in modo naturale. Se da un'asta pronta
+esce un partecipante, l'asta torna in `DRAFT` da sola. Se fosse uno stato deciso da qualcuno,
+qualcuno dovrebbe anche ricordarsi di annullarlo — e la sera dell'asta ci si accorgerebbe che
+un'asta segnata "pronta" ha sette giocatori invece di otto.
+
+### Chi può fare cosa, e quando
+
+Due assi. Il primo è **chi**: le modifiche alla configurazione, l'import e gli inviti sono
+riservati a chi ha creato l'asta; ognuno può togliere sé stesso, l'owner può togliere chiunque.
+
+Il secondo è **quando**, ed è il più interessante. La configurazione si divide in due famiglie:
+
+- I **tempi** (secondi per chiamare, per offrire, per lo spareggio, per l'apertura delle buste) si
+  possono cambiare sempre, anche ad asta iniziata. Valgono dal lotto successivo: non accorciano
+  mai un countdown in corso.
+- Tutto il resto — numero di posti, crediti, slot per ruolo, ordine dei ruoli — è **strutturale** e
+  si congela quando l'asta parte. Cambiare gli slot a metà asta significherebbe invalidare rose già
+  comprate.
+
+Nell'interfaccia i campi strutturali risultano spenti quando non si possono toccare, ma è solo
+cortesia: il server rifiuta comunque quelle modifiche. È la sesta regola del progetto — la UI
+disabilita il pulsante, il server rifiuta lo stesso — e la si verifica facilmente manomettendo il
+form: un'asta a nove partecipanti inviata a mano viene respinta con «I partecipanti devono essere
+8, 10, 12».
+
+### L'ordine dei ruoli
+
+È una lista di quattro elementi che si trascina, e il **primo elemento è il ruolo da cui parte
+l'asta**: non c'è una seconda scelta al momento dell'avvio. La lista viaggia al server come una
+stringa (`"C,A,P,D"`) dentro un campo nascosto — il drag & drop è un modo di modificarla, non il
+canale dati — e il server verifica che sia una permutazione completa di P, D, C, A: né ripetizioni
+né ruoli mancanti. Un ruolo assente sarebbe un ruolo che non si gioca mai; uno ripetuto, un ruolo
+che si giocherebbe due volte.
+
+Accanto alla maniglia di trascinamento ci sono due frecce. Trascinare quattro righe col pollice su
+un telefono è più difficile che premere un pulsante, e la tastiera deve poter fare tutto.
+
+### Il listone
+
+Il file è quello che si scarica da Fantacalcio.it: foglio «Lista calciatori», intestazione in prima
+riga, e nel nostro esempio 495 calciatori. Ne leggiamo otto colonne — identificativo, nome,
+squadra, ruolo, ruolo Mantra, valore di mercato, quotazione, e il marcatore «fuori lista» — e
+ignoriamo il resto. La colonna `Under` contiene l'età, non un flag: è il genere di trappola che
+vale la pena scrivere in un commento.
+
+**Il file non viene conservato.** Ne estraiamo i dati e lo buttiamo. In compenso i dati vengono
+copiati *dentro l'asta*: la tabella `players` ha una colonna `auction_id`, e la lista si congela al
+momento dell'import. Se l'anno prossimo il file cambia, le aste dell'anno scorso restano coerenti
+con sé stesse. Un secondo caricamento sostituisce lo snapshot precedente invece di aggiungersi,
+così correggere un file sbagliato non richiede di rifare l'asta.
+
+### L'invariante che rifiuta un'asta impossibile
+
+Prima di accettare un import, il server verifica che **per ogni ruolo ci siano almeno
+`slot × partecipanti` calciatori disponibili**. È l'invariante I9 del piano, e senza di essa
+l'asta si bloccherebbe a metà serata, quando l'ultimo partecipante scopre che di portieri non ne
+restano.
+
+Il messaggio di rifiuto nomina il ruolo e i due numeri: «Attaccanti (A): servono 96 giocatori
+(8 slot × 12 partecipanti), il listone ne ha 85». Un «import rifiutato» generico, a un'ora dalla
+serata, non aiuterebbe nessuno.
+
+La stessa verifica scatta ogni volta che uno dei tre termini si muove: cambiando il numero di
+posti, cambiando gli slot per ruolo, e accendendo o spegnendo il toggle sui **fuori lista** — i
+calciatori marcati con l'asterisco nel file, esclusi dal pool per default. La pagina di setup
+mostra la tabellina «disponibili / servono» per tutti e quattro i ruoli, che è la lettura umana
+della stessa disuguaglianza: si vede *prima* di caricare un file perché una configurazione non
+passerà.
+
+### Inviti e join
+
+Un invito è un token in un URL, e nient'altro: niente email, niente destinatario, nessuna
+scadenza. Lo stesso link va bene per tutti e si manda nel gruppo. Lo schema prevede i campi per una
+scadenza e per un numero massimo di utilizzi, e il codice li rispetta se valorizzati, ma di default
+restano vuoti — perché **la protezione vera è che gli inviti smettono di funzionare quando l'asta
+esce da DRAFT o READY**. Nessuno entra ad asta iniziata, qualunque link abbia in mano.
+
+Chi apre il link vede dove sta entrando — nome dell'asta, posti liberi, crediti, ordine dei ruoli —
+e sceglie il nome della squadra. Quel nome è **per-asta, non per-utente**: la stessa persona in due
+leghe diverse può chiamarsi in due modi.
+
+Entrando prende il primo posto libero, in ordine di arrivo, e i crediti iniziali sono una copia del
+budget dell'asta. Non esiste un budget per singolo partecipante: le differenze individuali, quando
+serviranno, saranno righe di rettifica motivate nel registro dei movimenti. Uscendo, i posti si
+**ricompattano** senza lasciare buchi, perché la rotazione dei turni scorre i posti in ordine
+circolare e un indice mancante sarebbe il turno di nessuno.
+
+### Il lock, questa volta per davvero
+
+Tutte le mutazioni di setup aprono una transazione e prendono un `SELECT ... FOR UPDATE` sulla riga
+dell'asta. Non è cerimoniale: due persone che aprono lo stesso link d'invito nello stesso istante,
+senza serializzazione, si assegnerebbero lo stesso posto o supererebbero il numero di partecipanti.
+Il vincolo di unicità del database le fermerebbe, ma con un errore incomprensibile invece che con
+un messaggio.
+
+Questa funzione (`withSetupLock`) è il cugino del `withAuctionLock` di PLAN §6, che arriverà in
+Fase 3 per le mutazioni di gioco. Sono due funzioni distinte di proposito: quella di gioco
+incrementa il numero di versione dello stato e diffonde lo snapshot a tutti i client collegati,
+cose che in `DRAFT` non esistono ancora — non c'è nessuno stream aperto e nessuna macchina a stati
+da far avanzare.
+
+### Le due invarianti scolpite nel database
+
+Lo schema di questa fase contiene già le tabelle del gioco, vuote. Due di esse portano un **indice
+unico parziale**, ed è il modo in cui due regole del piano diventano impossibili da violare invece
+che semplicemente vietate:
+
+```sql
+CREATE UNIQUE INDEX one_open_lot_per_auction
+  ON lots(auction_id) WHERE status = 'OPEN';
+
+CREATE UNIQUE INDEX one_owner_per_player
+  ON assignments(auction_id, player_id) WHERE voided_at IS NULL;
+```
+
+Il primo dice che un'asta non può avere due chiamate aperte insieme; il secondo che un calciatore
+non può stare in due rose. Nessun controllo applicativo può garantirle sotto concorrenza: due
+richieste simultanee possono entrambe leggere «non c'è nessun lotto aperto» e entrambe crearne uno.
+L'indice no. Sono lì da adesso perché il momento giusto per metterli è prima che esista la prima
+riga che potrebbe violarli.
+
+### Gli errori
+
+Ogni rifiuto ha un **codice** (`INVALID_SEATS`, `LISTONE_INSUFFICIENT`, `INVITE_EXPIRED`, …) e un
+messaggio già scritto in italiano. Le funzioni del setup non lanciano eccezioni per i rifiuti
+previsti: restituiscono un risultato che è o un valore o un errore, e la pagina lo mostra così
+com'è. Le eccezioni restano per i guasti veri — connessione persa, vincolo violato che non doveva
+esserlo — che devono finire in una pagina d'errore, non essere ingoiate in un messaggio gentile.
+
+Il motivo è scritto nel piano e vale la pena ripeterlo: durante un countdown di trenta secondi, la
+parola «Errore» senza spiegazione è inutilizzabile.
+
+### Le pagine
+
+Quattro, e nessuna di esse tocca il database direttamente.
+
+`/dashboard` elenca le aste di cui si è proprietari o partecipanti. `/auctions/new` le crea.
+`/auctions/[id]/setup` è la pagina dell'owner: partecipanti, inviti, listone, impostazioni; chi non
+è l'owner viene mandato in lobby. `/auctions/[id]/lobby` è la sala d'attesa, visibile a tutti i
+partecipanti. `/join/[token]` è quel che si apre cliccando un invito.
+
+I pallini di presenza in lobby (chi è collegato, chi ha l'app in background) arrivano in Fase 5,
+quando esisterà l'heartbeat: prima di allora non ci sarebbe niente di vero da mostrare. Nel
+frattempo la lobby è già una funzione dello stato a database — un ricaricamento mostra sempre la
+realtà — che è la stessa disciplina che in Fase 4 diventerà l'invariante I10.
+
+L'URL degli inviti si costruisce dall'host della richiesta, non da una variabile d'ambiente. In
+sviluppo la stessa pagina viene aperta da `localhost` e dall'IP di rete locale col telefono, e un
+link con dentro `localhost` sul telefono non porta da nessuna parte.
 
 ---
 
 ## Cosa non c'è ancora
 
-Alla fine della Fase 0 l'applicazione sa fare una cosa sola: far entrare una persona e chiederle
-come si chiama. Non esistono aste, non esiste il listone dei calciatori, non esiste il motore, non
-esiste il realtime. È voluto: l'ordine delle fasi mette il motore dell'asta **prima** di qualsiasi
-schermata, perché è nel motore che le cose si rompono, e una UI costruita sopra un motore sbagliato
-va buttata due volte.
+Alla fine della Fase 1 l'applicazione sa preparare un'asta, ma non sa giocarla. Si può creare,
+configurare, caricare il listone, invitare le persone e vederle entrare — poi ci si ferma. Non
+esiste il motore, non esistono i lotti, non esiste il realtime, non c'è un pulsante per avviare.
 
-Il prossimo capitolo di questo documento, a fine Fase 1, racconterà la creazione di un'asta,
-l'import del listone e la lobby.
+È voluto: l'ordine delle fasi mette il motore dell'asta **prima** di qualsiasi schermata di gioco,
+perché è nel motore che le cose si rompono, e una UI costruita sopra un motore sbagliato va
+buttata due volte.
+
+Il prossimo capitolo, a fine Fase 2, racconterà il motore: perché è fatto di funzioni pure, perché
+il tempo si passa come parametro invece di leggerlo dall'orologio, e come si legge una transizione
+di stato.

@@ -21,8 +21,13 @@ inventando: annota la domanda e aspetta. Un'assunzione silenziosa qui costa un'a
 
 ## Fase corrente
 
-> **FASE 0 — Scaffold** · codice completo, gate in attesa del login Google manuale dell'owner (F0-16).
+> **FASE 2 — Motore, funzioni pure, con test** · da aprire. ⚠ Sessione da avviare con `/model fable`.
+> Fasi 0 e 1 chiuse e collaudate a mano dall'owner il 2026-08-07.
 > Aggiorna questa riga a ogni passaggio di fase.
+
+In Fase 2 valgono due divieti in più, oltre alle otto regole: **nessun import da `lib/db`** e
+**nessuna riga di UI dell'asta**. I test di §12 si scrivono **prima** dell'implementazione.
+Ripartizione in `docs/BACKLOG.md`: a questa fase spettano i test 1–26, 29, 30, 41.
 
 Le fasi sono cancelli sequenziali (`docs/PLAN.md` §11). Non si apre una fase finché tutti i
 criteri ✅ della precedente non sono verdi. In particolare: **nessuna riga di UI dell'asta prima
@@ -77,9 +82,10 @@ pnpm dev                  # app in sviluppo
 pnpm dev:lan              # come sopra ma raggiungibile dal telefono in LAN (stampa l'URL)
 docker compose up -d      # postgres (host: porta 5433, vedi DECISIONS 2026-08-07)
 pnpm db:push              # applica lo schema drizzle
-pnpm db:seed              # utenti, listone, aste di prova
-pnpm db:seed -- --auction-status=mid   # asta LIVE già a metà
-pnpm test                 # vitest, fake timers obbligatori
+pnpm db:seed              # solo i 12 utenti di prova
+pnpm db:seed --auction-status=ready    # + asta a 8 pronta, listone importato
+pnpm db:seed --auction-status=mid      # asta LIVE già a metà (dalla Fase 3)
+pnpm test                 # vitest, fake timers obbligatori; i test in tests/db/ vogliono Postgres
 pnpm bots --auction=<id> --count=7 --strategy=random|tie|aggressive|passive
 ```
 
@@ -116,7 +122,12 @@ un diagramma testuale dove serve. **Aggiornarlo è un criterio di chiusura della
 
 ---
 
-## Regola ESLint da configurare in Fase 0
+## La regola ESLint su `lib/db` — attiva, e da non allentare
 
-Import di `lib/db` vietato fuori da `lib/engine/**`. Rende meccanicamente impossibile la
-scorciatoia che rompe le regole 3 e 4.
+Import di `lib/db` vietato fuori da `lib/engine/**` (più le eccezioni enumerate in
+`eslint.config.mjs`). Rende meccanicamente impossibile la scorciatoia che rompe le regole 3 e 4.
+
+**Quando una pagina o un componente ha bisogno di un nome di dominio** (i ruoli, gli stati di
+un'asta, i tagli di partecipanti) la risposta non è aggiungere un'eccezione: quei nomi stanno in
+`lib/domain.ts`, che non dipende da niente. Vale anche per i client component, che altrimenti si
+porterebbero l'ORM nel bundle.

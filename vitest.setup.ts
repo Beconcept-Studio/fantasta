@@ -1,4 +1,12 @@
+import { config } from "dotenv";
 import { afterEach, beforeEach, vi } from "vitest";
+
+/**
+ * I test che toccano il database leggono `DATABASE_URL` dal `.env` come tutto
+ * il resto del progetto. `dotenv` non sovrascrive quello che c'è già, quindi in
+ * CI basta esportare la variabile per puntare altrove.
+ */
+config({ path: ".env", quiet: true });
 
 /**
  * Fake timers per default in **tutti** i test (PLAN §16.7).

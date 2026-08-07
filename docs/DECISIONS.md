@@ -151,3 +151,87 @@ rimuovere quando la catena a monte si sistema.
 **`drizzle-kit` con `strict: false`.** Con `strict: true` `pnpm db:push` chiede conferma statement
 per statement e serve un TTY, quindi non è usabile da script. `verbose` resta attivo: l'SQL si
 vede comunque prima di essere eseguito.
+
+---
+
+## 2026-08-07 — Fase 1, setup asta
+
+**`lib/domain.ts` per il vocabolario condiviso.** `ROLES`, `Role`, `ROLE_LABELS`,
+`AUCTION_STATUSES`, `AUCTION_PHASES`, `SEAT_OPTIONS` non stanno in `lib/db/schema.ts` ma in un file
+senza dipendenze; `schema.ts` li importa da lì. Motivazione: due vincoli che si sono incontrati.
+(1) La regola ESLint su `lib/db` deve restare **assoluta**: una pagina che importa quattro stringhe
+non fa danno, ma nessun linter la distingue da una che apre una query, e la regola vale proprio
+perché non ammette eccezioni discrezionali. (2) `schema.ts` tira dentro `drizzle-orm/pg-core`:
+importarlo da un componente `"use client"` per quattro stringhe farebbe viaggiare un ORM fino al
+telefono. Nessuna eccezione aggiunta a `eslint.config.mjs`.
+
+**`withSetupLock` distinta da `withAuctionLock`.** Le mutazioni di setup (create, update, import,
+toggle, invite, join, remove) prendono un `SELECT ... FOR UPDATE` sulla riga dell'asta tramite una
+funzione locale a `lib/engine/setup.ts`, non tramite il `withAuctionLock` di PLAN §6 — che arriverà
+in F3-02. Motivazione: il lock serve già adesso (due join simultanei si assegnerebbero lo stesso
+`seat_index`), ma `withAuctionLock` incrementa `state_version` e fa il broadcast dello snapshot,
+due cose che in DRAFT/READY non esistono: non c'è nessuno stream aperto né macchina a stati da far
+avanzare. Anticiparlo a metà avrebbe reso ambiguo cosa resta da fare in F3-02.
+
+**Setup diviso fra `setup-rules.ts` (puro) e `setup.ts` (database).** Le validazioni —
+configurazione, permutazione di `role_order`, I9, nome squadra — sono funzioni pure in un file che
+non importa `lib/db`. Motivazione: sono collaudabili senza Postgres acceso, ed è la stessa
+disciplina che in Fase 2 governerà `rules.ts`. Non è un layer in più (regola 8): è dove passa la
+linea fra ciò che si può provare in millisecondi e ciò che ha bisogno di un database.
+
+**Test di integrazione con Postgres vero, saltati se il database non risponde.**
+`tests/db/setup.test.ts` gira contro il database reale e si auto-salta con un avviso se non è
+raggiungibile. Motivazione: metà di ciò che c'è da verificare nel setup *è* il database (unicità di
+`(auction_id, seat_index)`, ricompattazione dei posti sotto vincolo, serializzazione del lock) e un
+mock direbbe sempre di sì; ma `pnpm test` deve restare eseguibile da un checkout pulito senza
+Docker. Il gate di fase si verifica con Docker acceso — è nel runbook. Vitest carica `.env` da
+`vitest.setup.ts`, e i test di integrazione chiamano `vi.useRealTimers()` perché `pg` fa I/O vero.
+
+**`FormState` e `EMPTY_FORM_STATE` fuori dal file delle Server Action.** Stanno in
+`app/auctions/form-state.ts`. Motivazione: **un modulo `"use server"` può esportare soltanto
+funzioni async**. Esportare da lì anche una costante compila, passa `tsc` e passa pure
+`next build` — poi restituisce 500 alla prima invocazione reale dell'azione. Trovato col test di
+fumo end-to-end, non dai controlli statici: è il motivo per cui il gate di questa fase include un
+giro vero sulle pagine e non solo `pnpm test`.
+
+**SheetJS installato dal CDN ufficiale, non da npm.** `xlsx` è agganciato a
+`https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz`. Motivazione: l'ultima versione pubblicata su
+npm è la 0.18.5, ferma da anni e con vulnerabilità note (prototype pollution, ReDoS); SheetJS
+distribuisce le versioni correnti solo dal proprio CDN. Il file lo carica l'owner dell'asta, quindi
+il rischio sarebbe modesto, ma non c'è ragione di portarsi dietro codice vulnerabile. Il tarball
+finisce nel lockfile e viene messo in cache da pnpm.
+
+**Timer: minimi bassi invece che valori "ragionevoli".** `bid ≥ 3s`, `pick ≥ 3s`, `tiePrep ≥ 2s`,
+`reveal ≥ 1s`. Motivazione: le aste di prova nascono dal seed con timer corti (DECISIONS
+2026-08-06, niente `DEV_TIME_SCALE`), quindi il motore deve accettare quei valori senza rami
+dipendenti dall'ambiente.
+
+**Il budget non può essere inferiore al numero di slot.** `createAuction` rifiuta
+`budget_default < slot totali`. Motivazione: I3 richiede che ogni slot residuo resti comprabile ad
+almeno 1 credito; con un budget più basso la rosa non si completerebbe nemmeno comprando tutti a 1,
+e l'asta nascerebbe già in uno stato impossibile.
+
+**`ON DELETE CASCADE` su tutte le chiavi verso `auctions`.** Compresi `assignments` e `ledger`.
+Motivazione: la regola 5 vieta `DELETE` e `UPDATE` **distruttivi come correzione** dentro un'asta
+viva — lì si usano `voided_at` e righe compensative. Cancellare un'asta intera è un'altra cosa, ed
+è richiesta dalla checklist pre-asta di PLAN §17 (punto 3: rimozione dell'asta di prova). Senza le
+cascate quella cancellazione andrebbe scritta a mano tabella per tabella.
+
+**`auctions.current_lot_id` senza FOREIGN KEY.** `lots.auction_id` punta già ad `auctions`: la
+coppia di vincoli renderebbe circolare sia la creazione dello schema sia la cancellazione di
+un'asta. PLAN §3 non la dichiara.
+
+**Il seed costruisce le aste chiamando le funzioni dell'applicazione.** Niente `INSERT`
+artigianali: `createAuction`, `importPlayers`, `createInvite`, `joinAuction`. Motivazione: uno
+stato prodotto dal seed è per costruzione uno stato che l'app sa produrre. È la stessa regola che
+F3-13 impone per gli stati avanzati, applicata da subito. Effetto collaterale utile:
+`--auction-status=draft` ottiene DRAFT lasciando un posto vuoto invece di impostare la colonna,
+quindi ogni seed verifica di passaggio la derivazione DRAFT ↔ READY.
+
+**L'owner entra con una funzione dedicata, `joinAsOwner`.** Non passa da un invito. Motivazione:
+l'owner ha già i permessi sull'asta e mandarlo a cercare il proprio link sarebbe assurdo; le due
+funzioni condividono l'inserimento vero (`addMember`), quindi le regole su posti, nome squadra e
+budget sono le stesse per tutti.
+
+**Il nome dell'asta è modificabile solo in DRAFT/READY.** PLAN §9 non lo classifica. Trattato come
+strutturale: ad asta iniziata il nome è già proiettato sulla TV e ripetuto a voce.

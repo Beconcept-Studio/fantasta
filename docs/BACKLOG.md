@@ -106,114 +106,125 @@ I test 36–38 sono definiti su `voidAssignment`: l'undo è stato eliminato dal 
   Verifica dei criteri ✅ del piano: login Google funzionante, `display_name` obbligatorio al primo accesso. Aggiorna la riga "Fase corrente" in `CLAUDE.md`.
   Verifica: entrambi i criteri dimostrati manualmente; `pnpm test` e `pnpm lint` verdi.
   Dipende: tutti i F0-*
-  *Stato al 2026-08-07: `pnpm test`, `pnpm lint`, `pnpm typecheck` e `pnpm build` verdi; il
-  cancello dell'onboarding è stato dimostrato end-to-end col provider `dev` (utente senza
-  `display_name` → `/` e `/dashboard` rimandano a `/onboarding`; scritto il nome, `/dashboard`
-  si apre e `/onboarding` rimanda indietro). **Resta il login con un account Google vero, che
-  deve fare l'owner**: fatto quello, spunta questo task e aggiorna la riga "Fase corrente".*
+  *Chiuso il 2026-08-07. `pnpm test`, `pnpm lint`, `pnpm typecheck` e `pnpm build` verdi; il
+  cancello dell'onboarding dimostrato end-to-end col provider `dev` (utente senza `display_name`
+  → `/` e `/dashboard` rimandano a `/onboarding`; scritto il nome, `/dashboard` si apre e
+  `/onboarding` rimanda indietro). Il login con un account Google vero è stato verificato a mano
+  dall'owner.*
 
 ---
 
-## Fase 1 — Setup asta - "Fase corrente"
+## Fase 1 — Setup asta
 
-- [ ] **F1-01 — Schema Drizzle completo**
+- [x] **F1-01 — Schema Drizzle completo**
   Tutte le tabelle di §3 (auctions, members, invites, players, lots, lot_rounds, round_eligibility, bids, assignments, ledger, events) con indici unici parziali `one_open_lot_per_auction` e `one_owner_per_player`, indice auto-pick su players, colonna `include_out_of_list` su auctions ⚠ P7.
   Verifica: `db:push` ok; i due indici parziali risultano da `pg_indexes`; vincoli UNIQUE e CHECK di §3 presenti.
   Dipende: F0-16
 
-- [ ] **F1-02 — `createAuction` con validazioni**
+- [x] **F1-02 — `createAuction` con validazioni**
   Server action: seats ∈ {8,10,12}, `role_order` permutazione completa di P,D,C,A (validazione del test §12.25), default di budget/timer/slot, `public_token` generato.
   Verifica: unit test — seats 9 rifiutato; `role_order ['P','P','C','A']` e `['P','D','C']` rifiutati; asta valida persistita con owner corretto.
   Dipende: F1-01
 
-- [ ] **F1-03 — Form di creazione asta**
+- [x] **F1-03 — Form di creazione asta**
   Segmented control 8/10/12 (mai input libero), budget, timer, slot per ruolo, ordine ruoli riordinabile con dnd-kit (lista di 4, default P→D→C→A).
   Verifica: da UI si crea un'asta con `role_order ['C','A','P','D']` e il valore risulta a DB.
   Dipende: F1-02
 
-- [ ] **F1-04 — `updateAuctionSettings`**
+- [x] **F1-04 — `updateAuctionSettings`**
   Patch dei settaggi con matrice di modificabilità: campi strutturali (seats, slot, role_order, budget) solo in DRAFT/READY; timer sempre, applicati dal lotto successivo (§9).
   Verifica: unit test — modifica `role_order` in READY accettata, in LIVE rifiutata con errore tipizzato; modifica timer in LIVE accettata.
   Dipende: F1-02
 
-- [ ] **F1-05 — `parseListone`**
+- [x] **F1-05 — `parseListone`**
   Parser SheetJS del foglio `Lista calciatori` con il mapping colonne di §13 (`#`, Nome, Sq., R., R.MANTRA, FVM/1000, QUOT., Fuori lista; Under/PGv/MV/FM ignorate). Il file non viene conservato dopo l'import ⚠ P6.
   Verifica: unit test sulla fixture `fixtures/listone.xlsx` — 495 righe, P 61 / D 177 / C 172 / A 85; `out_of_list` valorizzato correttamente.
   Dipende: F0-16
 
-- [ ] **F1-06 — Validazione I9**
+- [x] **F1-06 — Validazione I9**
   Per ogni ruolo `disponibili ≥ slot_ruolo × seats`, contando il pool secondo `include_out_of_list`; errore esplicito con ruolo e conteggi.
   Verifica: unit test — listone artificialmente povero di attaccanti rifiutato con messaggio che nomina il ruolo A e i numeri.
   Dipende: F1-05
 
-- [ ] **F1-07 — `importPlayers` + UI upload**
+- [x] **F1-07 — `importPlayers` + UI upload**
   Action riservata all'owner, solo in DRAFT/READY; snapshot in `players` con `auction_id`; il reimport sostituisce lo snapshot precedente.
   Verifica: upload da UI popola `players`; secondo upload sostituisce senza duplicare `ext_id`; upload da non-owner rifiutato.
   Dipende: F1-05, F1-06
 
-- [ ] **F1-08 — Toggle `include_out_of_list`** ⚠ P7
+- [x] **F1-08 — Toggle `include_out_of_list`** ⚠ P7
   Toggle in setup che ridefinisce il pool; ogni cambio rivalida I9.
   Verifica: unit test — toggle che rende un ruolo insufficiente viene rifiutato; il pool disponibile cambia coerentemente.
   Dipende: F1-06, F1-07
 
-- [ ] **F1-09 — `createInvite` + pagina di join**
+- [x] **F1-09 — `createInvite` + pagina di join**
   Genera token con URL; la pagina del token mostra l'asta e il form nome squadra.
   Verifica: URL di invito aperto da un secondo utente loggato mostra il form; token inesistente → 404.
   Dipende: F1-02
 
-- [ ] **F1-10 — `joinAuction`** ⚠ P13
+- [x] **F1-10 — `joinAuction`** ⚠ P13
   Join con `team_name`; `seat_index` assegnato in ordine di join; `budget_initial` copiato da `budget_default` (uguale per tutti, mai per-membro — DECISIONS 2026-08-06); rispetto di UNIQUE(auction_id, user_id) e (auction_id, seat_index). L'owner joina come membro normale ⚠ P11.
   Verifica: due utenti che joinano ottengono seat 0 e 1; doppio join dello stesso utente rifiutato; join oltre `seats` rifiutato.
   Dipende: F1-09
 
-- [ ] **F1-11 — Scadenza inviti**
+- [x] **F1-11 — Scadenza inviti**
   Inviti rifiutati se `status ∉ {DRAFT, READY}` (§17); `expires_at`/`max_uses` opzionali e di default assenti — nessun limite (DECISIONS 2026-08-06) — ma rispettati se valorizzati.
   Verifica: unit test sui tre casi di rifiuto (status, scadenza, usi esauriti); `uses` incrementato a ogni join riuscito.
   Dipende: F1-10
 
-- [ ] **F1-12 — `leaveAuction` / `removeMember`** ⚠ P13
+- [x] **F1-12 — `leaveAuction` / `removeMember`** ⚠ P13
   Solo in DRAFT/READY; alla rimozione i `seat_index` vengono ricompattati senza buchi.
   Verifica: con membri a seat 0,1,2 la rimozione di seat 0 lascia seat 0,1; rimozione in LIVE rifiutata.
   Dipende: F1-10
 
-- [ ] **F1-13 — Transizione DRAFT ↔ READY** ⚠ P12
+- [x] **F1-13 — Transizione DRAFT ↔ READY** ⚠ P12
   Stato ricalcolato a ogni mutazione di setup: READY quando seats pieni + listone importato + I9 valida; regressione a DRAFT se una condizione decade (es. removeMember).
   Verifica: unit test — ultimo join con listone valido → READY; removeMember su asta READY → DRAFT.
   Dipende: F1-07, F1-10, F1-12
 
-- [ ] **F1-14 — Lobby**
+- [x] **F1-14 — Lobby**
   Pagina `/auctions/[id]/lobby` con elenco membri e nomi squadra (i pallini presence arrivano in Fase 5, quando esiste l'heartbeat).
   Verifica: due browser con utenti diversi vedono entrambi i nomi squadra dopo reload.
   Dipende: F1-10
 
-- [ ] **F1-15 — Dashboard**
+- [x] **F1-15 — Dashboard**
   `/dashboard` con le aste di cui l'utente è owner o membro, stato e link a setup/lobby.
   Verifica: asta creata e asta joinata compaiono entrambe con lo stato corretto.
   Dipende: F1-02, F1-10
 
-- [ ] **F1-16 — Setup page**
+- [x] **F1-16 — Setup page**
   `/auctions/[id]/setup` (solo owner): settaggi, import listone, inviti, membri.
   Verifica: l'intero flusso creazione → import → invito → join si completa da UI; non-owner rediretto.
   Dipende: F1-03, F1-04, F1-07, F1-09, F1-12
 
-- [ ] **F1-17 — Seed: listone + asta READY**
+- [x] **F1-17 — Seed: listone + asta READY**
   `db:seed --auction-status=draft|ready`: importa la fixture e crea un'asta a 8 con tutti i membri joinati e nome squadra.
   Verifica: `--auction-status=ready` produce un'asta READY che passa la validazione I9.
   Dipende: F1-05, F1-10, F1-13
 
-- [ ] **F1-18 — ARCHITECTURE: setup e inviti**
+- [x] **F1-18 — ARCHITECTURE: setup e inviti**
   Aggiorna `docs/ARCHITECTURE.md`: ciclo di vita DRAFT/READY, snapshot del listone, meccanica inviti.
   Verifica: il documento descrive tutto ciò che esiste a fine Fase 1.
   Dipende: F1-16
 
-- [ ] **F1-19 — GATE Fase 1** ⚠ P4
+- [x] **F1-19 — GATE Fase 1** ⚠ P4
   Criteri ✅: due utenti entrano da link e vedono i reciproci nomi squadra; import insufficiente rifiutato con messaggio chiaro; `role_order` riordinato persiste ed è il primo della lista (la verifica "avviando, l'asta parte dal primo ruolo" è differita al gate di Fase 3, F3-16). Aggiorna `CLAUDE.md`.
   Verifica: i tre criteri dimostrati; `pnpm test` e `pnpm lint` verdi.
   Dipende: tutti i F1-*
+  *Chiuso il 2026-08-07. `pnpm test` (67 test, di cui 32 di integrazione su Postgres), `pnpm lint`,
+  `pnpm typecheck` e `pnpm build` verdi. I tre criteri ✅ sono stati dimostrati **end-to-end sulle
+  pagine vere**, con due sessioni distinte del provider `dev` e i form inviati come li invierebbe
+  un browser: (1) Marco Bianchi ed Elena Conti entrano nella stessa asta — uno dal pannello di
+  setup, l'altra dal link d'invito — e in lobby ciascuno vede entrambi i nomi squadra; (2) l'import
+  della fixture su un'asta a 12 con 8 slot da attaccante è rifiutato con «Attaccanti (A): servono
+  96 giocatori (8 slot × 12 partecipanti), il listone ne ha 85» e nessuna riga scritta; (3) un'asta
+  creata dal form con `role_order = ['C','A','P','D']` risulta a database con quell'ordine e lo
+  mostra in lobby. Verificata anche la regola 6: un `seats = 9` iniettato nel campo nascosto viene
+  respinto dal server. Il collaudo a due browser e il trascinamento dei ruoli col mouse sono stati
+  confermati a mano dall'owner.*
 
 ---
 
-## Fase 2 — Motore, funzioni pure, con test ⚠ FASE CRITICA
+## Fase 2 — Motore, funzioni pure, con test ⚠ FASE CRITICA - "Fase corrente"
 
 Regola assoluta: nessun import da `lib/db`, nessuna rete, nessun `Date.now()`. Il tempo è
 sempre un parametro. Test scritti PRIMA dell'implementazione (§12).

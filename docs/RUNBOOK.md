@@ -6,6 +6,11 @@ Questa sezione è per l'utente umano: cosa devi fare tu, fase per fase, e cosa p
 **A ogni chiusura di fase, Claude deve ricapitolarti i punti di questa guida relativi al gate
 appena chiuso e alla fase che si apre** (regola in `CLAUDE.md`).
 
+> **Dove siamo.** Fasi 0 e 1 chiuse e collaudate a mano il 2026-08-07. La prossima è la **Fase 2 —
+> Motore**, da aprire in una sessione nuova digitando `/model fable` prima del prompt.
+> È la fase in cui **non devi fare nessun test manuale**: guarda `pnpm test` e confronta i nomi
+> dei test con §12 del piano.
+
 ### Il ritmo generale (vale per ogni fase)
 
 1. **Una sessione nuova per ogni fase** (PLAN.md §16): verso la fine di una conversazione lunga
@@ -54,8 +59,8 @@ tenere a mente questa tabella.
 
 | Fase | Il tuo intervento manuale |
 |---|---|
-| **0 — Scaffold** | Fornisci le credenziali OAuth. A fine fase: login con il **tuo** account Google vero, verifica che ti chieda nome e cognome, poi un login con un utente dev. ~10 minuti. |
-| **1 — Setup asta** | Test a due browser (uno normale + uno incognito, due utenti dev): crea un'asta, carica il listone da UI, genera l'invito, entra col secondo utente, verifica i nomi squadra reciproci. Prova anche un listone "povero" per vedere il rifiuto I9. |
+| ~~**0 — Scaffold**~~ ✓ | Fornisci le credenziali OAuth. A fine fase: login con il **tuo** account Google vero, verifica che ti chieda nome e cognome, poi un login con un utente dev. ~10 minuti. |
+| ~~**1 — Setup asta**~~ ✓ | Test a due browser (uno normale + uno incognito, due utenti dev): crea un'asta, carica il listone da UI, genera l'invito, entra col secondo utente, verifica i nomi squadra reciproci. Prova anche un listone "povero" per vedere il rifiuto I9. |
 | **2 — Motore** ⚠ | **Nessun test manuale** — tutto da terminale. Supervisiona: `pnpm test` verde e confronta i nomi dei test con §12 del piano (1–26, 29, 30, 41). È la fase in cui NON avere fretta: se il motore è giusto, il resto è cosmetica. |
 | **3 — Persistenza e timer** | Guarda con i tuoi occhi le due dimostrazioni: lo script che porta un'asta da READY a COMPLETED nel terminale, e il kill del processo a metà round → riparte da solo entro 1s. |
 | **4 — SSE** | Quasi niente: i criteri sono test automatici. Se vuoi, un `curl` sullo stream. Da qui esistono i **bot**: chiedi una demo con `--strategy=tie` per vedere uno spareggio forzato. |
@@ -87,7 +92,7 @@ pnpm install
 cp .env.example .env          # poi apri .env e riempilo, vedi sotto
 docker compose up -d          # Postgres 16 su localhost:5433
 pnpm db:push                  # crea le tabelle
-pnpm db:seed                  # 12 utenti di prova
+pnpm db:seed --auction-status=ready   # 12 utenti + un'asta pronta con listone
 pnpm dev                      # http://localhost:3000
 ```
 
@@ -148,9 +153,16 @@ pnpm typecheck            # tsc --noEmit
 docker compose up -d      # Postgres
 docker compose down       # ferma Postgres (i dati restano nel volume)
 pnpm db:push              # applica lo schema drizzle al database
-pnpm db:seed              # utenti di prova (idempotente)
+pnpm db:seed              # solo i 12 utenti di prova (idempotente)
+pnpm db:seed --auction-status=ready   # + un'asta a 8 pronta, listone importato
+pnpm db:seed --auction-status=draft   # + la stessa asta con un posto libero
 pnpm db:studio            # ispezione del database dal browser
 ```
+
+> **`pnpm test` vuole Docker acceso.** Una parte dei test parla con Postgres vero — è l'unico modo
+> di verificare che due join simultanei non prendano lo stesso posto. Senza database quella parte
+> si salta con un avviso invece di fallire, ma un `pnpm test` che serva da verifica di gate va dato
+> con `docker compose up -d` attivo.
 
 ### Quando qualcosa non va
 
@@ -161,7 +173,9 @@ pnpm db:studio            # ispezione del database dal browser
 | `port is already allocated` su 5433 | Un altro container occupa la porta: `docker ps` e fermalo |
 | La lista "Entra come …" è vuota | Manca il seed: `pnpm db:seed` |
 | Dopo il login Google resti sull'onboarding | È il comportamento giusto: scrivi nome e cognome |
-| Ripartire da zero col database | `docker compose down -v && docker compose up -d && pnpm db:push && pnpm db:seed` |
+| Ripartire da zero col database | `docker compose down -v && docker compose up -d && pnpm db:push && pnpm db:seed --auction-status=ready` |
+| `pnpm test` salta i test di integrazione | Docker è spento: `docker compose up -d` |
+| L'asta di prova è in uno stato strano | Rilancia `pnpm db:seed --auction-status=ready`: la ricrea da zero |
 
 ## Produzione e serata dell'asta
 
