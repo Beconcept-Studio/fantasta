@@ -235,3 +235,59 @@ budget sono le stesse per tutti.
 
 **Il nome dell'asta è modificabile solo in DRAFT/READY.** PLAN §9 non lo classifica. Trattato come
 strutturale: ad asta iniziata il nome è già proiettato sulla TV e ripetuto a voce.
+
+---
+
+## 2026-08-07 — Fase 2, motore puro
+
+**Il tempo nel motore è un numero (epoch ms), gli id sono un contatore.** `AuctionState` non
+contiene `Date` e il motore non genera uuid: il tempo è `number` come lo produce `getTime()`, e le
+entità create dal motore (lotti, offerte, assegnazioni) prendono id numerici sequenziali da
+`state.nextId`. Motivazione: una funzione pura non può inventare valori casuali, e il tie-break
+`MIN(bids.id)` di PLAN §4 deve essere riproducibile nei test. Il mapping fra id del motore e uuid
+del database è un problema di F3-01, non del motore.
+
+**Un no-op restituisce lo stesso riferimento.** `transition` che non ha effetto (ADVANCE in
+anticipo o su fase già avanzata, conferma della stessa cifra, pause/resume ripetuti) restituisce
+`ok(state)` con lo **stesso oggetto**, non una copia. Motivazione: è il segnale meccanico con cui
+F3 distinguerà le mutazioni vere (bump di `state_version` + broadcast) dai no-op (P14) — un
+`===` invece di un confronto profondo.
+
+**Ad asta in PAUSED le azioni di gioco sono rifiutate.** PLAN §4 dice solo che la pausa congela i
+deadline; pick/bid/withdraw durante la pausa non sono contemplati. Rifiutati con `WRONG_STATUS`:
+i countdown sono congelati e le scadenze traslate al resume, quindi un'offerta accettata in pausa
+verrebbe validata contro un `ends_at` che sta per muoversi. `ADVANCE` in pausa è un no-op (lo
+sweep di F3 seleziona comunque solo `status='LIVE'`). Pause su PAUSED e resume su LIVE sono
+no-op: il doppio click dell'owner non deve poter fare danni.
+
+**Il resume trasla anche l'`ends_at` del round aperto,** oltre a `phase_deadline` (PLAN §4 nomina
+solo quest'ultima). È l'`ends_at` la scadenza contro cui `placeBid` valida (§12.30): senza la
+traslazione, dopo una pausa lunga il round risulterebbe scaduto per le offerte ma vivo per la fase.
+
+**Anche il ritiro è guardato da `ends_at`.** `withdrawBid` dopo la scadenza → `ROUND_CLOSED`,
+simmetrico alle offerte: fra la scadenza e lo sweep che chiude il round, un ritiro accettato
+cambierebbe un esito già determinato dalle buste a DB.
+
+**`PICK` non è guardato dalla deadline.** Un pick che arriva dopo `phase_deadline` ma prima che
+lo sweep faccia scattare l'auto-pick viene accettato (la fase è ancora WAITING_PICK). Motivazione:
+il pick manuale in extremis è l'esito che il chiamante voleva; il conflitto con l'auto-pick è
+risolto in F3 dalla serializzazione di `withAuctionLock`, non da un confronto di orologi.
+
+**`START` è una transizione del motore.** `READY → LIVE` sta in `machine.ts` (evento `START`),
+non solo nell'action di F3-04: PLAN §4 la elenca fra le transizioni, e il test §12.21 la esercita
+puro. Il gate presence "tutti i membri LIVE" resta fuori dal motore — è un fatto di heartbeat e lo
+aggiunge F4-06 nell'action.
+
+**Codici d'errore di gioco anticipati a Fase 2.** F3-03 prevedeva l'enum dei codici; il motore
+puro rifiuta già con errori tipizzati, quindi i codici (`NOT_YOUR_TURN`, `BID_TOO_HIGH`,
+`ROUND_CLOSED`, …) sono nati in `errors.ts` ora. F3-03 li porterà alle action senza inventarne di
+nuovi. `WITHDRAW_FORBIDDEN` è un codice unico per i tre divieti di ritiro (chiamante, round 2,
+nessuna offerta): la UI li disabilita comunque a monte e i messaggi restano distinti.
+
+**Il lotto da unico idoneo ha comunque il suo round 1, già chiuso.** Nella chiusura immediata
+(DECISIONS 2026-08-06, §12.41) il round esiste con l'auto-bid a 1 e `closed_at = ends_at = now`:
+il pannello di reveal della Fase 5 mostra le buste di ogni lotto senza un caso speciale.
+
+**Il carry-forward crea righe nuove.** Le offerte copiate nel round 2 hanno id nuovi e
+`created_at` dell'apertura del round; solo `amount_set_at` è preservato dal round 1 (è l'unico
+campo che PLAN §4 richiede di ereditare, ed è quello che decide gli stalli).

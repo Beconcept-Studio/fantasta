@@ -384,16 +384,121 @@ link con dentro `localhost` sul telefono non porta da nessuna parte.
 
 ---
 
+## Il motore
+
+Questo è il capitolo della Fase 2: la logica dell'asta vera e propria. Vive in tre file dentro
+`lib/engine/` — `types.ts`, `rules.ts`, `machine.ts` — e ha una proprietà che vale più di ogni
+altra: **non tocca niente**. Nessun database, nessuna rete, nessun orologio. È la fase che il
+piano marca come critica, ed è quella che l'anno scorso è saltata: una logica d'asta scritta
+direttamente dentro le pagine non si può collaudare, e si scopre che è sbagliata la sera stessa.
+
+### Funzioni pure, e perché
+
+Il motore è una funzione: `transition(stato, evento, adesso) → nuovo stato`. Lo stato è un
+oggetto in memoria (`AuctionState` in `types.ts`) che rispecchia le tabelle del database — membri,
+giocatori, lotti, round, offerte, assegnazioni, rettifiche — ma non ne dipende. Gli eventi sono
+sette: l'avvio, la chiamata di un giocatore, un'offerta, un ritiro, lo scattare di una scadenza,
+la pausa e la ripresa. Non c'è nient'altro che possa far muovere un'asta.
+
+Il vantaggio si tocca con mano nei test: l'intera suite del regolamento — le buste, gli spareggi,
+i casi patologici — gira in una manciata di millisecondi, senza avviare niente. Un'asta completa
+da otto lotti è un ciclo `while` in un test. Quando in Fase 3 il motore verrà collegato al
+database, quello strato dovrà solo caricare lo stato, chiamare `transition` e salvare il
+risultato: la logica resterà tutta qui, già collaudata.
+
+`rules.ts` e `machine.ts` si dividono il lavoro in modo preciso. Le *regole* rispondono a domande
+e non cambiano mai niente: quanti crediti ha un membro, fino a quanto può offrire, chi è idoneo a
+un lotto, chi vince un round, a chi tocca dopo. La *macchina* compone quelle risposte in
+transizioni. Se si cerca "come si calcola l'offerta massima" si legge `rules.ts`; se si cerca
+"cosa succede quando scade il round" si legge `machine.ts`.
+
+### Il tempo si passa come parametro
+
+Dentro il motore non esiste `Date.now()`. Ogni funzione che ha bisogno di sapere che ore sono lo
+riceve come argomento, in millisecondi. Sembra un vezzo ed è invece la decisione che rende
+testabile tutto il resto: nei test il tempo è un numero che si sceglie — "l'offerta arriva 200
+millisecondi dopo la scadenza" è un test di una riga, non un `sleep` — e il comportamento del
+motore è identico in sviluppo, in produzione e sotto i timer finti di Vitest.
+
+Ne discende una regola di lettura: quando in `machine.ts` si vede `now`, quel valore l'ha deciso
+il chiamante. In Fase 3 sarà il server a passarlo; nei test è il test a dirigere l'orologio.
+
+Per la stessa ragione — una funzione pura non può inventare identificatori casuali — le entità che
+il motore crea (lotti, offerte, assegnazioni) ricevono id numerici sequenziali da un contatore
+dentro lo stato. Due esecuzioni sullo stesso stato producono lo stesso risultato, sempre; è anche
+ciò che rende riproducibile lo spareggio più improbabile, quello che si decide sull'ordine di
+inserimento delle offerte.
+
+### Come si legge un lotto
+
+Il giro di un lotto, dall'alto: si è in `WAITING_PICK` e tocca a un seat; la chiamata (o il
+timeout, che chiama d'ufficio il miglior valore di mercato rimasto) apre il lotto e lo porta in
+`LOT_OPEN`; le buste si chiudono allo scadere; se il massimo è unico si passa al `LOT_REVEAL`,
+altrimenti c'è lo spareggio (`LOT_TIE_PREP`, poi di nuovo `LOT_OPEN` come round 2); il reveal
+scade e il turno avanza — o l'asta finisce.
+
+Dentro questo giro ci sono quattro scelte che meritano una spiegazione.
+
+**Chi chiama è vincolato.** All'apertura del lotto il motore registra da solo un'offerta a 1 del
+chiamante, con il timestamp dell'apertura. Il chiamante può rilanciare ma non ritirarsi: un lotto
+ha sempre almeno un'offerta valida, e "nessuno offre" non è uno stato possibile.
+
+**Lo spareggio eredita i timestamp.** Se il round 1 finisce in parità, il round 2 si apre con i
+soli pareggianti e con le loro offerte *copiate*, ciascuna con l'`amount_set_at` originale. Chi
+non fa nulla "sta" sulla propria cifra; se nessuno rilancia vince chi era arrivato per primo a
+quell'importo, nel round 1. Confermare la stessa cifra, per ansia, è deliberatamente un no-op che
+non tocca il timestamp: il pulsante premuto due volte non peggiora la posizione di nessuno.
+
+**L'assegnazione si scrive all'ingresso del reveal, non alla fine.** I secondi di reveal sono
+puramente presentazionali — servono alla stanza per guardare le buste aperte sulla TV. L'esito è
+già committato: un crash durante il reveal non può perdere un lotto deciso.
+
+**Il caso dell'unico idoneo si chiude subito.** Se all'apertura del lotto l'unico che potrebbe
+offrire è il chiamante stesso — succede a fine ruolo, quando gli altri hanno la casella piena —
+l'esito è già scritto, e il motore salta il countdown: il lotto va dritto al reveal, assegnato
+a 1. Trenta secondi di attesa con l'esito noto, moltiplicati per gli ultimi lotti di ogni ruolo,
+sarebbero minuti persi in diretta.
+
+### L'evento del tempo, e l'idempotenza
+
+`ADVANCE` è l'unico evento che il tempo genera: in Fase 3 lo emetteranno i `setTimeout` e lo
+sweep di sicurezza. È **guardato**: se la scadenza non è ancora arrivata, o la fase nel frattempo
+è già cambiata, la transizione restituisce lo stato *identico* — proprio lo stesso oggetto, non
+una copia uguale. È l'invariante I7 del piano: un timer che scatta due volte, o un timer e lo
+sweep che arrivano insieme, producono un effetto solo.
+
+Quella convenzione — "un no-op restituisce lo stesso riferimento" — è anche il segnale che la
+Fase 3 userà per distinguere le mutazioni vere (che incrementano la versione dello stato e
+diffondono lo snapshot) da quelle a vuoto (che non devono generare traffico).
+
+La pausa congela, la ripresa trasla. Mettere in pausa segna solo l'istante; riprendere sposta in
+avanti ogni scadenza del tempo passato in pausa — la deadline di fase e, se c'è un round aperto,
+anche il suo `ends_at`, che è la scadenza contro cui si validano le offerte. Un countdown fermo a
+metà riparte da metà: la pausa non può mai far scadere niente in silenzio. Ad asta in pausa le
+azioni di gioco sono rifiutate e il tempo non avanza nulla.
+
+### I rifiuti sono valori, i bug sono eccezioni
+
+Come già nel setup, il motore non lancia eccezioni per dire "non puoi": restituisce un errore
+tipizzato con un messaggio già pronto (`NOT_YOUR_TURN`, `BID_TOO_HIGH`, `ROUND_CLOSED`, …). Le
+eccezioni restano per gli stati che non dovrebbero esistere — un round senza offerte, una fase di
+lotto senza lotto — dove l'unica cosa onesta da fare è esplodere e farsi vedere.
+
+C'è un dettaglio di questa famiglia che vale la pena conoscere prima della serata: **il ritiro di
+un'offerta è irreversibile**. Chi ritira non può più rientrare su quel lotto, nemmeno cambiando
+idea entro la scadenza. È una regola del regolamento, non un limite tecnico, e la UI della Fase 5
+dovrà comunicarla per quello che è.
+
+---
+
 ## Cosa non c'è ancora
 
-Alla fine della Fase 1 l'applicazione sa preparare un'asta, ma non sa giocarla. Si può creare,
-configurare, caricare il listone, invitare le persone e vederle entrare — poi ci si ferma. Non
-esiste il motore, non esistono i lotti, non esiste il realtime, non c'è un pulsante per avviare.
+Alla fine della Fase 2 il motore sa giocare un'asta intera — ma solo in memoria. Nessuna pagina
+lo usa, nessuna riga di gioco viene scritta a database, non esiste un timer vero che faccia
+scattare le scadenze: i test sono l'unico chiamante. Non c'è ancora una sola riga di UI
+dell'asta, ed è un criterio del gate, non una mancanza.
 
-È voluto: l'ordine delle fasi mette il motore dell'asta **prima** di qualsiasi schermata di gioco,
-perché è nel motore che le cose si rompono, e una UI costruita sopra un motore sbagliato va
-buttata due volte.
-
-Il prossimo capitolo, a fine Fase 2, racconterà il motore: perché è fatto di funzioni pure, perché
-il tempo si passa come parametro invece di leggerlo dall'orologio, e come si legge una transizione
-di stato.
+La Fase 3 costruirà il ponte: caricare `AuctionState` dalle righe del database, eseguire
+`transition` dentro il lock di riga (`withAuctionLock`), persistere il risultato, e dare al tempo
+un corpo — `setTimeout` più lo sweep di sicurezza che rilegge le scadenze dal database ogni
+secondo, così un riavvio a metà round riprende da dove aveva lasciato.

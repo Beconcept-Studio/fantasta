@@ -6,10 +6,11 @@ Questa sezione è per l'utente umano: cosa devi fare tu, fase per fase, e cosa p
 **A ogni chiusura di fase, Claude deve ricapitolarti i punti di questa guida relativi al gate
 appena chiuso e alla fase che si apre** (regola in `CLAUDE.md`).
 
-> **Dove siamo.** Fasi 0 e 1 chiuse e collaudate a mano il 2026-08-07. La prossima è la **Fase 2 —
-> Motore**, da aprire in una sessione nuova digitando `/model fable` prima del prompt.
-> È la fase in cui **non devi fare nessun test manuale**: guarda `pnpm test` e confronta i nomi
-> dei test con §12 del piano.
+> **Dove siamo.** Fasi 0, 1 e 2 chiuse il 2026-08-07 (la 2 senza collaudo manuale: motore puro,
+> 146 test verdi). La prossima è la **Fase 3 — Persistenza e timer**, da aprire in una sessione
+> nuova digitando `/model fable` prima del prompt. Il tuo collaudo al gate della 3: lanciare il
+> driver (`pnpm drive`) su un'asta seeded e vederla arrivare a COMPLETED, e il test di restart a
+> metà round.
 
 ### Il ritmo generale (vale per ogni fase)
 

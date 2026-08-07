@@ -10,8 +10,9 @@
  * veri (connessione persa, vincolo violato che non doveva esserlo), che vanno
  * viste in pagina d'errore, non ingoiate in un messaggio gentile.
  *
- * L'elenco dei codici cresce con le fasi: qui ci sono quelli del setup
- * (Fase 1). Quelli di gioco arrivano con F3-03.
+ * L'elenco dei codici cresce con le fasi: quelli del setup vengono dalla
+ * Fase 1, quelli di gioco dalla Fase 2 (il motore puro rifiuta con questi
+ * stessi codici; F3-03 li porta alle action).
  */
 
 export const ERROR_CODES = [
@@ -48,6 +49,23 @@ export const ERROR_CODES = [
   "ALREADY_MEMBER",
   "INVALID_TEAM_NAME",
   "MEMBER_NOT_FOUND",
+
+  // Gioco (Fase 2 — il motore puro)
+  "WRONG_PHASE",
+  "NOT_YOUR_TURN",
+  "PLAYER_NOT_FOUND",
+  "WRONG_ROLE",
+  "PLAYER_ASSIGNED",
+  "PLAYER_OUT_OF_LIST",
+  "NOT_ELIGIBLE",
+  "INVALID_AMOUNT",
+  "BID_TOO_LOW",
+  "BID_TOO_HIGH",
+  "ROUND_CLOSED",
+  "BID_WITHDRAWN",
+  "WITHDRAW_FORBIDDEN",
+  "INVALID_SEAT",
+  "ADJUST_VIOLATES_I3",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

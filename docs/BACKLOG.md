@@ -229,110 +229,119 @@ I test 36–38 sono definiti su `voidAssignment`: l'undo è stato eliminato dal 
 Regola assoluta: nessun import da `lib/db`, nessuna rete, nessun `Date.now()`. Il tempo è
 sempre un parametro. Test scritti PRIMA dell'implementazione (§12).
 
-- [ ] **F2-01 — Tipi puri del motore**
+- [x] **F2-01 — Tipi puri del motore**
   `AuctionState`, `AuctionConfig`, `AuctionEvent` in memoria, speculari a §3 ma senza DB (membri, lotti, round, bids, assignments, ledger come strutture dati).
   Verifica: `tsc` compila; ESLint conferma zero import da `lib/db`.
   Dipende: F1-19
 
-- [ ] **F2-02 — `rules.credits`**
+- [x] **F2-02 — `rules.credits`**
   `crediti(m) = budget_initial + Σ ledger.delta − Σ assignments.price (non voided)`.
   Verifica: unit test con rettifiche positive/negative e assignment voided ignorato.
   Dipende: F2-01
 
-- [ ] **F2-03 — `rules.maxBid`** ⚠ P2
+- [x] **F2-03 — `rules.maxBid`** ⚠ P2
   `max_bid = crediti − residui_altri`, con residui calcolati per ruolo clampati a ≥ 0 (robusto al `force` su I4) e comunque `max_bid ≤ crediti`.
   Verifica: test §12.16 (500 crediti, 0/25 → 476), §12.17 (crediti = residui → 1), più caso overflow da force: mai sopra i crediti.
   Dipende: F2-02
 
-- [ ] **F2-04 — `rules.eligibility`**
+- [x] **F2-04 — `rules.eligibility`**
   Idonei = slot libero nel ruolo corrente ∧ `max_bid ≥ 1`.
   Verifica: test §12.19 (ruolo pieno → escluso).
   Dipende: F2-03
 
-- [ ] **F2-05 — `rules.autoPick`**
+- [x] **F2-05 — `rules.autoPick`**
   Miglior disponibile del ruolo per `fvm DESC, quot DESC, ext_id ASC`, escludendo assegnati e (se configurato) out_of_list.
   Verifica: test §12.4 (pari fvm → quot, poi ext_id); pool filtrato correttamente.
   Dipende: F2-01
 
-- [ ] **F2-06 — `rules.resolveRound`**
+- [x] **F2-06 — `rules.resolveRound`**
   Dato un insieme di offerte non ritirate: max unico → vincitore; tie round 1 → pareggianti; tie round 2 → `MIN(amount_set_at)` poi `MIN(bid id)`.
   Verifica: test §12.1, §12.6, §12.11, §12.12.
   Dipende: F2-01
 
-- [ ] **F2-07 — `rules.nextSeat`**
+- [x] **F2-07 — `rules.nextSeat`**
   Prossimo seat in ordine crescente circolare con slot libero nel ruolo corrente; indipendente dal vincitore.
   Verifica: test §12.23 (skip ruolo pieno con wrap-around).
   Dipende: F2-04
 
-- [ ] **F2-08 — `rules.nextRole`** ⚠ P9
+- [x] **F2-08 — `rules.nextRole`** ⚠ P9
   Avanzamento lungo `role_order` che salta i ruoli già pieni per tutti (possibile dopo `manualAssign`); se nessun ruolo residuo → COMPLETED.
   Verifica: test §12.22, §12.24, più caso "ruolo intermedio già pieno" saltato.
   Dipende: F2-01
 
-- [ ] **F2-09 — `machine`: pick valido**
+- [x] **F2-09 — `machine`: pick valido**
   `transition(state, {type:'PICK', playerId}, now)`: validazioni (membro di turno, ruolo corrente, non assegnato, non fuori lista) → crea lotto OPEN + round 1 + eligibility + auto-bid a 1 del chiamante con `amount_set_at = now`.
   Verifica: unit test — pick di non-di-turno, ruolo sbagliato, giocatore assegnato, fuori lista: tutti rifiutati con errore tipizzato; pick valido produce lo stato atteso.
   Dipende: F2-04, F2-05
 
-- [ ] **F2-10 — `machine`: timeout pick → auto-pick**
+- [x] **F2-10 — `machine`: timeout pick → auto-pick**
   Scadenza WAITING_PICK → auto-pick (`auto_called = true`) + auto-bid a 1 del chiamante.
   Verifica: test §12.3.
   Dipende: F2-09
 
-- [ ] **F2-11 — `machine`: `placeBid`** ⚠ P3
+- [x] **F2-11 — `machine`: `placeBid`** ⚠ P3
   Upsert: nuovo importo → aggiorna `amount` e `amount_set_at = now`; stesso importo → no-op (timestamp preservato); validazioni `min_amount ≤ amount ≤ max_bid`, idoneità, `now ≤ ends_at`.
   Verifica: test §12.5, §12.14, §12.18, §12.30; nuovo test: ri-submit dello stesso importo non tocca `amount_set_at`.
   Dipende: F2-03, F2-04
 
-- [ ] **F2-12 — `machine`: `withdrawBid`** ⚠ P10
+- [x] **F2-12 — `machine`: `withdrawBid`** ⚠ P10
   Ritiro vietato al chiamante e nel round 2; **irreversibile**: dopo il ritiro il membro non può più offrire su quel lotto.
   Verifica: test §12.7, §12.8; nuovo test: withdraw → placeBid successivo rifiutato con errore tipizzato.
   Dipende: F2-11
 
-- [ ] **F2-13 — `machine`: chiusura round 1**
+- [x] **F2-13 — `machine`: chiusura round 1**
   Timeout LOT_OPEN round 1 → max unico → LOT_REVEAL; pareggio → LOT_TIE_PREP con deadline `tie_prep_seconds`.
   Verifica: test §12.1, §12.2, §12.9.
   Dipende: F2-06, F2-11
 
-- [ ] **F2-14 — `machine`: TIE_PREP → round 2 con carry-forward**
+- [x] **F2-14 — `machine`: TIE_PREP → round 2 con carry-forward**
   Round 2 con `min_amount` = importo pareggiato, eligibility = soli pareggianti, offerte copiate preservando `amount_set_at` originale.
   Verifica: test §12.9, §12.13, §12.15; il carry-forward conserva i timestamp del round 1.
   Dipende: F2-13
 
-- [ ] **F2-15 — `machine`: risoluzione round 2**
+- [x] **F2-15 — `machine`: risoluzione round 2**
   Rilancio unico → vince; stallo → carry-forward più vecchio; rilanci pari → primo submit del round 2.
   Verifica: test §12.6, §12.10, §12.11, §12.12.
   Dipende: F2-14
 
-- [ ] **F2-16 — `machine`: REVEAL e avanzamento**
+- [x] **F2-16 — `machine`: REVEAL e avanzamento**
   Assegnazione committata all'INGRESSO di LOT_REVEAL; alla scadenza: nextSeat/nextRole o COMPLETED.
   Verifica: test §12.21, §12.22, §12.24; l'assignment esiste già durante la fase REVEAL.
   Dipende: F2-07, F2-08, F2-13, F2-15
 
-- [ ] **F2-17 — `machine`: pause/resume**
+- [x] **F2-17 — `machine`: pause/resume**
   Pause congela (`paused_at`); resume trasla `phase_deadline` del tempo di pausa.
   Verifica: test §12.29 (pausa a metà round + resume dopo 5' → residuo intatto).
   Dipende: F2-09
 
-- [ ] **F2-18 — `machine`: idempotenza e caso unico idoneo**
+- [x] **F2-18 — `machine`: idempotenza e caso unico idoneo**
   `ADVANCE` su fase già avanzata o deadline non raggiunta = no-op (I7); se alla creazione del lotto l'unico idoneo è il chiamante → transizione immediata a LOT_REVEAL, assegnato a 1, senza attendere `bid_seconds` (DECISIONS 2026-08-06).
   Verifica: test §12.26, §12.41 (chiusura immediata, prezzo 1, nessun countdown di offerta).
   Dipende: F2-16
 
-- [ ] **F2-19 — Suite §12 pura completa**
+- [x] **F2-19 — Suite §12 pura completa**
   Test §12: 1–26, 29, 30, 41 tutti verdi da CLI in millisecondi; zero DB, zero UI, zero timer reali. ⚠ P5 per la ripartizione.
   Verifica: `pnpm test` verde; grep conferma nessun `Date.now()` in `rules.ts`/`machine.ts`.
   Dipende: F2-02 … F2-18
 
-- [ ] **F2-20 — ARCHITECTURE: il motore**
+- [x] **F2-20 — ARCHITECTURE: il motore**
   Capitolo sul motore: perché funzioni pure, come si legge `transition`, la regola del tempo come parametro.
   Verifica: il capitolo esiste e spiega il flusso WAITING_PICK → … → REVEAL in prosa.
   Dipende: F2-19
 
-- [ ] **F2-21 — GATE Fase 2**
+- [x] **F2-21 — GATE Fase 2**
   Criteri ✅: tutti i test della parte pura di §12 verdi; zero righe di UI dell'asta scritte. Aggiorna `CLAUDE.md`.
   Verifica: `pnpm test` verde; `git diff --stat` della fase non tocca `app/auctions/**/play|manage` né `components/auction`.
   Dipende: tutti i F2-*
+  *Chiuso il 2026-08-07. Il motore è in `lib/engine/types.ts` (stato ed eventi), `rules.ts`
+  (crediti, max_bid, idoneità, auto-pick, risoluzione round, rotazione) e `machine.ts`
+  (`transition(state, event, now)`). Suite tutta scritta PRIMA dell'implementazione (rosso→verde
+  documentato dai run): 79 test puri nuovi in `tests/engine/`, che coprono §12 1–26, 29, 30, 41
+  (il 25 era già verde dalla Fase 1). `pnpm test` 146/146, `pnpm lint`, `pnpm typecheck` e
+  `pnpm build` verdi; `grep` conferma zero `Date.now()`/`new Date` in `rules.ts` e `machine.ts`;
+  il diff della fase tocca solo `lib/engine/**`, `tests/engine/**` e i documenti — nessuna riga
+  di UI. Scelte nuove (tempo in epoch-ms, id da contatore, no-op per riferimento, rifiuti in
+  PAUSED, START nel motore) registrate in `DECISIONS.md` sotto "Fase 2, motore puro".*
 
 ---
 

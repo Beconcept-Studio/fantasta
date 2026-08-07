@@ -21,13 +21,14 @@ inventando: annota la domanda e aspetta. Un'assunzione silenziosa qui costa un'a
 
 ## Fase corrente
 
-> **FASE 2 — Motore, funzioni pure, con test** · da aprire. ⚠ Sessione da avviare con `/model fable`.
-> Fasi 0 e 1 chiuse e collaudate a mano dall'owner il 2026-08-07.
+> **FASE 3 — Persistenza e timer** · da aprire. ⚠ Sessione da avviare con `/model fable`.
+> Fasi 0–2 chiuse il 2026-08-07 (la 2 è tutta automatica: 146 test verdi, nessun collaudo manuale).
 > Aggiorna questa riga a ogni passaggio di fase.
 
-In Fase 2 valgono due divieti in più, oltre alle otto regole: **nessun import da `lib/db`** e
-**nessuna riga di UI dell'asta**. I test di §12 si scrivono **prima** dell'implementazione.
-Ripartizione in `docs/BACKLOG.md`: a questa fase spettano i test 1–26, 29, 30, 41.
+In Fase 3 il motore puro di `lib/engine/{rules,machine}.ts` non si riscrive: si carica lo stato
+dal DB, si chiama `transition` e si persiste dentro `withAuctionLock`. Un no-op del motore
+restituisce lo **stesso riferimento** di stato: è il segnale per non bumpare `state_version`
+(P14). A questa fase spettano i test §12.27 e §12.28 (concorrenza su Postgres reale).
 
 Le fasi sono cancelli sequenziali (`docs/PLAN.md` §11). Non si apre una fase finché tutti i
 criteri ✅ della precedente non sono verdi. In particolare: **nessuna riga di UI dell'asta prima
