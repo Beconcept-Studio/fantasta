@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx --env-file=.env scripts/seed.ts"
+    "db:seed": "tsx --env-file=.env scripts/seed.ts",
+    "drive": "tsx --env-file=.env scripts/drive.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

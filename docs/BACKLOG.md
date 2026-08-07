@@ -347,85 +347,97 @@ sempre un parametro. Test scritti PRIMA dell'implementazione (§12).
 
 ## Fase 3 — Persistenza e timer
 
-- [ ] **F3-01 — Load/persist dello stato**
+- [x] **F3-01 — Load/persist dello stato**
   Caricamento di `AuctionState` dalle righe DB e persistenza del nuovo stato dopo `transition`, dentro la transazione.
   Verifica: test integrazione — roundtrip load→transition→persist→load produce stati equivalenti su un'asta seeded.
   Dipende: F2-21
 
-- [ ] **F3-02 — `withAuctionLock`** ⚠ P14
+- [x] **F3-02 — `withAuctionLock`** ⚠ P14
   Come da §6: transazione + `SELECT ... FOR UPDATE`, incremento `state_version` e broadcast (hook no-op per ora) solo se la mutazione ha effetto; no-op → nessun bump.
   Verifica: test integrazione — due transazioni concorrenti serializzate; una `advancePhase` no-op non incrementa `state_version`.
   Dipende: F3-01
 
-- [ ] **F3-03 — Errori tipizzati**
+- [x] **F3-03 — Errori tipizzati**
   Enum di codici errore per ogni rifiuto (§17); ogni action li restituisce, mai stringhe generiche.
   Verifica: unit test su almeno pick non di turno e bid oltre max_bid: codice atteso.
   Dipende: F3-01
 
-- [ ] **F3-04 — `startAuction`**
+- [x] **F3-04 — `startAuction`**
   READY → LIVE con `startSeatIndex`; `current_role = role_order[0]`; il gate presence "tutti LIVE" è aggiunto in F4-06 quando esiste l'heartbeat ⚠ P5.
   Verifica: script su asta READY seeded → LIVE, `phase = WAITING_PICK`, deadline valorizzata.
   Dipende: F3-02
 
-- [ ] **F3-05 — Actions di gioco su DB**
+- [x] **F3-05 — Actions di gioco su DB**
   `pickPlayer`, `placeBid`, `withdrawBid` che caricano stato, chiamano il motore puro e persistono, tutto dentro `withAuctionLock`.
   Verifica: sequenza scriptata pick→bid×N→withdraw produce le righe attese in lots/lot_rounds/bids.
   Dipende: F3-02, F3-03
 
-- [ ] **F3-06 — `advancePhase` guardata**
+- [x] **F3-06 — `advancePhase` guardata**
   Rilegge `phase` e `phase_deadline` nella transazione; no-op se `now < deadline` o fase già cambiata (I7).
   Verifica: test §12.26 a livello DB — doppia chiamata sullo stesso deadline, un solo effetto.
   Dipende: F3-02
 
-- [ ] **F3-07 — `pauseAuction` / `resumeAuction`**
+- [x] **F3-07 — `pauseAuction` / `resumeAuction`**
   Pause cancella i timer in memoria; resume trasla la deadline e riarma.
   Verifica: test integrazione §12.29 — resume dopo pausa lunga → countdown dal residuo, il round non risulta scaduto.
   Dipende: F3-05, F3-08
 
-- [ ] **F3-08 — Scheduler**
+- [x] **F3-08 — Scheduler**
   `arm`/`cancel`/`sweep` (1s, `status='LIVE' AND phase_deadline <= now()`)/`bootRecovery`; init in `instrumentation.ts` con `globalThis.__scheduler ??=`.
   Verifica: test con fake timers su arm/sweep; doppia esecuzione di `register()` → un solo interval attivo.
   Dipende: F3-06
 
-- [ ] **F3-09 — `events` + log strutturato**
+- [x] **F3-09 — `events` + log strutturato**
   Ogni transizione scrive una riga in `events` e una riga JSON su stdout `{auctionId, from, to, lotId, actor, ts}` (§17).
   Verifica: un lotto completo produce la sequenza di eventi attesa, leggibile con la query del runbook.
   Dipende: F3-05
 
-- [ ] **F3-10 — Test di concorrenza**
+- [x] **F3-10 — Test di concorrenza**
   §12.27 (due `pickPlayer` concorrenti → uno passa) e §12.28 (bid stesso millisecondo → nessun doppio assegnamento), su Postgres reale.
   Verifica: entrambi verdi e stabili su 20 run consecutivi.
   Dipende: F3-05, F3-06
 
-- [ ] **F3-11 — Script driver d'asta**
+- [x] **F3-11 — Script driver d'asta**
   Script (`pnpm drive --auction=<id>`) che via HTTP/action gioca un'asta completa: pick, bid casuali validi, gestione spareggi.
   Verifica: ✅ criterio di fase — un'asta parte READY e arriva a COMPLETED senza UI e senza interventi.
   Dipende: F3-04, F3-05, F3-08
 
-- [ ] **F3-12 — Timer di sviluppo accelerati** ⚠ P16
+- [x] **F3-12 — Timer di sviluppo accelerati** ⚠ P16
   Timer corti nel seed dev (bid 3s, pick 3s, reveal 2s); `DEV_TIME_SCALE` eliminata (DECISIONS 2026-08-06): nessun ramo dipendente dall'ambiente nella logica del tempo.
   Verifica: l'asta del driver F3-11 si completa in pochi minuti in locale.
   Dipende: F3-11
 
-- [ ] **F3-13 — Seed stati avanzati**
+- [x] **F3-13 — Seed stati avanzati**
   `--auction-status=live|mid|completed` generati facendo girare il motore (non con INSERT artigianali).
   Verifica: `mid` produce un'asta LIVE con rose parziali dove i crediti rispettano la formula di §3 per ogni membro.
   Dipende: F3-11
 
-- [ ] **F3-14 — Boot recovery sotto restart** ⚠ P15
+- [x] **F3-14 — Boot recovery sotto restart** ⚠ P15
   Kill del processo a metà round → al riavvio `bootRecovery` riarma o avanza entro 1 secondo. Documentare in RUNBOOK: se il downtime supera il residuo, lo sweep chiude il round con le offerte già a DB; la correzione passa da `voidAssignment` + `manualAssign` (Fase 7).
   Verifica: ✅ criterio di fase — restart a metà round, l'asta prosegue correttamente entro 1s.
   Dipende: F3-08, F3-11
 
-- [ ] **F3-15 — ARCHITECTURE: persistenza e tempo**
+- [x] **F3-15 — ARCHITECTURE: persistenza e tempo**
   Capitolo su `withAuctionLock`, scheduler, sweep come rete di sicurezza, boot recovery.
   Verifica: capitolo presente e coerente con il codice.
   Dipende: F3-14
 
-- [ ] **F3-16 — GATE Fase 3**
+- [x] **F3-16 — GATE Fase 3**
   Criteri ✅ del piano più la verifica differita da F1-19: con `role_order = ['C','A','P','D']` l'asta parte da C e percorre l'ordine scelto (test §12.21 end-to-end). Aggiorna `CLAUDE.md`.
   Verifica: asta completa via script; restart test verde; ordine ruoli end-to-end dimostrato.
   Dipende: tutti i F3-*
+  *Chiuso il 2026-08-07. `pnpm test` 183/183 (di cui ~40 di integrazione su Postgres, con i due
+  test di concorrenza §12.27–28 stabili su 20 run consecutivi), `pnpm lint`, `pnpm typecheck` e
+  `pnpm build` verdi. Criteri ✅ dimostrati: (1) l'asta del seed (8 posti, 200 lotti, timer 3s)
+  portata da READY a COMPLETED da `pnpm drive` senza UI né interventi in 20,9 minuti — "pochi
+  minuti" del piano è in realtà il minimo fisico dei timer (200 × ~5s); per iterare in fretta
+  si usa un'asta con slot ridotti (32 lotti ≈ 2 minuti); rose finali 25/25 e crediti coerenti
+  con la formula di §3 per tutti gli 8 membri. (2) Kill -9 del processo a metà round: l'asta
+  resta congelata (28s oltre la deadline, `state_version` immobile) e al riavvio il primo
+  avanzamento arriva **0,37s** dopo il lancio del processo (boot recovery + sweep). (3) Ordine
+  ruoli: un'asta con `role_order = ['C','A','P','D']` percorre i lotti 1–8 su C, 9–16 su A,
+  17–24 su P, 25–32 su D. Il collaudo visivo delle due demo spetta all'owner (guida nel
+  RUNBOOK).*
 
 ---
 

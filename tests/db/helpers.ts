@@ -26,12 +26,12 @@ export async function databaseAvailable(): Promise<boolean> {
   }
 }
 
-let counter = 0;
-
 /** Un utente usa e getta, distinguibile dal seed perché ha un `google_sub`. */
 export async function makeUser(label = "test"): Promise<string> {
-  counter += 1;
-  const tag = `${Date.now().toString(36)}-${counter}`;
+  // Un uuid, non `Date.now()+contatore`: i file di test girano in worker
+  // paralleli e due `makeUser` nello stesso millisecondo collidevano su
+  // `users_google_sub_unique`.
+  const tag = crypto.randomUUID();
   const [row] = await db
     .insert(users)
     .values({

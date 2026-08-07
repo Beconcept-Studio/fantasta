@@ -174,9 +174,10 @@ in sviluppo.
 `pnpm db:seed` è idempotente — si può rilanciare quante volte si vuole senza duplicare niente — e
 crea i dodici utenti fittizi che alimentano il provider `dev`. Con
 `pnpm db:seed --auction-status=ready` costruisce anche un'asta a otto con il listone importato e
-tutti i posti pieni; con `draft` la stessa asta ma con un posto libero. Gli stati di un'asta già
-avviata (`live`, `mid`, `completed`) rispondono ancora con un messaggio che spiega in quale fase
-diventeranno generabili: li produrrà la Fase 3, facendo girare il motore.
+tutti i posti pieni; con `draft` la stessa asta ma con un posto libero. Dalla Fase 3 sa generare
+anche gli stati di un'asta già avviata — `live` (appena partita), `mid` (a metà, con le rose
+parzialmente riempite), `completed` — e il *come* è raccontato nel capitolo sulla persistenza:
+il motore gioca l'asta per davvero, solo su un orologio virtuale.
 
 Il dettaglio che conta è **come** li costruisce: non con `INSERT` artigianali, ma chiamando le
 stesse funzioni che usa la UI — `createAuction`, `importPlayers`, `createInvite`, `joinAuction`.
@@ -491,14 +492,117 @@ dovrà comunicarla per quello che è.
 
 ---
 
+## La persistenza e il tempo
+
+Questo è il capitolo della Fase 3: il ponte fra il motore in memoria e il mondo — il database, il
+lock, i timer, il riavvio. Il motore non è stato toccato: tutto ciò che segue sta *attorno* a
+`transition`, in `lib/engine/mutate.ts` (caricamento, persistenza, lock), `actions.ts` (le azioni
+che gli utenti invocano) e `scheduler.ts` (il tempo).
+
+### Il ciclo di ogni mutazione
+
+Qualunque cosa succeda a un'asta avviata — un'offerta, un pick, lo scattare di una scadenza, la
+pausa — passa dallo stesso identico ciclo: si apre una transazione, si prende il `SELECT ... FOR
+UPDATE` sulla riga dell'asta, si carica lo stato del motore dalle righe del database, si chiama
+`transition`, si scrive la differenza, si committa. Poi — fuori dalla transazione — si avvisa chi
+deve saperlo: il broadcast dello snapshot (che oggi è un gancio vuoto, lo riempie la Fase 4) e il
+riarmo del timer sulla nuova scadenza.
+
+Il lock è il punto che rende tutto il resto semplice, ed è la quarta regola del progetto: **due
+azioni concorrenti sulla stessa asta si mettono in fila lì**, e con il lock preso non esistono
+corse su nessuna delle altre tabelle. Il test che lo dimostra non usa attese: due mutazioni
+simultanee leggono la versione dello stato dalla riga bloccata, e se la seconda vede il valore
+già incrementato dalla prima è *perché* ha dovuto aspettarne il commit. I due test di concorrenza
+del piano — due pick simultanei aprono un lotto solo; due offerte nello stesso millisecondo non
+producono mai un doppio assegnamento — girano contro Postgres vero e sono stabili su venti
+esecuzioni consecutive.
+
+### La traduzione fra i due mondi
+
+Il motore ragiona su millisecondi e id numerici da contatore; il database ha `TIMESTAMPTZ` e
+uuid. La traduzione è confinata in due funzioni speculari. `loadAuctionState` legge le righe e
+costruisce l'`AuctionState`, assegnando gli id del motore in ordine di lettura e tenendosi la
+mappa verso gli uuid; quegli id sono **etichette di caricamento**, valide per il ciclo corrente e
+mai persistite — due caricamenti dello stesso database producono lo stesso identico stato, e
+niente nel dominio dipende dal loro valore.
+
+`persistTransition` scrive la differenza fra lo stato prima e dopo, e la calcola **per
+riferimento**: siccome il motore non muta mai — ciò che cambia è un oggetto nuovo, ciò che non
+cambia è lo stesso oggetto — basta un confronto di identità per sapere quali lotti, round e
+offerte toccare. Un rilancio è l'aggiornamento di una riga; un pick è l'inserimento di un lotto
+col suo round, l'eligibility e l'auto-bid del chiamante; un no-op non scrive niente. E qui torna
+la convenzione della Fase 2: quando `transition` restituisce lo stesso riferimento, il ciclo lo
+riconosce con un `===`, non incrementa `state_version` e non farà partire nessun broadcast. Lo
+sweep può bussare ogni secondo senza generare traffico.
+
+### Le azioni, e chi può fare cosa
+
+`actions.ts` è il punto in cui un utente autenticato incontra il motore: `startAuction`,
+`pickPlayer`, `placeBid`, `withdrawBid`, `pauseAuction`, `resumeAuction`, più `advancePhase` che
+non ha un utente — la chiamano i timer. La divisione dei compiti è netta: le azioni traducono
+l'utente nel suo membro e controllano le autorizzazioni (l'avvio e la pausa sono dell'owner);
+**le regole del gioco restano tutte nel motore**, e i suoi rifiuti tipizzati risalgono così come
+sono. Ogni transizione effettiva scrive anche una riga in `events` — la memoria dell'asta, quella
+che si interroga quando qualcosa è andato storto — e una riga JSON su stdout, quella che la sera
+dell'asta scorre in un terminale con `pm2 logs`.
+
+Un dettaglio che i test sfruttano ovunque: anche le azioni prendono il tempo come parametro
+opzionale. In produzione nessuno lo passa e vale l'orologio vero; nei test "riprendi dopo cinque
+minuti di pausa" è un numero, non un'attesa.
+
+### Il tempo ha due gambe
+
+Lo scheduler (`lib/engine/scheduler.ts`) dà corpo alle scadenze, e lo fa con due meccanismi che
+puntano alla stessa `advancePhase`:
+
+- **`arm`** è la via veloce: un `setTimeout` sulla deadline della fase, riarmato dopo ogni
+  mutazione. È quello che chiude un round nel millisecondo giusto.
+- **lo `sweep`** è la rete di sicurezza: ogni secondo chiede al database le aste LIVE con la
+  deadline scaduta e le fa avanzare. Da solo terrebbe in piedi l'asta anche se tutti i
+  `setTimeout` sparissero — ed è esattamente ciò che succede a un riavvio.
+
+Nessuno dei due "decide" niente: emettono `ADVANCE`, e la transizione è guardata dentro il motore
+(I7). Un timer che scatta due volte, un timer e lo sweep insieme, due processi che per sbaglio
+fanno lo sweep sulla stessa base dati: tutto innocuo per costruzione, un effetto solo.
+
+Il **boot recovery** è la conseguenza, non una funzione in più: all'avvio del processo si fa un
+giro di sweep (che chiude subito ciò che è scaduto durante il downtime) e si riarma il timer di
+ogni asta LIVE. L'avvio sta in `instrumentation.ts`, il gancio che Next.js esegue una volta per
+processo — con la guardia `globalThis.__scheduler ??=`, perché in sviluppo l'hot reload rieseguirebbe
+la registrazione e due sweep sulla stessa asta, per quanto innocui, sono comunque uno spreco. Se
+il server muore a metà round e riparte, entro un secondo lo stato riprende dal database: se il
+downtime era più corto del tempo residuo il round prosegue normalmente, altrimenti lo sweep lo
+chiude con le buste già consegnate — che è il comportamento giusto, perché le offerte stanno a
+database, non in memoria.
+
+### Il driver: l'asta che si gioca da sola
+
+`pnpm drive --auction=<id>` è il collaudo di tutto il capitolo: prende un'asta pronta e la porta
+a COMPLETED senza UI. Avvia lo scheduler in-process — è lui a chiudere i round, il driver non
+chiama mai `advancePhase` — e impersona i partecipanti: chi è di turno chiama un giocatore, gli
+idonei offrono importi casuali validi, qualcuno ogni tanto ritira o si lascia scadere il pick per
+esercitare l'auto-pick. Se l'asta arriva in fondo è perché timer, sweep, lock e persistenza
+funzionano insieme. Con i timer corti del seed (3 secondi per offrire) un'asta piccola si chiude
+in un paio di minuti; quella vera da duecento lotti in un quarto d'ora.
+
+Lo stesso motore, girato su un **orologio virtuale**, è il modo in cui il seed fabbrica gli stati
+avanzati: `--auction-status=mid` gioca metà asta in memoria saltando di deadline in deadline
+(millisecondi, non minuti), poi persiste il risultato in un'unica differenza dentro il lock,
+con tutti i timestamp traslati perché l'ultima transizione cada su "adesso". Niente `INSERT`
+artigianali: ogni stato intermedio è passato da `transition`, quindi è per costruzione uno stato
+che l'applicazione sa produrre. L'unica rinuncia dichiarata è la storia in `events` della parte
+simulata, sostituita da una riga `SEED_FAST_FORWARD`.
+
+---
+
 ## Cosa non c'è ancora
 
-Alla fine della Fase 2 il motore sa giocare un'asta intera — ma solo in memoria. Nessuna pagina
-lo usa, nessuna riga di gioco viene scritta a database, non esiste un timer vero che faccia
-scattare le scadenze: i test sono l'unico chiamante. Non c'è ancora una sola riga di UI
-dell'asta, ed è un criterio del gate, non una mancanza.
+Alla fine della Fase 3 un'asta completa si gioca da sola, da riga di comando, e sopravvive a un
+riavvio del processo a metà round. Ma nessun client la vede: il broadcast è un gancio vuoto, non
+esiste né lo snapshot sanificato né lo stream SSE, e non c'è ancora una sola riga di UI
+dell'asta — è un criterio dei gate, non una mancanza.
 
-La Fase 3 costruirà il ponte: caricare `AuctionState` dalle righe del database, eseguire
-`transition` dentro il lock di riga (`withAuctionLock`), persistere il risultato, e dare al tempo
-un corpo — `setTimeout` più lo sweep di sicurezza che rilegge le scadenze dal database ogni
-secondo, così un riavvio a metà round riprende da dove aveva lasciato.
+La Fase 4 costruirà il canale verso i client: `serializeSnapshot` (l'unico punto da cui lo stato
+esce dal server, per costruzione senza importi altrui durante le buste chiuse), il broadcast agli
+stream aperti, l'heartbeat di presence e i bot che sostituiranno il driver come partecipanti
+finti.

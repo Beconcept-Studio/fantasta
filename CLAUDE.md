@@ -21,18 +21,22 @@ inventando: annota la domanda e aspetta. Un'assunzione silenziosa qui costa un'a
 
 ## Fase corrente
 
-> **FASE 3 — Persistenza e timer** · da aprire. ⚠ Sessione da avviare con `/model fable`.
-> Fasi 0–2 chiuse il 2026-08-07 (la 2 è tutta automatica: 146 test verdi, nessun collaudo manuale).
+> **FASE 4 — SSE e snapshot** · da aprire con **Opus** (il default di progetto: nessun `/model`
+> da digitare). Fasi 0–3 chiuse il 2026-08-07 (la 3: 183 test verdi, asta completa via
+> `pnpm drive`, boot recovery in 0,37s; il collaudo visivo delle demo spetta all'owner).
 > Aggiorna questa riga a ogni passaggio di fase.
 
-In Fase 3 il motore puro di `lib/engine/{rules,machine}.ts` non si riscrive: si carica lo stato
-dal DB, si chiama `transition` e si persiste dentro `withAuctionLock`. Un no-op del motore
-restituisce lo **stesso riferimento** di stato: è il segnale per non bumpare `state_version`
-(P14). A questa fase spettano i test §12.27 e §12.28 (concorrenza su Postgres reale).
+In Fase 4 il motore e la persistenza non si toccano: si costruisce il canale verso i client.
+`serializeSnapshot(state, viewerMemberId | null)` è l'**unico** punto da cui lo stato esce dal
+server (regola 3, I8: mai un importo altrui durante `LOT_OPEN`); il broadcast si aggancia al
+hook già predisposto in `lib/engine/mutate.ts` (`setBroadcastHook`), che parte dopo il commit e
+solo su mutazione effettiva (P14). A questa fase spettano i test §12.31–34 e il test I8 sui tre
+viewer (partecipante, manager, TV), più l'heartbeat di presence (⚠ P8: fuori dal lock, senza
+bump di `state_version`) e i bot.
 
 Le fasi sono cancelli sequenziali (`docs/PLAN.md` §11). Non si apre una fase finché tutti i
 criteri ✅ della precedente non sono verdi. In particolare: **nessuna riga di UI dell'asta prima
-che la Fase 3 chiuda un'asta completa pilotata da script.**
+della Fase 5** — la Fase 4 è protocollo e test, non schermate.
 
 **A ogni chiusura di fase (task di GATE), ricapitola all'utente la sua parte**: i test manuali
 che deve eseguire di persona per il gate appena chiuso, cosa lo aspetta nella fase successiva
@@ -85,7 +89,8 @@ docker compose up -d      # postgres (host: porta 5433, vedi DECISIONS 2026-08-0
 pnpm db:push              # applica lo schema drizzle
 pnpm db:seed              # solo i 12 utenti di prova
 pnpm db:seed --auction-status=ready    # + asta a 8 pronta, listone importato
-pnpm db:seed --auction-status=mid      # asta LIVE già a metà (dalla Fase 3)
+pnpm db:seed --auction-status=mid      # asta LIVE già a metà (attenzione: con l'app accesa prosegue da sola)
+pnpm drive --auction=<id>              # gioca un'asta READY/LIVE fino a COMPLETED, senza UI
 pnpm test                 # vitest, fake timers obbligatori; i test in tests/db/ vogliono Postgres
 pnpm bots --auction=<id> --count=7 --strategy=random|tie|aggressive|passive
 ```

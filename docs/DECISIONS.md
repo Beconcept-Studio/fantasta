@@ -291,3 +291,62 @@ il pannello di reveal della Fase 5 mostra le buste di ogni lotto senza un caso s
 **Il carry-forward crea righe nuove.** Le offerte copiate nel round 2 hanno id nuovi e
 `created_at` dell'apertura del round; solo `amount_set_at` è preservato dal round 1 (è l'unico
 campo che PLAN §4 richiede di ereditare, ed è quello che decide gli stalli).
+
+---
+
+## 2026-08-07 — Fase 3, persistenza e timer
+
+**Gli id del motore sono etichette di caricamento, non identità persistite.** Ogni
+`loadAuctionState` li assegna da un contatore in ordine di lettura e tiene la mappa verso gli
+uuid in `refs`; valgono per il ciclo load → transition → persist corrente e non escono mai dal
+processo. Due load consecutivi dello stesso database producono lo stesso identico stato; il load
+*dopo* una transizione produce uno stato **equivalente** (stessi fatti, etichette diverse), ed è
+questa l'equivalenza che il test di roundtrip verifica. Motivazione: persistere la numerazione
+avrebbe richiesto colonne in più senza guadagno — niente nel dominio dipende dal valore degli id
+(il tie-break `MIN(bids.id)` scatta solo a parità esatta di timestamp, e a quel punto qualunque
+ordinamento stabile è ugualmente arbitrario).
+
+**La persistenza è una diff per riferimento.** Il motore non muta mai lo stato: ciò che cambia è
+un oggetto nuovo lungo il cammino della modifica, ciò che non cambia è lo stesso riferimento.
+`persistTransition` confronta con `===` e tocca solo le righe davvero cambiate; il no-op
+(`next === prev`) non scrive niente ed è il segnale P14 per non bumpare `state_version`.
+
+**`now` è un parametro anche nelle azioni.** `startAuction`, `placeBid`, `advancePhase` ecc.
+accettano un `now: Millis` opzionale (default `Date.now()`). Motivazione: è la stessa disciplina
+del motore portata un livello più su — i test integrano "resume dopo 5 minuti" senza dormire
+5 minuti, e il seed degli stati avanzati inietta un orologio virtuale. In produzione nessuno
+passa il parametro.
+
+**`withAuctionLock` carica lo stato e chiede `mutated` esplicito.** La firma è
+`fn(tx, loaded) → { result, mutated }`: ogni utilizzatore del lock ha comunque bisogno dello
+stato del motore, quindi il caricamento sta dentro il lock; e la decisione bump/broadcast (P14)
+è dichiarata dal corpo, non dedotta. Il broadcast è un hook settabile che oggi non fa niente:
+la Fase 4 lo aggancerà allo stream SSE, ma il punto da cui parte — dopo il commit, solo su
+mutazione — è già quello definitivo.
+
+**Lo scheduler non importa le azioni.** `createScheduler(advance)` riceve la funzione di
+avanzamento da chi lo avvia (`instrumentation.ts` gli passa `advancePhase`; i test un mock).
+Motivazione: evitare il ciclo di import azioni ↔ scheduler; in cambio `syncTimer` — il riarmo a
+valle di ogni mutazione — è un no-op nei processi senza scheduler (seed, test), dove non c'è
+nessuno che debba far scorrere il tempo. Corollario osservato col driver: **due processi con lo
+sweep attivo sulla stessa base dati si pestano i piedi senza farsi male** (I7 + lock rendono i
+doppi ADVANCE innocui), ma il design resta un processo solo — non farci affidamento.
+
+**Il driver non chiama mai `advancePhase`.** `pnpm drive` avvia lo scheduler in-process e
+impersona solo i partecipanti (pick, offerte, ritiri): se l'asta arriva a COMPLETED è perché
+timer e sweep funzionano. È il criterio ✅ di fase esercitato con i pezzi veri.
+
+**Seed avanzato: simulazione pura, persistenza in blocco, timestamp traslati.**
+`--auction-status=live|mid|completed` gioca l'asta col motore puro su un orologio virtuale che
+salta di deadline in deadline (duecento lotti in millisecondi), poi persiste il risultato con
+un'unica `persistTransition` dentro `withAuctionLock`, dopo aver traslato tutti i timestamp così
+che l'ultima transizione cada su "adesso" — un'asta `mid` riparte con un countdown pieno, non
+già scaduta. Conseguenza dichiarata: la storia lotto-per-lotto in `events` non esiste per la
+parte simulata; una riga `SEED_FAST_FORWARD` lo documenta. Un'asta `mid` con l'app accesa
+**continua da sola** (auto-pick coi timer corti): è LIVE per davvero, come da backlog.
+
+**`events.payload` è `{from, to, lotId, actor}`.** `from`/`to` sono posizioni compatte
+(`LIVE/LOT_OPEN`, `READY`, `COMPLETED`); `actor` è l'utente che ha agito o `"system"` per le
+transizioni del tempo; `lotId` è il lotto toccato (quello corrente dopo la transizione o, quando
+la transizione lo archivia, quello di prima). La riga JSON su stdout ha gli stessi campi più
+`auctionId`, `type` e `ts` (PLAN §17).

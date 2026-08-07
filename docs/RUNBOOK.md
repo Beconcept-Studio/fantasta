@@ -6,11 +6,12 @@ Questa sezione è per l'utente umano: cosa devi fare tu, fase per fase, e cosa p
 **A ogni chiusura di fase, Claude deve ricapitolarti i punti di questa guida relativi al gate
 appena chiuso e alla fase che si apre** (regola in `CLAUDE.md`).
 
-> **Dove siamo.** Fasi 0, 1 e 2 chiuse il 2026-08-07 (la 2 senza collaudo manuale: motore puro,
-> 146 test verdi). La prossima è la **Fase 3 — Persistenza e timer**, da aprire in una sessione
-> nuova digitando `/model fable` prima del prompt. Il tuo collaudo al gate della 3: lanciare il
-> driver (`pnpm drive`) su un'asta seeded e vederla arrivare a COMPLETED, e il test di restart a
-> metà round.
+> **Dove siamo.** Fasi 0–3 chiuse il 2026-08-07. La 3 ha portato il motore sul database
+> (183 test verdi, concorrenza inclusa): un'asta completa si gioca da sola con `pnpm drive`,
+> e un kill del processo a metà round riparte in meno di un secondo. **Il tuo collaudo visivo
+> delle due demo è ancora da fare** — i comandi esatti sono nella tabella qui sotto, riga
+> "3 — Persistenza e timer". La prossima è la **Fase 4 — SSE e snapshot**, da aprire in una
+> sessione nuova col modello di default (Opus): nessun `/model` da digitare.
 
 ### Il ritmo generale (vale per ogni fase)
 
@@ -62,8 +63,8 @@ tenere a mente questa tabella.
 |---|---|
 | ~~**0 — Scaffold**~~ ✓ | Fornisci le credenziali OAuth. A fine fase: login con il **tuo** account Google vero, verifica che ti chieda nome e cognome, poi un login con un utente dev. ~10 minuti. |
 | ~~**1 — Setup asta**~~ ✓ | Test a due browser (uno normale + uno incognito, due utenti dev): crea un'asta, carica il listone da UI, genera l'invito, entra col secondo utente, verifica i nomi squadra reciproci. Prova anche un listone "povero" per vedere il rifiuto I9. |
-| **2 — Motore** ⚠ | **Nessun test manuale** — tutto da terminale. Supervisiona: `pnpm test` verde e confronta i nomi dei test con §12 del piano (1–26, 29, 30, 41). È la fase in cui NON avere fretta: se il motore è giusto, il resto è cosmetica. |
-| **3 — Persistenza e timer** | Guarda con i tuoi occhi le due dimostrazioni: lo script che porta un'asta da READY a COMPLETED nel terminale, e il kill del processo a metà round → riparte da solo entro 1s. |
+| ~~**2 — Motore**~~ ✓ | **Nessun test manuale** — tutto da terminale. Supervisiona: `pnpm test` verde e confronta i nomi dei test con §12 del piano (1–26, 29, 30, 41). È la fase in cui NON avere fretta: se il motore è giusto, il resto è cosmetica. |
+| **3 — Persistenza e timer** | Guarda con i tuoi occhi le due dimostrazioni. **(a) Asta completa:** `pnpm db:seed --auction-status=ready`, prendi l'id stampato, poi `pnpm drive --auction=<id>` — vedrai il log JSON scorrere e in ~20 minuti «✓ Asta COMPLETED: 200 lotti». **(b) Restart a metà round:** mentre il driver gira, fermalo con Ctrl-C (o killa il processo); guarda che l'asta resti ferma (nessuna riga nuova), poi rilancia lo stesso comando `pnpm drive --auction=<id>`: riparte entro 1 secondo da dove si era fermata, fino a COMPLETED. |
 | **4 — SSE** | Quasi niente: i criteri sono test automatici. Se vuoi, un `curl` sullo stream. Da qui esistono i **bot**: chiedi una demo con `--strategy=tie` per vedere uno spareggio forzato. |
 | **5 — Portale partecipante** ⚠ | **La fase più impegnativa per te.** Riservati un'ora abbondante: 4 browser insieme in un'asta con bot; chiudi/riapri il modale; killa un tab a metà round e rientra; vai offline durante il tuo turno. E soprattutto: **prova dal tuo telefono vero** via `pnpm dev:lan` — è un criterio di chiusura, non un optional. |
 | **6 — Manager e TV** | Apri la vista TV in incognito (senza login) durante un'asta con bot: nessun importo a busta chiusa deve vedersi. Se hai una TV/proiettore, provala lì per la leggibilità. |
@@ -157,8 +158,32 @@ pnpm db:push              # applica lo schema drizzle al database
 pnpm db:seed              # solo i 12 utenti di prova (idempotente)
 pnpm db:seed --auction-status=ready   # + un'asta a 8 pronta, listone importato
 pnpm db:seed --auction-status=draft   # + la stessa asta con un posto libero
+pnpm db:seed --auction-status=live    # + la stessa asta appena avviata (LIVE)
+pnpm db:seed --auction-status=mid     # + la stessa asta LIVE a metà, rose parziali
+pnpm db:seed --auction-status=completed  # + la stessa asta finita, rose complete
+pnpm drive --auction=<id> # gioca un'asta READY/LIVE fino a COMPLETED, senza UI
 pnpm db:studio            # ispezione del database dal browser
 ```
+
+> **Un'asta LIVE si muove da sola.** Con un processo attivo (l'app in `pnpm dev`, o il driver)
+> lo scheduler fa scattare le scadenze: i pick scaduti diventano auto-pick e l'asta procede coi
+> timer corti del seed. Un'asta `mid` è quindi *viva*, non un fermo immagine: se serve ferma,
+> mettila in pausa. Senza nessun processo attivo, invece, non succede niente — riparte al
+> prossimo avvio (boot recovery, vedi sotto).
+
+### Riavvio a metà asta (boot recovery)
+
+Il processo può morire o essere riavviato in qualunque momento: **lo stato è tutto a database** e
+all'avvio (`instrumentation.ts`) lo scheduler fa un giro di sweep e riarma i timer di ogni asta
+LIVE, entro un secondo.
+
+- Se il downtime era **più corto** del tempo residuo del countdown, il round prosegue come se
+  niente fosse: la deadline non si sposta.
+- Se il downtime era **più lungo**, lo sweep chiude il round con le buste già consegnate a
+  database — le offerte non vivono mai in memoria. Se l'esito così determinato non è quello che
+  la stanza voleva, la correzione è quella del runbook incidenti: pausa → `voidAssignment`
+  dell'assegnazione sbagliata → `manualAssign` con l'esito giusto → resume (strumenti della
+  Fase 7). La rotazione dei turni non torna mai indietro.
 
 > **`pnpm test` vuole Docker acceso.** Una parte dei test parla con Postgres vero — è l'unico modo
 > di verificare che due join simultanei non prendano lo stesso posto. Senza database quella parte
