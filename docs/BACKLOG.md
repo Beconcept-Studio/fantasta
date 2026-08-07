@@ -443,65 +443,77 @@ sempre un parametro. Test scritti PRIMA dell'implementazione (§12).
 
 ## Fase 4 — SSE e snapshot
 
-- [ ] **F4-01 — `serializeSnapshot`**
+- [x] **F4-01 — `serializeSnapshot`**
   Unica funzione di serializzazione (§8): per-viewer (`viewerMemberId | null`), durante LOT_OPEN solo `hasBid` booleani, `myBid` solo del richiedente, `reveal` solo in LOT_REVEAL.
-  Verifica: test §12.31 (myBid valorizzato per chi ha offerto) e §12.32 (non idoneo → myBid null, fuori da eligibleMemberIds).
+  Verifica: test §12.31 (myBid valorizzato per chi ha offerto) e §12.32 (non idoneo → myBid null, fuori da eligibleMemberIds). ✓ `tests/db/snapshot.test.ts`
+  Fatto: `lib/engine/snapshot.ts` (funzione + `loadForSnapshot`), tipi in `lib/realtime/types.ts` (importabili dal client, come `lib/domain.ts`). Prende il bundle di `loadAuctionState`, non il solo stato: servono `refs` (verso il client escono uuid, non gli id del motore) e i nomi. Aggiunti `withdrawn`/`withdrawnAt` e `currentLot.tie` — vedi DECISIONS.
   Dipende: F3-16
 
-- [ ] **F4-02 — `stateVersion` nello snapshot**
+- [x] **F4-02 — `stateVersion` nello snapshot**
   Version inclusa; il client scarterà versioni inferiori.
-  Verifica: test §12.34 — due snapshot consecutivi dopo due mutazioni hanno version strettamente crescente.
+  Verifica: test §12.34 — due snapshot consecutivi dopo due mutazioni hanno version strettamente crescente. ✓ (con il caso P14: un ADVANCE anticipato non bumpa)
   Dipende: F4-01
 
-- [ ] **F4-03 — `broadcast.ts`**
+- [x] **F4-03 — `broadcast.ts`**
   Registry `Map<auctionId, Set<controller>>`; a ogni mutazione invia a ogni connessione lo snapshot serializzato per il SUO viewer.
-  Verifica: test — due connessioni con member diversi ricevono `myBid` diversi dallo stesso broadcast.
+  Verifica: test — due connessioni con member diversi ricevono `myBid` diversi dallo stesso broadcast. ✓ `tests/db/broadcast.test.ts`
+  Fatto: `lib/realtime/broadcast.ts`; l'hook di `mutate.ts` è agganciato in `instrumentation.ts`. **Registro e hook su `globalThis`**: Next compila instrumentation e route handler in bundle separati, e con variabili di modulo lo stream restava muto dopo il primo snapshot (DECISIONS).
   Dipende: F4-01
 
-- [ ] **F4-04 — Route SSE**
+- [x] **F4-04 — Route SSE**
   `GET /api/auctions/:id/stream` (runtime nodejs): snapshot immediato alla connessione, keep-alive `: ping` ogni 15s, cleanup del controller alla chiusura.
-  Verifica: `curl -N` riceve subito uno snapshot, i ping ogni 15s, e la mappa si svuota alla disconnessione.
+  Verifica: `curl -N` riceve subito uno snapshot, i ping ogni 15s, e la mappa si svuota alla disconnessione. ✓ verificato con `curl` e con test automatici sulla route vera (`tests/db/i8.test.ts`: header SSE, registro svuotato alla chiusura, 401/403 per estranei e token sbagliato).
+  Fatto: accesso via sessione (membro → viewer; owner non giocante → manager) o `?token=<public_token>` per la vista TV; `resolveViewer` in `lib/engine/viewer.ts`.
   Dipende: F4-03
 
-- [ ] **F4-05 — Heartbeat e presence** ⚠ P8
+- [x] **F4-05 — Heartbeat e presence** ⚠ P8
   `POST /api/auctions/:id/heartbeat` ogni 10s con `{visible}`; aggiorna `last_seen_at`/`is_visible` FUORI da `withAuctionLock` (non è stato-macchina), senza bump di `state_version`; presence derivata LIVE/IDLE/OFFLINE; broadcast dei soli cambi di presence, coalescato.
-  Verifica: unit test sulla derivazione (soglie 15s, visible); un heartbeat non incrementa `state_version` né genera uno snapshot per invocazione.
+  Verifica: unit test sulla derivazione (soglie 15s, visible); un heartbeat non incrementa `state_version` né genera uno snapshot per invocazione. ✓ `tests/db/presence.test.ts`
+  Fatto: `lib/engine/presence.ts`; il confronto è con l'**ultima mappa annunciata**, così il primo heartbeat che arriva dopo la scadenza di un altro si accorge di chi è sparito. Coalescing a 1s in `broadcast.ts`.
   Dipende: F4-03
 
-- [ ] **F4-06 — Gate presence su `startAuction`** ⚠ P11
+- [x] **F4-06 — Gate presence su `startAuction`** ⚠ P11
   READY → LIVE richiede tutti i **membri** in presence LIVE (§7); l'owner conta solo se ha joinato.
-  Verifica: test — start con un membro OFFLINE rifiutato con errore tipizzato; con tutti LIVE passa.
+  Verifica: test — start con un membro OFFLINE rifiutato con errore tipizzato; con tutti LIVE passa. ✓ (più il caso IDLE, che non basta)
+  Fatto: codice `MEMBERS_NOT_READY`, messaggio che nomina chi manca. `makeGameAuction` e `pnpm drive` battono gli heartbeat dei membri che impersonano: nessuna scorciatoia per saltare il cancello.
   Dipende: F4-05, F3-04
 
-- [ ] **F4-07 — Hook `useAuctionStream`**
+- [x] **F4-07 — Hook `useAuctionStream`**
   EventSource con riconnessione, calcolo `offset = serverNow − Date.now()`, scarto snapshot con version inferiore, cleanup corretto sotto StrictMode.
-  Verifica: in dev con StrictMode una sola connessione resta viva; il countdown usa l'offset (test unit sul calcolo).
+  Verifica: in dev con StrictMode una sola connessione resta viva; il countdown usa l'offset (test unit sul calcolo). ✓ `tests/use-auction-stream.test.ts` (offset, tempo residuo, scarto delle versioni)
+  Fatto: `lib/realtime/use-auction-stream.ts`, con anche `useHeartbeat` (il lato client di F4-05, indipendente dallo stream). La verifica StrictMode è visiva e arriva in Fase 5, quando esisterà una pagina che monta l'hook.
   Dipende: F4-02, F4-04
 
-- [ ] **F4-08 — Test I8 automatico**
+- [x] **F4-08 — Test I8 automatico**
   Durante LOT_OPEN, il JSON ricevuto da: un partecipante, l'owner/manager e la vista TV non contiene NESSUN importo di offerte altrui.
-  Verifica: ✅ criterio di fase — test automatico sui tre viewer verde.
+  Verifica: ✅ criterio di fase — test automatico sui tre viewer verde. ✓ `tests/db/i8.test.ts`: apre davvero la route SSE e legge il primo messaggio per i tre spettatori; più il caso complementare (in LOT_REVEAL gli importi ci sono).
   Dipende: F4-01, F4-04
 
-- [ ] **F4-09 — Test snapshot post-timeout**
+- [x] **F4-09 — Test snapshot post-timeout**
   §12.33 — snapshot richiesto dopo la scadenza del pick: la fase è già LOT_OPEN con l'auto-pick, mai WAITING_PICK stantio.
-  Verifica: test verde.
+  Verifica: test verde. ✓ passa dallo sweep vero dello scheduler, non da una chiamata diretta ad `advancePhase`.
   Dipende: F4-01, F3-08
 
-- [ ] **F4-10 — Bot partecipanti** ⚠ P5
+- [x] **F4-10 — Bot partecipanti** ⚠ P5
   `pnpm bots --auction=<id> --count=N --strategy=random|aggressive|passive|tie`: client headless con auth dev, SSE, reazione agli snapshot, rispetto di `min_amount` negli spareggi.
-  Verifica: 7 bot + driver completano un'asta; `--strategy=tie` innesca almeno un round 2 osservabile in `events`.
+  Verifica: 7 bot + driver completano un'asta; `--strategy=tie` innesca almeno un round 2 osservabile in `events`. ✓ 8 bot hanno portato a COMPLETED un'asta da 200 lotti contro `pnpm dev` in 21,8 minuti: 1498 azioni riuscite, 0 rifiutate, 0 auto-pick, 24 spareggi anche con `--strategy=random`. Con `--strategy=tie` la transizione `LOT_OPEN → LOT_TIE_PREP` compare in `events` su ogni lotto.
+  Fatto: i bot agiscono via HTTP su `POST /api/auctions/:id/action` (nuova route, vedi DECISIONS) e non toccano il motore nel proprio processo — solo così il browser aperto accanto vede muoversi l'asta. Non serve più il driver: `--start` avvia l'asta come farebbe l'owner, e lo scheduler è quello dell'app.
   Dipende: F4-04, F4-07, F3-11
 
-- [ ] **F4-11 — ARCHITECTURE: realtime**
+- [x] **F4-11 — ARCHITECTURE: realtime**
   Capitolo su snapshot-only, sanificazione per costruzione, clock offset, presence.
-  Verifica: capitolo presente.
+  Verifica: capitolo presente. ✓ "Il canale verso i client"
   Dipende: F4-08
 
-- [ ] **F4-12 — GATE Fase 4**
+- [x] **F4-12 — GATE Fase 4**
   Criterio ✅ del piano (test I8 sui tre viewer) più suite §12.31–34 verde. Aggiorna `CLAUDE.md`.
-  Verifica: `pnpm test` verde; bot funzionanti.
+  Verifica: `pnpm test` verde; bot funzionanti. ✓ 220 test verdi in 19 file; asta completa coi bot. Misurato a fine asta: uno snapshot costa 20 ms di lettura, 1 ms di serializzazione, 23 KB per viewer.
   Dipende: tutti i F4-*
+
+- [x] **F4-13 — Bug di Fase 3: l'app non partiva** (fuori piano)
+  Ogni pagina rispondeva 500 (`Can't resolve 'fs'` da `pg`): gli import dinamici di `instrumentation.ts` erano dopo una guardia con `return` anticipato, non eliminabile come ramo morto, e finivano nel bundle edge.
+  Verifica: `pnpm dev` risponde 200; nessun "Module not found" nel log. ✓
+  Fatto: import dentro `if (process.env.NEXT_RUNTIME === "nodejs") { … }` e `serverExternalPackages: ["pg"]` in `next.config.ts`. Non era emerso in Fase 3 perché i suoi criteri si verificano da terminale.
 
 ---
 

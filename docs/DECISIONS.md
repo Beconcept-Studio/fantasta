@@ -350,3 +350,83 @@ parte simulata; una riga `SEED_FAST_FORWARD` lo documenta. Un'asta `mid` con l'a
 transizioni del tempo; `lotId` è il lotto toccato (quello corrente dopo la transizione o, quando
 la transizione lo archivia, quello di prima). La riga JSON su stdout ha gli stessi campi più
 `auctionId`, `type` e `ts` (PLAN §17).
+
+---
+
+## 2026-08-07 — Fase 4, SSE e snapshot
+
+**I tipi dello snapshot in `lib/realtime/types.ts`, la funzione in `lib/engine/snapshot.ts`.**
+Il tipo `Snapshot` lo importa anche il client, e `lib/engine/snapshot.ts` importa `lib/db`: tenerli
+insieme significherebbe o un `import type` dal bundle del telefono verso l'ORM, o un'eccezione alla
+regola ESLint. È la stessa scelta di `lib/domain.ts` (DECISIONS 2026-08-07, Fase 1) applicata al
+protocollo. `lib/realtime/types.ts` non dipende da niente tranne `lib/domain.ts`.
+
+**`serializeSnapshot` prende il bundle di `loadAuctionState`, non il solo `AuctionState`.**
+La firma di PLAN §8 è `serializeSnapshot(auctionState, viewerMemberId)`; quella vera è
+`serializeSnapshot(loaded, viewerMemberId, now)`. Servono tre cose che il motore puro non ha e non
+deve avere: la riga `auctions` (nome e `state_version`), la mappa `refs` (gli id del motore sono
+etichette di caricamento — verso il client devono uscire **uuid**, altrimenti il
+`dismissedLotId` di §8bis punterebbe a un numero diverso a ogni load) e i nomi (squadra, giocatore)
+con la telemetria di presence. Il vincolo della regola 3 — **un solo punto di uscita** — resta
+intatto, che è ciò che il test I8 verifica.
+
+**`LoadedAuction.view`: nomi e presence accanto allo stato, non dentro.** `loadAuctionState`
+restituisce anche `view.members` (nome squadra, `display_name`, `last_seen_at`, `is_visible`) e
+`view.players` (nome, squadra). `AuctionState` resta senza: al motore «Lautaro» non serve, e i test
+puri continuano a costruire un giocatore con cinque campi. Costo: una `INNER JOIN users` in più a
+ogni caricamento.
+
+**Lo snapshot dice anche `withdrawn` e `tie`, che PLAN §8 non elenca.** Due aggiunte, entrambe
+richieste dalla regola 7 (ogni schermata è funzione pura dello snapshot): `myBid.withdrawnAt` e
+`bidStatus[].withdrawn`, senza i quali un partecipante che ha ritirato non saprebbe perché non può
+più offrire; e `currentLot.tie` (importo pareggiato + chi ha pareggiato), popolato **solo** in
+`LOT_TIE_PREP`, senza il quale il rientro durante lo spareggio previsto da §8bis mostrerebbe un
+countdown senza dire di cosa. Non è una deroga a I8: quell'importo è il contenuto dell'annuncio di
+spareggio e fra due secondi sarà il `min_amount` pubblico del round 2.
+
+**La TV entra col `public_token` in query string.** `GET /api/auctions/:id/stream?token=…`: la
+vista proiettabile non ha login (PLAN §10, `/tv/[publicToken]`), quindi il token nell'URL *è* la
+sua autenticazione. `resolveViewer` (`lib/engine/viewer.ts`) distingue i tre spettatori —
+partecipante, manager, TV — e restituisce il `viewerMemberId` per cui sanificare: solo il
+partecipante ne ha uno.
+
+**Esiste `POST /api/auctions/:id/action`, non previsto da PLAN §10.** PLAN §9 lascia la scelta fra
+Server Action e Route Handler; qui serve un endpoint HTTP per una ragione concreta. I bot sono
+client veri, e se agissero chiamando il motore nel proprio processo le loro mutazioni non
+passerebbero dal processo del server: il broadcast parte da chi scrive, quindi nessun browser
+collegato vedrebbe muoversi niente — e guardare il proprio portale mentre gli altri offrono è
+esattamente il motivo per cui i bot esistono. L'endpoint è un dispatcher senza logica (START,
+PICK, BID, WITHDRAW → le azioni di `lib/engine/actions.ts`) e non restituisce stato: quello arriva
+dallo snapshot. La Fase 5 può usarlo al posto di una Server Action per il pulsante di offerta —
+sotto un countdown di 30 secondi una `fetch` con codice d'errore tipizzato è più maneggevole.
+
+**I singleton di processo stanno su `globalThis`.** Il registro delle connessioni SSE, l'hook di
+broadcast e la memoria della presence annunciata. Next compila `instrumentation.ts` (da cui parte
+lo scheduler) e i route handler (da cui si aprono le connessioni) in **bundle separati**: con una
+variabile di modulo esisterebbero due copie di ciascun file, le connessioni finirebbero nel
+registro dove nessuno fa broadcast e l'hook sarebbe impostato solo nella copia dello scheduler.
+Sintomo osservato: stream aperto, snapshot iniziale corretto, poi silenzio per tutta l'asta.
+È la generalizzazione della guardia `globalThis.__scheduler` già presente (PLAN §16.8).
+
+**`serverExternalPackages: ["pg"]` e gli import dentro l'`if` in `instrumentation.ts`.** Bug della
+Fase 3 scoperto qui: **l'app non partiva affatto**, ogni pagina rispondeva 500 con
+`Can't resolve 'fs'` da `pg`. Una guardia `if (process.env.NEXT_RUNTIME !== "nodejs") return;` a
+inizio funzione non è eliminabile come ramo morto — il bundler compilava `pg` anche nel bundle
+edge. Gli import dinamici vanno **dentro** un `if (process.env.NEXT_RUNTIME === "nodejs") { … }`.
+Non era emerso in Fase 3 perché quei criteri si verificano da terminale (`pnpm test`, `pnpm drive`)
+e nessuno aveva ancora aperto una pagina con lo scheduler registrato.
+
+**Il broadcast dei cambi di presence è coalescato a 1 secondo, e parte solo se cambia qualcosa.**
+⚠ P8: dodici heartbeat ogni dieci secondi sono più di un evento al secondo. `recordHeartbeat`
+scrive le due colonne fuori dal lock, poi confronta la mappa di presence derivata con **l'ultima
+annunciata**: se differisce, il route handler mette in coda un invio (uno solo per finestra). Il
+confronto con l'ultima annunciata — invece che con il "prima" dello stesso heartbeat — è ciò che
+fa accorgere di chi ha *smesso* di battere il colpo: nessun evento lo segnala, ma il primo
+heartbeat altrui che arriva dopo la scadenza dei 15 secondi se ne accorge. Se nessun membro è più
+collegato, nessuno se ne accorge: non c'è più nessuno a cui dirlo.
+
+**Il gate presence vale per test, seed e driver come per tutti.** `startAuction` rifiuta con
+`MEMBERS_NOT_READY` se un membro non è LIVE (⚠ P11: solo i membri; l'owner che non gioca non
+conta). Di conseguenza `makeGameAuction` e `pnpm drive` battono gli heartbeat dei membri che
+impersonano, invece di avere una scorciatoia per saltare il cancello: chi simula la stanza simula
+anche i telefoni accesi.

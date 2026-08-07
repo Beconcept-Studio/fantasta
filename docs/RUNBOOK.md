@@ -6,12 +6,16 @@ Questa sezione è per l'utente umano: cosa devi fare tu, fase per fase, e cosa p
 **A ogni chiusura di fase, Claude deve ricapitolarti i punti di questa guida relativi al gate
 appena chiuso e alla fase che si apre** (regola in `CLAUDE.md`).
 
-> **Dove siamo.** Fasi 0–3 chiuse il 2026-08-07. La 3 ha portato il motore sul database
-> (183 test verdi, concorrenza inclusa): un'asta completa si gioca da sola con `pnpm drive`,
-> e un kill del processo a metà round riparte in meno di un secondo. **Il tuo collaudo visivo
-> delle due demo è ancora da fare** — i comandi esatti sono nella tabella qui sotto, riga
-> "3 — Persistenza e timer". La prossima è la **Fase 4 — SSE e snapshot**, da aprire in una
-> sessione nuova col modello di default (Opus): nessun `/model` da digitare.
+> **Dove siamo.** Fasi 0–4 chiuse il 2026-08-07. La 4 ha costruito il canale verso i client
+> (220 test verdi): snapshot sanificati, stream SSE, presence, e otto bot che giocano un'asta
+> collegandosi come farebbero otto telefoni. **Restano da fare i tuoi collaudi visivi delle
+> Fasi 3 e 4** — i comandi esatti sono nella tabella qui sotto, righe "3" e "4". La prossima è
+> la **Fase 5 — Portale partecipante**, da aprire in una sessione nuova col modello di default
+> (Opus): nessun `/model` da digitare. È la fase che chiederà più tempo *a te*.
+>
+> Nota per la Fase 3: `pnpm drive` continua a funzionare, ma se vuoi rifare quella demo sappi
+> che ora l'avvio richiede la presence di tutti i membri — il driver batte gli heartbeat da sé,
+> non devi fare niente.
 
 ### Il ritmo generale (vale per ogni fase)
 
@@ -65,7 +69,7 @@ tenere a mente questa tabella.
 | ~~**1 — Setup asta**~~ ✓ | Test a due browser (uno normale + uno incognito, due utenti dev): crea un'asta, carica il listone da UI, genera l'invito, entra col secondo utente, verifica i nomi squadra reciproci. Prova anche un listone "povero" per vedere il rifiuto I9. |
 | ~~**2 — Motore**~~ ✓ | **Nessun test manuale** — tutto da terminale. Supervisiona: `pnpm test` verde e confronta i nomi dei test con §12 del piano (1–26, 29, 30, 41). È la fase in cui NON avere fretta: se il motore è giusto, il resto è cosmetica. |
 | **3 — Persistenza e timer** | Guarda con i tuoi occhi le due dimostrazioni. **(a) Asta completa:** `pnpm db:seed --auction-status=ready`, prendi l'id stampato, poi `pnpm drive --auction=<id>` — vedrai il log JSON scorrere e in ~20 minuti «✓ Asta COMPLETED: 200 lotti». **(b) Restart a metà round:** mentre il driver gira, fermalo con Ctrl-C (o killa il processo); guarda che l'asta resti ferma (nessuna riga nuova), poi rilancia lo stesso comando `pnpm drive --auction=<id>`: riparte entro 1 secondo da dove si era fermata, fino a COMPLETED. |
-| **4 — SSE** | Quasi niente: i criteri sono test automatici. Se vuoi, un `curl` sullo stream. Da qui esistono i **bot**: chiedi una demo con `--strategy=tie` per vedere uno spareggio forzato. |
+| **4 — SSE** | Poco, ed è tutto da terminale. `pnpm test` verde (il criterio di fase è il test I8 sui tre spettatori). Se vuoi vedere il canale con i tuoi occhi: `pnpm dev` in un terminale, `pnpm bots --auction=<id> --count=8 --strategy=tie --start --verbose` in un altro, e un `curl -N "http://localhost:3000/api/auctions/<id>/stream?token=<public_token>"` in un terzo — è la vista TV, e vedrai scorrere uno snapshot per transizione senza **nessun** importo finché non si apre il reveal. Con `--strategy=tie` ogni lotto va allo spareggio. |
 | **5 — Portale partecipante** ⚠ | **La fase più impegnativa per te.** Riservati un'ora abbondante: 4 browser insieme in un'asta con bot; chiudi/riapri il modale; killa un tab a metà round e rientra; vai offline durante il tuo turno. E soprattutto: **prova dal tuo telefono vero** via `pnpm dev:lan` — è un criterio di chiusura, non un optional. |
 | **6 — Manager e TV** | Apri la vista TV in incognito (senza login) durante un'asta con bot: nessun importo a busta chiusa deve vedersi. Se hai una TV/proiettore, provala lì per la leggibilità. |
 | **7 — Override** | Simula la serata storta: pausa → cancella un giocatore da una rosa → riassegna manualmente → riprendi. Poi esporta l'xlsx e **aprilo in Excel** per verificare FantaSquadra e Costo. |
@@ -162,8 +166,28 @@ pnpm db:seed --auction-status=live    # + la stessa asta appena avviata (LIVE)
 pnpm db:seed --auction-status=mid     # + la stessa asta LIVE a metà, rose parziali
 pnpm db:seed --auction-status=completed  # + la stessa asta finita, rose complete
 pnpm drive --auction=<id> # gioca un'asta READY/LIVE fino a COMPLETED, senza UI
+pnpm bots --auction=<id> --count=7 --strategy=random   # 7 partecipanti finti, via HTTP
 pnpm db:studio            # ispezione del database dal browser
 ```
+
+**`drive` e `bots` non sono la stessa cosa.** Il driver è un processo che gioca da solo, con il
+proprio scheduler: serve a dimostrare che il motore funziona, e non ha bisogno dell'app accesa. I
+bot sono **client**: vogliono l'app accesa (`pnpm dev`), fanno login col provider `dev`, aprono lo
+stream SSE e agiscono via HTTP come farebbe un telefono. Sono quelli da usare per guardare una
+schermata mentre l'asta va avanti — e, a differenza del driver, fanno arrivare gli aggiornamenti
+anche al tuo browser.
+
+```bash
+pnpm bots --auction=<id> --count=7 --strategy=tie --start --verbose
+```
+
+| Opzione | Cosa fa |
+|---|---|
+| `--count=N` | Quanti membri impersonare, in ordine di posto. Lasciane fuori uno e quel posto è tuo, dal browser |
+| `--strategy=` | `random` (verosimile), `aggressive` (offre sempre il massimo), `passive` (sempre il minimo), `tie` (tutti la stessa cifra → **spareggio a comando**) |
+| `--start` | Avvia l'asta READY appena i bot sono collegati (fa login anche come owner) |
+| `--verbose` | Stampa ogni azione e ogni rifiuto, col codice d'errore |
+| `--url=` | Se l'app non è su `http://localhost:3000` |
 
 > **Un'asta LIVE si muove da sola.** Con un processo attivo (l'app in `pnpm dev`, o il driver)
 > lo scheduler fa scattare le scadenze: i pick scaduti diventano auto-pick e l'asta procede coi
@@ -202,6 +226,10 @@ LIVE, entro un secondo.
 | Ripartire da zero col database | `docker compose down -v && docker compose up -d && pnpm db:push && pnpm db:seed --auction-status=ready` |
 | `pnpm test` salta i test di integrazione | Docker è spento: `docker compose up -d` |
 | L'asta di prova è in uno stato strano | Rilancia `pnpm db:seed --auction-status=ready`: la ricrea da zero |
+| `L'app non risponde su http://localhost:3000` dai bot | Manca `pnpm dev` in un altro terminale: i bot sono client, non giocano da soli |
+| L'asta non parte: «Non sono collegati: …» | È il cancello di presence: l'avvio richiede **tutti** i membri con la pagina aperta in primo piano. Coi bot, usa `--start` |
+| Lo stream si apre ma poi non arriva niente | Sintomo dei singleton duplicati fra i bundle di Next: se ricompare, i registri di `lib/realtime/broadcast.ts` devono stare su `globalThis` (DECISIONS 2026-08-07, Fase 4) |
+| Ogni pagina risponde 500, `Can't resolve 'fs'` | Un import di `lib/db` è finito nel bundle edge. Gli import dinamici di `instrumentation.ts` vanno **dentro** l'`if (process.env.NEXT_RUNTIME === "nodejs")`, e `pg` in `serverExternalPackages` |
 
 ## Produzione e serata dell'asta
 

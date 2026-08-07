@@ -8,6 +8,7 @@ import {
   persistTransition,
   withAuctionLock,
 } from "./mutate";
+import { derivePresence } from "./presence";
 import { syncTimer } from "./scheduler";
 import type { AuctionEvent, AuctionState, Millis } from "./types";
 
@@ -141,6 +142,29 @@ function requireOwner(
   return null;
 }
 
+/**
+ * Il gate di avvio (F4-06, PLAN §7): `READY → LIVE` solo con **tutti i membri
+ * in presence LIVE**. Non "non OFFLINE": LIVE, cioè con la pagina davvero
+ * aperta in primo piano — l'asta parte con un countdown di trenta secondi e
+ * chi ha il telefono in tasca lo scopre dopo aver perso il primo lotto.
+ *
+ * ⚠ P11 — riguarda i **membri**: l'owner che non ha joinato non conta, non
+ * dovendo offrire. Se ha joinato è un membro come gli altri.
+ */
+function requireEveryoneLive(
+  loaded: LoadedAuction,
+  now: Millis,
+): Result<never> | null {
+  const assenti = [...loaded.view.members.entries()]
+    .filter(([, m]) => derivePresence(m.lastSeenAt, m.isVisible, now) !== "LIVE")
+    .map(([, m]) => m.displayName ?? m.teamName);
+  if (assenti.length === 0) return null;
+  return fail(
+    "MEMBERS_NOT_READY",
+    `Non sono collegati: ${assenti.join(", ")}. L'asta parte quando tutti hanno la pagina aperta.`,
+  );
+}
+
 function requireMember(loaded: LoadedAuction, userId: string): Result<string> {
   const memberId = loaded.memberIdByUserId.get(userId);
   if (!memberId) {
@@ -153,8 +177,8 @@ function requireMember(loaded: LoadedAuction, userId: string): Result<string> {
 
 /**
  * `READY → LIVE` (F3-04). Il ruolo iniziale è `role_order[0]`; qui si sceglie
- * solo il seat di partenza. Il gate presence "tutti i membri LIVE" arriva in
- * F4-06, quando esisterà l'heartbeat.
+ * solo il seat di partenza. Due guardie prima del motore: la proprietà
+ * dell'asta e la presence di tutti i membri (F4-06).
  */
 export async function startAuction(
   actorUserId: string,
@@ -166,6 +190,7 @@ export async function startAuction(
     auctionId,
     (loaded) =>
       requireOwner(loaded, actorUserId, "avviarla") ??
+      requireEveryoneLive(loaded, now) ??
       ok({ type: "START", startSeatIndex }),
     now,
     actorUserId,

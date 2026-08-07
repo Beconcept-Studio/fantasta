@@ -66,6 +66,10 @@ export const ERROR_CODES = [
   "WITHDRAW_FORBIDDEN",
   "INVALID_SEAT",
   "ADJUST_VIOLATES_I3",
+
+  // Presence e protocollo (Fase 4)
+  "MEMBERS_NOT_READY",
+  "INVALID_REQUEST",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

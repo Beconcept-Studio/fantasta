@@ -21,22 +21,23 @@ inventando: annota la domanda e aspetta. Un'assunzione silenziosa qui costa un'a
 
 ## Fase corrente
 
-> **FASE 4 — SSE e snapshot** · da aprire con **Opus** (il default di progetto: nessun `/model`
-> da digitare). Fasi 0–3 chiuse il 2026-08-07 (la 3: 183 test verdi, asta completa via
-> `pnpm drive`, boot recovery in 0,37s; il collaudo visivo delle demo spetta all'owner).
-> Aggiorna questa riga a ogni passaggio di fase.
+> **FASE 5 — Portale partecipante** · da aprire con **Opus** (il default di progetto: nessun
+> `/model` da digitare). Fasi 0–4 chiuse il 2026-08-07 (la 4: 220 test verdi, test I8 sui tre
+> viewer, asta completa con 8 bot collegati via SSE; i collaudi visivi delle Fasi 3 e 4 spettano
+> all'owner). Aggiorna questa riga a ogni passaggio di fase.
 
-In Fase 4 il motore e la persistenza non si toccano: si costruisce il canale verso i client.
-`serializeSnapshot(state, viewerMemberId | null)` è l'**unico** punto da cui lo stato esce dal
-server (regola 3, I8: mai un importo altrui durante `LOT_OPEN`); il broadcast si aggancia al
-hook già predisposto in `lib/engine/mutate.ts` (`setBroadcastHook`), che parte dopo il commit e
-solo su mutazione effettiva (P14). A questa fase spettano i test §12.31–34 e il test I8 sui tre
-viewer (partecipante, manager, TV), più l'heartbeat di presence (⚠ P8: fuori dal lock, senza
-bump di `state_version`) e i bot.
+In Fase 5 il canale non si tocca: si disegna il **portale del partecipante**, mobile-first, su
+`/auctions/[id]/play`. Tutto ciò che serve arriva dallo snapshot, e ogni schermata è funzione
+pura di quello (regola 7, I10): `useAuctionStream` in `lib/realtime/use-auction-stream.ts` dà
+snapshot, `offset` dell'orologio e tempo residuo; `useHeartbeat` tiene viva la presence; le
+azioni passano da `POST /api/auctions/:id/action` (o da una Server Action, a scelta — il primo
+è già lì e risponde con codici tipizzati). La gerarchia della UI è **vincolante**: banner globale
+→ card permanente del lotto → modale (`docs/PLAN.md` §8bis), e `dismissedLotId` vive solo nello
+state del componente. Il countdown si rende, non decide (regola 1).
 
 Le fasi sono cancelli sequenziali (`docs/PLAN.md` §11). Non si apre una fase finché tutti i
-criteri ✅ della precedente non sono verdi. In particolare: **nessuna riga di UI dell'asta prima
-della Fase 5** — la Fase 4 è protocollo e test, non schermate.
+criteri ✅ della precedente non sono verdi. Il gate della 5 include un collaudo **su un telefono
+vero** via `pnpm dev:lan`, non sul simulatore del browser.
 
 **A ogni chiusura di fase (task di GATE), ricapitola all'utente la sua parte**: i test manuali
 che deve eseguire di persona per il gate appena chiuso, cosa lo aspetta nella fase successiva
@@ -120,6 +121,13 @@ un diagramma testuale dove serve. **Aggiornarlo è un criterio di chiusura della
 
 - **Scheduler duplicato in dev**: HMR rieseguirà `instrumentation.ts`. Usa
   `globalThis.__scheduler ??= start()`.
+- **Ogni singleton di processo va su `globalThis`**, non in una variabile di modulo: Next compila
+  `instrumentation.ts` e i route handler in **bundle separati**, quindi dello stesso file
+  esistono due copie. È così che il registro delle connessioni SSE e l'hook di broadcast si
+  erano trovati in due mondi diversi — stream aperto e poi silenzio per tutta l'asta.
+- **Gli import di `instrumentation.ts` vanno dentro `if (process.env.NEXT_RUNTIME === "nodejs")`**,
+  non dopo un `return` di guardia: solo il blocco `if` viene eliminato come ramo morto. Altrimenti
+  `pg` finisce nel bundle edge e **l'app non parte affatto** (500 su ogni pagina).
 - **`EventSource` doppio in dev**: React StrictMode monta due volte. Cleanup corretto nell'effect.
 - **Test flaky**: `vi.useFakeTimers()` sempre. Mai un `sleep` reale in test.
 - **Buffering SSE**: in nginx serve `proxy_buffering off` sulla route dello stream.

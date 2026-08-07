@@ -29,6 +29,7 @@ import {
   withdrawBid,
 } from "../lib/engine/actions";
 import { loadAuctionState } from "../lib/engine/mutate";
+import { recordHeartbeat } from "../lib/engine/presence";
 import { maxBid } from "../lib/engine/rules";
 import { startScheduler, stopScheduler } from "../lib/engine/scheduler";
 import type { AuctionState } from "../lib/engine/types";
@@ -91,6 +92,11 @@ async function main(): Promise<void> {
   startScheduler(advancePhase);
 
   if (auction.status === "READY") {
+    // Il gate di avvio vuole tutti i membri collegati (F4-06): il driver
+    // impersona anche i loro browser, che sarebbero quelli a battere il colpo.
+    for (const m of memberRows) {
+      await recordHeartbeat(auctionId, m.id, true);
+    }
     const started = await startAuction(auction.ownerUserId, auctionId, 0);
     if (!started.ok) throw new Error(started.error.message);
     console.log(`Asta avviata dal seat 0.`);

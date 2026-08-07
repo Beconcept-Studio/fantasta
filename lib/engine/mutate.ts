@@ -12,6 +12,7 @@ import {
   members,
   players,
   roundEligibility,
+  users,
 } from "@/lib/db/schema";
 
 import { type Result, fail } from "./errors";
@@ -57,15 +58,26 @@ type Dbx = Tx | typeof db;
 // ─── Il lock ─────────────────────────────────────────────────────────────────
 
 /**
- * Il punto in cui la Fase 4 aggancerà l'invio degli snapshot. Finché non
- * esiste lo stream, il broadcast è un no-op — ma il **posto** da cui parte
- * (dopo il commit, solo su mutazione effettiva) è già quello giusto.
+ * L'invio degli snapshot, agganciato dall'esterno (lo fa `instrumentation.ts`,
+ * F4-03): il motore non deve sapere che esiste un canale verso i client. Nel
+ * seed, nei test e nel driver resta il no-op di default, e nessuno di loro apre
+ * connessioni.
+ *
+ * **Il riferimento vive su `globalThis`, non in un `let` di modulo.** Next
+ * compila `instrumentation.ts` e i route handler in bundle separati: con una
+ * variabile di modulo esisterebbero due copie di questo file, l'hook sarebbe
+ * impostato solo in quella dello scheduler, e un'offerta arrivata via HTTP non
+ * farebbe partire nessuno snapshot. È lo stesso motivo per cui lo scheduler sta
+ * su `globalThis.__scheduler` (PLAN §16.8).
  */
 type BroadcastHook = (auctionId: string) => void;
-let broadcastHook: BroadcastHook = () => {};
+
+const processGlobals = globalThis as typeof globalThis & {
+  __broadcastHook?: BroadcastHook;
+};
 
 export function setBroadcastHook(hook: BroadcastHook): void {
-  broadcastHook = hook;
+  processGlobals.__broadcastHook = hook;
 }
 
 export type LockOutcome<T> = {
@@ -113,7 +125,7 @@ export async function withAuctionLock<T>(
     return out;
   });
 
-  if (outcome.mutated) broadcastHook(auctionId);
+  if (outcome.mutated) processGlobals.__broadcastHook?.(auctionId);
   return outcome.result;
 }
 
@@ -141,10 +153,37 @@ export type EngineRefs = {
   assignments: Map<EngineId, string>;
 };
 
+/**
+ * Ciò che il motore non sa, e che serve a chi lo stato lo deve *mostrare*:
+ * i nomi delle cose e la telemetria di presence.
+ *
+ * Il motore ragiona per membri, seat e id di giocatori — «Squadra Rossi» e
+ * «Lautaro» non gli servono, e `last_seen_at` non è nemmeno stato-macchina
+ * (⚠ P8: si scrive fuori dal lock). Tenerli fuori da `AuctionState` è ciò che
+ * permette ai test puri di costruire uno stato con quattro campi; averli qui
+ * accanto è ciò che permette a `serializeSnapshot` di essere l'unico punto di
+ * uscita (regola 3) senza andarseli a ripescare da solo.
+ */
+export type MemberView = {
+  teamName: string;
+  displayName: string | null;
+  lastSeenAt: Millis | null;
+  isVisible: boolean;
+};
+
+export type PlayerView = { name: string; team: string };
+
+export type AuctionView = {
+  members: Map<string, MemberView>;
+  players: Map<string, PlayerView>;
+};
+
 export type LoadedAuction = {
   auction: Auction;
   state: AuctionState;
   refs: EngineRefs;
+  /** Nomi e presence, per la serializzazione. Il motore non li guarda mai. */
+  view: AuctionView;
   /**
    * Chi è chi: l'utente autenticato → il suo `member_id` in quest'asta.
    * Il motore non conosce gli utenti (ragiona per membri e seat); la
@@ -175,8 +214,13 @@ export async function loadAuctionState(
       userId: members.userId,
       seatIndex: members.seatIndex,
       budgetInitial: members.budgetInitial,
+      teamName: members.teamName,
+      displayName: users.displayName,
+      lastSeenAt: members.lastSeenAt,
+      isVisible: members.isVisible,
     })
     .from(members)
+    .innerJoin(users, eq(users.id, members.userId))
     .where(eq(members.auctionId, auction.id))
     .orderBy(asc(members.seatIndex));
 
@@ -188,6 +232,8 @@ export async function loadAuctionState(
       fvm: players.fvm,
       quot: players.quot,
       outOfList: players.outOfList,
+      name: players.name,
+      team: players.team,
     })
     .from(players)
     .where(eq(players.auctionId, auction.id))
@@ -352,17 +398,41 @@ export async function loadAuctionState(
       seatIndex,
       budgetInitial,
     })),
-    players: playerRows,
+    // Solo i campi del motore: `name` e `team` restano fuori, in `view`.
+    players: playerRows.map(({ id, extId, role, fvm, quot, outOfList }) => ({
+      id,
+      extId,
+      role,
+      fvm,
+      quot,
+      outOfList,
+    })),
     lots: engineLots,
     assignments: engineAssignments,
     ledger: ledgerRows,
     nextId: counter,
   };
 
+  const view: AuctionView = {
+    members: new Map(
+      memberRows.map((m) => [
+        m.id,
+        {
+          teamName: m.teamName,
+          displayName: m.displayName,
+          lastSeenAt: toMillis(m.lastSeenAt),
+          isVisible: m.isVisible,
+        },
+      ]),
+    ),
+    players: new Map(playerRows.map((p) => [p.id, { name: p.name, team: p.team }])),
+  };
+
   return {
     auction,
     state,
     refs,
+    view,
     memberIdByUserId: new Map(memberRows.map((m) => [m.userId, m.id])),
   };
 }

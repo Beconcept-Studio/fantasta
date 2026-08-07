@@ -595,14 +595,174 @@ simulata, sostituita da una riga `SEED_FAST_FORWARD`.
 
 ---
 
+## Il canale verso i client
+
+Questo è il capitolo della Fase 4. Il motore e la persistenza non sono stati toccati: quello che
+si aggiunge è il modo in cui lo stato **esce** dal server e arriva ai telefoni, alla TV e al
+portale del manager. Sono quattro pezzi — la serializzazione, il registro delle connessioni, lo
+stream, la presence — e una decisione di fondo che li tiene insieme.
+
+### Snapshot interi, non aggiornamenti
+
+Esiste un solo tipo di messaggio, si chiama `snapshot`, e contiene **tutto lo stato dell'asta**
+ogni volta. Non c'è un evento "qualcuno ha offerto", non c'è un delta da applicare a quello che il
+client aveva prima.
+
+Sembra uno spreco, e non lo è: con dodici partecipanti uno snapshot sta in pochi kilobyte, e a
+fronte di quel costo spariscono due intere categorie di bug. La prima è il merge sbagliato di un
+delta — lo stato del client che diverge lentamente da quello del server e nessuno se ne accorge
+finché non si assegna il giocatore alla persona sbagliata. La seconda, più insidiosa, è il
+disallineamento di chi si riconnette: se le schermate dipendessero dagli eventi ricevuti, chi ha
+il telefono che va in standby a metà round, o chiude il tab per sbaglio, tornerebbe a un'app che
+non sa più dov'è. Con lo snapshot intero non esiste "aver perso qualcosa": ci si riconnette, arriva
+subito lo stato completo, e da quello solo si ricostruisce la fase corrente, il tempo residuo, la
+propria offerta già salvata, la propria idoneità e il pannello dei risultati se il lotto è già
+stato deciso. È la settima regola del progetto, ed è verificabile: ogni schermata è funzione pura
+dello snapshot corrente.
+
+Il client scarta gli snapshot con una `stateVersion` inferiore a quella già vista. Serve perché i
+due modi in cui uno snapshot arriva — quello iniziale della connessione e quelli del broadcast —
+possono sorpassarsi a vicenda per qualche millisecondo, e senza il confronto la schermata
+tornerebbe indietro nel tempo per un istante.
+
+### Un solo punto di uscita, ed è il motivo
+
+`serializeSnapshot` in `lib/engine/snapshot.ts` è **l'unica funzione che trasforma lo stato
+dell'asta in qualcosa che esce dal server**. È la terza regola del progetto, e non è una
+preferenza di stile: è il modo di rendere vera l'invariante I8 — *durante `LOT_OPEN` nessuno vede
+l'importo dell'offerta di un altro* — per costruzione invece che per attenzione.
+
+La differenza è tutta pratica. Se la serializzazione fosse sparsa fra tre pagine e due componenti,
+garantire I8 vorrebbe dire ricordarsene ogni volta, e basterebbe una `JSON.stringify` distratta in
+un punto qualsiasi per far trapelare una busta. In un'asta a busta chiusa una busta che trapela
+non è un bug da ticket: è l'asta rifatta. Con una funzione sola, invece, *tutte* le uscite
+possibili sono coperte da un test solo — ed è il criterio di chiusura di questa fase, esercitato
+sui tre spettatori che esistono: un partecipante, l'owner che organizza senza giocare, e la vista
+TV senza login.
+
+La regola di sanificazione è una, applicata due volte. Degli altri si sa **se** hanno una busta,
+mai **quanto** c'è dentro: `bidStatus` è una lista di booleani. Il proprio importo lo vede solo il
+proprio viewer, in `myBid` — e chi viewer non è, cioè il manager che non gioca e la TV, non ha
+nemmeno quello. Gli importi diventano pubblici in un momento solo, `LOT_REVEAL`, ed è lì che
+compare il campo `reveal` con tutte le buste di tutti i round. L'unica informazione che esce prima
+è l'importo pareggiato durante `LOT_TIE_PREP`, che è il contenuto stesso dell'annuncio di
+spareggio e fra due secondi sarà la soglia pubblica del round successivo.
+
+Due dettagli che sembrano tecnici e sono di dominio. Il primo: verso il client escono **uuid**, non
+gli id numerici del motore — quelli sono etichette valide per un solo caricamento, e un client che
+si ricordasse "ho già chiuso il modale del lotto 7" si ritroverebbe a parlare di un altro lotto al
+caricamento successivo. Il secondo: i nomi (della squadra, del giocatore) e la telemetria di
+presence viaggiano accanto allo stato del motore, non dentro — `AuctionState` resta la struttura
+minima su cui i test puri lavorano in millisecondi.
+
+### L'orologio è quello del server
+
+Ogni snapshot porta `serverNow`. Il client calcola `offset = serverNow − Date.now()` e rende i
+countdown come `deadline − (Date.now() + offset)`. È l'unico modo di far vedere lo stesso numero a
+dodici telefoni, uno dei quali sarà avanti di venti secondi — e succede sempre.
+
+E il countdown è **rendering, non decisione**: quando arriva a zero la pagina scrive "in
+chiusura…" e aspetta lo snapshot successivo. La chiusura di un round avviene esclusivamente lato
+server, allo scattare del timer o dello sweep. È la prima regola del progetto, e questa fase è il
+punto in cui sarebbe stato facile tradirla.
+
+### Il registro delle connessioni
+
+`lib/realtime/broadcast.ts` è una `Map` da id dell'asta all'insieme delle connessioni aperte, più
+la funzione che manda a ciascuna il proprio snapshot. Il posto da cui parte era già stato deciso in
+Fase 3: `withAuctionLock` chiama un hook **dopo il commit e solo se la mutazione ha avuto effetto**
+— un no-op dello sweep non genera traffico. Ora quell'hook fa qualcosa.
+
+Il broadcast carica lo stato una volta sola e poi serializza una volta per ogni viewer distinto.
+Non è un'ottimizzazione mancata: serializzare una volta per tutti sarebbe *sbagliato*, perché
+manderebbe il `myBid` di qualcuno a tutti gli altri.
+
+Il costo è quello che è, e vale la pena averlo misurato: ogni snapshot rilegge **tutta la storia
+dell'asta** dal database — duecento lotti, i loro round, milleseicento offerte — perché il motore
+lavora sullo stato intero. A fine asta sono 20 ms di lettura, 1 ms di serializzazione e 23 KB di
+JSON per viewer. Cresce durante la serata, ma resta lontano da qualunque soglia che si possa
+notare, e in cambio non esiste una seconda strada per leggere lo stato: c'è `loadAuctionState`, e
+basta.
+
+Un punto che ha richiesto un'ora di indagine e vale la pena ricordare: **i singleton di processo
+stanno su `globalThis`**, non in variabili di modulo. Next compila `instrumentation.ts` — da cui
+parte lo scheduler — e i route handler — da cui si aprono le connessioni — in bundle separati, con
+copie distinte degli stessi file. Con una `Map` di modulo le connessioni finivano in un registro e
+il broadcast partiva dall'altro: stream aperto, snapshot iniziale corretto, e poi silenzio per
+tutta l'asta. È la generalizzazione della guardia `globalThis.__scheduler` che c'era già.
+
+### Lo stream
+
+`GET /api/auctions/:id/stream` è un `text/event-stream` che vive quanto la pagina. Alla
+connessione manda subito uno snapshot completo — è ciò che rende il rientro a metà asta un
+non-problema — e poi uno per ogni mutazione. Tre accortezze, tutte nate da modi in cui una
+connessione muore in silenzio: ci si iscrive al registro **prima** di leggere lo stato (nell'ordine
+inverso ci sarebbe una finestra in cui una transizione non arriva a nessuno); un commento `: ping`
+ogni quindici secondi tiene aperta la connessione attraverso proxy e reti mobili; l'header
+`X-Accel-Buffering: no` impedisce a nginx di bufferizzare la risposta e consegnare gli snapshot a
+blocchi.
+
+Chi può collegarsi lo decide `resolveViewer`: un membro dell'asta (e vede la propria offerta),
+l'owner che non ha joinato (e non vede nessun importo, perché non ne ha), oppure la vista TV, che
+non ha una sessione e si autentica col `public_token` dell'asta nell'URL. Chiunque altro riceve un
+403.
+
+### Chi c'è, adesso
+
+La presence è telemetria, non stato-macchina, e questa distinzione ha una conseguenza precisa:
+`last_seen_at` e `is_visible` si scrivono **fuori dal lock dell'asta** e non incrementano
+`state_version`. La quarta regola protegge lo stato del gioco — aste, lotti, round, offerte, rose —
+non due colonne che dicono se un telefono è acceso; farle passare dal lock significherebbe mettere
+in fila dodici transazioni ogni dieci secondi dietro le offerte.
+
+Il valore che si vede — LIVE, IDLE, OFFLINE — non è una colonna: si deriva a ogni lettura
+dall'ultimo heartbeat e dal flag di visibilità del tab. Una colonna andrebbe scritta da qualcuno
+anche quando *non* succede niente, che è esattamente il caso in cui un partecipante sparisce. Il
+browser batte un colpo ogni dieci secondi con `POST …/heartbeat`, indipendentemente dallo stream:
+un tab con la connessione rotta ma la pagina viva risulta comunque presente.
+
+L'invio ai client di un cambio di presence è coalescato a un secondo e parte solo se qualcuno ha
+davvero cambiato stato. Il confronto non è con il "prima" dello stesso heartbeat ma con **l'ultima
+mappa annunciata**, e questa è la parte non ovvia: il caso interessante non è chi batte il colpo,
+è chi *smette* di batterlo — nessun evento lo segnala, e a scoprirlo è il primo heartbeat altrui
+che arriva dopo la scadenza dei quindici secondi.
+
+Da qui nasce anche il cancello di avvio: `READY → LIVE` richiede **tutti i membri in LIVE**, non
+"non OFFLINE". Un'asta parte con un countdown di trenta secondi, e chi ha il telefono in tasca lo
+scoprirebbe dopo aver perso il primo lotto. Il rifiuto nomina chi manca, perché in lobby "membri
+non pronti" non basta. Vale anche per il seed, i test e il driver: chi simula la stanza simula
+anche i telefoni accesi, invece di avere una scorciatoia per saltare il cancello.
+
+### I bot
+
+`pnpm bots --auction=<id> --count=7 --strategy=random` sostituisce il driver come fonte di
+partecipanti finti, ma è una cosa diversa: sono **client veri**. Si autenticano col provider `dev`
+come farebbe un browser, aprono lo stream SSE, e reagiscono agli snapshot — se è il loro turno
+chiamano un giocatore, se sono idonei offrono, e rispettano `min_amount` negli spareggi. Le loro
+azioni passano da `POST …/action`, cioè dal server: se scrivessero sul database dal proprio
+processo, il broadcast partirebbe da lì e il browser aperto accanto non vedrebbe muoversi niente —
+e guardare il proprio portale dentro un'asta viva è tutto il motivo per cui i bot esistono.
+
+Le strategie servono a fabbricare situazioni: `aggressive` offre sempre il massimo, `passive`
+sempre il minimo, `random` importi verosimili, e `tie` fa convergere tutti sulla stessa cifra —
+è il modo di innescare a comando lo spareggio, che a mano è quasi impossibile da riprodurre. Con
+sette bot più un browser reale si collauda il proprio portale in mezzo a un'asta che va avanti da
+sola.
+
+---
+
 ## Cosa non c'è ancora
 
-Alla fine della Fase 3 un'asta completa si gioca da sola, da riga di comando, e sopravvive a un
-riavvio del processo a metà round. Ma nessun client la vede: il broadcast è un gancio vuoto, non
-esiste né lo snapshot sanificato né lo stream SSE, e non c'è ancora una sola riga di UI
-dell'asta — è un criterio dei gate, non una mancanza.
+Alla fine della Fase 4 un'asta completa si gioca da sola con otto client veri collegati, e chi si
+collega a metà riceve lo stato completo in un messaggio. Ma **non c'è ancora una sola riga di UI
+dell'asta**: nessun portale del partecipante, nessun portale del manager, nessuna vista TV. È un
+criterio dei gate, non una dimenticanza — il canale e la sanificazione dovevano esistere e avere
+un test prima che qualcuno ci disegnasse sopra una schermata.
 
-La Fase 4 costruirà il canale verso i client: `serializeSnapshot` (l'unico punto da cui lo stato
-esce dal server, per costruzione senza importi altrui durante le buste chiuse), il broadcast agli
-stream aperti, l'heartbeat di presence e i bot che sostituiranno il driver come partecipanti
-finti.
+Restano fuori anche gli override del manager (`manualAssign`, `voidAssignment`, `adjustBudget`),
+che sono della Fase 7, e l'export dell'xlsx. Il pulsante "Avvia l'asta" in lobby non esiste
+ancora: oggi l'avvio passa dai bot o dal driver.
+
+La Fase 5 costruisce il portale del partecipante, mobile-first, secondo §8bis: il banner globale
+"asta in corso", la card permanente del lotto, il modale d'offerta, il countdown, il pannello di
+reveal. Tutto derivato dallo snapshot — che ora esiste.
