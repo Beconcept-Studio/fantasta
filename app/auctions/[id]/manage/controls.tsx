@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { PresenceDot, PRESENCE_LABELS } from "@/components/auction/presence-dot";
+import { PresenceDot } from "@/components/auction/presence-dot";
 import { Button } from "@/components/ui/button";
 import { managerControls } from "@/lib/realtime/manage";
 import { sendAction, type ActionPayload } from "@/lib/realtime/action";

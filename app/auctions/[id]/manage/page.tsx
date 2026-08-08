@@ -47,7 +47,6 @@ export default async function ManagePage({
       auctionId={id}
       publicToken={overview.auction.publicToken}
       ownerIsMember={overview.viewerMember !== null}
-      seatsTaken={overview.members.length}
       pool={pool}
     />
   );

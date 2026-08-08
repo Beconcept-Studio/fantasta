@@ -73,7 +73,7 @@ export default async function SetupPage({
             href={`/auctions/${auction.id}/manage`}
             className="underline underline-offset-4"
           >
-            Regia dell'asta
+            Regia dell&apos;asta
           </Link>
           <Link
             href={`/auctions/${auction.id}/lobby`}

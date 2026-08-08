@@ -6,7 +6,6 @@ import { Countdown } from "@/components/auction/countdown";
 import { PresenceDot, PRESENCE_LABELS } from "@/components/auction/presence-dot";
 import { RosterGrid } from "@/components/auction/roster-grid";
 import { Badge } from "@/components/ui/badge";
-import { ROLE_LABELS } from "@/lib/domain";
 import { presenceAlert, spentCredits } from "@/lib/realtime/manage";
 import { memberById, memberLabel, phaseLabel } from "@/lib/realtime/portal";
 import type { PoolPlayer, Snapshot, SnapshotMember } from "@/lib/realtime/types";
@@ -34,7 +33,6 @@ export function ManageConsole({
   auctionId,
   publicToken,
   ownerIsMember,
-  seatsTaken,
   pool,
 }: {
   auctionId: string;
@@ -42,7 +40,6 @@ export function ManageConsole({
   publicToken: string;
   /** Se l'owner gioca, questa pagina deve battere il suo heartbeat. */
   ownerIsMember: boolean;
-  seatsTaken: number;
   /** Il listone dell'asta, per il pannello delle correzioni (F7-05). */
   pool: PoolPlayer[];
 }) {

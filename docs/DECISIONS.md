@@ -677,3 +677,73 @@ futura — e da `resolveViewer`, che copre `stream` e `heartbeat`. In più `with
 `getAuctionOverview` e `listPickPool`, perché anche `/auctions/undefined/setup` rispondeva 500 e
 adesso è un `notFound()`. Difendere l'imbuto invece dell'ingresso è ciò che fa valere la regola
 anche per la prossima rotta che qualcuno aggiungerà.
+
+---
+
+## 2026-08-08 — Fase 8, deploy
+
+**Gli artefatti di deploy stanno in `deploy/`, non in `scripts/`.** `scripts/` contiene programmi
+`tsx` che parlano col motore (seed, driver, bot); `deploy/` contiene la configurazione della
+macchina: `ecosystem.config.cjs` per pm2, `deploy.sh`, `nginx-asta.conf`, `db-backup.sh`,
+`db-restore-check.sh`, `env.production.example`. Motivazione: sono file che si leggono dal server
+e non dal progetto, e nessuno di loro importa una riga di applicazione. Tenerli insieme agli script
+TypeScript avrebbe reso `scripts/` un cassetto.
+
+**⚠ Il build di produzione era rotto, e nessun cancello delle Fasi 0–7 lo aveva notato.**
+`next build` esegue ESLint e un errore di lint **fa fallire la build**: un apostrofo non
+escapato in `app/auctions/[id]/setup/page.tsx` (aggiunto dall'ultimo commit di Fase 7) rendeva
+l'applicazione **non deployabile**, con `pnpm dev`, `pnpm test` e `pnpm typecheck` tutti verdi.
+Corretto insieme a tre variabili non usate — fra cui la prop `seatsTaken` di `ManageConsole`, morta
+dopo il rimaneggiamento della regia. Lezione registrata nel runbook: `pnpm build` è la verifica che
+va fatta **prima** di considerare chiusa una fase con della UI dentro, non la sera del deploy.
+
+**Le variabili d'ambiente le passa pm2, non il file `.env`.** Il server standalone di Next fa
+`process.chdir(__dirname)` e gira quindi con la working directory in `.next/standalone`, dove non
+esiste nessun `.env`: le variabili non verrebbero lette. `deploy/ecosystem.config.cjs` legge il
+`.env` della radice con un parser di dieci righe (niente `dotenv`: pm2 esegue quel file col proprio
+Node, non con quello del progetto) e lo passa al processo, aggiungendo `NODE_ENV=production`,
+`HOSTNAME=127.0.0.1` e `TZ=UTC`. Il file è committato, quindi **non contiene segreti**: la password
+del database resta scritta in un posto solo. Se manca una delle cinque variabili di PLAN §1, pm2
+non parte affatto — meglio un errore all'avvio che un login che gira a vuoto la sera dell'asta.
+
+**`exec_mode: "fork"` e `instances: 1` sono un invariante, non una preferenza.** In cluster mode
+pm2 avvierebbe una copia del processo per core, e ognuna eseguirebbe `instrumentation.ts`: due
+sweep che fanno avanzare la stessa asta, cioè il bug di PLAN §16.8 riprodotto in produzione a
+comando. Il corollario osservato in Fase 3 («due processi con lo sweep attivo non si fanno male,
+ma il design resta un processo solo») qui diventa una riga di configurazione da non toccare.
+
+**`TZ=UTC` fissato sul processo, oltre che sulla macchina.** PLAN §17 chiede il server in UTC;
+`timedatectl set-timezone UTC` lo fa per il sistema, ma un giorno qualcuno potrebbe cambiarlo. La
+variabile nell'ecosystem file rende la cosa vera per il processo che conta, qualunque cosa dica il
+sistema operativo.
+
+**`pnpm db:push` **non** è nel deploy.** Il deploy aggiorna codice e processo; lo schema si applica
+a mano. Motivazione: `drizzle-kit` gira con `strict: false` (DECISIONS 2026-08-07) e non chiede il
+permesso a nessuno — un `push` automatico significherebbe una modifica di schema che parte da sola
+mentre otto persone stanno offrendo.
+
+**Il deploy si rifiuta di partire con un'asta `LIVE` o `PAUSED`.** Una riga di `psql` in
+`deploy.sh`, aggirabile con `DEPLOY_DURING_AUCTION=1`. Motivazione: il riavvio in sé è innocuo (il
+boot recovery riprende entro un secondo, F3-14), ma `pnpm build` dura un minuto, e un minuto di
+silenzio in diretta è un minuto di panico. La pausa non basta come protezione: `PAUSED` è compreso
+nella guardia proprio perché è lo stato in cui l'owner mette l'asta quando sta cercando di
+risolvere un problema, ed è il momento peggiore per un deploy.
+
+**Il dump è SQL semplice compresso, non il formato `custom`.** `pg_dump --clean --if-exists
+--no-owner | gzip`. Motivazione: un dump che si legge con `zless` e si ripristina con `psql` è un
+dump che si riesce a usare alle undici di sera senza rileggere il manuale, e questo database sta in
+pochi megabyte. `db-restore-check.sh` ripristina su un database separato, conta le righe **e
+verifica I2** sul ripristinato: un backup che si ripristina ma con due volte lo stesso giocatore in
+una rosa non è un backup buono.
+
+**I bot in produzione si firmano da sé il cookie di sessione.** `scripts/bots.ts` non passa più dal
+provider `dev`: emette il proprio JWT di sessione Auth.js con `encode()` di `next-auth/jwt`, usando
+l'`AUTH_SECRET` che sul server ha già in `.env`. Motivazione: il criterio ✅ della fase è un'asta a
+8 bot **in produzione**, ma il provider `dev` in produzione non esiste per costruzione — e il
+server standalone forza `NODE_ENV=production` da sé, quindi non sarebbe bastato nemmeno un flag.
+Le alternative erano riaprire il provider dietro un'env var (indebolendo un invariante che
+`tests/auth-providers.test.ts` garantisce in modo assoluto, e dipendendo dal ricordarsi di
+spegnerla) o rinunciare al collaudo con i bot. Firmare il cookie non aggiunge **nessuna superficie
+di login all'applicazione**: chi ha `AUTH_SECRET` ha già tutto. Effetto collaterale voluto: un solo
+cammino di codice in locale e in produzione, quindi ciò che funziona in prova funziona la sera
+dell'asta.
