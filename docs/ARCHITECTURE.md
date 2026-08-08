@@ -928,6 +928,12 @@ a fare il loro mestiere e la decisione di fermare tutto resta a chi conduce, che
 se quella persona è uscita dalla stanza o è andata a prendere da bere. Il banner lo scrive
 esplicitamente, perché è la prima domanda che viene in mente leggendolo.
 
+Dalla Fase 7 la regia ha anche un **pannello di correzioni**, chiuso di default perché non è roba
+da usare per sbaglio: assegnazione manuale, cancellazione di un giocatore da una rosa, rettifica
+dei crediti. Si spegne da solo quando c'è un lotto in contesa, e la prima cosa che scrive è che un
+pulsante «annulla» non esiste. Come funziona e perché è fatto così sta nel capitolo dopo. Nella
+barra dei link, accanto alla vista TV, c'è anche il download del file `.xlsx` con le rose dentro.
+
 ### La TV, su `/tv/[publicToken]`
 
 La vista proiettata **non ha login**, e il token nell'URL *è* la sua autenticazione. È la scelta
@@ -961,20 +967,175 @@ sul telefono.
 
 ---
 
+## Le correzioni, e la memoria dell'asta
+
+Fino alla Fase 6 l'applicazione sa fare una cosa sola: **aggiungere storia**. Un lotto, una busta,
+un turno, un'assegnazione. Nessuna azione torna su ciò che è già successo, ed è quello che la rende
+semplice da ragionare — lo stato di un'asta è la somma di quello che è accaduto, in ordine.
+
+Poi arriva la sera vera. Qualcuno chiama il giocatore sbagliato, un'offerta parte con uno zero in
+più, il manager si accorge che un lotto è stato aggiudicato mentre metà stanza guardava altrove.
+La Fase 7 aggiunge le tre azioni che quella storia la **riscrivono**, e siccome sono le uniche di
+tutto il progetto a farlo, hanno un file loro (`lib/engine/override.ts`) e tre regole che non
+valgono per nient'altro.
+
+### Niente undo, e non è una mancanza
+
+Non esiste un pulsante «annulla l'ultimo lotto». È stato eliminato dal progetto in fase di
+kickoff, ed è la decisione da cui discende tutto il resto del capitolo.
+
+La ragione è che un undo vero avrebbe dovuto rimettere a posto anche il **turno**: ripristinare il
+seat di chi aveva chiamato, il ruolo corrente, e — se quel lotto aveva fatto scattare il passaggio
+al ruolo successivo — anche quello. Era la parte più fragile dell'intera specifica, e sarebbe stata
+esercitata esattamente nel momento peggiore, con dieci persone che aspettano.
+
+Al suo posto c'è una correzione in due mosse: si **cancella** il giocatore dalla rosa e lo si
+**riassegna** com'era giusto. La rotazione dei turni non torna mai indietro; chi ha chiamato ha
+chiamato. In cambio, quello che si corregge è esattamente quello che si vede — una rosa e un
+prezzo — e si può raccontare a voce in una frase.
+
+### Mai con le buste aperte
+
+Le tre azioni sono rifiutate quando c'è un lotto in contesa, cioè con la fase in `LOT_OPEN` o
+`LOT_TIE_PREP`. Non è prudenza generica: toccare una rosa mentre un round è aperto cambia i crediti
+e l'offerta massima **sotto** a chi ha già offerto. Chi aveva messo 40 nella busta trenta secondi
+fa si troverebbe l'offerta fuori tetto senza aver fatto niente, e l'esito del round dipenderebbe da
+un fatto avvenuto dopo la sua decisione.
+
+Il dettaglio che conta: il divieto guarda la **fase**, non lo stato. Mettere in pausa l'asta non
+apre la porta alle correzioni, perché la pausa congela la fase invece di azzerarla. Il momento
+buono è quello in cui nessuno ha una busta aperta — l'attesa della chiamata, i secondi del reveal,
+l'asta ferma o finita — e in diretta significa aspettare pochi secondi, non riprogrammare la
+serata.
+
+### Mai un DELETE
+
+Un'assegnazione annullata **resta a database**, con una colonna `voided_at` valorizzata. Una
+rettifica di crediti è una riga in più in `ledger`, con dentro il motivo e chi l'ha decisa; nessun
+numero viene sovrascritto.
+
+Questo funziona perché il credito non è una colonna: è una formula, `budget_initial` più la somma
+dei delta del ledger meno la somma dei prezzi delle assegnazioni **non annullate**. Marcare una
+riga come annullata restituisce i crediti da sola, senza nessuna scrittura compensativa — anzi, una
+riga di rimborso nel ledger conterebbe il rimborso due volte. È lo stesso motivo per cui il void
+non ha invarianti da controllare: annullare restituisce almeno un credito per ogni slot che riapre
+(i prezzi sono interi ≥ 1, all'asta come a mano), quindi non può mai lasciare qualcuno senza i
+crediti per completare la rosa.
+
+Il risultato è che dopo la serata non si può ricostruire solo *quanto* aveva ciascuno, ma
+**perché**. È la differenza fra un archivio e un saldo.
+
+### Le tre azioni
+
+**`manualAssign`** scrive un giocatore in una rosa senza che nessuno abbia offerto: `source =
+MANUAL`, `lot_id` nullo — non c'è nessun lotto che l'abbia deciso. Controlla le stesse invarianti di
+un acquisto vero, perché è l'unico modo di scrivere una rosa saltando la macchina a stati, e quindi
+l'unico modo di corromperla. Un giocatore ha un solo proprietario (I2) e questo non è negoziabile;
+ogni slot ancora vuoto deve restare comprabile ad almeno un credito (I3) e nemmeno questo lo è. La
+sola cosa derogabile è il numero di slot del ruolo (I4), con una **forzatura** esplicita: esiste
+per la sera in cui si è sbagliato a contare, e una rosa con un difensore di troppo è preferibile a
+un'asta ferma.
+
+**`voidAssignment`** cancella un giocatore da una rosa scrivendo `voided_at`. Ripeterla è un no-op,
+non un errore: è il doppio click su un pulsante che intanto è sparito dalla schermata, e in diretta
+un messaggio di errore su un'operazione già riuscita fa perdere dieci secondi a capire cosa sia
+successo.
+
+**`adjustBudget`** aggiunge una riga di ledger con delta, motivo e autore. Il motivo è obbligatorio,
+e non per burocrazia: fra sei mesi un `−20` senza spiegazione è indistinguibile da un errore di
+battitura. Una rettifica che lascerebbe un membro con meno crediti degli slot da riempire viene
+rifiutata, perché quel membro non potrebbe più completare la rosa e l'asta si bloccherebbe sul suo
+turno.
+
+Tutte e tre passano da `withAuctionLock` come qualunque altra mutazione: si mettono in fila con le
+offerte e con lo sweep, incrementano `state_version` e fanno partire lo snapshot. Un void deve
+arrivare sui telefoni esattamente come ci arriva un'offerta — la regola 7 non ha eccezioni per le
+correzioni.
+
+Quello che **non** sono è transizioni della macchina a stati. Non hanno un istante che le fa
+scattare, non spostano la fase, non producono uno stato successivo: sono scritture puntuali su due
+tabelle. Le loro *regole*, invece, sono funzioni pure in `rules.ts` accanto a tutte le altre, e si
+provano in millisecondi senza database.
+
+### Un buco che la correzione stessa apriva
+
+Aggiungere `manualAssign` ha reso raggiungibile una situazione che prima non esisteva, e che è
+valsa due righe in più nel motore.
+
+Nella rotazione normale, chi è di turno ha sempre uno slot libero nel ruolo che si sta giocando: è
+`nextSeat` a dare il turno soltanto a chi ce l'ha. Ma il manager può assegnare un portiere a
+qualcuno **mentre quel qualcuno sta aspettando di chiamare un portiere**. A quel punto il pick
+apriva comunque il lotto, il chiamante restava fuori dagli idonei del round e la sua offerta
+d'ufficio a 1 ci restava dentro: se nessun altro rilanciava se lo aggiudicava, e si ritrovava due
+portieri su uno slot — l'invariante sugli slot rotta senza che nessuno avesse forzato niente.
+
+Il rimedio segue la lettera del piano, che già diceva «chi ha il ruolo corrente pieno non è fra gli
+idonei e il suo turno viene saltato»: adesso il pick di chi ha il ruolo pieno viene rifiutato, e
+allo scadere del timer il turno **passa** invece di aprire un lotto che quel chiamante non potrebbe
+vincere. Non è un undo, e non è il manager a muovere la rotazione: il turno va avanti, come sempre,
+e a muoverlo resta soltanto il tempo.
+
+### L'export
+
+L'ultima cosa che serve, la mattina dopo, è rimettere il risultato su Fantacalcio.it. Il file di
+partenza non c'è più — all'import ne estraiamo i dati e lo buttiamo — quindi l'export **ricostruisce
+il layout da zero**: foglio `Lista calciatori`, le quattordici colonne nell'ordine originale,
+`FantaSquadra` e `Costo` riempite da chi possiede il giocatore e a quanto. Le quattro colonne che
+non importiamo (l'età, le presenze, le due medie) restano celle vuote, non zeri: una cella vuota
+dice «non lo so», uno zero dice «zero».
+
+È tutto il listone, non solo le rose: chi non è stato comprato c'è comunque, con le due colonne
+vuote. E un'assegnazione annullata non compare — è l'unico punto in cui il filtro «non annullata»
+decide cosa finisce in un file che qualcuno caricherà altrove, e una riga sbagliata che
+riapparisse lì sarebbe la correzione della sera buttata via. Il modo in cui lo verifichiamo è un
+giro completo: si esporta, si rilegge con **il nostro stesso parser** dell'import e si controlla
+che ritrovi gli stessi giocatori con le squadre e i prezzi giusti.
+
+Il download è l'unica rotta che non passa dal dispatcher delle azioni: una `GET` su
+`/api/auctions/[id]/export`, perché un file da scaricare ha bisogno di un URL, di un tipo MIME e di
+un nome, e nessuna delle tre cose sta in una risposta JSON.
+
+### La tabella `events`
+
+Ogni transizione dell'asta scrive una riga in `events`, dall'inizio del progetto: da dove a dove,
+su quale lotto, per mano di chi (o di `system`, quando è il tempo). Le correzioni ci si aggiungono
+con qualche campo in più — chi ha assegnato cosa a chi, a quale prezzo, con quale motivo, se ha
+forzato.
+
+È la tabella che nessuno guarderà mai, finché non servirà. Quando qualcosa andrà storto durante
+un'asta vera, sarà l'unica cosa che permetterà di ricostruire cosa è successo e in quale ordine —
+ed è per questo che ogni riga viene scritta **nella stessa transazione** della mutazione che
+descrive: o ci sono entrambe, o non c'è nessuna delle due. Una traccia che può mentire vale meno di
+nessuna traccia. La stessa riga esce anche su stdout in JSON, ed è quella che si segue in diretta
+con `pm2 logs` mentre l'asta va.
+
+### Un id sbagliato non è un errore del server
+
+Chiude la fase una piccola cosa annotata durante il collaudo della Fase 5. Un URL come
+`/api/auctions/undefined/action` — che nessuna pagina genera, ma che una `fetch` scritta a mano
+produce al primo copia-incolla sbagliato — mandava la stringa fino a Postgres, che la rifiutava con
+un'eccezione: un **500**, cioè la risposta che l'applicazione riserva ai propri bug. Ma un'asta che
+non esiste è un rifiuto come gli altri, e ogni rifiuto ha un codice tipizzato.
+
+La guardia sta nei due imbuti da cui passa tutto — `withAuctionLock` per le azioni e `resolveViewer`
+per lo stream e l'heartbeat — più le letture che le pagine fanno con l'id preso dall'URL. Difendere
+l'imbuto invece dell'ingresso è ciò che fa valere la regola anche per la prossima rotta che
+qualcuno aggiungerà.
+
+---
+
 ## Cosa non c'è ancora
 
-Alla fine della Fase 6 l'asta si può condurre per intero senza toccare un terminale: l'owner la fa
-partire dal posto che vuole, la mette in pausa e la riprende, vede chi è caduto, e la stanza segue
-tutto dal televisore mentre ciascuno offre dal proprio telefono.
+Alla fine della Fase 7 l'applicazione fa tutto quello che serve la sera dell'asta. L'owner la fa
+partire dal posto che vuole, la mette in pausa, corregge gli sbagli senza toccare il database,
+scarica il file da ricaricare su Fantacalcio.it; la stanza segue dal televisore e ciascuno offre
+dal proprio telefono.
 
-Quello che manca è **il ripescaggio degli errori**. Non c'è modo di correggere un lotto sbagliato:
-`voidAssignment` — cancellare un giocatore da una rosa senza mai un `DELETE` — e `manualAssign` per
-riassegnarlo sono della Fase 7, insieme alle rettifiche di budget col loro ledger e all'export
-dell'xlsx nel formato del file di partenza. Undo non ce n'è e non ce ne sarà: la rotazione dei turni
-non torna indietro, e un lotto sbagliato si corregge annullando e riassegnando.
+Quello che manca è **il posto dove farla girare**. Oggi tutto questo vive su `pnpm dev` e su un
+Postgres in Docker sul portatile: la Fase 8 è il deploy — una macchina piccola, nginx davanti con
+il buffering spento sullo stream, il certificato, `pm2` che riavvia il processo se la memoria
+cresce, e un `pg_dump` ogni notte. Il criterio di chiusura è un'asta completa a otto partecipanti
+giocata in produzione.
 
-Resta aperto anche un difetto noto e annotato: un id di asta malformato nell'URL arriva fino a
-Postgres, che lo rifiuta con un'eccezione, e le route rispondono 500 invece di un 404 tipizzato. È
-un URL che nessuna pagina genera, ma va sistemato nella fase in cui si guardano gli errori. Fuori
-scopo per la prima asta resta l'area `/admin`. E resta fuori il deploy: oggi tutto questo gira su
-`pnpm dev` e su un Postgres in Docker.
+Fuori scopo per la prima asta resta l'area `/admin`, cioè l'elenco di tutte le aste e di tutti gli
+utenti per chi ha il flag di amministratore: è comodo, non serve a giocare.

@@ -47,6 +47,13 @@ export type SnapshotAuction = {
 };
 
 export type SnapshotRosterEntry = {
+  /**
+   * L'id della riga `assignments`, non del giocatore: è ciò che
+   * `voidAssignment(assignmentId)` (PLAN §9) vuole come riferimento, e da
+   * nessun'altra parte la regia lo avrebbe. Un uuid di riga non dice niente di
+   * nessuna busta, quindi non tocca I8.
+   */
+  assignmentId: string;
   playerId: string;
   name: string;
   role: Role;

@@ -9,11 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { ROLE_LABELS } from "@/lib/domain";
 import { presenceAlert, spentCredits } from "@/lib/realtime/manage";
 import { memberById, memberLabel, phaseLabel } from "@/lib/realtime/portal";
-import type { Snapshot, SnapshotMember } from "@/lib/realtime/types";
+import type { PoolPlayer, Snapshot, SnapshotMember } from "@/lib/realtime/types";
 import { useAuctionStream, useHeartbeat } from "@/lib/realtime/use-auction-stream";
 import { cn } from "@/lib/utils";
 
 import { ControlPanel } from "./controls";
+import { OverridePanel } from "./overrides";
 
 /**
  * La regia dell'asta (F6-01…F6-04).
@@ -34,6 +35,7 @@ export function ManageConsole({
   publicToken,
   ownerIsMember,
   seatsTaken,
+  pool,
 }: {
   auctionId: string;
   /** Il token della vista TV: da qui esce l'unico link che la apre. */
@@ -41,6 +43,8 @@ export function ManageConsole({
   /** Se l'owner gioca, questa pagina deve battere il suo heartbeat. */
   ownerIsMember: boolean;
   seatsTaken: number;
+  /** Il listone dell'asta, per il pannello delle correzioni (F7-05). */
+  pool: PoolPlayer[];
 }) {
   const { snapshot, connected, offset } = useAuctionStream(auctionId);
   // ⚠ Se l'owner è anche un membro (⚠ P11 — di solito lo è) e conduce da qui,
@@ -109,6 +113,14 @@ export function ManageConsole({
           >
             Vista TV ↗
           </a>
+          {/* Un link, non un pulsante: è una GET che scarica un file, e il
+              browser sa già farlo (F7-06). */}
+          <a
+            href={`/api/auctions/${auctionId}/export`}
+            className="hover:text-foreground"
+          >
+            Scarica le rose (.xlsx) ↓
+          </a>
         </nav>
       </header>
 
@@ -117,6 +129,8 @@ export function ManageConsole({
       <ControlPanel auctionId={auctionId} snapshot={snapshot} />
 
       <LiveStrip snapshot={snapshot} offset={offset} turnOf={turnOf} />
+
+      <OverridePanel auctionId={auctionId} snapshot={snapshot} pool={pool} />
 
       <section className="space-y-3">
         <div className="flex items-baseline justify-between gap-4">

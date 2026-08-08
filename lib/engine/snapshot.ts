@@ -93,7 +93,12 @@ function serializeMembers(
               throw new Error(`assegnazione su un giocatore sconosciuto: ${a.playerId}`);
             }
             const pv = view.players.get(a.playerId);
+            const uuid = loaded.refs.assignments.get(a.id);
+            if (!uuid) {
+              throw new Error(`assegnazione ${a.id} senza uuid: snapshot impossibile`);
+            }
             return {
+              assignmentId: uuid,
               playerId: a.playerId,
               name: pv?.name ?? "",
               role: player.role,

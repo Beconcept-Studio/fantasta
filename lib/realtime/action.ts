@@ -22,7 +22,20 @@ export type ActionPayload =
   | { type: "WITHDRAW" }
   /** Solo l'owner; il portale manager di Fase 6 le userà da qui. */
   | { type: "PAUSE" }
-  | { type: "RESUME" };
+  | { type: "RESUME" }
+  /**
+   * Gli override del manager (Fase 7), consentiti solo senza un lotto in
+   * contesa. Il server rifiuta comunque: qui si sceglie solo cosa mandare.
+   */
+  | {
+      type: "MANUAL_ASSIGN";
+      memberId: string;
+      playerId: string;
+      price: number;
+      force?: boolean;
+    }
+  | { type: "VOID_ASSIGNMENT"; assignmentId: string }
+  | { type: "ADJUST_BUDGET"; memberId: string; delta: number; reason: string };
 
 export type ActionResult =
   | { ok: true }

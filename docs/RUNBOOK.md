@@ -74,8 +74,8 @@ tenere a mente questa tabella.
 | **3 — Persistenza e timer** | Guarda con i tuoi occhi le due dimostrazioni. **(a) Asta completa:** `pnpm db:seed --auction-status=ready`, prendi l'id stampato, poi `pnpm drive --auction=<id>` — vedrai il log JSON scorrere e in ~20 minuti «✓ Asta COMPLETED: 200 lotti». **(b) Restart a metà round:** mentre il driver gira, fermalo con Ctrl-C (o killa il processo); guarda che l'asta resti ferma (nessuna riga nuova), poi rilancia lo stesso comando `pnpm drive --auction=<id>`: riparte entro 1 secondo da dove si era fermata, fino a COMPLETED. |
 | **4 — SSE** | Poco, ed è tutto da terminale. `pnpm test` verde (il criterio di fase è il test I8 sui tre spettatori). Se vuoi vedere il canale con i tuoi occhi: `pnpm dev` in un terminale, `pnpm bots --auction=<id> --count=8 --strategy=tie --start --verbose` in un altro, e un `curl -N "http://localhost:3000/api/auctions/<id>/stream?token=<public_token>"` in un terzo — è la vista TV, e vedrai scorrere uno snapshot per transizione senza **nessun** importo finché non si apre il reveal. Con `--strategy=tie` ogni lotto va allo spareggio. |
 | ~~**5 — Portale partecipante**~~ ✓ | Fatto il 2026-08-08: telefono vero + un browser sul Mac dentro un'asta con sei bot, tutti sull'IP di LAN. Nessun disallineamento fra i due dispositivi; tastierino numerico e nessuno zoom forzato. La procedura resta scritta qui sotto ("Il collaudo della Fase 5"): serve di nuovo ogni volta che si tocca il portale. |
-| **6 — Manager e TV** | Il collaudo è scritto passo per passo qui sotto ("Il collaudo della Fase 6"). In due parole: apri la **regia** e avvia da lì un'asta con bot scegliendo il posto di partenza, prova pausa e ripresa, killa un bot e guarda comparire l'alert; poi apri la **vista TV in incognito** (senza login) e verifica che durante le offerte non si veda nessun importo. Se hai una TV o un proiettore, provala lì per la leggibilità: è l'unica cosa che a schermo di computer non si può giudicare. ~30 minuti. |
-| **7 — Override** | Simula la serata storta: pausa → cancella un giocatore da una rosa → riassegna manualmente → riprendi. Poi esporta l'xlsx e **aprilo in Excel** per verificare FantaSquadra e Costo. |
+| ~~**6 — Manager e TV**~~ ✓ | Il collaudo è scritto passo per passo qui sotto ("Il collaudo della Fase 6"). In due parole: apri la **regia** e avvia da lì un'asta con bot scegliendo il posto di partenza, prova pausa e ripresa, killa un bot e guarda comparire l'alert; poi apri la **vista TV in incognito** (senza login) e verifica che durante le offerte non si veda nessun importo. Se hai una TV o un proiettore, provala lì per la leggibilità: è l'unica cosa che a schermo di computer non si può giudicare. ~30 minuti. |
+| **7 — Override** | Il collaudo è scritto passo per passo qui sotto ("Il collaudo della Fase 7"). In due parole: simula la serata storta — pausa → cancella un giocatore da una rosa → riassegna manualmente → riprendi — e verifica che crediti e rose tornino da soli. Poi esporta l'xlsx e **aprilo in Excel**: `FantaSquadra` e `Costo` riempite, e il giocatore corretto risulta della squadra nuova. ~20 minuti. |
 | **8 — Deploy** ⚠ | Alto coinvolgimento tuo: server Hetzner, Ploi, DNS del dominio, redirect URI di **produzione** nella console Google, env sul server. Poi l'asta di prova a 8 bot in produzione e la checklist pre-asta di PLAN.md §17, eseguita da te punto per punto. |
 
 ### Consigli trasversali
@@ -276,6 +276,75 @@ esserci. Non è nascosto dalla pagina — non arriva proprio.
 o un proiettore, collega il portatile e guarda da quattro metri. Il nome del giocatore, il countdown
 e il prezzo di aggiudicazione devono leggersi senza sforzo; i nomi delle squadre nella colonna
 di destra anche. Se qualcosa non si legge, annota **cosa** e **da che distanza**.
+
+### Il collaudo della Fase 7 — passo per passo
+
+Venti minuti, tutto al computer. Stesso campo della Fase 6: un'asta `ready`, l'app accesa, otto bot.
+
+```bash
+docker compose up -d
+pnpm db:seed --auction-status=ready     # stampa l'id dell'asta
+pnpm dev                                # in un terminale
+pnpm bots --auction=<id> --count=8 --strategy=random   # in un secondo terminale, senza --start
+```
+
+**1. Il pannello.** Entra come l'owner, vai su `/auctions/<id>/manage` e apri «Correzioni». Deve
+dirti, prima di tutto, che un pulsante «annulla» non esiste e perché.
+
+**2. Con le buste aperte non si tocca niente.** Avvia l'asta e aspetta il primo lotto aperto: il
+pannello si deve spegnere e comparire la riga in ambra che spiega di aspettare l'assegnazione.
+**Premi «Metti in pausa» e riguarda**: deve restare spento. La pausa congela la fase, non la azzera
+— è la cosa più facile da dare per scontata al contrario.
+
+**3. La correzione vera — è il primo criterio ✅ della fase.** Aspetta la fine di un lotto (fase
+«buste aperte» o «in attesa della chiamata»), poi:
+
+- annota crediti e rosa di chi ha vinto;
+- in «Cancella un giocatore da una rosa» scegli la sua squadra, premi «Cancella» sul giocatore e
+  conferma. **I crediti devono risalire esattamente del prezzo pagato** e il giocatore sparire
+  dalla rosa, subito, senza ricaricare la pagina;
+- in «Assegna un giocatore a mano» scegli un'altra squadra, cerca **quello stesso giocatore** (deve
+  ricomparire fra i liberi: se non ricompare, il void non ha funzionato), metti un prezzo diverso e
+  assegna. La nuova rosa e i nuovi crediti si aggiornano da soli.
+
+Se hai un portale partecipante aperto in un'altra finestra, tieni d'occhio anche quello: la
+correzione ci deve arrivare come ci arriva un'offerta.
+
+**4. Quello che il server rifiuta comunque.** Prova ad assegnare un giocatore che è già in una
+rosa: non compare nemmeno nella lista dei liberi. Prova una rettifica di −500 crediti: deve essere
+rifiutata con un messaggio che nomina i numeri («resterebbe con … crediti per … slot»). Prova ad
+assegnare un secondo portiere a chi ne ha già uno: rifiutato, e con la spunta «Forza lo slot in
+eccesso» accettato.
+
+**5. Il registro.** Le rettifiche non spariscono: `psql` e `select type, payload from events where
+auction_id = '<id>' order by id desc limit 5;` deve mostrare `MANUAL_ASSIGN`, `VOID_ASSIGNMENT` e
+`ADJUST_BUDGET` con dentro chi, cosa e perché. E `select price, source, voided_at from assignments`
+deve mostrare la riga annullata ancora lì, con la data.
+
+**6. L'export — è il secondo criterio ✅ della fase.** Dalla barra dei link, «Scarica le rose
+(.xlsx)». **Apri il file in Excel o Numbers**: foglio `Lista calciatori`, tutto il listone, e le
+colonne `FantaSquadra` e `Costo` riempite solo per i giocatori comprati. Il giocatore che hai
+cancellato al punto 3 deve risultare della squadra **nuova**, al prezzo nuovo. Se sei sul sito di
+Fantacalcio.it, prova a ricaricarlo lì: è quello il vero collaudo.
+
+### Correggere un errore in diretta
+
+La procedura da tenere a mente la sera dell'asta, in quattro mosse:
+
+1. **Pausa** dalla regia, così nessuno perde secondi mentre si ragiona.
+2. Aspetta di **non avere buste aperte**: se il pannello è spento, l'assegnazione del lotto in
+   corso arriva in pochi secondi. La pausa da sola non basta.
+3. **Cancella** il giocatore dalla rosa sbagliata e **riassegnalo** com'era giusto, col prezzo
+   giusto. Se il problema è solo il prezzo, cancella e riassegna allo stesso.
+4. **Riprendi**. I countdown ripartono dal tempo che restava.
+
+Cosa **non** si può fare, e come conviene raccontarlo a voce: il turno di chiamata non torna
+indietro. Se il lotto sbagliato ha già fatto passare il turno, quel turno è passato — si corregge
+la rosa, non la storia.
+
+Se la correzione riempie il ruolo di chi sta per chiamare, quel turno viene **saltato** (il suo
+pick verrà rifiutato e alla scadenza si passa al prossimo): è voluto, ed è meglio dirlo prima che
+scoprirlo insieme.
 
 ### Tutti i comandi
 

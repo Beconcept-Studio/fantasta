@@ -40,15 +40,45 @@ type EventFactory = (loaded: LoadedAuction) => Result<AuctionEvent>;
 type Actor = string | "system";
 
 /** `LIVE/LOT_OPEN`, `PAUSED/LOT_OPEN`, `READY`, `COMPLETED`… */
-function describePosition(state: AuctionState): string {
+export function describePosition(state: AuctionState): string {
   return state.phase === null ? state.status : `${state.status}/${state.phase}`;
 }
 
 /**
- * La memoria dell'asta (F3-09, PLAN §17): ogni transizione effettiva scrive
- * una riga in `events` — nella stessa transazione della mutazione — e una
- * riga JSON su stdout, quella che si segue in diretta con `pm2 logs`.
+ * La memoria dell'asta (F3-09, PLAN §17): una riga in `events` — nella stessa
+ * transazione della mutazione, quindi o ci sono entrambe o non c'è nessuna
+ * delle due — e una riga JSON su stdout, quella che si segue in diretta con
+ * `pm2 logs`.
+ *
+ * Esportata perché il secondo chiamante è arrivato: gli override di Fase 7
+ * (`lib/engine/override.ts`) non passano dalla macchina a stati ma devono
+ * lasciare la stessa traccia — anzi, sono proprio quelli per cui la traccia
+ * conta di più, essendo le uniche azioni che riscrivono un fatto già accaduto.
  */
+export async function writeEvent(
+  tx: Tx,
+  auctionId: string,
+  type: string,
+  payload: Record<string, unknown>,
+  now: Millis,
+): Promise<void> {
+  await tx.insert(events).values({
+    auctionId,
+    type,
+    payload,
+    createdAt: new Date(now),
+  });
+  console.log(
+    JSON.stringify({
+      auctionId,
+      type,
+      ...payload,
+      ts: new Date(now).toISOString(),
+    }),
+  );
+}
+
+/** La riga di `events` di una transizione: da dove a dove, su quale lotto. */
 async function recordEvent(
   tx: Tx,
   loaded: LoadedAuction,
@@ -63,25 +93,17 @@ async function recordEvent(
   const lotId =
     lotEngineId === null ? null : (loaded.refs.lots.get(lotEngineId) ?? null);
 
-  const payload = {
-    from: describePosition(loaded.state),
-    to: describePosition(next),
-    lotId,
-    actor,
-  };
-  await tx.insert(events).values({
-    auctionId: loaded.auction.id,
-    type: event.type,
-    payload,
-    createdAt: new Date(now),
-  });
-  console.log(
-    JSON.stringify({
-      auctionId: loaded.auction.id,
-      type: event.type,
-      ...payload,
-      ts: new Date(now).toISOString(),
-    }),
+  await writeEvent(
+    tx,
+    loaded.auction.id,
+    event.type,
+    {
+      from: describePosition(loaded.state),
+      to: describePosition(next),
+      lotId,
+      actor,
+    },
+    now,
   );
 }
 

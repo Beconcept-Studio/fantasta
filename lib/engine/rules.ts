@@ -224,3 +224,120 @@ export function canAdjustBudget(
   }
   return ok(null);
 }
+
+// ─── Override del manager (Fase 7) ───────────────────────────────────────────
+
+/**
+ * Le regole di `manualAssign` (PLAN §9), come funzione pura sullo stato.
+ *
+ * Sono le stesse invarianti di un acquisto all'asta, controllate qui perché
+ * un'assegnazione manuale **non passa dalla macchina a stati**: non c'è un
+ * lotto, non c'è un round, non c'è niente che le abbia già validate lungo la
+ * strada. È l'unico modo di scrivere una rosa senza che nessuno abbia offerto,
+ * ed è per questo che è anche l'unico modo di corromperla.
+ *
+ * - **I2** — un giocatore ha un solo proprietario. Non è derogabile nemmeno con
+ *   `force`: due rose con lo stesso giocatore non sono un'asta storta, sono
+ *   un'asta impossibile (e l'indice unico parziale rifiuterebbe comunque la
+ *   riga, con un'eccezione al posto di un messaggio).
+ * - **I3** — dopo l'assegnazione, ogni slot ancora vuoto deve restare
+ *   comprabile ad almeno 1 credito. Mai derogabile (PLAN §9): un membro senza
+ *   crediti per completare la rosa blocca l'asta, non la sporca soltanto.
+ * - **I4** — nessuno supera gli slot del proprio ruolo. Questa `force` la
+ *   deroga, ed è l'unica cosa che deroga: serve per la sera in cui si è
+ *   sbagliato a contare e si preferisce una rosa con un difensore in più a
+ *   un'asta ferma.
+ *
+ * Il prezzo è un intero ≥ 1, come qualunque offerta: è il pavimento del
+ * regolamento (PLAN §4, `min_amount = 1`), ed è anche ciò che rende
+ * `voidAssignment` sempre innocua per I3 — annullare restituisce almeno tanti
+ * crediti quanti slot riapre.
+ */
+export function canManualAssign(
+  state: AuctionState,
+  memberId: string,
+  playerId: string,
+  price: number,
+  force: boolean,
+): Result<null> {
+  const member = state.members.find((m) => m.id === memberId);
+  if (!member) {
+    return fail("MEMBER_NOT_FOUND", "Membro sconosciuto per questa asta.");
+  }
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) {
+    return fail("PLAYER_NOT_FOUND", "Giocatore non presente nel listone.");
+  }
+  if (!Number.isInteger(price) || price < 1) {
+    return fail(
+      "INVALID_AMOUNT",
+      "Il prezzo di un'assegnazione è un numero intero di almeno 1 credito.",
+    );
+  }
+
+  // I2 — mai derogabile, nemmeno con force (§12.40).
+  const taken = state.assignments.some(
+    (a) => a.playerId === playerId && a.voidedAt === null,
+  );
+  if (taken) {
+    return fail(
+      "PLAYER_ASSIGNED",
+      "Il giocatore è già in una rosa: per spostarlo, prima annulla l'assegnazione esistente.",
+    );
+  }
+
+  // I4 — derogabile con force.
+  const owned = ownedByRole(state, memberId)[player.role];
+  const slots = state.config.slots[player.role];
+  if (!force && owned >= slots) {
+    return fail(
+      "ASSIGN_VIOLATES_I4",
+      `Il membro ha già ${owned} ${player.role} su ${slots}: per assegnarlo comunque serve la forzatura.`,
+    );
+  }
+
+  // I3 — mai derogabile, e si valuta sullo stato **dopo** l'assegnazione:
+  // il prezzo esce dai crediti e lo slot riempito esce dal residuo.
+  const after = withAssignment(state, memberId, playerId, price);
+  const creditsAfter = credits(after, memberId);
+  const residualAfter = residualSlots(after, memberId);
+  if (creditsAfter < residualAfter) {
+    return fail(
+      "ADJUST_VIOLATES_I3",
+      `A ${price} crediti il membro resterebbe con ${creditsAfter} crediti per ${residualAfter} slot da riempire: ogni slot deve restare comprabile ad almeno 1 credito.`,
+    );
+  }
+
+  return ok(null);
+}
+
+/**
+ * Lo stato con un'assegnazione in più, **solo per interrogarlo**: serve a
+ * chiedere «I3 varrebbe ancora?» alle stesse funzioni che rispondono per lo
+ * stato vero, invece di riscrivere la formula dei crediti in una seconda
+ * versione che potrebbe divergere. Non è una transizione: nessuno la persiste,
+ * e l'id è quello che avrebbe (`nextId`) senza avanzare il contatore.
+ */
+function withAssignment(
+  state: AuctionState,
+  memberId: string,
+  playerId: string,
+  price: number,
+): AuctionState {
+  return {
+    ...state,
+    assignments: [
+      ...state.assignments,
+      {
+        id: state.nextId,
+        memberId,
+        playerId,
+        price,
+        lotId: null,
+        source: "MANUAL",
+        createdAt: 0,
+        voidedAt: null,
+      },
+    ],
+  };
+}

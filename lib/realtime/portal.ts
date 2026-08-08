@@ -327,8 +327,13 @@ export function takenPlayerIds(snapshot: Snapshot): Set<string> {
   return taken;
 }
 
-/** Confronto tollerante agli accenti e alle maiuscole, per la ricerca. */
-function fold(text: string): string {
+/**
+ * Confronto tollerante agli accenti e alle maiuscole, per la ricerca.
+ * Esportata dalla Fase 7: la cerca anche la regia, che ha una sua lista di
+ * giocatori assegnabili (`assignablePlayers`) — e due ricerche che rispondono
+ * diversamente a «citta» sarebbero una piccola bugia difficile da spiegare.
+ */
+export function fold(text: string): string {
   return text
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")

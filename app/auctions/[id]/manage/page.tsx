@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
-import { getAuctionOverview } from "@/lib/engine/setup";
+import { getAuctionOverview, listPickPool } from "@/lib/engine/setup";
 
 import { ManageConsole } from "./console";
 
@@ -36,12 +36,19 @@ export default async function ManagePage({
   // Chi non ha creato l'asta non ha una regia: per lui questa pagina non esiste.
   if (!overview.viewerIsOwner) notFound();
 
+  // Il listone, per il pannello delle correzioni (F7-05). Stessa scelta del
+  // portale (DECISIONS Fase 5): non viaggia nello snapshot — è immutabile
+  // dall'import e non ha niente da sanificare — e **chi** sia ancora libero
+  // resta funzione dello snapshot, che le rose ce le ha.
+  const pool = await listPickPool(id);
+
   return (
     <ManageConsole
       auctionId={id}
       publicToken={overview.auction.publicToken}
       ownerIsMember={overview.viewerMember !== null}
       seatsTaken={overview.members.length}
+      pool={pool}
     />
   );
 }

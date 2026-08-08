@@ -156,6 +156,22 @@ function pick(
   if (assigned) {
     return fail("PLAYER_ASSIGNED", "Il giocatore è già in una rosa.");
   }
+  // §12.19 applicata al chiamante. Nella rotazione normale questo caso non
+  // esiste — `nextSeat` dà il turno solo a chi ha uno slot libero — ma una
+  // `manualAssign` di Fase 7 può riempire il ruolo di chi sta già aspettando
+  // di chiamare. Senza questa guardia il lotto si aprirebbe con il chiamante
+  // **fuori** da `round_eligibility` e la sua auto-offerta a 1 dentro il
+  // round: se nessun altro rilancia, la vince lui e si ritrova un giocatore
+  // oltre gli slot del ruolo, cioè I4 rotta senza che nessuno abbia forzato
+  // niente. Il turno non si perde: lo salta `advanceWaitingPick`.
+  if (
+    ownedByRole(state, memberId)[player.role] >= state.config.slots[player.role]
+  ) {
+    return fail(
+      "NOT_ELIGIBLE",
+      `Hai già tutti i ${player.role} previsti: questo turno di chiamata passa al prossimo.`,
+    );
+  }
   if (player.outOfList && !state.config.includeOutOfList) {
     return fail(
       "PLAYER_OUT_OF_LIST",
@@ -377,6 +393,20 @@ function advance(state: AuctionState, now: Millis): Result<AuctionState> {
  * indipendente da chi ha vinto.
  */
 function advanceReveal(state: AuctionState, now: Millis): AuctionState {
+  return nextTurn(state, now);
+}
+
+/**
+ * Il passaggio del turno: ruolo pieno per tutti → prossimo ruolo di
+ * `role_order` (saltando quelli già pieni, ⚠ P9), nessun ruolo residuo →
+ * COMPLETED, altrimenti il prossimo seat in ordine circolare con uno slot
+ * libero.
+ *
+ * Ha due chiamanti — la fine del reveal e il pick timer scaduto su un membro
+ * che non può più chiamare — e il secondo è arrivato con la Fase 7: prima
+ * questa logica stava tutta dentro `advanceReveal`.
+ */
+function nextTurn(state: AuctionState, now: Millis): AuctionState {
   const base = { ...state, currentLotId: null };
   let role = state.currentRole!;
   const roleFull = state.members.every(
@@ -567,16 +597,25 @@ function enterReveal(
  * turno — il regolamento non fa sconti a chi si distrae.
  */
 function advanceWaitingPick(state: AuctionState, now: Millis): AuctionState {
-  const player = autoPick(state, state.currentRole!);
-  if (!player) {
-    // ⚠ P20 — pool esaurito dopo l'import: deliberatamente non gestito.
-    throw new Error(
-      `auto-pick senza giocatori disponibili nel ruolo ${state.currentRole}`,
-    );
-  }
+  const role = state.currentRole!;
   const caller = state.members.find(
     (m) => m.seatIndex === state.currentSeatIndex,
   );
   if (!caller) throw new Error("seat corrente senza membro");
+
+  // Il turno si salta se nel frattempo il ruolo si è riempito: succede solo
+  // dopo una `manualAssign` di Fase 7, perché la rotazione normale dà il turno
+  // soltanto a chi ha uno slot libero. Aprire comunque il lotto significherebbe
+  // un round di cui il chiamante non è nemmeno idoneo — e con lui l'unica
+  // offerta in campo (§12.19, I4).
+  if (ownedByRole(state, caller.id)[role] >= state.config.slots[role]) {
+    return nextTurn(state, now);
+  }
+
+  const player = autoPick(state, role);
+  if (!player) {
+    // ⚠ P20 — pool esaurito dopo l'import: deliberatamente non gestito.
+    throw new Error(`auto-pick senza giocatori disponibili nel ruolo ${role}`);
+  }
   return openLot(state, player.id, caller.id, true, now);
 }

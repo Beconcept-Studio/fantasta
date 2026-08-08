@@ -677,55 +677,68 @@ sempre un parametro. Test scritti PRIMA dell'implementazione (§12).
 Niente undo (⚠ P1): la correzione di un lotto sbagliato è `voidAssignment` + `manualAssign`;
 la rotazione dei turni non torna mai indietro.
 
-- [ ] **F7-01 — `manualAssign`**
+- [x] **F7-01 — `manualAssign`**
   Valida I2/I3/I4; `force` deroga solo I4, mai I3; rifiutata con lotto in contesa (`phase ∈ {LOT_OPEN, LOT_TIE_PREP}`, anche in PAUSED) ⚠ P1.
-  Verifica: test §12.35 (con lotto in contesa rifiutata) e §12.40 (giocatore già assegnato rifiutato anche con force).
+  Verifica: test §12.35 (con lotto in contesa rifiutata) e §12.40 (giocatore già assegnato rifiutato anche con force). ✓ Entrambi verdi in `tests/db/override.test.ts`, §12.35 provato sia in `LOT_OPEN` sia in `LOT_TIE_PREP` sia **in pausa**.
+  Fatto: azione in `lib/engine/override.ts`, invarianti in `canManualAssign` (funzione pura in `rules.ts`, 9 test). `source = MANUAL`, `lot_id = NULL`. **Il prezzo è un intero ≥ 1**: è il pavimento di qualunque offerta ed è ciò che rende `voidAssignment` sempre innocua per I3 (DECISIONS).
   Dipende: F6-08
 
-- [ ] **F7-02 — `voidAssignment`**
+- [x] **F7-02 — `voidAssignment`**
   Cancella un giocatore da una rosa: `voided_at`, mai DELETE; rifiutata con lotto in contesa; crediti ricalcolati dalla formula.
-  Verifica: test §12.36 (giocatore torna disponibile, crediti risalgono, riga a DB con `voided_at`) e §12.38 (con lotto in contesa rifiutata).
+  Verifica: test §12.36 (giocatore torna disponibile, crediti risalgono, riga a DB con `voided_at`) e §12.38 (con lotto in contesa rifiutata). ✓ Verdi. §12.36 controlla anche che **nessuna riga di ledger** venga scritta: il credito è una formula, non una colonna da rimettere a posto.
+  Fatto: nessuna invariante da validare, e non è una dimenticanza — con `price ≥ 1` un void restituisce almeno un credito per ogni slot che riapre, quindi I3 non può rompersi. Ripeterla è un **no-op** (nessun bump, nessun broadcast): è il doppio click su un pulsante già sparito.
   Dipende: F6-08
 
-- [ ] **F7-03 — `adjustBudget`**
+- [x] **F7-03 — `adjustBudget`**
   Riga di `ledger` con reason e actor; rifiutata se violerebbe I3.
-  Verifica: test §12.20 e §12.39 — delta negativo che porta i crediti sotto gli slot residui rifiutato con errore tipizzato.
+  Verifica: test §12.20 e §12.39 — delta negativo che porta i crediti sotto gli slot residui rifiutato con errore tipizzato. ✓ Verdi, con il caso «una rettifica in più tiene conto di quelle già scritte».
+  Fatto: motivo obbligatorio (`INVALID_REQUEST` se vuoto), delta intero e diverso da zero. La regola è `canAdjustBudget`, che la Fase 2 aveva già scritto aspettando questa fase.
   Dipende: F6-08
 
-- [ ] **F7-04 — Correzione combinata void + manualAssign** ⚠ P1
+- [x] **F7-04 — Correzione combinata void + manualAssign** ⚠ P1
   Il flusso che sostituisce l'undo: void dell'assegnazione errata + riassegnazione manuale con l'esito corretto.
-  Verifica: test §12.37 — dopo la correzione, rosa e crediti coerenti, nessun doppio assegnamento (I2).
+  Verifica: test §12.37 — dopo la correzione, rosa e crediti coerenti, nessun doppio assegnamento (I2). ✓ Verde: due righe a DB, **una sola viva**, l'annullata conserva prezzo, `source = AUCTION` e il proprio `lot_id`; crediti tornati a 100 per chi ha perso il giocatore e scesi a 70 per chi l'ha preso. Provato anche il caso «riassegno allo stesso membro» (correzione del solo prezzo) e che l'override faccia partire lo snapshot.
+  ⚠ **Falla chiusa qui**: un `manualAssign` sul membro **di turno** in `WAITING_PICK` gli riempiva il ruolo, e il suo pick apriva comunque un lotto di cui non era idoneo — con la sua auto-offerta a 1 dentro il round. Se nessuno rilanciava se lo aggiudicava: **I4 rotta senza `force`**. Due righe in `machine.ts` (pick rifiutato con `NOT_ELIGIBLE`, turno saltato allo scadere), tre test puri e uno su DB. Vedi DECISIONS 2026-08-08.
   Dipende: F7-01, F7-02
 
-- [ ] **F7-05 — UI override nel manager**
+- [x] **F7-05 — UI override nel manager**
   Assegnazione manuale, cancellazione giocatore (void), rettifica budget con reason; controlli disabilitati con lotto in contesa (e comunque rifiutati dal server).
-  Verifica: il flusso del runbook "pausa → void → manualAssign → resume" si esegue interamente da UI.
+  Verifica: il flusso del runbook "pausa → void → manualAssign → resume" si esegue interamente da UI. ✓ Pannello «Correzioni» in `app/auctions/[id]/manage/overrides.tsx`, chiuso di default. Le tre azioni passano dal dispatcher `POST /api/auctions/:id/action` già esistente e **provate dal vivo via HTTP** con l'app accesa: FORBIDDEN da un non-owner, `PLAYER_ASSIGNED` anche con `force`, `ADJUST_VIOLATES_I3` su −500, void + riassegnazione con una sola riga viva a DB, void ripetuto no-op.
+  Fatto: le derivazioni sono pure (`overrideControls`, `assignablePlayers` in `lib/realtime/manage.ts`, 9 test). Il void chiede **due click** — cancellare una rosa per un tocco sbagliato sarebbe l'errore che il pannello dovrebbe riparare. La lista dei giocatori mostra solo i liberi, quindi I2 non è nemmeno proponibile; la ricerca del manager non è filtrata per ruolo corrente, perché è proprio per gli errori fuori dal ruolo corrente che il pannello esiste.
+  ⚠ Resta all'owner la prova con gli occhi: il pannello si vede solo a stream connesso (la pagina è funzione dello snapshot), quindi da riga di comando se ne può verificare il bundle, non il rendering.
   Dipende: F7-01 … F7-04, F6-03
 
-- [ ] **F7-06 — `exportXlsx`** ⚠ P6
+- [x] **F7-06 — `exportXlsx`** ⚠ P6
   Rigenera il file nel layout Fantacalcio.it a partire dai dati importati (il file originale non è conservato: le colonne non importate restano vuote), con `FantaSquadra` = team_name e `Costo` = price.
-  Verifica: ✅ criterio di fase — il file esportato ha le due colonne riempite e riapre correttamente in Excel; un reimport nel nostro stesso parser lo accetta.
+  Verifica: ✅ criterio di fase — il file esportato ha le due colonne riempite e riapre correttamente in Excel; un reimport nel nostro stesso parser lo accetta. ✓ 5 test verdi: intestazione identica alle 14 colonne di Fantacalcio.it, reimport con `parseListone` che ritrova i 40 giocatori, e un'assegnazione **annullata** che non compare (regola 5). Provato anche dal vivo: 495 righe, 129 KB, `Content-Disposition: attachment; filename="asta-di-prova-rose.xlsx"`, 403 per chi non è l'owner.
+  Fatto: layout puro in `lib/import/exportListone.ts`, lettura in `lib/engine/export.ts` (la regola ESLint vieta `lib/db` a `lib/import/**`), download su `GET /api/auctions/:id/export` — l'unica azione della fase fuori dal dispatcher, perché un file ha bisogno di un URL e di due header. Le colonne non importate sono `null`, cioè **nessuna cella**, non stringhe vuote.
+  ⚠ Resta all'owner: aprire davvero il file in Excel/Numbers e, se possibile, ricaricarlo su Fantacalcio.it.
   Dipende: F6-08
 
-- [ ] **F7-07 — Suite §12.35–40 completa**
+- [x] **F7-07 — Suite §12.35–40 completa**
   Tutti i test di override e correzioni verdi.
-  Verifica: `pnpm test` verde sull'intera §12 (41/41 contando le fasi precedenti).
+  Verifica: `pnpm test` verde sull'intera §12 (41/41 contando le fasi precedenti). ✓ §12.35, 36, 37, 38, 39 e 40 in `tests/db/override.test.ts` (22 test), §12.20 riverificata sia pura sia su database. Suite completa **327/327** su 25 file, contro i 275 alla chiusura della Fase 6.
   Dipende: F7-01 … F7-04
 
-- [ ] **F7-07bis — Un id malformato deve dare 404, non 500** (rimandato dalla Fase 5)
+- [x] **F7-07bis — Un id malformato deve dare 404, non 500** (rimandato dalla Fase 5)
   `POST /api/auctions/undefined/action` (e le altre route con `:id`) risponde **500**: l'uuid finto arriva fino a Postgres, che lo rifiuta con un'eccezione. PLAN §17 vuole un codice tipizzato per ogni rifiuto, e un URL sbagliato è un rifiuto come gli altri.
-  Verifica: le tre route con `:id` (`action`, `heartbeat`, `stream`) rispondono `NOT_FOUND` con un id non-uuid, e il caso è coperto da un test.
+  Verifica: le tre route con `:id` (`action`, `heartbeat`, `stream`) rispondono `NOT_FOUND` con un id non-uuid, e il caso è coperto da un test. ✓ `tests/db/ids.test.ts`, 5 test verdi su sei id malformati (`undefined`, `null`, stringa vuota, `123`, `not-a-uuid`, un uuid con un carattere in più).
+  Fatto: `isUuid` in `lib/engine/ids.ts`, chiamata dai due **imbuti** invece che dalle tre rotte — `withAuctionLock` (che copre `action` e ogni azione futura) e `resolveViewer` (che copre `stream` e `heartbeat`) — più `withSetupLock`, `getAuctionOverview` e `listPickPool`, che le pagine chiamano con l'id preso dall'URL: anche `/auctions/undefined/setup` rispondeva 500 e adesso è un `notFound()`.
   Nota: emerso durante il collaudo della Fase 5, dove il comando di avvio in console aveva preso l'id sbagliato. Non è urgente — è un URL che nessuna pagina genera — ma sta qui perché è la fase in cui si guardano gli errori.
   Dipende: —
 
-- [ ] **F7-08 — ARCHITECTURE: override e audit**
+- [x] **F7-08 — ARCHITECTURE: override e audit**
   Capitolo su ledger, void compensativi, correzione senza undo e la tabella events come memoria dell'asta.
-  Verifica: capitolo presente.
+  Verifica: capitolo presente. ✓ "Le correzioni, e la memoria dell'asta": perché l'undo non esiste, perché il divieto guarda la fase e non lo stato, perché il credito-formula rende superflua ogni riga compensativa, le tre azioni una per una, la falla su I4 e come è stata chiusa, l'export e la tabella `events`. Aggiornati anche il capitolo della regia e "Cosa non c'è ancora", riscritto sulla Fase 8.
   Dipende: F7-07
 
-- [ ] **F7-09 — GATE Fase 7**
+- [x] **F7-09 — GATE Fase 7**
   Criteri ✅: void + riassegnazione manuale riporta crediti e rose a uno stato coerente (I2 rispettata, riga annullata a DB con `voided_at`); export riempie FantaSquadra e Costo. Aggiorna `CLAUDE.md`.
-  Verifica: entrambi dimostrati; suite completa verde.
+  Verifica: entrambi dimostrati; suite completa verde. ✓ **Suite 327/327** su 25 file, `typecheck`, `lint` e `build` puliti.
+  ✓ **Primo criterio, dimostrato due volte.** Nei test (§12.37): lotto aggiudicato al seat 1 per 10, void, riassegnazione al seat 4 per 30 → crediti 100 e 70, rose 0 e 1 portiere, **due righe a DB con una sola viva**, l'annullata che conserva prezzo 10, `source = AUCTION` e il proprio `lot_id`. E dal vivo via HTTP, con l'app accesa, sull'asta del seed: stessa sequenza, `PLAYER_ASSIGNED` sul tentativo di dare lo stesso giocatore a due squadre (anche con `force`), `ADJUST_VIOLATES_I3` su una rettifica di −500, void ripetuto no-op.
+  ✓ **Secondo criterio.** Export da `GET /api/auctions/<id>/export`: 495 righe, 129 KB, `filename="asta-di-prova-rose.xlsx"`, con `FantaSquadra` e `Costo` riempite **solo** per i giocatori comprati e il giocatore corretto attribuito alla squadra nuova al prezzo nuovo. Intestazione identica alle 14 colonne di Fantacalcio.it e reimport accettato da `parseListone`.
+  ✓ **F7-07bis dal vivo**: `/api/auctions/undefined/stream` e `.../heartbeat` rispondono `404 NOT_FOUND`, `.../action` autenticato idem, e `/auctions/undefined/manage` e `/setup` sono passate da 500 a 404.
+  ⚠ **Restano all'owner tre prove con gli occhi**, tutte nel runbook ("Il collaudo della Fase 7"): il pannello di correzione usato davvero dalla regia con un'asta viva (da riga di comando se ne verifica il bundle, non il rendering), l'apertura del file esportato in Excel/Numbers, e il ricaricamento su Fantacalcio.it.
   Dipende: tutti i F7-*
 
 ---

@@ -9,6 +9,11 @@ import {
   withdrawBid,
 } from "@/lib/engine/actions";
 import type { ActionError, Result } from "@/lib/engine/errors";
+import {
+  adjustBudget,
+  manualAssign,
+  voidAssignment,
+} from "@/lib/engine/override";
 
 /**
  * `POST /api/auctions/:id/action` — le azioni di gioco via HTTP.
@@ -92,6 +97,41 @@ export async function POST(
     }
     case "RESUME": {
       result = await resumeAuction(user.id, id);
+      break;
+    }
+    // Gli override del manager (Fase 7). Passano di qui e non da una rotta
+    // loro per la stessa ragione delle offerte: un codice tipizzato subito, e
+    // nessuno stato nella risposta. `manualAssign`, `voidAssignment` e
+    // `adjustBudget` verificano da sé la proprietà dell'asta e la fase — la UI
+    // disabilita, il server rifiuta comunque (regola 6).
+    case "MANUAL_ASSIGN": {
+      const { memberId, playerId, price, force } = payload;
+      if (typeof memberId !== "string" || typeof playerId !== "string") {
+        return errorResponse(BAD_REQUEST);
+      }
+      if (!Number.isInteger(price)) return errorResponse(BAD_REQUEST);
+      result = await manualAssign(user.id, id, {
+        memberId,
+        playerId,
+        price: price as number,
+        force: force === true,
+      });
+      break;
+    }
+    case "VOID_ASSIGNMENT": {
+      if (typeof payload.assignmentId !== "string") {
+        return errorResponse(BAD_REQUEST);
+      }
+      result = await voidAssignment(user.id, id, payload.assignmentId);
+      break;
+    }
+    case "ADJUST_BUDGET": {
+      const { memberId, delta, reason } = payload;
+      if (typeof memberId !== "string" || typeof reason !== "string") {
+        return errorResponse(BAD_REQUEST);
+      }
+      if (!Number.isInteger(delta)) return errorResponse(BAD_REQUEST);
+      result = await adjustBudget(user.id, id, memberId, delta as number, reason);
       break;
     }
     default:

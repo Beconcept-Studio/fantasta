@@ -1,4 +1,7 @@
-import type { Snapshot, SnapshotMember } from "./types";
+import type { Role } from "@/lib/domain";
+
+import { fold, takenPlayerIds } from "./portal";
+import type { PoolPlayer, Snapshot, SnapshotMember } from "./types";
 
 /**
  * Il portale manager, nella parte che si può provare senza un browser.
@@ -131,4 +134,65 @@ export function managerControls(snapshot: Snapshot): ManagerControls {
  */
 export function spentCredits(member: SnapshotMember): number {
   return member.roster.reduce((sum, entry) => sum + entry.price, 0);
+}
+
+// ─── Le correzioni (Fase 7) ──────────────────────────────────────────────────
+
+export type OverrideControls = {
+  /** `false` con un lotto in contesa: i tre pannelli si disabilitano. */
+  allowed: boolean;
+  /** Perché non si può, già scritto in italiano; `null` se si può. */
+  blocked: string | null;
+};
+
+/**
+ * Se è il momento di correggere (PLAN §9): **mai con un lotto in contesa**,
+ * cioè con `phase ∈ {LOT_OPEN, LOT_TIE_PREP}`, e la pausa non cambia niente
+ * perché congela la fase invece di azzerarla.
+ *
+ * È la copia client del rifiuto che `lib/engine/override.ts` fa comunque
+ * (regola 6): serve a spiegare *prima* del round trip, non ad autorizzare. Il
+ * messaggio dice quanto bisogna aspettare, perché «non si può adesso» senza un
+ * «fra dieci secondi sì» in diretta genera solo un secondo tentativo.
+ */
+export function overrideControls(snapshot: Snapshot): OverrideControls {
+  const { phase } = snapshot.auction;
+  if (phase === "LOT_OPEN" || phase === "LOT_TIE_PREP") {
+    return {
+      allowed: false,
+      blocked:
+        "C'è un lotto in contesa: le correzioni si fanno quando nessuna busta è aperta. Aspetta l'assegnazione — sono pochi secondi — poi correggi.",
+    };
+  }
+  return { allowed: true, blocked: null };
+}
+
+/**
+ * I giocatori che il manager può assegnare a mano: tutto il pool meno chi ha
+ * già un proprietario, filtrato per ruolo e per testo cercato.
+ *
+ * Differisce da `availablePlayers` del portale in una cosa sola, ed è la cosa
+ * che conta: **non c'è un ruolo corrente**. Il partecipante può chiamare solo
+ * nel ruolo che si sta giocando; il manager corregge una rosa qualunque, in un
+ * ruolo qualunque — è proprio per gli errori fuori dal ruolo corrente che
+ * questo pannello esiste.
+ */
+export function assignablePlayers(
+  pool: PoolPlayer[],
+  snapshot: Snapshot,
+  role: Role | null,
+  query = "",
+): PoolPlayer[] {
+  const taken = takenPlayerIds(snapshot);
+  const needle = fold(query.trim());
+  return pool
+    .filter(
+      (p) =>
+        !taken.has(p.id) &&
+        (role === null || p.role === role) &&
+        (needle === "" ||
+          fold(p.name).includes(needle) ||
+          fold(p.team).includes(needle)),
+    )
+    .sort((a, b) => b.fvm - a.fvm || b.quot - a.quot || a.name.localeCompare(b.name));
 }

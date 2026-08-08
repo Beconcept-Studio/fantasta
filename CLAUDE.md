@@ -21,24 +21,35 @@ inventando: annota la domanda e aspetta. Un'assunzione silenziosa qui costa un'a
 
 ## Fase corrente
 
-> **FASE 7 — Override e chiusura** · da aprire con **Opus** (il default di progetto: nessun
-> `/model` da digitare). Fasi 0–6 chiuse: la 6 il **2026-08-08**, con 275 test verdi e il criterio
-> ✅ dimostrato dal vivo — 53 snapshot letti dallo stream della vista TV **senza nessun cookie**
-> durante un'asta a otto bot: `"amount"` compare solo nei sei snapshot in `LOT_REVEAL`, mai nei 40
-> in `LOT_OPEN`. Aggiorna questa riga a ogni passaggio di fase.
+> **FASE 8 — Deploy** · da aprire con **Opus** (il default di progetto: nessun `/model` da
+> digitare). Fasi 0–7 chiuse: la 7 il **2026-08-08**, con **327 test verdi** e i due criteri ✅
+> dimostrati — void + riassegnazione manuale che riporta crediti e rose a uno stato coerente (due
+> righe a database, **una sola viva**, l'annullata con `voided_at`, I2 rispettata) e l'export che
+> riempie `FantaSquadra` e `Costo` e riapre nel nostro stesso parser. Aggiorna questa riga a ogni
+> passaggio di fase.
 
-In Fase 7 si costruisce **il ripescaggio degli errori**, cioè le uniche azioni dell'applicazione che
-riscrivono un fatto già accaduto: `manualAssign`, `voidAssignment`, `adjustBudget` e l'export xlsx.
-Tre vincoli, tutti già decisi e non rinegoziabili. **Niente undo** (⚠ P1): un lotto sbagliato si
-corregge con `voidAssignment` + `manualAssign`, la rotazione dei turni non torna mai indietro.
-**Solo senza un lotto in contesa**: gli override sono rifiutati con `phase ∈ {LOT_OPEN,
-LOT_TIE_PREP}`, anche ad asta in pausa (la pausa congela la fase, non la azzera). E **mai un
-`DELETE`** (regola 5): si scrive `voided_at` e si aggiungono righe compensative al ledger. I test
-§12.35–40 sono di questa fase, e c'è un difetto noto da chiudere qui (F7-07bis: un id malformato
-nell'URL dà 500 invece di un 404 tipizzato).
+In Fase 8 si porta tutto **su una macchina vera**: Hetzner CX22 con Ploi, Postgres locale alla
+macchina, nginx davanti con `proxy_buffering off` sulla rotta dello stream (senza, gli snapshot
+arrivano a blocchi e i countdown vanno a scatti), Let's Encrypt, `pm2` con `--max-memory-restart`
+e un `pg_dump` giornaliero in cron con la procedura di restore **provata almeno una volta**. Il
+criterio ✅ è un'asta completa a 8 partecipanti giocata in produzione, poi cancellata; e la
+checklist pre-asta di `docs/PLAN.md` §17 va eseguita per intero almeno una volta.
+
+Attenzione alle due cose che in locale non si vedono: il redirect URI di **produzione** va aggiunto
+nella console Google prima che il login funzioni, e `output: 'standalone'` vuole che i file statici
+siano copiati accanto al bundle. Il boot recovery (F3-14) va riprovato **sul server**, con
+`pm2 restart` a metà round.
 
 Le fasi sono cancelli sequenziali (`docs/PLAN.md` §11). Non si apre una fase finché tutti i
 criteri ✅ della precedente non sono verdi.
+
+**Regole che la Fase 7 ha reso concrete e che restano vincolanti.** **Niente undo** (⚠ P1): un
+lotto sbagliato si corregge con `voidAssignment` + `manualAssign`, la rotazione dei turni non torna
+mai indietro. **Solo senza un lotto in contesa**: gli override sono rifiutati con `phase ∈
+{LOT_OPEN, LOT_TIE_PREP}`, anche ad asta in pausa (la pausa congela la fase, non la azzera). E
+**mai un `DELETE`** (regola 5): si scrive `voided_at`, e le rettifiche di budget sono righe di
+`ledger` — un void invece **non** scrive nessuna riga compensativa, perché il credito è una formula
+e il prezzo esce dalla somma da solo.
 
 **A ogni chiusura di fase (task di GATE), ricapitola all'utente la sua parte**: i test manuali
 che deve eseguire di persona per il gate appena chiuso, cosa lo aspetta nella fase successiva

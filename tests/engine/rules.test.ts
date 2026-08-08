@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   autoPick,
   canAdjustBudget,
+  canManualAssign,
   credits,
   eligibleMemberIds,
   maxBid,
@@ -150,6 +151,102 @@ describe("canAdjustBudget — §12.20 (I3)", () => {
     // Crediti 10, 3 slot residui: −7 lascia 3, ok; −8 lascia 2, no.
     expect(canAdjustBudget(state, "m0", -7).ok).toBe(true);
     expect(canAdjustBudget(state, "m0", -8).ok).toBe(false);
+  });
+});
+
+describe("canManualAssign — F7-01 (I2/I3/I4)", () => {
+  /** Un'asta con 1 slot per ruolo e due portieri liberi. */
+  function base() {
+    return makeState({
+      players: [player("p1", "P"), player("p2", "P"), player("d1", "D")],
+    });
+  }
+
+  it("accetta l'assegnazione ordinaria", () => {
+    expect(canManualAssign(base(), "m0", "p1", 10, false).ok).toBe(true);
+  });
+
+  it("§12.40 — giocatore già assegnato: rifiutata anche con force (I2)", () => {
+    const state = makeState({
+      players: [player("p1", "P")],
+      assignments: [assignment(1, "m1", "p1", 30)],
+    });
+    for (const force of [false, true]) {
+      const result = canManualAssign(state, "m0", "p1", 10, force);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("PLAYER_ASSIGNED");
+    }
+  });
+
+  it("un'assegnazione annullata non occupa più il giocatore", () => {
+    const state = makeState({
+      players: [player("p1", "P")],
+      assignments: [assignment(1, "m1", "p1", 30, { voidedAt: T0 })],
+    });
+    expect(canManualAssign(state, "m0", "p1", 10, false).ok).toBe(true);
+  });
+
+  it("ruolo pieno: rifiutata senza force, accettata con force (I4)", () => {
+    const state = makeState({
+      players: [player("p1", "P"), player("p2", "P")],
+      assignments: [assignment(1, "m0", "p1", 30)],
+    });
+    const senza = canManualAssign(state, "m0", "p2", 10, false);
+    expect(senza.ok).toBe(false);
+    if (!senza.ok) expect(senza.error.code).toBe("ASSIGN_VIOLATES_I4");
+    expect(canManualAssign(state, "m0", "p2", 10, true).ok).toBe(true);
+  });
+
+  it("prezzo che violerebbe I3: rifiutato, e force non lo salva", () => {
+    // 4 slot, 500 crediti. Comprando un P restano 3 slot: il prezzo massimo
+    // sostenibile è 497, perché 3 crediti devono restare per i 3 slot vuoti.
+    const state = base();
+    expect(canManualAssign(state, "m0", "p1", 497, false).ok).toBe(true);
+    for (const force of [false, true]) {
+      const result = canManualAssign(state, "m0", "p1", 498, force);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("ADJUST_VIOLATES_I3");
+    }
+  });
+
+  it("I3 si valuta sui crediti veri, ledger compreso", () => {
+    const state = makeState({
+      players: [player("p1", "P")],
+      ledger: [{ memberId: "m0", delta: -450 }],
+    });
+    // 50 crediti, 4 slot: comprando il P restano 3 slot → prezzo max 47.
+    expect(canManualAssign(state, "m0", "p1", 47, false).ok).toBe(true);
+    expect(canManualAssign(state, "m0", "p1", 48, false).ok).toBe(false);
+  });
+
+  it("il prezzo è un intero di almeno 1 credito", () => {
+    for (const price of [0, -5, 1.5, Number.NaN]) {
+      const result = canManualAssign(base(), "m0", "p1", price, false);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("INVALID_AMOUNT");
+    }
+  });
+
+  it("membro o giocatore inesistenti → errori distinti", () => {
+    const state = base();
+    const noMember = canManualAssign(state, "mX", "p1", 10, false);
+    expect(noMember.ok).toBe(false);
+    if (!noMember.ok) expect(noMember.error.code).toBe("MEMBER_NOT_FOUND");
+
+    const noPlayer = canManualAssign(state, "m0", "pX", 10, false);
+    expect(noPlayer.ok).toBe(false);
+    if (!noPlayer.ok) expect(noPlayer.error.code).toBe("PLAYER_NOT_FOUND");
+  });
+
+  it("con force e un ruolo in overflow, I3 resta valutata sul residuo vero (⚠ P2)", () => {
+    // m0 ha già il suo unico P e ne prende un secondo con force: gli slot
+    // residui restano 3 (P non scende sotto zero), quindi il tetto è 497 − 30.
+    const state = makeState({
+      players: [player("p1", "P"), player("p2", "P")],
+      assignments: [assignment(1, "m0", "p1", 30)],
+    });
+    expect(canManualAssign(state, "m0", "p2", 467, true).ok).toBe(true);
+    expect(canManualAssign(state, "m0", "p2", 468, true).ok).toBe(false);
   });
 });
 

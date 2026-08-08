@@ -17,6 +17,7 @@ import { countPool, parseListone } from "@/lib/import/parseListone";
 import type { PoolPlayer } from "@/lib/realtime/types";
 
 import { type Result, fail, ok } from "./errors";
+import { isUuid } from "./ids";
 import {
   type AuctionConfig,
   type AuctionConfigInput,
@@ -60,6 +61,10 @@ async function withSetupLock<T>(
   auctionId: string,
   fn: (tx: Tx, auction: Auction) => Promise<Result<T>>,
 ): Promise<Result<T>> {
+  // F7-07bis: come in `withAuctionLock`, un id non-uuid è un'asta che non
+  // esiste, non un'eccezione di Postgres da mostrare come 500.
+  if (!isUuid(auctionId)) return fail<T>("NOT_FOUND", "Questa asta non esiste.");
+
   return db.transaction(async (tx) => {
     const [auction] = await tx
       .select()
@@ -798,6 +803,10 @@ export async function getAuctionOverview(
   auctionId: string,
   viewerUserId: string,
 ): Promise<AuctionOverview | null> {
+  // F7-07bis: le pagine prendono l'id dall'URL e chiamano di qui; un id
+  // malformato deve diventare il loro `notFound()`, non un 500.
+  if (!isUuid(auctionId)) return null;
+
   const auction = await db.query.auctions.findFirst({
     where: eq(auctions.id, auctionId),
   });
@@ -897,6 +906,8 @@ export async function listPlayers(
  * per lotto sarebbe una seconda fonte di verità sullo stesso fatto.
  */
 export async function listPickPool(auctionId: string): Promise<PoolPlayer[]> {
+  if (!isUuid(auctionId)) return [];
+
   const auction = await db.query.auctions.findFirst({
     where: eq(auctions.id, auctionId),
     columns: { includeOutOfList: true },

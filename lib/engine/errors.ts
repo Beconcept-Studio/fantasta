@@ -67,6 +67,10 @@ export const ERROR_CODES = [
   "INVALID_SEAT",
   "ADJUST_VIOLATES_I3",
 
+  // Override del manager (Fase 7)
+  "ASSIGN_VIOLATES_I4",
+  "ASSIGNMENT_NOT_FOUND",
+
   // Presence e protocollo (Fase 4)
   "MEMBERS_NOT_READY",
   "INVALID_REQUEST",

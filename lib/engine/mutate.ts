@@ -16,6 +16,7 @@ import {
 } from "@/lib/db/schema";
 
 import { type Result, fail } from "./errors";
+import { isUuid } from "./ids";
 import type {
   Assignment as EngineAssignment,
   Bid as EngineBid,
@@ -101,6 +102,11 @@ export async function withAuctionLock<T>(
   auctionId: string,
   fn: (tx: Tx, loaded: LoadedAuction) => Promise<LockOutcome<T>>,
 ): Promise<Result<T>> {
+  // F7-07bis: un id che non è nemmeno un uuid non ha una riga da lockare, e
+  // mandarlo a Postgres significa un'eccezione (500) al posto di un rifiuto.
+  if (!isUuid(auctionId)) {
+    return fail<T>("NOT_FOUND", "Questa asta non esiste.");
+  }
   const outcome = await db.transaction(async (tx) => {
     const [auction] = await tx
       .select()

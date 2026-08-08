@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { auctions, members } from "@/lib/db/schema";
 
 import { type Result, fail, ok } from "./errors";
+import { isUuid } from "./ids";
 
 /**
  * Chi sta guardando un'asta, e con quali diritti (F4-04).
@@ -59,6 +60,11 @@ export async function resolveViewer(
   userId: string | null,
   publicToken: string | null,
 ): Promise<Result<Viewer>> {
+  // F7-07bis: `/api/auctions/undefined/stream` è un'asta che non esiste, non
+  // un errore del server. Senza questa riga la stringa arriva a Postgres e
+  // torna un 500 al posto del 404.
+  if (!isUuid(auctionId)) return fail("NOT_FOUND", "Questa asta non esiste.");
+
   const [auction] = await db
     .select({ id: auctions.id, ownerUserId: auctions.ownerUserId, publicToken: auctions.publicToken })
     .from(auctions)

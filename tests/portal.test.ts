@@ -291,7 +291,9 @@ describe("giocatori chiamabili", () => {
   const conRose = snapshot({
     members: [
       member(ME, 0, {
-        roster: [{ playerId: "p2", name: "Vlahovic", role: "A", team: "Juventus", price: 80 }],
+        roster: [
+          { assignmentId: "a2", playerId: "p2", name: "Vlahovic", role: "A", team: "Juventus", price: 80 },
+        ],
       }),
       member(OTHER, 1),
       member(THIRD, 2),

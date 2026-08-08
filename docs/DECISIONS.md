@@ -603,3 +603,77 @@ risoluzione del token vive accanto a `resolveViewer`, che è già il posto in cu
 guardando e con quali diritti; è anche l'unica lettura a database che la vista TV fa. Un token
 inesistente e un'asta inesistente danno la stessa risposta (404), e la pagina dichiara
 `robots: noindex, nofollow`: un URL che *è* l'autenticazione non si lascia indicizzare.
+
+---
+
+## 2026-08-08 — Fase 7, override e chiusura
+
+**Gli override non sono transizioni della macchina a stati.** `manualAssign`, `voidAssignment` e
+`adjustBudget` stanno in `lib/engine/override.ts` e scrivono direttamente su `assignments` e
+`ledger` dentro `withAuctionLock`; non passano da `transition` e non hanno un evento in
+`AuctionEvent`. Motivazione: non hanno un istante che le fa scattare, non spostano la fase e non
+producono uno stato successivo — sono scritture puntuali su due tabelle. Era anche già la
+posizione presa in Fase 3, scritta nel commento di `persistTransition`: «le correzioni manuali
+sono azioni di Fase 7, non transizioni». Le *invarianti* però restano funzioni pure in `rules.ts`
+(`canManualAssign` accanto a `canAdjustBudget`, che la Fase 2 aveva già scritto aspettando
+questa), quindi si provano in millisecondi come tutto il resto del motore.
+
+**Il prezzo di una `manualAssign` è un intero ≥ 1.** PLAN §9 non dà un minimo. Uno vale il
+pavimento di qualunque offerta (`min_amount = 1`), ma la ragione vera è un'altra: con `price ≥ 1`
+**`voidAssignment` non può mai violare I3**. Annullare restituisce `price` crediti e riapre uno
+slot, quindi con prezzi ≥ 1 il membro guadagna sempre almeno tanti crediti quanti slot riapre —
+ed è per questo che il void non ha nessuna validazione da fare. Con un prezzo 0 ammesso, un void
+avrebbe potuto lasciare un membro sotto la soglia di I3, e sarebbe servita una guardia su
+un'azione che nasce per *riparare*, non per essere rifiutata.
+
+**Un void non scrive nessuna riga compensativa nel `ledger`.** Il credito è la formula di PLAN §3
+(`budget_initial + Σ ledger.delta − Σ price non annullati`): con `voided_at` valorizzato il prezzo
+esce dalla somma da solo. Una riga compensativa conterebbe il rimborso due volte. Il `ledger`
+resta quello che è: le rettifiche *decise* dal manager, non la contabilità automatica degli
+annullamenti.
+
+**Un void ripetuto è un no-op, non un errore.** Seconda chiamata sulla stessa assegnazione già
+annullata → `ok` con `mutated: false`: nessun bump, nessun broadcast (⚠ P14). Motivazione: è il
+doppio click su un pulsante che intanto è sparito dalla schermata, e in diretta un messaggio
+d'errore su un'operazione già riuscita fa perdere dieci secondi a capire cosa è successo.
+
+**⚠ Un `manualAssign` poteva violare I4 senza `force`: chiusa una falla del motore.** Scoperta
+provando il caso limite, non prevista dal piano. Nella rotazione normale chi è di turno ha sempre
+uno slot libero nel ruolo (ci pensa `nextSeat`), ma una `manualAssign` può riempirgli il ruolo
+**mentre sta aspettando di chiamare** — ed è esattamente quello che il pannello di correzione di
+questa fase permette di fare. Prima: `pick` non controllava gli slot del chiamante, il lotto si
+apriva con lui **fuori** da `round_eligibility` e la sua auto-offerta a 1 **dentro** il round; se
+nessun altro rilanciava se la aggiudicava, e si ritrovava due portieri su uno slot. Variante
+peggiore: ruolo pieno per tutti → l'auto-pick apriva un lotto con zero idonei e la rotazione
+successiva non aveva più un seat dove andare (eccezione in diretta). Rimedio, due righe in
+`machine.ts`: `pick` rifiuta con `NOT_ELIGIBLE` chi ha già il ruolo pieno (è §12.19 applicata al
+chiamante), e `advanceWaitingPick` in quel caso **salta il turno** invece di aprire il lotto,
+riusando la logica di avanzamento già esistente — estratta da `advanceReveal` in `nextTurn`, che
+adesso ha due chiamanti. Non è un undo: il turno va avanti, mai indietro (⚠ P1), e a muoverlo
+resta **solo il tempo**, mai il manager. Coperto da tre test puri e uno su database.
+
+**Gli override passano dallo stesso `POST /api/auctions/:id/action` delle azioni di gioco.**
+Nessuna rotta nuova e nessuna Server Action: il dispatcher esisteva già (DECISIONS Fase 4) e i
+tre override hanno bisogno esattamente di ciò che dà — un codice tipizzato subito e nessuno stato
+nella risposta, perché lo stato arriva dallo snapshot. `exportXlsx` invece è una `GET` a sé
+(`/api/auctions/:id/export`): un download ha bisogno di un URL, di un `Content-Type` e di un
+`Content-Disposition`, che in una `POST` di azioni non stanno.
+
+**`assignmentId` entra nello snapshot, dentro ogni voce di rosa.** PLAN §9 vuole
+`voidAssignment(assignmentId)` e la regia non aveva da nessuna parte quell'id: le rose dello
+snapshot avevano solo `playerId`. Alternativa scartata: annullare per `(memberId, playerId)`, che
+avrebbe funzionato ma avrebbe reso l'azione una ricerca invece di un riferimento. Non è una
+deroga a I8 — un uuid di riga non dice niente di nessuna busta.
+
+**L'export rigenera tutte e quattordici le colonne, non solo quelle importate** (⚠ P6). `Under`,
+`PGv`, `MV` e `FM` restano vuote perché il file originale non è conservato; l'intestazione però è
+completa e nell'ordine di Fantacalcio.it, altrimenti il file non sarebbe riconoscibile da chi lo
+riapre. Il test è un giro completo: esporta, rilegge con **il nostro stesso parser** e ritrova
+`FantaSquadra` e `Costo` sulle righe giuste.
+
+**F7-07bis: la guardia sugli id sta nei due imbuti, non nelle tre rotte.** `isUuid`
+(`lib/engine/ids.ts`) è chiamata da `withAuctionLock` — che copre la rotta `action` e ogni azione
+futura — e da `resolveViewer`, che copre `stream` e `heartbeat`. In più `withSetupLock`,
+`getAuctionOverview` e `listPickPool`, perché anche `/auctions/undefined/setup` rispondeva 500 e
+adesso è un `notFound()`. Difendere l'imbuto invece dell'ingresso è ciò che fa valere la regola
+anche per la prossima rotta che qualcuno aggiungerà.

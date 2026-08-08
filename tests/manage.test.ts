@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   absentMembers,
+  assignablePlayers,
   managerControls,
+  overrideControls,
   presenceAlert,
   spentCredits,
 } from "@/lib/realtime/manage";
@@ -171,8 +173,8 @@ describe("recap delle rose", () => {
     const me = member(ME, 0, {
       credits: 420,
       roster: [
-        { playerId: "p1", name: "Lautaro", role: "A", team: "Inter", price: 60 },
-        { playerId: "p2", name: "Sommer", role: "P", team: "Inter", price: 20 },
+        { assignmentId: "a1", playerId: "p1", name: "Lautaro", role: "A", team: "Inter", price: 60 },
+        { assignmentId: "a2", playerId: "p2", name: "Sommer", role: "P", team: "Inter", price: 20 },
       ],
     });
     expect(spentCredits(me)).toBe(80);
@@ -222,5 +224,100 @@ describe("etichetta della fase", () => {
       currentLot: null,
     });
     expect(phaseLabel(finita)).toBe("finita");
+  });
+});
+
+// ─── Le correzioni (F7-05) ───────────────────────────────────────────────────
+
+describe("overrideControls — quando si può correggere", () => {
+  it("con le buste aperte no, e lo spiega", () => {
+    const s = snapshot({ auction: { ...snapshot().auction, phase: "LOT_OPEN" } });
+    const controls = overrideControls(s);
+    expect(controls.allowed).toBe(false);
+    expect(controls.blocked).toMatch(/busta/i);
+  });
+
+  it("nemmeno durante lo spareggio", () => {
+    const s = snapshot({
+      auction: { ...snapshot().auction, phase: "LOT_TIE_PREP" },
+    });
+    expect(overrideControls(s).allowed).toBe(false);
+  });
+
+  it("⚠ P1 — la pausa non apre la porta: congela la fase, non la azzera", () => {
+    const s = snapshot({
+      auction: {
+        ...snapshot().auction,
+        status: "PAUSED",
+        pausedAt: iso(-1_000),
+        phase: "LOT_OPEN",
+      },
+    });
+    expect(overrideControls(s).allowed).toBe(false);
+  });
+
+  it("in attesa della chiamata, durante il reveal e ad asta ferma sì", () => {
+    for (const phase of ["WAITING_PICK", "LOT_REVEAL"] as const) {
+      const s = snapshot({ auction: { ...snapshot().auction, phase } });
+      expect(overrideControls(s), phase).toMatchObject({
+        allowed: true,
+        blocked: null,
+      });
+    }
+    expect(overrideControls(ready()).allowed).toBe(true);
+    const finita = snapshot({
+      auction: { ...readyAuction(), status: "COMPLETED" },
+      currentLot: null,
+    });
+    expect(overrideControls(finita).allowed).toBe(true);
+  });
+});
+
+describe("assignablePlayers — chi si può assegnare a mano", () => {
+  const pool = [
+    { id: "p1", name: "Lautaro", team: "Inter", role: "A" as const, fvm: 300, quot: 30 },
+    { id: "p2", name: "Sommer", team: "Inter", role: "P" as const, fvm: 90, quot: 12 },
+    { id: "p3", name: "Bastoni", team: "Inter", role: "D" as const, fvm: 120, quot: 15 },
+    { id: "p4", name: "Retegui", team: "Atalanta", role: "A" as const, fvm: 250, quot: 29 },
+  ];
+
+  const conRosa = snapshot({
+    members: [
+      member(ME, 0, {
+        roster: [
+          { assignmentId: "a1", playerId: "p1", name: "Lautaro", role: "A", team: "Inter", price: 60 },
+        ],
+      }),
+      member(OTHER, 1),
+      member(THIRD, 2),
+    ],
+  });
+
+  it("esclude chi ha già un proprietario (I2 non è nemmeno proponibile)", () => {
+    expect(assignablePlayers(pool, conRosa, null).map((p) => p.id)).toEqual([
+      "p4",
+      "p3",
+      "p2",
+    ]);
+  });
+
+  it("senza ruolo li dà tutti: il manager corregge anche fuori dal ruolo corrente", () => {
+    const tutti = assignablePlayers(pool, snapshot(), null);
+    expect(tutti).toHaveLength(4);
+    // Ordinati come l'auto-pick: fvm DESC, poi quot DESC.
+    expect(tutti.map((p) => p.id)).toEqual(["p1", "p4", "p3", "p2"]);
+  });
+
+  it("con un ruolo filtra su quello", () => {
+    expect(assignablePlayers(pool, snapshot(), "A").map((p) => p.id)).toEqual([
+      "p1",
+      "p4",
+    ]);
+  });
+
+  it("la ricerca guarda nome e squadra, e non si fa fermare dagli accenti", () => {
+    expect(assignablePlayers(pool, snapshot(), null, "inter")).toHaveLength(3);
+    expect(assignablePlayers(pool, snapshot(), null, "REtegui")).toHaveLength(1);
+    expect(assignablePlayers(pool, snapshot(), null, "nessuno")).toHaveLength(0);
   });
 });

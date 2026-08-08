@@ -127,6 +127,23 @@ describe("machine: PICK — F2-09", () => {
     expectFail(stateInWaitingPick(), pick("m1", "q1"), T0, "NOT_YOUR_TURN");
   });
 
+  /**
+   * Il buco che la Fase 7 rende raggiungibile: nella rotazione normale chi è
+   * di turno ha sempre uno slot libero (ci pensa `nextSeat`), ma una
+   * `manualAssign` può riempirgli il ruolo mentre sta aspettando di chiamare.
+   * Senza la guardia il lotto si apriva con il chiamante fuori
+   * dall'eligibility e la sua auto-offerta a 1 dentro il round: non
+   * rilanciava nessuno e si ritrovava due portieri su uno slot — I4 rotta
+   * senza che nessuno avesse forzato niente.
+   */
+  it("rifiuta il pick di chi ha già il ruolo pieno (F7, §12.19)", () => {
+    const state = stateInWaitingPick({
+      assignments: [assignment(90, "m0", "q3", 5)],
+      nextId: 91,
+    });
+    expectFail(state, pick("m0", "q1"), T0, "NOT_ELIGIBLE");
+  });
+
   it("rifiuta il ruolo sbagliato", () => {
     expectFail(stateInWaitingPick(), pick("m0", "d0"), T0, "WRONG_ROLE");
   });
@@ -187,6 +204,38 @@ describe("machine: timeout del pick → auto-pick — F2-10", () => {
     const result = transition(state, { type: "ADVANCE" }, T0 + sec(10));
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toBe(state);
+  });
+
+  it("se un override ha riempito il ruolo di chi è di turno, il turno passa (F7)", () => {
+    const state = stateInWaitingPick({
+      assignments: [assignment(90, "m0", "q3", 5)],
+      nextId: 91,
+    });
+    const next = run(state, [[{ type: "ADVANCE" }, state.phaseDeadline!]]);
+
+    // Nessun lotto aperto a nome di chi non poteva vincerlo: solo il turno
+    // che avanza al primo seat con uno slot libero nel ruolo.
+    expect(next.lots).toHaveLength(0);
+    expect(next.phase).toBe("WAITING_PICK");
+    expect(next.currentSeatIndex).toBe(1);
+    expect(next.currentRole).toBe("P");
+  });
+
+  it("se il ruolo si è riempito per tutti, si passa al ruolo successivo (F7, ⚠ P9)", () => {
+    const state = stateInWaitingPick({
+      assignments: [
+        assignment(90, "m0", "q0", 5),
+        assignment(91, "m1", "q1", 5),
+        assignment(92, "m2", "q2", 5),
+        assignment(93, "m3", "q3", 5),
+      ],
+      nextId: 94,
+    });
+    const next = run(state, [[{ type: "ADVANCE" }, state.phaseDeadline!]]);
+
+    expect(next.lots).toHaveLength(0);
+    expect(next.phase).toBe("WAITING_PICK");
+    expect(next.currentRole).toBe("D");
   });
 });
 
