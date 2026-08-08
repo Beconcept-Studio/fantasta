@@ -65,6 +65,14 @@ const eslintConfig = [
     files: DB_ACCESS_ALLOWED,
     rules: { "no-restricted-imports": "off" },
   },
+  {
+    // `deploy/ecosystem.config.cjs` è un file di configurazione che legge **pm2**,
+    // col proprio Node e non col nostro bundler: CommonJS non è una scelta di
+    // stile, è l'unico formato che pm2 accetta. Non contiene codice
+    // dell'applicazione — solo la lettura di `.env` e i parametri del processo.
+    files: ["deploy/**/*.cjs"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
 ];
 
 export default eslintConfig;

@@ -745,9 +745,17 @@ la rotazione dei turni non torna mai indietro.
 
 ## Fase 8 — Deploy
 
+- [x] **F8-00 — La build di produzione e la suite, riparate** *(task non previsto)*
+  Prima di poter deployare c'era da rimettere in piedi due cose che i cancelli delle fasi 0–7 non avevano visto, perché si verificano con `pnpm dev` e `pnpm test` su un albero che nel frattempo era cambiato.
+  Verifica: `pnpm build` verde (17 rotte), `pnpm test` **327/327**, `pnpm typecheck` e `pnpm lint` verdi. ✓
+  Fatto: (1) `next build` esegue ESLint e un errore di lint **blocca la build** — un apostrofo non escapato in `app/auctions/[id]/setup/page.tsx` rendeva l'app non deployabile; corretto insieme a tre variabili morte, fra cui la prop `seatsTaken` di `ManageConsole`. (2) Il commit `01b7c0d` aveva lasciato **due test rossi** in `tests/manage.test.ts`: i nomi degli assenti sono stati tolti da `startBlocked` di proposito (la stessa informazione stava in tre posti), e i test sono stati riportati sul contratto vero — `canStart` falso, messaggio sulla regola, e il nome di chi manca ancora raggiungibile da `absentMembers`. Vedi DECISIONS 2026-08-08.
+
 - [ ] **F8-01 — Provisioning**
   Hetzner CX22 + Ploi, Postgres 16 locale alla macchina, variabili d'ambiente di §1, deploy `standalone`.
   Verifica: l'app risponde su HTTPS con login Google di produzione funzionante.
+  Fatto (file, in `deploy/`): `env.production.example` (le 5 variabili di §1), `ecosystem.config.cjs` (pm2 in `fork` con `instances: 1` — in cluster mode ogni copia eseguirebbe `instrumentation.ts`, cioè due sweep sulla stessa asta — `max_memory_restart: 512M`, `TZ=UTC`, `HOSTNAME=127.0.0.1`; legge `.env` da sé e **non parte** se manca una variabile), `deploy.sh` (install con `--prod=false`, build, copia di `.next/static`, `pm2 reload`; si rifiuta di partire con un'asta `LIVE`/`PAUSED`).
+  ✓ **Standalone collaudato in locale**, non solo evitato: `server.js` fa `process.chdir(__dirname)` e da `.next/standalone` non vede nessun `.env` — le variabili le passa pm2. Con `.next/static` copiato, `GET /` → 307 e il CSS servito 200 (55 KB).
+  ✓ Macchina: Hetzner CX22, Ubuntu 26.04 LTS, `psql 16.14` (PGDG ha la 26.04), nginx 1.30.4, Node 24.19, fuso `Etc/UTC`.
   Dipende: F7-09
 
 - [ ] **F8-02 — nginx per SSE**
@@ -773,6 +781,8 @@ la rotazione dei turni non torna mai indietro.
 - [ ] **F8-06 — Asta di prova in produzione**
   Asta completa a 8 bot con timer accelerati portata a COMPLETED su produzione, poi cancellata.
   Verifica: ✅ criterio di fase — asta COMPLETED in produzione; `events` coerente; l'asta di prova rimossa.
+  Fatto (codice): i bot non passano più dal provider `dev`, che in produzione non esiste per costruzione — e non sarebbe bastata un'env var, perché il server standalone forza `NODE_ENV=production` da sé. `sessionCookie()` in `scripts/bots.ts` emette il JWT di sessione con `encode()` di `next-auth/jwt` usando `AUTH_SECRET`, e **verifica subito** che il server lo accetti (`GET /api/auth/session` deve restituire l'id giusto), invece di scoprirlo da una sfilza di 401 a metà asta. Il nome del cookie segue lo schema (`__Secure-` su https) perché Auth.js usa **il nome come salt** della chiave. Nessuna superficie di login aggiunta all'app: chi ha `AUTH_SECRET` ha già tutto. Vedi DECISIONS 2026-08-08.
+  ✓ **Prova generale in locale**: asta a 8 bot dallo `START` a `COMPLETED`, 8 rose da 25 giocatori (200 assegnazioni vive), crediti tutti positivi (I3), `state_version` 827.
   Dipende: F8-02, F8-03
 
 - [ ] **F8-07 — ARCHITECTURE: capitolo finale**

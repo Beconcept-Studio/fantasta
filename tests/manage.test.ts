@@ -48,6 +48,13 @@ describe("avvio dell'asta", () => {
     expect(controls.startBlocked).toBeNull();
   });
 
+  // ⚠ `startBlocked` **non nomina** chi manca: dice la regola, e i nomi li
+  // mostra la lista dei posti, dove ogni membro ha il suo pallino di presence
+  // (scelta dell'owner, commit 01b7c0d — la stessa informazione in tre posti
+  // diversi era una da tenere allineata e due da dimenticare). Chi manca resta
+  // quindi un fatto derivabile dallo snapshot, ed è `absentMembers` a dirlo:
+  // questi due test verificano il cancello **e** che il nome sia raggiungibile,
+  // che è ciò che la regia deve poter mostrare.
   it("un membro in secondo piano blocca l'avvio, e si sa quale", () => {
     // ⚠ Il cancello di `startAuction` pretende LIVE, non "non OFFLINE": chi ha
     // il telefono in tasca scoprirebbe l'asta partita dopo il primo lotto.
@@ -57,17 +64,19 @@ describe("avvio dell'asta", () => {
       member(THIRD, 2),
     ]);
     expect(managerControls(s).canStart).toBe(false);
-    expect(managerControls(s).startBlocked).toContain("I Distratti");
+    expect(managerControls(s).startBlocked).toMatch(/collegat/i);
+    expect(absentMembers(s).map((m) => m.teamName)).toEqual(["I Distratti"]);
   });
 
-  it("un membro non collegato blocca l'avvio", () => {
+  it("un membro non collegato blocca l'avvio, e si sa quale", () => {
     const s = ready([
       member(ME, 0),
       member(OTHER, 1),
       member(THIRD, 2, { presence: "OFFLINE", teamName: "Gli Assenti" }),
     ]);
     expect(managerControls(s).canStart).toBe(false);
-    expect(managerControls(s).startBlocked).toContain("Gli Assenti");
+    expect(managerControls(s).startBlocked).toMatch(/collegat/i);
+    expect(absentMembers(s).map((m) => m.teamName)).toEqual(["Gli Assenti"]);
   });
 
   it("ad asta incompleta (DRAFT) non si parte, e il motivo non è la presence", () => {

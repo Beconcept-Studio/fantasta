@@ -747,3 +747,22 @@ spegnerla) o rinunciare al collaudo con i bot. Firmare il cookie non aggiunge **
 di login all'applicazione**: chi ha `AUTH_SECRET` ha già tutto. Effetto collaterale voluto: un solo
 cammino di codice in locale e in produzione, quindi ciò che funziona in prova funziona la sera
 dell'asta.
+
+**Valkey installata per obbligo del provisioner, e disabilitata.** Ploi non permette di creare un
+server senza un servizio di cache: la scelta è fra Redis e Valkey. Installata Valkey e spenta
+subito (`systemctl disable --now`). Non è una deroga al divieto di PLAN §1: quel divieto riguarda
+l'**architettura** — nessuna riga di questo progetto deve dipendere da un servizio esterno per
+timer, code o realtime, e non lo fa (i countdown sono `setTimeout` nel processo, il registro SSE sta
+su `globalThis`, la concorrenza la serializza `withAuctionLock`). Un demone che nessuno interroga
+non cambia l'architettura di niente; sarebbe diverso il giorno in cui qualcuno lo usasse per
+condividere stato fra processi, perché a quel punto smetterebbe di esistere un processo solo.
+
+**⚠ I 327 test verdi del gate di Fase 7 non lo erano più.** Il commit `01b7c0d` ("update UI labels")
+ha tolto i nomi degli assenti da `startBlocked` e commentato la lista dei membri prima
+dell'avvio, lasciando **due test rossi** in `tests/manage.test.ts`. La modifica è deliberata e
+sensata — la stessa informazione stava in tre posti (il messaggio, la lista dei posti col pallino di
+presence, e la lista commentata), cioè uno da tenere allineato e due da dimenticare. I test sono
+stati riportati sul contratto vero: `canStart` falso, il messaggio parla della regola, e **il nome
+di chi manca resta raggiungibile** da `absentMembers`, che è la funzione che la lista dei posti
+usa per il pallino. Il blocco JSX commentato in `controls.tsx` è stato lasciato com'è: sembra un
+segnaposto di una decisione ancora aperta dell'owner, e non è codice che il deploy tocchi.

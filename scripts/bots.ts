@@ -2,7 +2,7 @@
  * `pnpm bots --auction=<id> --count=7 --strategy=random` — partecipanti finti
  * (F4-10, PLAN §15).
  *
- * Sono **client veri**, non scorciatoie: si autenticano col provider `dev`,
+ * Sono **client veri**, non scorciatoie: portano un cookie di sessione valido,
  * aprono l'SSE come un browser e agiscono via HTTP sulla route delle azioni.
  * Niente accesso al motore nel proprio processo — se scrivessero da qui, il
  * server non se ne accorgerebbe e il browser aperto accanto non vedrebbe
@@ -15,9 +15,11 @@
  * lo spareggio, che a mano è quasi impossibile innescare.
  *
  * Richiede l'app accesa (`pnpm dev`): è quel processo ad avere lo scheduler,
- * ed è lui a chiudere i round.
+ * ed è lui a chiudere i round. In produzione è lo stesso script, con
+ * `--url=https://…`: è così che si gioca l'asta di prova di F8-06.
  */
 import { asc, eq } from "drizzle-orm";
+import { encode } from "next-auth/jwt";
 
 import { db, pool } from "../lib/db";
 import { auctions, members, players, users } from "../lib/db/schema";
@@ -83,47 +85,74 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const pickOne = <T,>(items: T[]): T =>
   items[Math.floor(Math.random() * items.length)];
 
-// ─── Login col provider `dev` ────────────────────────────────────────────────
+// ─── Il cookie di sessione ───────────────────────────────────────────────────
 
 /**
- * La stessa danza che fa il browser dalla pagina di signin: token CSRF, POST
- * delle credenziali, cookie di sessione. Il provider `dev` esiste solo fuori
- * produzione (PLAN §15) — in produzione questo script non ha modo di entrare,
- * ed è giusto così.
+ * I bot si **firmano da sé** il cookie di sessione, invece di passare dalla
+ * pagina di login.
+ *
+ * Prima passavano dal provider `dev`: token CSRF, POST delle credenziali,
+ * cookie dalla risposta. Ma il provider `dev` non esiste in produzione (PLAN
+ * §15, e un test lo garantisce), e il criterio ✅ della Fase 8 è un'asta a 8 bot
+ * **in produzione** — quella strada era senza uscita. Nemmeno un'env var
+ * l'avrebbe riaperta: il server standalone di Next forza `NODE_ENV=production`
+ * da sé, prima che il nostro codice possa dire la sua.
+ *
+ * La sessione di questa applicazione è un JWT cifrato (DECISIONS P17, nessuna
+ * tabella adapter) e la chiave di cifratura è `AUTH_SECRET`. Chi ha quel
+ * segreto — il server, e questo script che legge lo stesso `.env` — può
+ * emetterne uno valido. Non è una scorciatoia nell'autenticazione
+ * dell'applicazione: **non aggiunge nessun modo di entrare dal browser**, e chi
+ * possiede `AUTH_SECRET` possiede già tutto. In compenso il cammino di codice è
+ * uno solo, identico in locale e in produzione: ciò che funziona in prova
+ * funziona la sera dell'asta.
+ *
+ * Il contenuto del token è quello che si aspetta il callback `session` di
+ * `lib/auth.ts`: `uid` con l'id interno dell'utente. `sub` c'è per convenzione.
  */
-async function loginAs(baseUrl: string, userId: string): Promise<string> {
-  const csrfResponse = await fetch(`${baseUrl}/api/auth/csrf`);
-  if (!csrfResponse.ok) {
+async function sessionCookie(baseUrl: string, userId: string): Promise<string> {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) {
     throw new Error(
-      `L'app non risponde su ${baseUrl} (${csrfResponse.status}). È accesa?`,
+      "AUTH_SECRET assente: senza il segreto del server i bot non possono firmarsi una sessione.",
     );
   }
-  const { csrfToken } = (await csrfResponse.json()) as { csrfToken: string };
-  const csrfCookie = cookiesFrom(csrfResponse);
 
-  const login = await fetch(`${baseUrl}/api/auth/callback/dev`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Cookie: csrfCookie,
-    },
-    body: new URLSearchParams({ csrfToken, userId, callbackUrl: baseUrl }),
-    redirect: "manual",
+  // Auth.js prefissa il cookie con `__Secure-` quando l'app gira in https, e
+  // usa **il nome del cookie come salt** della derivazione della chiave: con il
+  // nome sbagliato il token si cifra con una chiave diversa e il server lo
+  // scarta senza dire niente.
+  const name = baseUrl.startsWith("https://")
+    ? "__Secure-authjs.session-token"
+    : "authjs.session-token";
+
+  const token = await encode({
+    token: { sub: userId, uid: userId },
+    secret,
+    salt: name,
+    // Sei ore: più di qualunque asta, meno di una sessione dimenticata in giro.
+    maxAge: 6 * 60 * 60,
   });
-  const session = cookiesFrom(login);
-  if (!/session-token=/.test(session)) {
+  const cookie = `${name}=${token}`;
+
+  // Il cookie va provato subito, non al primo `pick`: se `AUTH_SECRET` non è
+  // quello del server, l'unico sintomo sarebbe una sfilza di 401 a metà asta.
+  const check = await fetch(`${baseUrl}/api/auth/session`, {
+    headers: { Cookie: cookie },
+  });
+  if (!check.ok) {
     throw new Error(
-      `Login del provider dev fallito per ${userId}: nessun cookie di sessione.`,
+      `L'app non risponde su ${baseUrl} (${check.status}). È accesa?`,
     );
   }
-  return [csrfCookie, session].filter(Boolean).join("; ");
-}
+  const session = (await check.json()) as { user?: { id?: string } };
+  if (session.user?.id !== userId) {
+    throw new Error(
+      `Il server ha rifiutato la sessione di ${userId}: AUTH_SECRET non combacia con quello dell'app su ${baseUrl}.`,
+    );
+  }
 
-function cookiesFrom(response: Response): string {
-  return response.headers
-    .getSetCookie()
-    .map((c) => c.split(";")[0])
-    .join("; ");
+  return cookie;
 }
 
 // ─── Un bot ──────────────────────────────────────────────────────────────────
@@ -353,7 +382,7 @@ async function main(): Promise<void> {
 
   const bots: Bot[] = [];
   for (const row of chosen) {
-    const cookie = await loginAs(options.baseUrl, row.userId);
+    const cookie = await sessionCookie(options.baseUrl, row.userId);
     bots.push({
       label: row.teamName,
       userId: row.userId,
@@ -378,7 +407,7 @@ async function main(): Promise<void> {
       where: eq(users.id, auction.ownerUserId),
     });
     if (!owner) throw new Error("owner dell'asta sparito");
-    const ownerCookie = await loginAs(options.baseUrl, owner.id);
+    const ownerCookie = await sessionCookie(options.baseUrl, owner.id);
     // Il gate presence vuole tutti i membri LIVE: gli heartbeat sono partiti.
     const response = await fetch(
       `${options.baseUrl}/api/auctions/${options.auctionId}/action`,
