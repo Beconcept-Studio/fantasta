@@ -1,4 +1,4 @@
-import type { Role } from "@/lib/domain";
+import { ROLE_LABELS, type Role } from "@/lib/domain";
 
 import type {
   PoolPlayer,
@@ -131,6 +131,37 @@ export function portalScreen(
     return { kind: "PICK_MINE", frozen };
   }
   return { kind: "PICK_WAIT", frozen };
+}
+
+/**
+ * Dove siamo, in due o tre parole: «chiamata portieri», «offerte»,
+ * «spareggio», «buste aperte», «in pausa».
+ *
+ * La stessa frase serve in tre posti — l'intestazione del portale, quella del
+ * manager e il cartello grande della TV — ed è per questo che sta qui e non
+ * dentro un componente. La pausa vince su tutto: in proiezione è la prima cosa
+ * che chi guarda deve poter leggere, prima ancora di sapere quale ruolo è in
+ * gioco.
+ */
+export function phaseLabel(snapshot: Snapshot): string {
+  const { status, phase, currentRole } = snapshot.auction;
+  if (status === "PAUSED") return "in pausa";
+  if (status === "COMPLETED") return "finita";
+  if (status === "DRAFT" || status === "READY") return "non iniziata";
+  const role =
+    currentRole === null ? "" : ` ${ROLE_LABELS[currentRole].toLowerCase()}`;
+  switch (phase) {
+    case "WAITING_PICK":
+      return `chiamata${role}`;
+    case "LOT_OPEN":
+      return snapshot.currentLot?.roundNo === 2 ? "spareggio" : "offerte";
+    case "LOT_TIE_PREP":
+      return "spareggio";
+    case "LOT_REVEAL":
+      return "buste aperte";
+    default:
+      return "in corso";
+  }
 }
 
 // ─── Il modale ───────────────────────────────────────────────────────────────

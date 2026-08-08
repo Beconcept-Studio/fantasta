@@ -13,3 +13,8 @@ Crea una card con:
 ### Lotto live - Offerte arrivate
 Mentre il lotto è live, nonn voglio mostrare chi ha consegnato un'offerta. Fino a che non scade il timer non voglio mostrare agli altri utenti chi sta offrendo.
 
+### Portale TV - Visualizzazione più compatta
+Crea una UI più compatta, con testi più adatti ad un Macbook che a una TV. Se proprio devo migliorare la leggibilità farò zoom della schermata.
+
+### Portale TV - Offerte arrivate
+Togliere chi consegna la propria offerta, è fuorviante e può portare a fare strategie tra competitor. È lo stesso concetto del task "Lotto live - Offerte arrivate".

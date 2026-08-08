@@ -45,9 +45,13 @@ export default async function DashboardPage() {
             {auctions.map((auction) => (
               <li key={auction.id}>
                 <Link
+                  // Ad asta iniziata l'owner vuole la regia, non la
+                  // configurazione: da lì mette in pausa e vede chi è caduto.
                   href={
                     auction.isOwner
-                      ? `/auctions/${auction.id}/setup`
+                      ? auction.status === "DRAFT" || auction.status === "READY"
+                        ? `/auctions/${auction.id}/setup`
+                        : `/auctions/${auction.id}/manage`
                       : `/auctions/${auction.id}/lobby`
                   }
                   className="hover:bg-accent flex items-center gap-4 rounded-lg border p-4 transition"

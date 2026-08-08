@@ -21,22 +21,21 @@ inventando: annota la domanda e aspetta. Un'assunzione silenziosa qui costa un'a
 
 ## Fase corrente
 
-> **FASE 6 — Portale manager e vista TV** · da aprire con **Opus** (il default di progetto: nessun
-> `/model` da digitare). Fasi 0–5 chiuse: la 5 il **2026-08-08**, con 252 test verdi e il collaudo
-> dell'owner su **telefono vero + browser sul Mac** dentro un'asta con sei bot — chiamata, offerta,
-> rilancio, ritiro, spareggio, reveal, pausa, rientro dopo reload e turno perso offline, senza
-> disallineamenti fra i due dispositivi. Aggiorna questa riga a ogni passaggio di fase.
+> **FASE 7 — Override e chiusura** · da aprire con **Opus** (il default di progetto: nessun
+> `/model` da digitare). Fasi 0–6 chiuse: la 6 il **2026-08-08**, con 275 test verdi e il criterio
+> ✅ dimostrato dal vivo — 53 snapshot letti dallo stream della vista TV **senza nessun cookie**
+> durante un'asta a otto bot: `"amount"` compare solo nei sei snapshot in `LOT_REVEAL`, mai nei 40
+> in `LOT_OPEN`. Aggiorna questa riga a ogni passaggio di fase.
 
-In Fase 6 non si tocca né il canale né il portale del partecipante: si fa il **portale manager**
-(`/auctions/[id]/manage`, solo owner) e la **vista TV** (`/tv/[publicToken]`, senza login). Sono
-**desktop-only** e possono ignorare il mobile — è l'opposto del vincolo della Fase 5. Il manager ha
-recap rose e budget, scelta del seat iniziale, avvio, pausa/resume e gli alert di presence; la TV è
-alto contrasto e tipografia grande, sola lettura. Lo stato arriva dallo stesso `useAuctionStream`
-(la TV con `?token=`), e `serializeSnapshot` resta l'unico punto di uscita: il criterio ✅ della
-fase è che **la TV in incognito non mostri nessun importo a busta chiusa**. Pausa e resume esistono
-già nel dispatcher di `POST /api/auctions/:id/action` (anticipate in Fase 5 per collaudare la vista
-in pausa): vanno collegate a un pulsante, non riscritte. Il pulsante "Avvia l'asta" invece non
-esiste ancora da nessuna parte — oggi l'avvio passa dai bot.
+In Fase 7 si costruisce **il ripescaggio degli errori**, cioè le uniche azioni dell'applicazione che
+riscrivono un fatto già accaduto: `manualAssign`, `voidAssignment`, `adjustBudget` e l'export xlsx.
+Tre vincoli, tutti già decisi e non rinegoziabili. **Niente undo** (⚠ P1): un lotto sbagliato si
+corregge con `voidAssignment` + `manualAssign`, la rotazione dei turni non torna mai indietro.
+**Solo senza un lotto in contesa**: gli override sono rifiutati con `phase ∈ {LOT_OPEN,
+LOT_TIE_PREP}`, anche ad asta in pausa (la pausa congela la fase, non la azzera). E **mai un
+`DELETE`** (regola 5): si scrive `voided_at` e si aggiungono righe compensative al ledger. I test
+§12.35–40 sono di questa fase, e c'è un difetto noto da chiudere qui (F7-07bis: un id malformato
+nell'URL dà 500 invece di un 404 tipizzato).
 
 Le fasi sono cancelli sequenziali (`docs/PLAN.md` §11). Non si apre una fase finché tutti i
 criteri ✅ della precedente non sono verdi.

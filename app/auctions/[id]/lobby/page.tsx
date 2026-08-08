@@ -53,12 +53,20 @@ export default async function LobbyPage({
           <StatusBadge status={auction.status} />
         </div>
         {viewerIsOwner && (
-          <Link
-            href={`/auctions/${auction.id}/setup`}
-            className="text-sm underline underline-offset-4"
-          >
-            Configura l&apos;asta
-          </Link>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <Link
+              href={`/auctions/${auction.id}/manage`}
+              className="underline underline-offset-4"
+            >
+              Regia dell&apos;asta
+            </Link>
+            <Link
+              href={`/auctions/${auction.id}/setup`}
+              className="underline underline-offset-4"
+            >
+              Configura l&apos;asta
+            </Link>
+          </div>
         )}
       </header>
 

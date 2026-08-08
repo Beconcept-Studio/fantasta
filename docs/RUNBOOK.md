@@ -6,12 +6,15 @@ Questa sezione è per l'utente umano: cosa devi fare tu, fase per fase, e cosa p
 **A ogni chiusura di fase, Claude deve ricapitolarti i punti di questa guida relativi al gate
 appena chiuso e alla fase che si apre** (regola in `CLAUDE.md`).
 
-> **Dove siamo.** Fasi 0–4 chiuse il 2026-08-07. La 4 ha costruito il canale verso i client
-> (220 test verdi): snapshot sanificati, stream SSE, presence, e otto bot che giocano un'asta
-> collegandosi come farebbero otto telefoni. **Restano da fare i tuoi collaudi visivi delle
-> Fasi 3 e 4** — i comandi esatti sono nella tabella qui sotto, righe "3" e "4". La prossima è
-> la **Fase 5 — Portale partecipante**, da aprire in una sessione nuova col modello di default
-> (Opus): nessun `/model` da digitare. È la fase che chiederà più tempo *a te*.
+> **Dove siamo.** Fasi 0–6 chiuse, la 6 il **2026-08-08** con 275 test verdi. Adesso l'asta si
+> conduce per intero da dentro l'applicazione: la **regia** (`/auctions/<id>/manage`, solo tua) ha
+> il recap delle rose, l'avvio con la scelta del posto di partenza, pausa e ripresa e l'alert di
+> chi cade; la **vista TV** (`/tv/<public_token>`) si apre senza login e non riceve nessun importo
+> a busta chiusa. **Ti restano da fare i collaudi visivi delle Fasi 3, 4 e 6** — i comandi sono
+> nella tabella qui sotto e, per la 6, nella sezione "Il collaudo della Fase 6". La prossima è la
+> **Fase 7 — Override e chiusura** (assegnazione manuale, void, rettifiche di budget, export
+> xlsx), da aprire in una sessione nuova col modello di default (Opus): nessun `/model` da
+> digitare.
 >
 > Nota per la Fase 3: `pnpm drive` continua a funzionare, ma se vuoi rifare quella demo sappi
 > che ora l'avvio richiede la presence di tutti i membri — il driver batte gli heartbeat da sé,
@@ -71,7 +74,7 @@ tenere a mente questa tabella.
 | **3 — Persistenza e timer** | Guarda con i tuoi occhi le due dimostrazioni. **(a) Asta completa:** `pnpm db:seed --auction-status=ready`, prendi l'id stampato, poi `pnpm drive --auction=<id>` — vedrai il log JSON scorrere e in ~20 minuti «✓ Asta COMPLETED: 200 lotti». **(b) Restart a metà round:** mentre il driver gira, fermalo con Ctrl-C (o killa il processo); guarda che l'asta resti ferma (nessuna riga nuova), poi rilancia lo stesso comando `pnpm drive --auction=<id>`: riparte entro 1 secondo da dove si era fermata, fino a COMPLETED. |
 | **4 — SSE** | Poco, ed è tutto da terminale. `pnpm test` verde (il criterio di fase è il test I8 sui tre spettatori). Se vuoi vedere il canale con i tuoi occhi: `pnpm dev` in un terminale, `pnpm bots --auction=<id> --count=8 --strategy=tie --start --verbose` in un altro, e un `curl -N "http://localhost:3000/api/auctions/<id>/stream?token=<public_token>"` in un terzo — è la vista TV, e vedrai scorrere uno snapshot per transizione senza **nessun** importo finché non si apre il reveal. Con `--strategy=tie` ogni lotto va allo spareggio. |
 | ~~**5 — Portale partecipante**~~ ✓ | Fatto il 2026-08-08: telefono vero + un browser sul Mac dentro un'asta con sei bot, tutti sull'IP di LAN. Nessun disallineamento fra i due dispositivi; tastierino numerico e nessuno zoom forzato. La procedura resta scritta qui sotto ("Il collaudo della Fase 5"): serve di nuovo ogni volta che si tocca il portale. |
-| **6 — Manager e TV** | Apri la vista TV in incognito (senza login) durante un'asta con bot: nessun importo a busta chiusa deve vedersi. Se hai una TV/proiettore, provala lì per la leggibilità. |
+| **6 — Manager e TV** | Il collaudo è scritto passo per passo qui sotto ("Il collaudo della Fase 6"). In due parole: apri la **regia** e avvia da lì un'asta con bot scegliendo il posto di partenza, prova pausa e ripresa, killa un bot e guarda comparire l'alert; poi apri la **vista TV in incognito** (senza login) e verifica che durante le offerte non si veda nessun importo. Se hai una TV o un proiettore, provala lì per la leggibilità: è l'unica cosa che a schermo di computer non si può giudicare. ~30 minuti. |
 | **7 — Override** | Simula la serata storta: pausa → cancella un giocatore da una rosa → riassegna manualmente → riprendi. Poi esporta l'xlsx e **aprilo in Excel** per verificare FantaSquadra e Costo. |
 | **8 — Deploy** ⚠ | Alto coinvolgimento tuo: server Hetzner, Ploi, DNS del dominio, redirect URI di **produzione** nella console Google, env sul server. Poi l'asta di prova a 8 bot in produzione e la checklist pre-asta di PLAN.md §17, eseguita da te punto per punto. |
 
@@ -172,21 +175,16 @@ vogliono lo stesso indirizzo: `--url=http://192.168.x.x:3000`. La regola dei pos
 
 **Per far partire l'asta dal tuo posto** invece che dal primo: lancia i bot **senza** `--start`,
 collegati con tutti i dispositivi, poi apri una finestra **in incognito**, entra come l'owner
-(Marco Bianchi), vai sulla lobby di quell'asta e dalla console del browser manda:
-
-```js
-const id = 'INCOLLA-QUI-ID-DELL-ASTA';   // lo stampa il seed, ed è nella barra degli indirizzi
-await fetch(`/api/auctions/${id}/action`, {
-  method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ type: 'START', startSeatIndex: 6 })   // 6 = settimo posto
-}).then(r => r.text())
-```
+(Marco Bianchi) e vai sulla **regia**, `/auctions/<id>/manage`. Lì scegli il posto di partenza — un
+pulsante per posto, ciascuno col suo pallino — e premi «Avvia l'asta».
 
 Serve l'incognito perché nella finestra normale sovrascriveresti la tua sessione di partecipante.
-Deve rispondere `{"ok":true}`; `MEMBERS_NOT_READY` significa che qualcuno non è collegato, e il
-messaggio fa i nomi. Senza questo passaggio la rotazione parte dal primo posto e il tuo turno di
-chiamata — la schermata che più vale la pena guardare — arriva dopo un giro intero. Lo stesso
-comando con `{type:'PAUSE'}` e `{type:'RESUME'}` serve per provare la vista in pausa.
+Se il pulsante è spento, sotto c'è scritto chi non è collegato: l'avvio pretende **tutti** i membri
+con la pagina aperta in primo piano. Senza scegliere il posto, la rotazione parte dal primo e il tuo
+turno di chiamata — la schermata che più vale la pena guardare — arriva dopo un giro intero.
+
+> Fino alla Fase 5 questo passaggio si faceva a mano dalla console del browser, con una `fetch` su
+> `POST /api/auctions/<id>/action`. Funziona ancora, ma non serve più.
 
 > Con i timer del seed (3 secondi per offrire) si fa fatica a *guardare* le schermate. Se vuoi
 > tempo per leggere, allunga i tempi di quell'asta prima di avviarla, dal database:
@@ -214,19 +212,10 @@ esattamente `10` come loro. Vedrai il pannello "Sei nello spareggio", il round 2
 offerta riportata, e nel reveal le due sezioni ("Buste" e "Spareggio") con i `+Ns` che spiegano
 chi ha vinto a parità di cifra.
 
-E la **pausa**: non c'è ancora un pulsante (arriva col portale manager, Fase 6), quindi si prova
-dal terminale. Con l'asta viva:
-
-```bash
-# metti in pausa (serve il cookie dell'owner: fallo dal browser dove sei loggato come owner,
-# dalla console del browser)
-await fetch(`/api/auctions/<id>/action`, {method:'POST',
-  headers:{'Content-Type':'application/json'}, body: JSON.stringify({type:'PAUSE'})})
-# e per riprendere, la stessa cosa con {type:'RESUME'}
-```
-
-Il portale deve mostrare il banner giallo, il countdown **fermo** sul residuo di quel momento, e
-nessun modale aperto; al resume il tempo riparte da dov'era.
+E la **pausa**: dalla Fase 6 è un pulsante nella regia (`/auctions/<id>/manage`, nella finestra in
+incognito dove sei l'owner). Premi «Metti in pausa» e guarda il portale del partecipante: banner
+giallo, countdown **fermo** sul residuo di quel momento, nessun modale aperto. «Riprendi l'asta» e
+il tempo riparte da dov'era, non da capo.
 
 **Infine il telefono, che è il criterio più importante.** Ferma `pnpm dev`, lancia `pnpm dev:lan`,
 apri sul telefono l'indirizzo che stampa ed entra col provider `dev`. Gioca qualche lotto per
@@ -240,6 +229,53 @@ davvero, in piedi, con una mano. Le cose da guardare:
 
 Se una di queste quattro cose non è vera, annotala e apri una sessione dedicata: sono i quattro
 punti su cui si gioca l'usabilità della serata.
+
+### Il collaudo della Fase 6 — passo per passo
+
+Mezz'ora, tutta al computer. Il campo si prepara come per la Fase 5, ma **senza** far avviare l'asta
+ai bot: l'avvio è la prima cosa da provare.
+
+```bash
+docker compose up -d
+pnpm db:seed --auction-status=ready     # stampa l'id dell'asta
+pnpm dev                                # in un terminale
+pnpm bots --auction=<id> --count=8 --strategy=random   # in un secondo terminale, senza --start
+```
+
+**1. La regia.** Entra come l'owner (Marco Bianchi) e vai su `/auctions/<id>/manage` — ci arrivi
+anche dalla dashboard e dalla pagina di configurazione, "Vai alla regia". Devi vedere le otto rose
+con crediti, speso e offerta massima, e i pallini di presence.
+
+**2. Il cancello d'avvio.** Ferma i bot (Ctrl-C) e guarda: entro quindici secondi il pulsante
+«Avvia l'asta» si spegne e sotto compaiono i nomi di chi non è collegato. Rilancia i bot: torna
+verde. Poi scegli **il posto di partenza** — clicca il quarto, per dire — e avvia: la prima
+chiamata deve toccare a quel posto, e il primo ruolo deve essere il primo del tuo `role_order`.
+
+**3. Pausa e ripresa.** Con l'asta viva premi «Metti in pausa»: il countdown della regia si ferma.
+Riprendi e verifica che riparta dal tempo che restava, non da trenta secondi pieni. Se hai anche un
+portale partecipante aperto in un'altra finestra, guarda i due insieme.
+
+**4. L'alert di chi cade.** Killa i bot a metà asta: entro quindici secondi deve comparire il
+banner rosso con i nomi. **L'asta non deve mettersi in pausa da sola** — continua con le chiamate
+automatiche, ed è voluto.
+
+**5. La vista TV — è il criterio ✅ della fase.** Dalla regia, il link "Vista TV ↗" apre
+`/tv/<public_token>`. **Copia quell'URL e aprilo in una finestra in incognito**, dove non sei
+loggato con nessun account: deve funzionare lo stesso. Con un'asta viva e i bot che offrono, guarda
+un lotto intero:
+
+- durante le offerte si vede il nome del giocatore, chi l'ha chiamato, **quante buste** sono
+  arrivate e da chi — ma **nessuna cifra**;
+- allo scadere, e solo lì, compaiono vincitore, prezzo e tutte le offerte.
+
+Se vuoi la prova senza fidarti degli occhi, apri la console del browser di quella finestra sulla
+scheda Network, guarda il messaggio dello stream durante le offerte e cerca `amount`: non deve
+esserci. Non è nascosto dalla pagina — non arriva proprio.
+
+**6. La leggibilità.** Questa è l'unica cosa che a schermo di computer non si giudica: se hai una TV
+o un proiettore, collega il portatile e guarda da quattro metri. Il nome del giocatore, il countdown
+e il prezzo di aggiudicazione devono leggersi senza sforzo; i nomi delle squadre nella colonna
+di destra anche. Se qualcosa non si legge, annota **cosa** e **da che distanza**.
 
 ### Tutti i comandi
 

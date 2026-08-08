@@ -65,15 +65,23 @@ export default async function SetupPage({
         </div>
         <p className="text-muted-foreground text-sm">
           {auction.status === "READY"
-            ? "Tutto a posto: posti pieni e listone sufficiente. L'avvio arriva con la Fase 3."
+            ? "Tutto a posto: posti pieni e listone sufficiente. L'asta si avvia dalla regia, quando siete tutti collegati."
             : "L'asta sarà pronta quando i posti saranno pieni e il listone importato basterà per ogni ruolo."}
         </p>
-        <Link
-          href={`/auctions/${auction.id}/lobby`}
-          className="text-sm underline underline-offset-4"
-        >
-          Vai alla lobby
-        </Link>
+        <div className="flex flex-wrap gap-4 text-sm">
+          <Link
+            href={`/auctions/${auction.id}/manage`}
+            className="underline underline-offset-4"
+          >
+            Vai alla regia
+          </Link>
+          <Link
+            href={`/auctions/${auction.id}/lobby`}
+            className="underline underline-offset-4"
+          >
+            Vai alla lobby
+          </Link>
+        </div>
       </header>
 
       <Card>

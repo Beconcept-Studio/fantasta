@@ -880,18 +880,101 @@ snapshot.
 
 ---
 
+## La regia e la TV
+
+Il portale del partecipante risponde alla domanda «quanto offro?». Ci sono altre due domande in
+quella stanza, e hanno due pagine tutte loro: «posso far partire l'asta, e va tutto bene?», che è di
+chi conduce, e «cosa sta succedendo adesso?», che è di tutti e si guarda alzando gli occhi verso il
+televisore.
+
+Sono la stessa applicazione vista da altri due posti. Nessuna delle due aggiunge un canale, una
+query sullo stato o una seconda verità: entrambe aprono lo stesso `useAuctionStream` e leggono lo
+stesso snapshot sanificato dei partecipanti. Ed entrambe sono **desktop-only** per scelta: il
+vincolo mobile-first della Fase 5 nasceva dal pollice sotto pressione, e qui non c'è né pollice né
+pressione — c'è un portatile sul tavolo e uno schermo in fondo alla stanza.
+
+### La regia, su `/auctions/[id]/manage`
+
+Solo l'owner: chi non ha creato l'asta riceve un 404, non un messaggio — di quella pagina non deve
+sapere niente. Il server verifica quello, legge il `public_token` (che serve a costruire il link
+della TV e non è recuperabile altrove) e si ferma lì; il resto arriva dallo stream.
+
+Il cuore della pagina è il **recap**: una scheda per squadra con crediti, speso, offerta massima e
+la rosa ruolo per ruolo, tutte insieme sullo schermo. È l'informazione che a voce non si riesce a
+tenere: chi ha ancora budget, chi ha la rosa quasi piena, chi non può più permettersi il portiere
+che sta per essere chiamato. Lo *speso* non è un campo nuovo del protocollo ma la somma dei prezzi
+della rosa, che nello snapshot c'è già; `speso + crediti = budget` è anche l'identità con cui si
+vede in un colpo d'occhio che i conti tornano.
+
+Sopra il recap ci sono i comandi, ed è qui che per la prima volta esiste un pulsante **"Avvia
+l'asta"** — fino alla Fase 5 l'avvio passava dai bot o da una `fetch` scritta a mano nella console
+del browser. Accanto si sceglie **da quale posto** comincia la rotazione: un pulsante per posto, con
+il pallino di presence di ciascuno, perché la sera dell'asta quella decisione si prende a voce
+guardando chi è collegato. Il pulsante è disabilitato finché tutti i membri non sono LIVE, ma
+disabilitare non è autorizzare: `startAuction` rifà da sé la verifica, e se qualcuno cade nel mezzo
+secondo fra il render e il click il rifiuto arriva dal server con il suo messaggio. È la sesta
+regola, e qui si vede a occhio nudo.
+
+Pausa e ripresa erano già nel dispatcher delle azioni dalla Fase 5, dove erano servite a collaudare
+la vista congelata del partecipante: in Fase 6 sono state **collegate a due pulsanti**, non
+riscritte. La pausa congela le scadenze e le trasla al resume, quindi ogni countdown riparte dal
+tempo che restava e non da capo.
+
+L'ultimo pezzo è **l'alert di chi non c'è più**. Ad asta iniziata, se qualcuno smette di battere
+l'heartbeat, la regia lo dice entro quindici secondi, distinguendo chi è caduto — al suo turno
+scatterà la chiamata automatica e le sue offerte si fermeranno a 1 — da chi ha solo la pagina in
+secondo piano. Quello che l'applicazione **non** fa è mettersi in pausa da sola: i timer continuano
+a fare il loro mestiere e la decisione di fermare tutto resta a chi conduce, che è l'unico a sapere
+se quella persona è uscita dalla stanza o è andata a prendere da bere. Il banner lo scrive
+esplicitamente, perché è la prima domanda che viene in mente leggendolo.
+
+### La TV, su `/tv/[publicToken]`
+
+La vista proiettata **non ha login**, e il token nell'URL *è* la sua autenticazione. È la scelta
+giusta per quello che è: la TV della stanza è un browser aperto una volta a inizio serata, non un
+utente; chiedergli un account Google significherebbe accendere il proiettore e trovarsi davanti a
+una schermata di consenso.
+
+Quello che rende la scelta innocua sta dall'altra parte. Lo stream apre lo stesso canale di tutti,
+ma `resolveViewer` assegna alla TV `viewerMemberId = null`, e `serializeSnapshot` — che è l'unico
+punto da cui lo stato esce dal server — a un viewer nullo non mette dentro né `myBid` né un solo
+importo di busta chiusa. **La TV non nasconde gli importi: non li riceve.** Il criterio di chiusura
+della fase è esattamente questo, e si verifica leggendo il JSON: durante `LOT_OPEN` la stringa
+`"amount"` nel messaggio non compare affatto, e ricompare solo in `LOT_REVEAL`, che è il momento in
+cui le buste si aprono per tutti.
+
+Il layout è governato da un posto: un televisore in fondo a una stanza, con dieci persone che
+guardano da tre o quattro metri. Da lì discendono tre cose. Niente hover, niente scroll, niente
+click: nessuna informazione può stare dietro a un'interazione, perché chi guarda non ha un mouse, e
+tutto ciò che conta sta in una schermata sola — intestazione, il lotto al centro, la classifica dei
+crediti sul fianco. Bianco su nero **fisso**, l'unica pagina dell'applicazione che ignora il tema di
+sistema: un proiettore non ha una preferenza, e un tema chiaro in una stanza al buio è illeggibile.
+E dimensioni che vengono da un conto invece che dall'occhio — a 1080p su un cinquanta pollici un
+pixel vale circa mezzo millimetro, la leggibilità a quattro metri chiede un carattere alto quasi tre
+centimetri, quindi nessun dato scende sotto i trentasei pixel e il nome del giocatore, il countdown
+e il prezzo di aggiudicazione stanno fra i 128 e i 144.
+
+C'è una conseguenza minore ma vera di questa distanza: la classifica mostra la rosa come totale
+(`11/25`) e non come quattro frazioni per ruolo. Le quattro frazioni sono perfette su un monitor a
+mezzo metro e diventano una riga di numerini a quattro metri; il dettaglio, chi lo vuole, ce l'ha
+sul telefono.
+
+---
+
 ## Cosa non c'è ancora
 
-Alla fine della Fase 5 un partecipante gioca un'asta intera dal telefono: entra dalla lobby, chiama,
-offre, rilancia, si ritira, guarda le buste aprirsi e ritrova tutto identico se il tab muore a metà
-round. Quello che manca è **il lato di chi guida**.
+Alla fine della Fase 6 l'asta si può condurre per intero senza toccare un terminale: l'owner la fa
+partire dal posto che vuole, la mette in pausa e la riprende, vede chi è caduto, e la stanza segue
+tutto dal televisore mentre ciascuno offre dal proprio telefono.
 
-Non c'è il portale del manager: il pulsante "Avvia l'asta" non esiste ancora in nessuna pagina, e
-oggi l'avvio passa dai bot (`--start`) o da una chiamata a `POST …/action`. Pausa e resume sono
-raggiungibili solo dallo stesso endpoint — ci sono già perché la vista in pausa del partecipante
-andava collaudata, ma il loro posto vero è il portale del manager, in Fase 6. Con quello arriva
-anche la vista TV: alto contrasto, tipografia grande, desktop-only, e senza login.
+Quello che manca è **il ripescaggio degli errori**. Non c'è modo di correggere un lotto sbagliato:
+`voidAssignment` — cancellare un giocatore da una rosa senza mai un `DELETE` — e `manualAssign` per
+riassegnarlo sono della Fase 7, insieme alle rettifiche di budget col loro ledger e all'export
+dell'xlsx nel formato del file di partenza. Undo non ce n'è e non ce ne sarà: la rotazione dei turni
+non torna indietro, e un lotto sbagliato si corregge annullando e riassegnando.
 
-Restano fuori gli override del manager — `manualAssign`, `voidAssignment`, `adjustBudget` — e
-l'export dell'xlsx, che sono della Fase 7. E resta fuori il deploy: oggi tutto questo gira su
+Resta aperto anche un difetto noto e annotato: un id di asta malformato nell'URL arriva fino a
+Postgres, che lo rifiuta con un'eccezione, e le route rispondono 500 invece di un 404 tipizzato. È
+un URL che nessuna pagina genera, ma va sistemato nella fase in cui si guardano gli errori. Fuori
+scopo per la prima asta resta l'area `/admin`. E resta fuori il deploy: oggi tutto questo gira su
 `pnpm dev` e su un Postgres in Docker.

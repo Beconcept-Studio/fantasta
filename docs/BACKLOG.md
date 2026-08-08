@@ -621,44 +621,53 @@ sempre un parametro. Test scritti PRIMA dell'implementazione (§12).
 
 ## Fase 6 — Portale manager e vista TV
 
-- [ ] **F6-01 — Recap rose e budget**
+- [x] **F6-01 — Recap rose e budget**
   `/auctions/[id]/manage` (solo owner, desktop): tutte le rose, crediti, max_bid, slot per ruolo.
-  Verifica: i numeri coincidono con la formula crediti su un'asta `mid` seeded.
+  Verifica: i numeri coincidono con la formula crediti su un'asta `mid` seeded. ✓ sugli otto posti di un'asta `mid`: `crediti + speso = 500` per tutti e `max_bid = min(crediti, crediti − (slot residui − 1))` esatto, letti dallo stesso snapshot che riceve il manager. La route risponde 200 all'owner e **404 a un partecipante** (chi non ha creato l'asta non ha una regia).
+  Fatto: `app/auctions/[id]/manage/page.tsx` (server: solo autorizzazione + `public_token` + "l'owner gioca?") e `console.tsx` (client: tutto dallo snapshot, `viewerMemberId = null` → nessun importo nemmeno per il manager). Le derivazioni pure stanno in `lib/realtime/manage.ts` con i loro test. La pagina batte l'heartbeat **se l'owner è anche membro**: senza, sarebbe lui stesso a bloccare il proprio cancello d'avvio.
   Dipende: F5-16
 
-- [ ] **F6-02 — Avvio con seat iniziale**
+- [x] **F6-02 — Avvio con seat iniziale**
   UI di start: scelta `startSeatIndex`, bloccata finché non tutti i membri sono LIVE (gate F4-06).
-  Verifica: con un membro OFFLINE il pulsante è disabilitato E il server rifiuta comunque (regola 6).
+  Verifica: con un membro OFFLINE il pulsante è disabilitato E il server rifiuta comunque (regola 6). ✓ il pulsante: `managerControls` in `tests/manage.test.ts` (IDLE e OFFLINE bloccano, e il messaggio nomina la squadra). Il server: con nessuno collegato, `POST …/action {START}` risponde **400 `MEMBERS_NOT_READY`** con l'elenco degli assenti. Con gli otto bot collegati, START dal posto 4 → `current_seat_index = 3`, primo ruolo `P`.
+  Fatto: `app/auctions/[id]/manage/controls.tsx`. Il posto di partenza si sceglie con un pulsante per posto (sono al massimo dodici e la sera dell'asta si decide a voce), ognuno col suo pallino di presence. **È il primo posto dell'applicazione in cui esiste un pulsante "Avvia l'asta"**: prima l'avvio passava dai bot o da una fetch a mano.
   Dipende: F6-01
 
-- [ ] **F6-03 — Pausa/riprendi da UI**
+- [x] **F6-03 — Pausa/riprendi da UI**
   Pulsanti pause/resume con stato visibile a tutti i client.
-  Verifica: pause dal manager congela i countdown di tutti; resume li riprende dal residuo.
+  Verifica: pause dal manager congela i countdown di tutti; resume li riprende dal residuo. ✓ misurato a database: alla pausa `phase_deadline` **non si muove** (ferma a 05:34:21.427 con `paused_at` 05:34:20.304), e resta ferma dopo sei secondi da fermo; al resume la scadenza è traslata a 05:34:27.58 su un "adesso" di 05:34:26.5 — cioè ripartono gli **1,1 secondi** che restavano, non il countdown intero. La vista congelata dei partecipanti era già stata collaudata in F5-11 con le stesse azioni.
+  Fatto: due pulsanti nello stesso pannello dei comandi, mutuamente esclusivi per costruzione (`canPause` è `status === 'LIVE'`, `canResume` è `PAUSED`). Le azioni esistevano già nel dispatcher dalla Fase 5: qui sono state **collegate**, non riscritte.
   Dipende: F6-01
 
-- [ ] **F6-04 — Alert presence in LIVE**
+- [x] **F6-04 — Alert presence in LIVE**
   Il manager vede un alert se un membro va OFFLINE ad asta iniziata (nessuna pausa automatica, §7).
-  Verifica: kill del tab di un bot/browser → alert entro 15s; nessuna pausa scatta da sola.
+  Verifica: kill del tab di un bot/browser → alert entro 15s; nessuna pausa scatta da sola. ✓ uccisi gli otto bot a metà asta e letti gli snapshot dal vivo: l'ultimo con `presence: LIVE` è delle 05:35:38, il primo con tutti `OFFLINE` delle 05:35:41 — dentro la finestra dei 15 secondi dall'ultimo heartbeat. **L'asta è rimasta `LIVE`** e ha continuato da sola con auto-pick e auto-bid a 1, esattamente come vuole §7.
+  Fatto: `PresenceBanner` in `console.tsx`, su `presenceAlert`. Distingue chi è caduto (rosso: al suo turno scatta la chiamata automatica) da chi ha la pagina in secondo piano (ambra), e dice esplicitamente che **niente si mette in pausa da solo**: il pulsante è lì sotto, la decisione è di chi conduce. Prima dell'avvio l'alert non compare — lì gli stessi pallini sono il cancello, non un guasto. ⚠ In un'asta ferma il cambio di presence viene notato dal primo heartbeat **altrui** che arriva dopo la scadenza (DECISIONS, Fase 4): se cade l'ultimo collegato, non c'è più nessuno a cui dirlo.
   Dipende: F6-01
 
-- [ ] **F6-05 — Vista TV**
+- [x] **F6-05 — Vista TV**
   `/tv/[publicToken]` senza login, sola lettura, snapshot sanificato con `viewerMemberId = null`.
-  Verifica: aperta in incognito mostra lotto, countdown e reveal; un token invalido → 404.
+  Verifica: aperta in incognito mostra lotto, countdown e reveal; un token invalido → 404. ✓ senza **nessun cookie** (l'equivalente dell'incognito): la pagina risponde 200 col nome dell'asta nel titolo, un token inventato dà 404, e lo stream aperto col solo `?token=` restituisce `viewerMemberId: null`, `myBid: null` e otto membri con crediti e rose. Osservati 22 secondi di asta dal vivo: la stringa `"amount"` compare nel JSON **solo** negli snapshot in `LOT_REVEAL`, mai in `LOT_OPEN`.
+  Fatto: `app/tv/[publicToken]/page.tsx` (server: traduce il token in un'asta, `auctionByPublicToken` in `lib/engine/viewer.ts`, con i suoi test in `tests/db/tv.test.ts`) e `tv-view.tsx`. La pagina è `noindex`: un URL che vale come autenticazione non si lascia indicizzare. Token inesistente e asta inesistente danno la stessa risposta.
   Dipende: F5-16
 
-- [ ] **F6-06 — Layout TV ad alto contrasto**
+- [x] **F6-06 — Layout TV ad alto contrasto**
   Tipografia grande, lotto in corso + countdown + reveal leggibili da distanza di proiezione.
-  Verifica: leggibile a 1080p da ~4 metri (o zoom equivalente); nessuna informazione richiede hover.
+  Verifica: leggibile a 1080p da ~4 metri (o zoom equivalente); nessuna informazione richiede hover. ✓ **nessun `hover:` e nessun `title` nell'intera pagina**, e nessun testo sotto i 24 px (verificato sul sorgente). Le misure vengono da un conto, non dall'occhio: a 1080p su un 50" un pixel vale ~0,57 mm e la leggibilità a quattro metri chiede ~2,7 cm di altezza, cioè ~47 px — quindi nessun **dato** sotto i 36 px, le etichette di contorno a 24, e nome del giocatore, countdown e prezzo fra 128 e 144 px. ⚠ La prova con gli occhi, a schermo vero e a quattro metri, resta all'owner al gate.
+  Fatto: bianco su nero **fissi**, non presi dal tema: un proiettore non ha una preferenza di sistema e un tema chiaro in una stanza al buio è illeggibile (è l'unica pagina dell'app che non segue il tema, vedi `docs/DECISIONS.md`). Schermo intero senza scroll: intestazione, palco al centro, classifica dei crediti a destra. Della rosa la classifica mostra il totale (`11/25`) e non le quattro frazioni per ruolo — a quattro metri diventerebbero una riga di numerini.
   Dipende: F6-05
 
-- [ ] **F6-07 — ARCHITECTURE: manager e TV**
+- [x] **F6-07 — ARCHITECTURE: manager e TV**
   Aggiornamento con i due portali e il ruolo del public token.
-  Verifica: capitolo presente.
+  Verifica: capitolo presente. ✓ "La regia e la TV", con le due sezioni `/manage` e `/tv/[publicToken]`, più "Cosa non c'è ancora" riscritto sulla Fase 7.
+  Fatto: il capitolo spiega perché il token *è* l'autenticazione della TV e perché la cosa è innocua (`viewerMemberId = null` → lo snapshot non contiene gli importi, non li nasconde), da dove vengono le misure tipografiche, e perché il pulsante disabilitato non è mai l'autorizzazione.
   Dipende: F6-06
 
-- [ ] **F6-08 — GATE Fase 6**
+- [x] **F6-08 — GATE Fase 6**
   Criterio ✅: la vista TV in incognito, senza login, mostra tutto tranne gli importi a busta chiusa (riesegue il test I8 per il viewer TV). Aggiorna `CLAUDE.md`.
-  Verifica: criterio dimostrato + test I8 verde.
+  Verifica: criterio dimostrato + test I8 verde. ✓ **Dimostrazione dal vivo**: asta a 8 bot `random` avviata dalla regia, 53 snapshot letti dallo stream della TV **senza nessun cookie**, sei lotti completi con 7–8 buste ciascuno. `viewerMemberId: null` e `myBid: null` in tutti; la stringa `"amount"` compare **solo** nei sei snapshot in `LOT_REVEAL` (con gli otto importi distinti e il vincitore), e in **nessuno** dei 40 in `LOT_OPEN`, dove si vede solo il contatore delle buste. **Violazioni: 0.** Test I8 verde sui tre spettatori; suite completa **275/275**, `typecheck`, `lint` e `build` puliti.
+  Fatto: aggiunte anche le vie per **arrivare** alla regia — dalla dashboard (ad asta iniziata l'owner ci finisce direttamente), dalla configurazione e dalla lobby; e corretta la frase del setup che prometteva ancora «l'avvio arriva con la Fase 3». `docs/RUNBOOK.md` ha la nuova sezione "Il collaudo della Fase 6" e non manda più l'owner nella console del browser per avviare e mettere in pausa.
+  ⚠ Resta all'owner la prova con gli occhi: la leggibilità a quattro metri su TV o proiettore, che a schermo di computer non si può giudicare.
   Dipende: tutti i F6-*
 
 ---

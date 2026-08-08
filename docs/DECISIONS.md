@@ -544,3 +544,62 @@ permette già; i bot avviano sempre dal posto 0. Nel collaudo si lancia quindi `
 con due soli posti umani su otto, la rotazione farebbe arrivare il turno di chiamata dopo sei lotti,
 e la schermata di chiamata è quella che più vale la pena guardare per prima. Procedura in
 `docs/RUNBOOK.md`.
+
+---
+
+## 2026-08-08 — Fase 6, portale manager e vista TV
+
+**Le derivazioni del manager sono funzioni pure, in `lib/realtime/manage.ts`.** «Si può avviare?»
+(`managerControls`), «chi manca all'appello?» (`absentMembers`, `presenceAlert`), «quanto ha
+speso?» (`spentCredits`) stanno fuori dai componenti, esattamente come le derivazioni del portale
+in `portal.ts`. Motivazione: è la stessa di Fase 5 — se ogni schermata è funzione dello snapshot
+(regola 7), quelle domande *sono* funzioni pure e si provano in millisecondi; e il cancello
+d'avvio, che è la cosa più facile da sbagliare di tutta la pagina, diventa una tabella di casi
+invece di una condizione dentro un `disabled`. Non è un layer in più (regola 8): è la stessa linea
+già tracciata fra ciò che si prova senza browser e ciò che va guardato con gli occhi.
+
+**`spentCredits` invece di portare `budget_initial` nello snapshot.** Il recap mostra «crediti ·
+speso · max», ma lo speso non è un campo nuovo del protocollo: è la somma dei prezzi della rosa,
+che nello snapshot c'è già. Motivazione: `speso + crediti = budget` è anche l'identità con cui si
+controlla a colpo d'occhio che i conti tornino (I3); aggiungere una colonna al canale per un numero
+derivabile sarebbe stata una seconda fonte di verità sullo stesso fatto.
+
+**`phaseLabel` promossa a funzione condivisa.** Era una funzione privata dell'intestazione del
+portale («dove siamo, in tre parole»); ora sta in `lib/realtime/portal.ts` e la usano in tre —
+portale, regia, TV. Motivazione: regola 8 al contrario, cioè il secondo chiamante è arrivato. Lo
+stesso vale per `tests/snapshot-factory.ts`, estratto da `portal.test.ts` quando i test della Fase 6
+hanno avuto bisogno degli stessi oggetti di prova.
+
+**Il portale manager batte l'heartbeat, ma solo se l'owner è anche membro.** ⚠ P11: l'owner
+tipicamente joina come partecipante, e in quel caso conduce la serata da `/manage` mentre gioca dal
+telefono. Senza heartbeat da questa pagina, un owner che *non* tiene aperto anche il portale
+risulterebbe OFFLINE e il cancello d'avvio rifiuterebbe l'asta **per colpa di chi la sta avviando**.
+L'owner che non gioca non ha una riga `members` e l'endpoint lo rifiuterebbe, quindi l'heartbeat
+parte solo quando ha senso.
+
+**La regia mostra una striscia sul lotto in corso, non un pannello di reveal.** PLAN §11 assegna
+alla TV il «lotto in corso + countdown + reveal»; qui c'è solo una riga — giocatore, chi ha
+chiamato, buste consegnate, countdown. Motivazione: serve a rispondere a «è il momento di premere
+pausa?», che è una domanda che «siamo a metà di un round con tre buste su otto» risolve e «l'asta è
+LIVE» no. Duplicare il reveal avrebbe significato due schermate da tenere allineate per la stessa
+informazione.
+
+**L'alert di presence distingue chi è caduto da chi è in secondo piano.** OFFLINE in rosso («al suo
+turno scatta la chiamata automatica, le sue offerte si fermano a 1»), IDLE in ambra. Motivazione:
+sono due telefonate diverse — uno è uscito dalla stanza, l'altro ha aperto Instagram — e il rimedio
+è diverso. Resta valido §7: **nessuna pausa automatica**, e il banner lo dice esplicitamente perché
+è la prima domanda che viene in mente leggendolo.
+
+**La vista TV non segue il tema: bianco su nero, fisso.** È l'unica pagina dell'applicazione che
+ignora `prefers-color-scheme`. Motivazione: un televisore non ha una preferenza di sistema, e un
+tema chiaro proiettato in una stanza al buio è illeggibile — la scelta non è dell'utente, è del
+mezzo. Le dimensioni vengono da un conto e non dall'occhio: a 1080p su un 50" un pixel vale ~0,57 mm
+e la regola pratica della leggibilità chiede un carattere alto un 150-esimo della distanza (~2,7 cm
+a quattro metri, cioè ~47 px), da cui la soglia «nessun dato sotto i 36 px» e i 128–144 px di nome
+del giocatore, countdown e prezzo di aggiudicazione.
+
+**`auctionByPublicToken` sta in `lib/engine/viewer.ts`, e la pagina TV è `noindex`.** La
+risoluzione del token vive accanto a `resolveViewer`, che è già il posto in cui si decide chi sta
+guardando e con quali diritti; è anche l'unica lettura a database che la vista TV fa. Un token
+inesistente e un'asta inesistente danno la stessa risposta (404), e la pagina dichiara
+`robots: noindex, nofollow`: un URL che *è* l'autenticazione non si lascia indicizzare.

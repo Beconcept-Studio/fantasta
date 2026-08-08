@@ -32,6 +32,28 @@ export type Viewer = {
   memberId: string | null;
 };
 
+/**
+ * L'asta di un `public_token`, per la pagina `/tv/[publicToken]` (F6-05).
+ *
+ * È l'unica lettura che la vista TV fa dal database: le serve l'id dell'asta
+ * per aprire lo stream, e il nome per la scritta in cima. Tutto il resto arriva
+ * dallo snapshot, sanificato con `viewerMemberId = null` — la TV non ha un
+ * viewer, quindi non ha nemmeno un `myBid` da farsi scappare (I8).
+ *
+ * `null` sia per un token inventato sia per un'asta che non esiste: dall'esterno
+ * i due casi non si distinguono, ed è giusto così.
+ */
+export async function auctionByPublicToken(
+  publicToken: string,
+): Promise<{ id: string; name: string } | null> {
+  if (publicToken === "") return null;
+  const [auction] = await db
+    .select({ id: auctions.id, name: auctions.name })
+    .from(auctions)
+    .where(eq(auctions.publicToken, publicToken));
+  return auction ?? null;
+}
+
 export async function resolveViewer(
   auctionId: string,
   userId: string | null,

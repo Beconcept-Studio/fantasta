@@ -1,0 +1,92 @@
+import type { Snapshot, SnapshotLot, SnapshotMember } from "@/lib/realtime/types";
+
+/**
+ * Lo snapshot di prova, in una forma modificabile pezzo per pezzo.
+ *
+ * Serve a tutti i test delle funzioni pure che leggono lo snapshot — il portale
+ * del partecipante (Fase 5) e il portale manager con la vista TV (Fase 6). Sta
+ * qui perché i chiamanti sono due: finché era uno solo viveva dentro
+ * `portal.test.ts`, che è dove era giusto stesse (regola 8).
+ *
+ * Il default è il caso più frequente: asta LIVE a tre partecipanti, lotto
+ * aperto, io idoneo e senza ancora una busta consegnata.
+ */
+
+export const T = Date.parse("2026-08-07T20:00:00.000Z");
+
+/** Un istante ISO, in millisecondi relativi a `T`. */
+export const iso = (offsetMs: number) => new Date(T + offsetMs).toISOString();
+
+export const ME = "member-me";
+export const OTHER = "member-other";
+export const THIRD = "member-third";
+
+export function member(
+  id: string,
+  seatIndex: number,
+  patch: Partial<SnapshotMember> = {},
+): SnapshotMember {
+  return {
+    id,
+    teamName: `Squadra ${seatIndex + 1}`,
+    displayName: null,
+    seatIndex,
+    credits: 500,
+    maxBid: 476,
+    slotsFilled: { P: 0, D: 0, C: 0, A: 0 },
+    presence: "LIVE",
+    roster: [],
+    ...patch,
+  };
+}
+
+export function lot(patch: Partial<SnapshotLot> = {}): SnapshotLot {
+  return {
+    id: "lot-1",
+    seq: 1,
+    player: { id: "player-1", name: "Lautaro", role: "A", team: "Inter", fvm: 300 },
+    calledByMemberId: OTHER,
+    autoCalled: false,
+    roundNo: 1,
+    minAmount: 1,
+    endsAt: iso(30_000),
+    closedAt: null,
+    eligibleMemberIds: [ME, OTHER, THIRD],
+    bidStatus: [
+      { memberId: ME, hasBid: false, withdrawn: false },
+      { memberId: OTHER, hasBid: true, withdrawn: false },
+      { memberId: THIRD, hasBid: false, withdrawn: false },
+    ],
+    tie: null,
+    reveal: null,
+    ...patch,
+  };
+}
+
+export function snapshot(patch: Partial<Snapshot> = {}): Snapshot {
+  return {
+    serverNow: iso(0),
+    stateVersion: 12,
+    viewerMemberId: ME,
+    auction: {
+      id: "auction-1",
+      name: "Asta di prova",
+      status: "LIVE",
+      phase: "LOT_OPEN",
+      phaseDeadline: iso(30_000),
+      pausedAt: null,
+      currentRole: "A",
+      currentSeatIndex: 1,
+      currentMemberId: OTHER,
+      roleOrder: ["P", "D", "C", "A"],
+      seats: 8,
+      slots: { P: 3, D: 8, C: 8, A: 6 },
+      timers: { bidSeconds: 30, pickSeconds: 60, tiePrepSeconds: 5, revealSeconds: 10 },
+      ...patch.auction,
+    },
+    members: [member(ME, 0), member(OTHER, 1), member(THIRD, 2)],
+    currentLot: lot(),
+    myBid: null,
+    ...patch,
+  };
+}

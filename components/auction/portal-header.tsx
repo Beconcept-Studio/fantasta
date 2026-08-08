@@ -1,6 +1,6 @@
 import { SlotsSummary } from "@/components/auction/roster-grid";
 import { Badge } from "@/components/ui/badge";
-import { ROLE_LABELS } from "@/lib/domain";
+import { phaseLabel } from "@/lib/realtime/portal";
 import type { Snapshot, SnapshotMember } from "@/lib/realtime/types";
 import { cn } from "@/lib/utils";
 
@@ -37,7 +37,7 @@ export function PortalHeader({
             </Badge>
           )}
           <Badge variant={auction.status === "PAUSED" ? "destructive" : "secondary"}>
-            {statusLabel(snapshot)}
+            {phaseLabel(snapshot)}
           </Badge>
         </div>
 
@@ -86,25 +86,4 @@ function Figure({
       </p>
     </div>
   );
-}
-
-/** Dove siamo, in tre parole: è la stessa informazione che c'è in TV. */
-function statusLabel(snapshot: Snapshot): string {
-  const { status, phase, currentRole } = snapshot.auction;
-  if (status === "PAUSED") return "in pausa";
-  if (status === "COMPLETED") return "finita";
-  if (status === "DRAFT" || status === "READY") return "non iniziata";
-  const role = currentRole === null ? "" : ` ${ROLE_LABELS[currentRole].toLowerCase()}`;
-  switch (phase) {
-    case "WAITING_PICK":
-      return `chiamata${role}`;
-    case "LOT_OPEN":
-      return snapshot.currentLot?.roundNo === 2 ? "spareggio" : "offerte";
-    case "LOT_TIE_PREP":
-      return "spareggio";
-    case "LOT_REVEAL":
-      return "buste aperte";
-    default:
-      return "in corso";
-  }
 }
