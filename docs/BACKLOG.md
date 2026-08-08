@@ -750,12 +750,14 @@ la rotazione dei turni non torna mai indietro.
   Verifica: `pnpm build` verde (17 rotte), `pnpm test` **327/327**, `pnpm typecheck` e `pnpm lint` verdi. ✓
   Fatto: (1) `next build` esegue ESLint e un errore di lint **blocca la build** — un apostrofo non escapato in `app/auctions/[id]/setup/page.tsx` rendeva l'app non deployabile; corretto insieme a tre variabili morte, fra cui la prop `seatsTaken` di `ManageConsole`. (2) Il commit `01b7c0d` aveva lasciato **due test rossi** in `tests/manage.test.ts`: i nomi degli assenti sono stati tolti da `startBlocked` di proposito (la stessa informazione stava in tre posti), e i test sono stati riportati sul contratto vero — `canStart` falso, messaggio sulla regola, e il nome di chi manca ancora raggiungibile da `absentMembers`. Vedi DECISIONS 2026-08-08.
 
-- [ ] **F8-01 — Provisioning**
+- [x] **F8-01 — Provisioning**
   Hetzner CX22 + Ploi, Postgres 16 locale alla macchina, variabili d'ambiente di §1, deploy `standalone`.
   Verifica: l'app risponde su HTTPS con login Google di produzione funzionante.
   Fatto (file, in `deploy/`): `env.production.example` (le 5 variabili di §1), `ecosystem.config.cjs` (pm2 in `fork` con `instances: 1` — in cluster mode ogni copia eseguirebbe `instrumentation.ts`, cioè due sweep sulla stessa asta — `max_memory_restart: 512M`, `TZ=UTC`, `HOSTNAME=127.0.0.1`; legge `.env` da sé e **non parte** se manca una variabile), `deploy.sh` (install con `--prod=false`, build, copia di `.next/static`, `pm2 reload`; si rifiuta di partire con un'asta `LIVE`/`PAUSED`).
   ✓ **Standalone collaudato in locale**, non solo evitato: `server.js` fa `process.chdir(__dirname)` e da `.next/standalone` non vede nessun `.env` — le variabili le passa pm2. Con `.next/static` copiato, `GET /` → 307 e il CSS servito 200 (55 KB).
-  ✓ Macchina: Hetzner CX22, Ubuntu 26.04 LTS, `psql 16.14` (PGDG ha la 26.04), nginx 1.30.4, Node 24.19, fuso `Etc/UTC`.
+  ✓ Macchina: Hetzner CX22, Ubuntu 26.04 LTS, `psql 16.14` (PGDG ha la 26.04), nginx 1.30.4, Node 24.19, fuso `Etc/UTC`. Valkey installata per obbligo di Ploi e disabilitata; login SSH per password chiuso (`passwordauthentication no`), root solo con chiave.
+  ✓ **Criterio raggiunto**: `https://fantasta.rggndr.it` risponde, certificato Let's Encrypt valido, **login Google di produzione funzionante**, schema applicato con `pnpm db:push` (14 tabelle, indici parziali `one_owner_per_player` e `one_open_lot_per_auction` compresi), pm2 online in `fork`, `pm2 startup` registrato.
+  ⚠ Due inciampi utili da ricordare: il `client_id` di Google era stato riempito col redirect URI (Google risponde `invalid_client`, non `redirect_uri_mismatch` — si diagnostica leggendo il parametro `client_id` nel redirect verso Google); e una modifica di `.env` richiede `pm2 reload deploy/ecosystem.config.cjs --update-env`, **non** `pm2 restart asta`, perché è l'ecosystem file a leggere `.env` quando pm2 lo valuta.
   Dipende: F7-09
 
 - [ ] **F8-02 — nginx per SSE**
