@@ -21,6 +21,12 @@
  *   `0.0.0.0` se non gli si dice altro. Davanti c'è nginx: la porta 3000 non
  *   deve essere raggiungibile da internet nemmeno per errore di firewall.
  *
+ * ⚠ Conseguenza da ricordare: `.env` viene letto **quando pm2 valuta questo
+ * file**. Dopo aver modificato una variabile serve quindi
+ * `pm2 reload deploy/ecosystem.config.cjs --update-env`; un `pm2 restart asta`
+ * riparte con l'ambiente che pm2 si è salvato la prima volta, e la modifica
+ * sembrerebbe non aver avuto effetto.
+ *
  * `script` punta al server standalone, che fa `process.chdir(__dirname)` da sé:
  * gira quindi con la working directory in `.next/standalone`, dove **non** c'è
  * nessun `.env` — ed è la ragione per cui le variabili le passiamo noi.
