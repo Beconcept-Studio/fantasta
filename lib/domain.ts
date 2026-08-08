@@ -25,6 +25,14 @@ export const ROLE_LABELS: Record<Role, string> = {
   A: "Attaccanti",
 };
 
+/** Il singolare, per le frasi: «chiama un portiere», non «chiama un Portieri». */
+export const ROLE_LABELS_ONE: Record<Role, string> = {
+  P: "portiere",
+  D: "difensore",
+  C: "centrocampista",
+  A: "attaccante",
+};
+
 export const AUCTION_STATUSES = [
   "DRAFT",
   "READY",

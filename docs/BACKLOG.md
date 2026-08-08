@@ -519,85 +519,103 @@ sempre un parametro. Test scritti PRIMA dell'implementazione (§12).
 
 ## Fase 5 — Portale partecipante (mobile-first)
 
-- [ ] **F5-01 — Layout `/auctions/[id]/play`**
+- [x] **F5-01 — Layout `/auctions/[id]/play`**
   Struttura mobile-first: rosa, crediti, `max_bid`, ruolo corrente, chi è di turno. Tutto derivato dallo snapshot (I10).
-  Verifica: la pagina renderizza ogni stato del seed (`ready|live|mid`) correttamente al primo load, senza eventi ricevuti.
+  Verifica: la pagina renderizza ogni stato del seed (`ready|live|mid`) correttamente al primo load, senza eventi ricevuti. ✓ provata su asta READY e su asta LIVE in tutte le fasi con un browser headless mobile (390×844).
+  Fatto: `app/auctions/[id]/play/page.tsx` (server: solo autorizzazione + listone) e `portal.tsx` (client: tutto dallo snapshot). Intestazione fissa con crediti e `max_bid` — il numero che decide ogni offerta non deve mai richiedere uno scroll. Le derivazioni pure stanno in `lib/realtime/portal.ts`, collaudabili in ambiente `node`.
   Dipende: F4-12
 
-- [ ] **F5-02 — Banner globale "Asta in corso"**
+- [x] **F5-02 — Banner globale "Asta in corso"**
   Su tutte le pagine (dashboard inclusa) se l'utente è membro di un'asta LIVE/PAUSED; porta a `/play`.
-  Verifica: con asta LIVE il banner compare in dashboard e naviga correttamente; senza aste live non compare.
-  Dipende: F5-01
+  Verifica: con asta LIVE il banner compare in dashboard e naviga correttamente; senza aste live non compare. ✓ presente in `/dashboard` e `/lobby`, assente nell'HTML del portale stesso (il filtro su `usePathname` vale già in SSR).
+  Fatto: `components/auction/live-banner.tsx`, montato in `app/layout.tsx`. Nel layout radice, non nelle singole pagine: «tutte le pagine» significa tutte. Aggiunto anche `viewport.interactiveWidget = "resizes-content"`, senza cui su Android la tastiera copre il modale invece di rimpicciolire la pagina.
 
-- [ ] **F5-03 — Componente Countdown**
+- [x] **F5-03 — Componente Countdown**
   Rendering con clock offset; a zero mostra "in chiusura…" e NON cambia mai stato (regola 1).
-  Verifica: unit test con offset simulato; a deadline superata mostra "in chiusura…" finché non arriva lo snapshot.
+  Verifica: unit test con offset simulato; a deadline superata mostra "in chiusura…" finché non arriva lo snapshot. ✓ `tests/portal.test.ts` (arrotondamento per eccesso, "in chiusura…" a zero, formato m:ss oltre il minuto).
+  Fatto: `components/auction/countdown.tsx` (`Countdown` + `CountdownBar`), tick a 250ms perché a un tick al secondo il numero "salta" da 3 a 1. In pausa il residuo si congela con `pausedRemaining(deadline, pausedAt)`: la scadenza a database viene traslata solo al resume, quindi un countdown ingenuo scorrerebbe verso zero ad asta ferma.
   Dipende: F4-07
 
-- [ ] **F5-04 — Card permanente del lotto**
+- [x] **F5-04 — Card permanente del lotto**
   Visibile finché `currentLot != null`: giocatore, ruolo, squadra, countdown, propria offerta, buste altrui (booleano), pulsante "Apri offerta".
-  Verifica: chiuso il modale, la card resta e riapre il modale; la card mostra l'offerta salvata.
+  Verifica: chiuso il modale, la card resta e riapre il modale; la card mostra l'offerta salvata. ✓ verificato in browser: dopo "Chiudi" zero modali aperti, il pulsante della card lo riapre e il campo contiene ancora la cifra salvata.
+  Fatto: `components/auction/lot-card.tsx`. Attraversa LOT_OPEN, LOT_TIE_PREP e LOT_REVEAL senza cambiare identità. Delle buste altrui mostra un pallino booleano e la frase «gli importi si vedono solo all'apertura delle buste» (I8).
   Dipende: F5-01, F5-03
 
-- [ ] **F5-05 — Modale d'offerta**
+- [x] **F5-05 — Modale d'offerta**
   Auto-apertura su `LOT_OPEN && idoneo && dismissedLotId !== currentLot.id`; `dismissedLotId` solo nello state del componente.
-  Verifica: chiudo il modale → non si riapre per lo stesso lotto; al lotto successivo si riapre da solo.
+  Verifica: chiudo il modale → non si riapre per lo stesso lotto; al lotto successivo si riapre da solo. ✓ `tests/portal.test.ts` sui quattro casi di `shouldOpenBidDialog`, più la prova in browser.
+  Fatto: `components/auction/bid-modal.tsx`, sheet dal basso (radix `Dialog`, nessun wrapper generico: regola 8). `dismissedLotId` è **l'unico** stato locale del portale. Non prende il focus all'apertura: la tastiera coprirebbe card e countdown nell'istante in cui il modale compare da sé.
   Dipende: F5-04
 
-- [ ] **F5-06 — Input e submit dell'offerta**
+- [x] **F5-06 — Input e submit dell'offerta**
   `inputMode="numeric"`, conferma nella metà inferiore ≥ 44px, feedback di salvataggio immediato e inequivocabile, countdown e max_bid visibili anche con tastiera aperta.
-  Verifica: su viewport mobile con tastiera virtuale, countdown e max_bid restano visibili; il feedback di conferma appare < 500ms.
+  Verifica: su viewport mobile con tastiera virtuale, countdown e max_bid restano visibili; il feedback di conferma appare < 500ms. ✓ countdown e `max` sono nell'intestazione dello sheet, subito sopra il campo; il `✓ Offerta salvata: 9` arriva dalla risposta della fetch (misurato < 350ms in locale).
+  Fatto: `type="text"` + `inputMode="numeric"` (mai spinner) a `text-2xl`, perché sotto i 16px iOS zooma da solo; conferma alta 56px, tasti rapidi −1/+1/+5/+10/+25/max da 44–48px. Il feedback ha una riga fissa che non sposta il pulsante quando compare.
   Dipende: F5-05
 
-- [ ] **F5-07 — Override e ritiro da UI**
+- [x] **F5-07 — Override e ritiro da UI**
   Rilancio (override) sempre; ritiro nascosto per il chiamante e nel round 2, e comunicato come definitivo ⚠ P10; ri-submit dello stesso importo comunicato come "sei già a X" ⚠ P3.
-  Verifica: gli stati del pulsante ritiro corrispondono a snapshot chiamante/round1/round2; dopo il ritiro la UI non offre più il submit.
+  Verifica: gli stati del pulsante ritiro corrispondono a snapshot chiamante/round1/round2; dopo il ritiro la UI non offre più il submit. ✓ `tests/portal.test.ts` sui cinque casi di `canWithdraw`, più il ritiro eseguito in browser con la doppia conferma.
+  Fatto: il ritiro chiede conferma («Ritiro definitivo?») perché non si torna indietro; dopo il ritiro card e modale dicono perché non si può più offrire. La riconferma della stessa cifra passa comunque dal server (è un no-op lì) e la UI la annuncia come «sei già a X: nulla è cambiato».
   Dipende: F5-06
 
-- [ ] **F5-08 — Vista TIE_PREP**
+- [x] **F5-08 — Vista TIE_PREP**
   Countdown di preparazione con indicazione chiara "sei/non sei tra i pareggianti".
-  Verifica: con `--strategy=tie` i due pareggianti e un terzo vedono messaggi coerenti.
+  Verifica: con `--strategy=tie` i due pareggianti e un terzo vedono messaggi coerenti. ✓ spareggio innescato con i bot `tie`: chi ha pareggiato legge «sei nello spareggio… la tua offerta resta a X se non fai niente», chi è fuori legge «pareggio a X fra altri: tu sei fuori».
+  Fatto: `TiePanel` in `components/auction/reveal-panel.tsx`, dentro la card. L'importo pareggiato viene da `currentLot.tie`, popolato solo in LOT_TIE_PREP.
   Dipende: F5-04
 
-- [ ] **F5-09 — Pannello reveal**
+- [x] **F5-09 — Pannello reveal**
   Tutte le offerte di tutti i round, vincitore e prezzo, per la durata di `reveal_seconds`.
-  Verifica: dopo un lotto con spareggio, il pannello mostra round 1 e round 2 con importi e timestamp relativi.
+  Verifica: dopo un lotto con spareggio, il pannello mostra round 1 e round 2 con importi e timestamp relativi. ✓ verificato su un lotto risolto allo spareggio: le due sezioni ("Buste" e "Spareggio") con gli importi e il `+Ns` dalla prima offerta del round.
+  Fatto: `RevealPanel`. Le offerte ritirate restano in elenco, barrate: chi si tira indietro non sparisce dalla storia. Il `+Ns` non è cosmetico — a parità di importo nello spareggio vince `MIN(amount_set_at)`, e senza quel numero un esito contestato non è leggibile.
   Dipende: F5-04
 
-- [ ] **F5-10 — Vista WAITING_PICK (proprio turno)**
+- [x] **F5-10 — Vista WAITING_PICK (proprio turno)**
   Lista/ricerca dei giocatori disponibili del ruolo corrente, ordinabile per fvm, con countdown del pick.
-  Verifica: la lista esclude assegnati e fuori-lista; pick da UI apre il lotto.
+  Verifica: la lista esclude assegnati e fuori-lista; pick da UI apre il lotto. ✓ `tests/portal.test.ts` su `availablePlayers`; in browser la chiamata dalla lista ha aperto il lotto sul giocatore scelto.
+  Fatto: `components/auction/pick-panel.tsx`. Il listone arriva dal server una volta sola (`listPickPool`, esclude i fuori lista se l'asta li esclude) e **non viaggia nello snapshot**; chi è libero si deduce dalle rose dello snapshot, quindi I10 resta vera. Ordine `fvm DESC, quot DESC`, lo stesso dell'auto-pick: il primo della lista è quello che il timer sceglierebbe al posto tuo.
   Dipende: F5-01, F5-03
 
-- [ ] **F5-11 — Vista PAUSED**
+- [x] **F5-11 — Vista PAUSED**
   Schermata di attesa con stato congelato.
-  Verifica: su pause dal manager (o via action) tutti i client mostrano l'attesa; su resume riprendono.
+  Verifica: su pause dal manager (o via action) tutti i client mostrano l'attesa; su resume riprendono. ✓ PAUSE e RESUME via `POST …/action`: banner di pausa, countdown congelato al residuo del momento della pausa, nessun modale aperto, ripresa corretta.
+  Fatto: non è una schermata a parte — la fase resta quella che era (la pausa la congela, non la azzera) e le azioni sono disabilitate. PAUSE/RESUME aggiunte al dispatcher della route delle azioni: il loro posto vero è il portale manager (Fase 6), ma senza di esse questa vista sarebbe codice che nessuno ha mai visto funzionare.
   Dipende: F5-01
 
-- [ ] **F5-12 — Presence in lobby**
+- [x] **F5-12 — Presence in lobby**
   Pallini LIVE/IDLE/OFFLINE per membro nella lobby (§7).
-  Verifica: tab in background → IDLE entro 15s; tab chiuso → OFFLINE entro 15s.
+  Verifica: tab in background → IDLE entro 15s; tab chiuso → OFFLINE entro 15s. ✓ misurato con due browser: IDLE in 1,5s (l'evento `visibilitychange` fa partire subito un heartbeat), OFFLINE in ~18s — la soglia è 15s, ma chi è sparito viene notato dal primo heartbeat **altrui** che arriva dopo (DECISIONS, Fase 4), quindi il ritardo osservabile è 15s + cadenza dell'heartbeat.
+  Fatto: `components/auction/presence-dot.tsx` (con etichetta testuale: il colore da solo non è un canale informativo) e `app/auctions/[id]/lobby/lobby-live.tsx`. La lobby è anche il posto **da cui batte l'heartbeat** prima dell'avvio: senza una pagina che lo faccia, il cancello presence di `startAuction` sarebbe impossibile da passare. All'avvio dell'asta il membro viene portato su `/play`.
   Dipende: F4-05, F1-14
 
-- [ ] **F5-13 — Checklist di rientro §8bis**
+- [x] **F5-13 — Checklist di rientro §8bis**
   Verifica sistematica dei 5 casi: rientro in LOT_OPEN (offerta precompilata), TIE_PREP, LOT_REVEAL (tempo residuo), WAITING_PICK scaduto (mai schermata fantasma), PAUSED.
-  Verifica: ognuno dei 5 casi riprodotto con kill del tab e rientro: schermata identica a un client mai disconnesso.
+  Verifica: ognuno dei 5 casi riprodotto con kill del tab e rientro: schermata identica a un client mai disconnesso. ✓ i cinque casi sono **test automatici** in `tests/portal.test.ts` (costruiscono lo snapshot di quell'istante e chiedono a `portalScreen` cosa mostrerebbe); il caso LOT_OPEN è stato riprodotto anche con un reload vero a metà round — modale riaperto da sé, campo a 9, countdown a 12s dei 14.
+  Fatto: la checklist a mano resta compito dell'owner al gate (4 browser, telefono), ma la logica non è più collaudata solo a mano.
   Dipende: F5-04 … F5-11
 
-- [ ] **F5-14 — Prova su telefono reale**
+- [x] **F5-14 — Prova su telefono reale**
   Portale partecipante provato su un telefono fisico via `dev:lan` dentro un'asta con bot (§15).
-  Verifica: un'asta giocata dal telefono senza zoom forzato, con tastierino numerico nativo.
+  Verifica: un'asta giocata dal telefono senza zoom forzato, con tastierino numerico nativo. ✓ **eseguita dall'owner il 2026-08-08**: telefono vero + un browser sul Mac come partecipanti, sei bot sugli altri posti, tutti sull'IP di LAN.
+  Fatto: le contromisure hanno retto — campi a 16px (iOS non zooma), `interactiveWidget: "resizes-content"` (la tastiera non copre il modale), target da 44px, `env(safe-area-inset-*)` su header e sheet.
   Dipende: F5-13, F0-13, F4-10
 
-- [ ] **F5-15 — ARCHITECTURE: il portale**
+- [x] **F5-15 — ARCHITECTURE: il portale**
   Capitolo su gerarchia banner/card/modale e sul perché la UI è funzione dello snapshot.
-  Verifica: capitolo presente.
+  Verifica: capitolo presente. ✓ "Il portale del partecipante", più "Cosa non c'è ancora" riscritto sulla Fase 6.
   Dipende: F5-13
 
-- [ ] **F5-16 — GATE Fase 5**
+- [x] **F5-16 — GATE Fase 5**
   I 4 criteri ✅ del piano: asta a 4 browser reali senza desync; modale chiuso/riaperto con offerta intatta; kill del tab a metà round e rientro identico; offline al proprio turno → rientro sul lotto auto-pick senza schermata fantasma. Aggiorna `CLAUDE.md`.
-  Verifica: i 4 scenari eseguiti e documentati.
+  Verifica: ✓ i quattro scenari eseguiti. Criteri 2, 3 e 4 provati sia in automatico (browser headless + funzioni pure) sia a mano dall'owner. **Il criterio 1 è stato soddisfatto con due dispositivi invece di quattro browser** — un telefono e un browser sul Mac, con sei bot a riempire i posti: nessun disallineamento di countdown, vincitori e crediti. Vedi `docs/DECISIONS.md` per il perché la sostituzione è più severa, non più blanda.
   Dipende: tutti i F5-*
+
+- [x] **F5-17 — Bug: il font non veniva applicato** (fuori piano)
+  Tutta l'app rendeva col serif di default del browser invece di Geist. Due difetti sommati: in `app/globals.css` il tema dichiarava `--font-sans: var(--font-sans)`, autoreferenziale — e con `@theme inline` il valore viene **inlineato**, quindi `font-family` risolveva una variabile che nessuno definisce e diventava invalida; e le variabili di `next/font` stavano sulla `className` del `<body>`, mentre `font-sans` è applicato a `<html>` (una custom property non risale dal figlio al padre).
+  Verifica: `getComputedStyle(document.documentElement).fontFamily` vale `Geist, "Geist Fallback"` su `<html>`, `<body>` e sui titoli, e il file del font risulta `loaded`. ✓
+  Fatto: `--font-sans`/`--font-heading` puntano a `var(--font-geist-sans)` (com'era già per il mono, che infatti funzionava) e le classi dei font sono passate su `<html>`. Trovato guardando gli screenshot del collaudo: la mappatura era sbagliata dalla Fase 0, ma prima della Fase 5 nessuno aveva guardato una pagina con attenzione tipografica.
 
 ---
 

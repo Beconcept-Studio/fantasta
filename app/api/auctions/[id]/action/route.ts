@@ -1,8 +1,10 @@
 import { errorResponse } from "@/app/api/http";
 import { currentUser } from "@/lib/auth";
 import {
+  pauseAuction,
   pickPlayer,
   placeBid,
+  resumeAuction,
   startAuction,
   withdrawBid,
 } from "@/lib/engine/actions";
@@ -77,6 +79,19 @@ export async function POST(
     }
     case "WITHDRAW": {
       result = await withdrawBid(user.id, id);
+      break;
+    }
+    // PAUSE e RESUME sono azioni dell'owner e il loro posto vero è il portale
+    // manager (Fase 6). Stanno già qui perché la vista in pausa del
+    // partecipante (F5-11) va collaudata adesso, e senza un modo di mettere in
+    // pausa l'asta sarebbe codice che nessuno ha mai visto funzionare.
+    // `pauseAuction`/`resumeAuction` verificano da sé la proprietà dell'asta.
+    case "PAUSE": {
+      result = await pauseAuction(user.id, id);
+      break;
+    }
+    case "RESUME": {
+      result = await resumeAuction(user.id, id);
       break;
     }
     default:

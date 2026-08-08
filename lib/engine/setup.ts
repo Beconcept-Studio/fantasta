@@ -14,6 +14,7 @@ import {
 } from "@/lib/db/schema";
 import { ROLES, type AuctionStatus, type Role } from "@/lib/domain";
 import { countPool, parseListone } from "@/lib/import/parseListone";
+import type { PoolPlayer } from "@/lib/realtime/types";
 
 import { type Result, fail, ok } from "./errors";
 import {
@@ -879,6 +880,45 @@ export async function listPlayers(
     .where(eq(players.auctionId, auctionId))
     .orderBy(sql`${players.fvm} DESC`, sql`${players.quot} DESC`)
     .limit(limit);
+}
+
+/**
+ * Il pool chiamabile dell'asta, per la schermata di chiamata del portale
+ * (F5-10): tutto il listone meno i fuori lista, se l'asta li esclude.
+ *
+ * Sta qui accanto a `listPlayers` perché è la stessa cosa — una lettura del
+ * listone — e perché **non è stato dell'asta**: nessuna offerta, nessun credito,
+ * niente da sanificare, e dall'import in poi non cambia più. Per questo non
+ * passa da `serializeSnapshot` e non viola la regola 3: quel vincolo protegge lo
+ * stato del gioco, non l'elenco dei calciatori di Serie A.
+ *
+ * Chi sia già stato comprato **non** si chiede qui: quello sta nelle rose dello
+ * snapshot, e il client lo sottrae da questa lista (regola 7, I10). Una query
+ * per lotto sarebbe una seconda fonte di verità sullo stesso fatto.
+ */
+export async function listPickPool(auctionId: string): Promise<PoolPlayer[]> {
+  const auction = await db.query.auctions.findFirst({
+    where: eq(auctions.id, auctionId),
+    columns: { includeOutOfList: true },
+  });
+  if (!auction) return [];
+
+  return db
+    .select({
+      id: players.id,
+      name: players.name,
+      team: players.team,
+      role: players.role,
+      fvm: players.fvm,
+      quot: players.quot,
+    })
+    .from(players)
+    .where(
+      auction.includeOutOfList
+        ? eq(players.auctionId, auctionId)
+        : and(eq(players.auctionId, auctionId), eq(players.outOfList, false)),
+    )
+    .orderBy(sql`${players.fvm} DESC`, sql`${players.quot} DESC`);
 }
 
 export { DEFAULT_CONFIG, type AuctionConfig };

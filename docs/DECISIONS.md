@@ -430,3 +430,117 @@ collegato, nessuno se ne accorge: non c'è più nessuno a cui dirlo.
 conta). Di conseguenza `makeGameAuction` e `pnpm drive` battono gli heartbeat dei membri che
 impersonano, invece di avere una scorciatoia per saltare il cancello: chi simula la stanza simula
 anche i telefoni accesi.
+
+---
+
+## 2026-08-07 — Fase 5, portale partecipante
+
+**Le derivazioni del portale sono funzioni pure, in `lib/realtime/portal.ts`.** Quale schermata
+mostrare (`portalScreen`), se il modale deve aprirsi (`shouldOpenBidDialog`), quanto si può offrire
+(`bidBounds`/`checkAmount`), se si può ritirare (`canWithdraw`), chi è ancora chiamabile
+(`availablePlayers`): tutto fuori dai componenti. Motivazione: la regola 7 dice che ogni schermata è
+funzione pura dello snapshot; se è vero, quelle domande *sono* funzioni pure, e i cinque casi di
+rientro di §8bis diventano test automatici invece di una checklist da rifare a mano ogni volta.
+`vitest` gira in ambiente `node`, senza DOM, quindi la logica deve stare in un `.ts` per essere
+raggiungibile. Non è un layer in più (regola 8): è dove passa la linea fra ciò che si prova in
+millisecondi e ciò che va guardato con gli occhi.
+
+**Il listone non viaggia nello snapshot.** La schermata di chiamata ha bisogno dei nomi dei
+giocatori; `listPickPool` (in `lib/engine/setup.ts`, accanto a `listPlayers`) li serve alla pagina
+una volta sola, già filtrati dei fuori lista se l'asta li esclude. Motivazione: sono ~500 righe
+immutabili dall'import in poi e senza niente da sanificare — replicarle a ogni transizione per
+dodici viewer moltiplicherebbe per venti il costo del canale (uno snapshot costa 23 KB). Non è una
+deroga alla regola 3, che protegge lo **stato dell'asta**, non l'elenco dei calciatori di Serie A.
+E **quali** giocatori siano liberi resta funzione dello snapshot: le rose ci sono dentro, e il
+client sottrae. Una query "giocatori disponibili" sarebbe stata una seconda fonte di verità sullo
+stesso fatto.
+
+**`PoolPlayer` sta in `lib/realtime/types.ts`.** È un tipo del protocollo server → client come lo
+`Snapshot`, e va dove stanno i tipi che attraversano il confine.
+
+**Il countdown si congela in pausa con `pausedRemaining(deadline, pausedAt)`.** PLAN §4 dice che il
+resume trasla le scadenze, ma solo al resume: durante la pausa `phase_deadline` è ancora quella di
+prima, e un countdown che sottrae `now` scorrerebbe a zero ad asta ferma — mostrando "in chiusura…"
+per tutta la durata della pausa. Il residuo giusto è quello dell'istante della pausa, e lo snapshot
+lo dice.
+
+**Nessun aggiornamento ottimistico dello stato dell'asta.** Il feedback immediato riguarda
+l'**invio** («✓ Offerta salvata: 9», dalla risposta della `fetch`); il **mondo** lo riscrive solo lo
+snapshot successivo. Motivazione: un'offerta scritta a mano nello state locale sarebbe un secondo
+posto dove vive la verità, e al primo snapshot in ritardo la schermata mostrerebbe una cifra che il
+server non ha. Il requisito del piano («feedback di salvataggio immediato e inequivocabile») è
+soddisfatto senza duplicare lo stato.
+
+**`max_bid` degli altri è pubblico.** Lo snapshot lo porta per ogni membro e il portale lo mostra.
+Non è una deroga a I8: I8 riguarda l'**importo di un'offerta in busta chiusa**, mentre il tetto si
+calcola da crediti e slot, che sono entrambi pubblici per costruzione (PLAN §5, I5). Sapere che il
+vicino può arrivare a 12 e non a 120 è metà del gioco.
+
+**Il modale si apre anche a offerta ritirata.** La condizione di §8bis è presa alla lettera
+(`LOT_OPEN && idoneo && dismissedLotId !== lotId`), e in quel caso il modale spiega perché non si
+può più offrire. Motivazione: chi rientra dopo essersi ritirato deve trovare la spiegazione, non un
+pulsante inerte; e nel flusso normale il modale è già aperto quando si ritira, quindi non "riappare"
+mai a sorpresa. In pausa invece **non** si apre: il server rifiuterebbe l'offerta.
+
+**PAUSE e RESUME anticipate nel dispatcher di `POST /api/auctions/:id/action`.** Il loro posto è il
+portale manager (Fase 6). Motivazione: la vista in pausa del partecipante (F5-11) è un task di
+questa fase, e senza un modo di mettere in pausa l'asta sarebbe codice che nessuno ha mai visto
+funzionare. Le due azioni verificano da sé la proprietà dell'asta, quindi non è un allentamento dei
+permessi.
+
+**Il banner globale sta nel layout radice, e il layout radice ora legge la sessione.**
+«Presente su tutte le pagine, dashboard inclusa» significa tutte, quindi l'unico posto è
+`app/layout.tsx`; il costo è una lettura di sessione e una query per pagina, con dodici utenti
+irrilevante. Chi non è autenticato non ha aste e la query non parte. Il banner si nasconde sul
+portale di quell'asta tramite `usePathname` — che vale già in SSR, quindi non compare nemmeno per un
+istante.
+
+**`viewport.interactiveWidget = "resizes-content"`, e nessun `maximumScale`.** Senza il primo, su
+Android la tastiera *copre* la pagina invece di rimpicciolirla e `100dvh` continua a valere lo
+schermo intero: il modale d'offerta finirebbe per metà sotto i tasti. Il secondo non c'è di
+proposito — bloccare lo zoom è una scortesia verso chi non vede bene, e il campo dell'importo è già
+a 16px, la soglia sotto la quale iOS zooma da sé.
+
+**La lobby batte l'heartbeat e porta su `/play` all'avvio.** Il cancello di `startAuction` pretende
+tutti i membri in presence LIVE, e la presence nasce da una pagina aperta: senza una pagina che la
+alimenti prima dell'avvio, quel cancello non si passa. Ed è l'unica navigazione automatica
+dell'applicazione: la decisione la prende lo snapshot (`status === 'LIVE'`), non un evento ricevuto,
+quindi chi apre la lobby ad asta già iniziata viene spostato allo stesso modo al primo snapshot.
+
+**Niente `components/ui/dialog.tsx`.** Il modale d'offerta usa direttamente le primitive
+`Dialog` di `radix-ui`, con le classi dello sheet dal basso. Motivazione: regola 8 — un wrapper
+generico avrebbe un solo chiamante, e le scelte che contano qui (ancoraggio in basso, `max-h-dvh`,
+`env(safe-area-inset-bottom)`, intestazione con countdown e `max_bid`) non sono generalizzabili a un
+dialogo qualunque. Quando la Fase 6 o la 7 avranno il loro secondo modale, allora si vedrà.
+
+**`ROLE_LABELS_ONE` accanto a `ROLE_LABELS` in `lib/domain.ts`.** Le etichette del piano sono
+plurali ("Portieri") e in una frase servono al singolare ("chiama un portiere"). È vocabolario di
+dominio, quindi sta nel file del vocabolario.
+
+**Il font: `--font-sans` mappato su `var(--font-geist-sans)`, e le classi su `<html>`.** Bug della
+Fase 0 scoperto qui: tutta l'app rendeva col serif di default del browser. `@theme inline`
+**inlinea il valore** invece di emettere una variabile in `:root`, quindi
+`--font-sans: var(--font-sans)` faceva risolvere a runtime una custom property che nessuno
+definisce — `font-family` invalida, e ripiego sul default. In più le variabili di `next/font`
+stavano sulla `className` del `<body>` mentre `font-sans` è applicato a `<html>`: una custom
+property non risale dal figlio al padre, quindi anche con la mappatura giusta sarebbe rimasto
+rotto. Il mono funzionava da sempre perché la sua riga era già scritta bene. Non era emerso prima
+perché i criteri delle Fasi 0–4 si verificano da terminale, e la prima fase con un occhio sulla
+tipografia è questa.
+
+**Il gate della Fase 5 chiuso con due dispositivi invece di quattro browser.** PLAN §11 chiede
+«un'asta a 4 partecipanti su 4 browser reali»; il collaudo del 2026-08-08 è stato fatto con **un
+telefono e un browser sul Mac**, più sei bot sugli altri posti. Motivazione: quel criterio esiste
+per scovare il **desync**, e quattro finestre sulla stessa macchina condividono lo stesso orologio —
+è proprio la condizione in cui il bug che il criterio cerca non si manifesta. Due dispositivi
+distinti hanno orologi distinti, ed è lì che l'offset di `serverNow` viene messo alla prova per
+davvero. La sostituzione è quindi più severa della lettera, non più blanda. Resta non provato il
+caso "quattro client contemporanei" come carico, che però la Fase 4 aveva già esercitato con otto
+bot collegati via SSE.
+
+**L'avvio dell'asta di prova parte dal posto del collaudatore.** `startAuction(startSeatIndex)` lo
+permette già; i bot avviano sempre dal posto 0. Nel collaudo si lancia quindi `pnpm bots` **senza**
+`--start` e si manda lo START dalla console del browser dell'owner con il proprio seat. Motivazione:
+con due soli posti umani su otto, la rotazione farebbe arrivare il turno di chiamata dopo sei lotti,
+e la schermata di chiamata è quella che più vale la pena guardare per prima. Procedura in
+`docs/RUNBOOK.md`.

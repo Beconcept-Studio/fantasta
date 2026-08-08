@@ -751,18 +751,147 @@ sola.
 
 ---
 
+## Il portale del partecipante
+
+Qui l'applicazione incontra la persona: un telefono tenuto con una mano, in una stanza dove
+qualcuno legge i nomi ad alta voce, con trenta secondi per decidere quanto vale un attaccante. Il
+portale sta su `/auctions/[id]/play` ed è una pagina sola.
+
+La parte server di quella pagina fa tre cose e nessuna di queste è preparare la schermata: verifica
+che chi entra sia un membro (l'owner che non ha joinato non ha un portale — il suo è `/manage`),
+carica il listone, e passa la palla al client. **Lo stato dell'asta non viene renderizzato lato
+server**, ed è una scelta: una schermata calcolata a build-time della richiesta sarebbe giusta per
+un istante e sbagliata per i trenta secondi successivi, e avere due fonti di verità sulla fase
+corrente è esattamente il modo in cui si desincronizza un'asta.
+
+### Tre livelli, e nessuna notifica
+
+La gerarchia della UI è quella di `docs/PLAN.md` §8bis, e ogni livello esiste per un modo preciso in
+cui un partecipante può perdersi.
+
+Il **banner globale** sta nel layout radice, quindi compare su qualunque pagina — dashboard
+inclusa — quando l'utente è membro di un'asta `LIVE` o `PAUSED`. Serve a chi ha chiuso il tab per
+sbaglio o ha riaperto l'app dalla home dello smartphone: senza, l'unico modo di rientrare sarebbe
+ricordarsi un URL con un uuid dentro. Si nasconde solo sul portale di quell'asta, dove porterebbe
+dove già sei.
+
+La **card del lotto** è un elemento *permanente* del portale finché c'è un lotto corrente. È la
+correzione dell'errore che l'anno scorso ha reso l'app inutilizzabile: se l'unica interfaccia per
+offrire è un modale, chi lo chiude non ha più modo di rientrare nel lotto. La card mostra
+giocatore, ruolo, squadra, countdown, la propria offerta, chi ha consegnato la busta — solo il
+booleano, mai la cifra — e il pulsante che riapre il modale. Attraversa senza cambiare identità le
+tre fasi di un lotto: le offerte, l'annuncio dello spareggio, l'apertura delle buste.
+
+Il **modale** è un overlay sopra la card, e la frase da tenere a mente è che *non è una notifica*:
+è una vista sullo stato corrente. Si apre da sé quando c'è un round aperto e sono fra gli idonei;
+chiuderlo non nasconde niente perché l'offerta è a database, non nello state del componente.
+
+### Un solo pezzo di stato locale
+
+`dismissedLotId` è l'unica variabile del portale che non viene dallo snapshot: l'id del lotto per
+cui ho chiuso il modale. Non è persistito, non è sincronizzato, e al lotto successivo diventa
+irrilevante da sé perché l'id cambia — il modale si riapre da solo senza che nessuno lo resetti.
+
+Che sia l'unica non è un aneddoto: è la forma che prende la settima regola. Non esiste da nessuna
+parte una variabile "ho ricevuto l'evento X", quindi non esiste una schermata raggiungibile solo da
+chi era connesso al momento giusto. Chiudere il tab e riaprirlo produce la stessa pagina — non
+perché ci sia un recupero, ma perché non c'era niente da recuperare.
+
+La conseguenza pratica è che la domanda «quale schermata devo mostrare?» è una funzione pura, e sta
+in `lib/realtime/portal.ts` insieme a «quanto posso offrire?», «posso ritirarmi?», «chi è ancora
+libero?». Girano in ambiente `node`, senza DOM, in millisecondi: i cinque casi di rientro di §8bis —
+durante le offerte, durante lo spareggio, durante il reveal, a turno di chiamata già scaduto, ad
+asta in pausa — sono **test automatici** che costruiscono lo snapshot di quell'istante e chiedono
+alla funzione cosa mostrerebbe. Il collaudo a mano sui browser veri resta, ed è il cancello di fase;
+ma non è più l'unico posto in cui questa logica viene esercitata.
+
+### Il countdown, che non decide
+
+Ogni countdown della pagina è un orologio a muro: legge la scadenza dallo snapshot, la confronta con
+l'ora **del server** (`Date.now()` più l'offset ricalcolato a ogni snapshot) e scrive un numero.
+Quando arriva a zero scrive "in chiusura…" e continua ad aspettare. Non chiude round, non cambia
+fase, non chiama niente. Se lo snapshot successivo tarda di due secondi, il portale dice "in
+chiusura…" per due secondi: è la verità, ed è preferibile a un esito inventato dal client.
+
+La pausa ha un dettaglio che sembra un cavillo e non lo è. Il resume trasla le scadenze, ma solo al
+resume: durante la pausa la scadenza a database è ancora quella di prima e un countdown ingenuo
+continuerebbe a scorrere verso zero mentre l'asta è ferma. Il residuo giusto è quello che c'era
+all'istante della pausa, e lo snapshot lo dice (`pausedAt`). Da lì nasce anche il resto della vista
+in pausa: la fase resta quella che era — la pausa la congela, non la azzera — e le azioni sono
+sospese perché il server le rifiuterebbe.
+
+### Le scelte che vengono dal telefono
+
+Il vincolo mobile-first di §15 non è una nota di stile, e si vede nelle forme concrete.
+L'intestazione del portale è fissa e contiene **crediti e offerta massima**: `max_bid` è il numero
+che decide ogni offerta — è il tetto che il server applica — e cercarlo con uno scroll mentre
+restano otto secondi è il tipo di attrito che fa perdere un lotto. Il modale è uno *sheet dal
+basso*, non un dialogo centrato, perché il pollice sta in basso e con la tastiera aperta la metà
+alta dello schermo non esiste; countdown e `max_bid` sono nella sua intestazione, a due centimetri
+sopra il campo, quindi restano visibili anche con la tastiera aperta. Il campo dell'importo è un
+`type="text"` con `inputMode="numeric"` — niente spinner, inusabili col pollice — a sedici pixel,
+perché sotto quella soglia iOS zooma da solo e la pagina resta zoomata per il resto della serata.
+Nel layout radice `interactiveWidget: "resizes-content"` fa in modo che su Android la tastiera
+rimpicciolisca la pagina invece di coprirla. Lo zoom non è bloccato: impedirlo è una scortesia
+verso chi non vede bene.
+
+Il feedback di salvataggio ha una riga fissa tutta sua, che non sposta il pulsante di conferma
+quando compare. «L'ansia da *è passata?* a cinque secondi dalla scadenza è il vero problema di UX di
+questa app», e la risposta è un `✓ Offerta salvata: 9` che arriva dalla risposta della `fetch`, non
+dallo snapshot successivo. La distinzione conta: il verdetto sull'**invio** è immediato, il **mondo**
+lo riscrive solo lo snapshot. Non c'è nessun aggiornamento ottimistico dello stato dell'asta.
+
+Tre casi hanno un messaggio invece di un silenzio, perché sono i tre che generano discussioni in
+diretta: chi riconferma la stessa cifra legge «sei già a 9: nulla è cambiato» (il timestamp resta
+quello del primo invio, e nello spareggio è la posizione in coda che conta); chi ha chiamato il
+giocatore legge che l'apertura a 1 è già registrata e che può solo rilanciare; e il ritiro chiede
+una seconda conferma, perché è definitivo — chi si ritira non torna a offrire su quel lotto.
+
+Le validazioni della pagina non sostituiscono quelle del server, lo anticipano: la UI disabilita il
+pulsante e spiega perché, il motore rifiuta comunque con il proprio codice tipizzato. Se i due non
+sono d'accordo, quello giusto è il server.
+
+### L'unica cosa che non passa dallo snapshot
+
+Per chiamare un giocatore serve l'elenco dei giocatori, e cinquecento righe di listone non stanno
+nello snapshot: sono immutabili dall'import in poi, non contengono niente di sanificabile, e
+replicarle a ogni transizione per dodici viewer moltiplicherebbe per venti il costo del canale. La
+pagina le carica una volta dal server (`listPickPool`), filtrate dei fuori lista se l'asta li
+esclude.
+
+**Chi sia ancora libero, invece, resta funzione dello snapshot**: le rose ci sono dentro, e la lista
+dei chiamabili è il listone meno i giocatori già assegnati. Nessuna seconda fonte di verità, e I10
+resta vera — chi ricarica a metà turno vede la stessa lista di chi non si è mosso. L'ordinamento è
+`fvm DESC, quot DESC`, lo stesso dell'auto-pick: il primo nome della lista è quello che il timer
+sceglierebbe al posto tuo, e saperlo cambia la fretta con cui si guarda il countdown.
+
+### La lobby, e come inizia la serata
+
+La lobby è dove i partecipanti aspettano, e con la Fase 5 diventa il posto da cui **batte
+l'heartbeat**. Non è un dettaglio implementativo: `startAuction` rifiuta l'avvio se un solo membro
+non è in presence LIVE, e la presence nasce da un POST ogni dieci secondi fatto da una pagina
+aperta. Senza una pagina che lo faccia, quel cancello sarebbe impossibile da passare. L'owner vede
+i pallini diventare verdi uno a uno e sa quando può premere avvio.
+
+Appena lo snapshot dice `LIVE`, il membro viene portato su `/play`. È l'unica navigazione
+automatica dell'applicazione, e nemmeno lei dipende da un evento: la decisione la prende lo stato
+che arriva: chi apre la lobby ad asta già iniziata viene spostato allo stesso modo, al primo
+snapshot.
+
+---
+
 ## Cosa non c'è ancora
 
-Alla fine della Fase 4 un'asta completa si gioca da sola con otto client veri collegati, e chi si
-collega a metà riceve lo stato completo in un messaggio. Ma **non c'è ancora una sola riga di UI
-dell'asta**: nessun portale del partecipante, nessun portale del manager, nessuna vista TV. È un
-criterio dei gate, non una dimenticanza — il canale e la sanificazione dovevano esistere e avere
-un test prima che qualcuno ci disegnasse sopra una schermata.
+Alla fine della Fase 5 un partecipante gioca un'asta intera dal telefono: entra dalla lobby, chiama,
+offre, rilancia, si ritira, guarda le buste aprirsi e ritrova tutto identico se il tab muore a metà
+round. Quello che manca è **il lato di chi guida**.
 
-Restano fuori anche gli override del manager (`manualAssign`, `voidAssignment`, `adjustBudget`),
-che sono della Fase 7, e l'export dell'xlsx. Il pulsante "Avvia l'asta" in lobby non esiste
-ancora: oggi l'avvio passa dai bot o dal driver.
+Non c'è il portale del manager: il pulsante "Avvia l'asta" non esiste ancora in nessuna pagina, e
+oggi l'avvio passa dai bot (`--start`) o da una chiamata a `POST …/action`. Pausa e resume sono
+raggiungibili solo dallo stesso endpoint — ci sono già perché la vista in pausa del partecipante
+andava collaudata, ma il loro posto vero è il portale del manager, in Fase 6. Con quello arriva
+anche la vista TV: alto contrasto, tipografia grande, desktop-only, e senza login.
 
-La Fase 5 costruisce il portale del partecipante, mobile-first, secondo §8bis: il banner globale
-"asta in corso", la card permanente del lotto, il modale d'offerta, il countdown, il pannello di
-reveal. Tutto derivato dallo snapshot — che ora esiste.
+Restano fuori gli override del manager — `manualAssign`, `voidAssignment`, `adjustBudget` — e
+l'export dell'xlsx, che sono della Fase 7. E resta fuori il deploy: oggi tutto questo gira su
+`pnpm dev` e su un Postgres in Docker.

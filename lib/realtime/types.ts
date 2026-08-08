@@ -144,6 +144,26 @@ export type SnapshotMyBid = {
   withdrawnAt: string | null;
 };
 
+/**
+ * Il listone dell'asta, l'unica cosa che il server manda al portale **fuori**
+ * dallo snapshot.
+ *
+ * Non è stato dell'asta: sono cinquecento righe immutabili dall'import in poi,
+ * e non contengono nulla di sanificabile (nessuna offerta, nessun credito).
+ * Replicarle a ogni transizione per dodici viewer moltiplicherebbe per venti il
+ * costo del canale senza aggiungere un bit d'informazione. La pagina di gioco le
+ * carica una volta; **quali** giocatori siano ancora liberi resta funzione dello
+ * snapshot, che le rose ce le ha (regola 7, I10).
+ */
+export type PoolPlayer = {
+  id: string;
+  name: string;
+  team: string;
+  role: Role;
+  fvm: number;
+  quot: number;
+};
+
 export type Snapshot = {
   /** ISO — l'orologio del server, per la sincronizzazione dei countdown. */
   serverNow: string;

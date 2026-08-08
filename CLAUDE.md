@@ -21,23 +21,25 @@ inventando: annota la domanda e aspetta. Un'assunzione silenziosa qui costa un'a
 
 ## Fase corrente
 
-> **FASE 5 — Portale partecipante** · da aprire con **Opus** (il default di progetto: nessun
-> `/model` da digitare). Fasi 0–4 chiuse il 2026-08-07 (la 4: 220 test verdi, test I8 sui tre
-> viewer, asta completa con 8 bot collegati via SSE; i collaudi visivi delle Fasi 3 e 4 spettano
-> all'owner). Aggiorna questa riga a ogni passaggio di fase.
+> **FASE 6 — Portale manager e vista TV** · da aprire con **Opus** (il default di progetto: nessun
+> `/model` da digitare). Fasi 0–5 chiuse: la 5 il **2026-08-08**, con 252 test verdi e il collaudo
+> dell'owner su **telefono vero + browser sul Mac** dentro un'asta con sei bot — chiamata, offerta,
+> rilancio, ritiro, spareggio, reveal, pausa, rientro dopo reload e turno perso offline, senza
+> disallineamenti fra i due dispositivi. Aggiorna questa riga a ogni passaggio di fase.
 
-In Fase 5 il canale non si tocca: si disegna il **portale del partecipante**, mobile-first, su
-`/auctions/[id]/play`. Tutto ciò che serve arriva dallo snapshot, e ogni schermata è funzione
-pura di quello (regola 7, I10): `useAuctionStream` in `lib/realtime/use-auction-stream.ts` dà
-snapshot, `offset` dell'orologio e tempo residuo; `useHeartbeat` tiene viva la presence; le
-azioni passano da `POST /api/auctions/:id/action` (o da una Server Action, a scelta — il primo
-è già lì e risponde con codici tipizzati). La gerarchia della UI è **vincolante**: banner globale
-→ card permanente del lotto → modale (`docs/PLAN.md` §8bis), e `dismissedLotId` vive solo nello
-state del componente. Il countdown si rende, non decide (regola 1).
+In Fase 6 non si tocca né il canale né il portale del partecipante: si fa il **portale manager**
+(`/auctions/[id]/manage`, solo owner) e la **vista TV** (`/tv/[publicToken]`, senza login). Sono
+**desktop-only** e possono ignorare il mobile — è l'opposto del vincolo della Fase 5. Il manager ha
+recap rose e budget, scelta del seat iniziale, avvio, pausa/resume e gli alert di presence; la TV è
+alto contrasto e tipografia grande, sola lettura. Lo stato arriva dallo stesso `useAuctionStream`
+(la TV con `?token=`), e `serializeSnapshot` resta l'unico punto di uscita: il criterio ✅ della
+fase è che **la TV in incognito non mostri nessun importo a busta chiusa**. Pausa e resume esistono
+già nel dispatcher di `POST /api/auctions/:id/action` (anticipate in Fase 5 per collaudare la vista
+in pausa): vanno collegate a un pulsante, non riscritte. Il pulsante "Avvia l'asta" invece non
+esiste ancora da nessuna parte — oggi l'avvio passa dai bot.
 
 Le fasi sono cancelli sequenziali (`docs/PLAN.md` §11). Non si apre una fase finché tutti i
-criteri ✅ della precedente non sono verdi. Il gate della 5 include un collaudo **su un telefono
-vero** via `pnpm dev:lan`, non sul simulatore del browser.
+criteri ✅ della precedente non sono verdi.
 
 **A ogni chiusura di fase (task di GATE), ricapitola all'utente la sua parte**: i test manuali
 che deve eseguire di persona per il gate appena chiuso, cosa lo aspetta nella fase successiva
@@ -133,6 +135,12 @@ un diagramma testuale dove serve. **Aggiornarlo è un criterio di chiusura della
 - **Buffering SSE**: in nginx serve `proxy_buffering off` sulla route dello stream.
 - **Mobile**: il portale partecipante è **mobile-first**, non desktop con breakpoint. Si offre dal
   telefono, sotto pressione, con 30 secondi di countdown.
+- **Chunk client stantio in dev**: dopo molte modifiche con `pnpm dev` acceso, il browser può
+  chiedere un bundle che non esiste più — `404 su /_next/static/chunks/app/.../page.js`. Il sintomo
+  è ingannevole: la pagina *si carica* ma non idrata, quindi il portale resta fermo su "Mi collego
+  all'asta…" e non parte nessuno stream né heartbeat. Non è un bug dell'app: riavvia il dev server.
+  Prima di indagare su un client che "non riceve snapshot", controlla la console per un 404 su un
+  chunk.
 
 ---
 

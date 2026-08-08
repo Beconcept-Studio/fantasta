@@ -70,7 +70,7 @@ tenere a mente questa tabella.
 | ~~**2 — Motore**~~ ✓ | **Nessun test manuale** — tutto da terminale. Supervisiona: `pnpm test` verde e confronta i nomi dei test con §12 del piano (1–26, 29, 30, 41). È la fase in cui NON avere fretta: se il motore è giusto, il resto è cosmetica. |
 | **3 — Persistenza e timer** | Guarda con i tuoi occhi le due dimostrazioni. **(a) Asta completa:** `pnpm db:seed --auction-status=ready`, prendi l'id stampato, poi `pnpm drive --auction=<id>` — vedrai il log JSON scorrere e in ~20 minuti «✓ Asta COMPLETED: 200 lotti». **(b) Restart a metà round:** mentre il driver gira, fermalo con Ctrl-C (o killa il processo); guarda che l'asta resti ferma (nessuna riga nuova), poi rilancia lo stesso comando `pnpm drive --auction=<id>`: riparte entro 1 secondo da dove si era fermata, fino a COMPLETED. |
 | **4 — SSE** | Poco, ed è tutto da terminale. `pnpm test` verde (il criterio di fase è il test I8 sui tre spettatori). Se vuoi vedere il canale con i tuoi occhi: `pnpm dev` in un terminale, `pnpm bots --auction=<id> --count=8 --strategy=tie --start --verbose` in un altro, e un `curl -N "http://localhost:3000/api/auctions/<id>/stream?token=<public_token>"` in un terzo — è la vista TV, e vedrai scorrere uno snapshot per transizione senza **nessun** importo finché non si apre il reveal. Con `--strategy=tie` ogni lotto va allo spareggio. |
-| **5 — Portale partecipante** ⚠ | **La fase più impegnativa per te.** Riservati un'ora abbondante: 4 browser insieme in un'asta con bot; chiudi/riapri il modale; killa un tab a metà round e rientra; vai offline durante il tuo turno. E soprattutto: **prova dal tuo telefono vero** via `pnpm dev:lan` — è un criterio di chiusura, non un optional. |
+| ~~**5 — Portale partecipante**~~ ✓ | Fatto il 2026-08-08: telefono vero + un browser sul Mac dentro un'asta con sei bot, tutti sull'IP di LAN. Nessun disallineamento fra i due dispositivi; tastierino numerico e nessuno zoom forzato. La procedura resta scritta qui sotto ("Il collaudo della Fase 5"): serve di nuovo ogni volta che si tocca il portale. |
 | **6 — Manager e TV** | Apri la vista TV in incognito (senza login) durante un'asta con bot: nessun importo a busta chiusa deve vedersi. Se hai una TV/proiettore, provala lì per la leggibilità. |
 | **7 — Override** | Simula la serata storta: pausa → cancella un giocatore da una rosa → riassegna manualmente → riprendi. Poi esporta l'xlsx e **aprilo in Excel** per verificare FantaSquadra e Costo. |
 | **8 — Deploy** ⚠ | Alto coinvolgimento tuo: server Hetzner, Ploi, DNS del dominio, redirect URI di **produzione** nella console Google, env sul server. Poi l'asta di prova a 8 bot in produzione e la checklist pre-asta di PLAN.md §17, eseguita da te punto per punto. |
@@ -146,6 +146,100 @@ occupa da sé.
 
 Il login Google **non funziona** da IP di LAN (il redirect URI autorizzato è su `localhost`): dal
 telefono si entra col provider `dev`, che è esattamente il motivo per cui esiste.
+
+### Il collaudo della Fase 5 — passo per passo
+
+Questa è la parte che tocca a te, e sono i quattro criteri di chiusura del piano più la prova sul
+telefono. Serve un'ora, con calma. Prepara così il campo:
+
+```bash
+docker compose up -d
+pnpm db:seed --auction-status=ready     # stampa gli URL e l'id dell'asta
+pnpm dev                                # in un terminale, e lascialo aperto
+pnpm bots --auction=<id> --count=7 --strategy=random   # in un secondo terminale
+```
+
+Sette bot occupano i posti da 1 a 7: **l'ottavo è tuo**. Entra da `/signin` come l'ultimo utente
+della lista, vai in lobby e resta lì: quando tutti i pallini sono verdi, i bot avviano l'asta da
+soli e la lobby ti porta sul tuo portale.
+
+**Se collaudi da più dispositivi** (è la variante consigliata: due orologi diversi provano la
+sincronizzazione meglio di quattro finestre sullo stesso computer), il server va lanciato con
+`pnpm dev:lan` e **tutti** — telefono, altro PC e anche il browser del Mac — usano l'indirizzo di
+LAN che lo script stampa, mai `localhost`, altrimenti le sessioni non sono confrontabili. I bot
+vogliono lo stesso indirizzo: `--url=http://192.168.x.x:3000`. La regola dei posti è
+`--count = 8 − quante finestre umane apri`, e i bot prendono sempre i posti più bassi.
+
+**Per far partire l'asta dal tuo posto** invece che dal primo: lancia i bot **senza** `--start`,
+collegati con tutti i dispositivi, poi apri una finestra **in incognito**, entra come l'owner
+(Marco Bianchi), vai sulla lobby di quell'asta e dalla console del browser manda:
+
+```js
+const id = 'INCOLLA-QUI-ID-DELL-ASTA';   // lo stampa il seed, ed è nella barra degli indirizzi
+await fetch(`/api/auctions/${id}/action`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ type: 'START', startSeatIndex: 6 })   // 6 = settimo posto
+}).then(r => r.text())
+```
+
+Serve l'incognito perché nella finestra normale sovrascriveresti la tua sessione di partecipante.
+Deve rispondere `{"ok":true}`; `MEMBERS_NOT_READY` significa che qualcuno non è collegato, e il
+messaggio fa i nomi. Senza questo passaggio la rotazione parte dal primo posto e il tuo turno di
+chiamata — la schermata che più vale la pena guardare — arriva dopo un giro intero. Lo stesso
+comando con `{type:'PAUSE'}` e `{type:'RESUME'}` serve per provare la vista in pausa.
+
+> Con i timer del seed (3 secondi per offrire) si fa fatica a *guardare* le schermate. Se vuoi
+> tempo per leggere, allunga i tempi di quell'asta prima di avviarla, dal database:
+> `update auctions set bid_seconds=15, pick_seconds=15, tie_prep_seconds=8, reveal_seconds=15
+> where id='<id>';`. È un'asta di prova, e i timer si applicano dal lotto successivo.
+
+I quattro criteri, nell'ordine in cui conviene provarli:
+
+1. **Quattro browser reali, nessun desync.** Una finestra normale, una in incognito, e altri due
+   browser (Safari, Firefox): quattro utenti diversi nella stessa asta, con i bot a riempire i
+   posti restanti. Guardali fianco a fianco per una decina di lotti: il countdown deve scorrere
+   uguale su tutti, il vincitore del reveal deve essere lo stesso, i crediti devono coincidere.
+2. **Modale chiuso e riaperto.** Offri, chiudi il modale con "Chiudi", riapri dalla card con
+   "Modifica offerta": la tua cifra deve essere ancora lì. Poi lascia scorrere al lotto dopo: il
+   modale si riapre da sé.
+3. **Tab killato a metà round.** Chiudi la finestra mentre un round è aperto e riaprila (o
+   ricarica con ⌘R): devi ritrovare la stessa schermata degli altri, con il countdown giusto —
+   non ripartito da capo — e l'offerta già salvata nel campo.
+4. **Offline durante il tuo turno di chiamata.** Quando tocca a te, chiudi la finestra e aspetta
+   che il timer scada. Rientrando devi vedere il lotto generato dall'**auto-pick** con la tua
+   offerta d'apertura a 1: mai una schermata di scelta ancora aperta.
+
+Poi lo **spareggio**, che a mano non si innesca: rilancia i bot con `--strategy=tie` e offri
+esattamente `10` come loro. Vedrai il pannello "Sei nello spareggio", il round 2 con la tua
+offerta riportata, e nel reveal le due sezioni ("Buste" e "Spareggio") con i `+Ns` che spiegano
+chi ha vinto a parità di cifra.
+
+E la **pausa**: non c'è ancora un pulsante (arriva col portale manager, Fase 6), quindi si prova
+dal terminale. Con l'asta viva:
+
+```bash
+# metti in pausa (serve il cookie dell'owner: fallo dal browser dove sei loggato come owner,
+# dalla console del browser)
+await fetch(`/api/auctions/<id>/action`, {method:'POST',
+  headers:{'Content-Type':'application/json'}, body: JSON.stringify({type:'PAUSE'})})
+# e per riprendere, la stessa cosa con {type:'RESUME'}
+```
+
+Il portale deve mostrare il banner giallo, il countdown **fermo** sul residuo di quel momento, e
+nessun modale aperto; al resume il tempo riparte da dov'era.
+
+**Infine il telefono, che è il criterio più importante.** Ferma `pnpm dev`, lancia `pnpm dev:lan`,
+apri sul telefono l'indirizzo che stampa ed entra col provider `dev`. Gioca qualche lotto per
+davvero, in piedi, con una mano. Le cose da guardare:
+
+- toccando il campo dell'importo la pagina **non deve zoomare** e deve comparire il **tastierino
+  numerico**, non la tastiera con le lettere;
+- con la tastiera aperta, **countdown e "max" devono restare visibili** sopra il campo;
+- il pulsante di conferma deve stare comodo sotto il pollice;
+- dopo l'invio il `✓ Offerta salvata: N` deve comparire subito, senza far saltare il pulsante.
+
+Se una di queste quattro cose non è vera, annotala e apri una sessione dedicata: sono i quattro
+punti su cui si gioca l'usabilità della serata.
 
 ### Tutti i comandi
 
