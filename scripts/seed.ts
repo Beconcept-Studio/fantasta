@@ -47,6 +47,24 @@ const KNOWN_AUCTION_STATUSES = [
   "completed",
 ] as const;
 
+/**
+ * La base degli URL che il seed stampa a fine corsa.
+ *
+ * In locale è `http://localhost:3000`; **sul server è `AUTH_URL`**, che nel
+ * `.env` di produzione c'è già. Senza questo, il seed di produzione stamperebbe
+ * link a localhost — e il punto 2 della checklist pre-asta (§17) è proprio
+ * "asta di prova sul server", quindi quei link vanno seguiti da un browser che
+ * localhost non ce l'ha.
+ *
+ * `||` e non `??`: nel `.env` di sviluppo `AUTH_URL` **esiste ma è vuota** (in
+ * locale Auth.js usa localhost da sé), e `??` lascerebbe passare la stringa
+ * vuota stampando link mozzi.
+ */
+const BASE_URL = (process.env.AUTH_URL || "http://localhost:3000").replace(
+  /\/$/,
+  "",
+);
+
 const DEV_USERS = [
   "Marco Bianchi",
   "Luca Ferrari",
@@ -199,7 +217,7 @@ function unwrap<T>(
 async function seedAuction(
   userIds: string[],
   status: "draft" | "ready" | AdvancedStatus,
-): Promise<{ id: string; status: string; inviteUrl: string }> {
+): Promise<{ id: string; status: string; inviteUrl: string; publicToken: string }> {
   if (userIds.length < SEED_SEATS) {
     throw new Error(
       `Servono almeno ${SEED_SEATS} utenti di prova, ne ho trovati ${userIds.length}.`,
@@ -248,7 +266,8 @@ async function seedAuction(
   return {
     id: auctionId,
     status: row!.status,
-    inviteUrl: `http://localhost:3000/join/${token}`,
+    publicToken: row!.publicToken,
+    inviteUrl: `${BASE_URL}/join/${token}`,
   };
 }
 
@@ -473,10 +492,12 @@ async function main(): Promise<void> {
     `Asta "${SEED_AUCTION_NAME}" creata: stato ${auction.status}, ` +
       `${SEED_SEATS} posti, listone importato.`,
   );
-  console.log(`  Setup:  http://localhost:3000/auctions/${auction.id}/setup`);
-  console.log(`  Lobby:  http://localhost:3000/auctions/${auction.id}/lobby`);
+  console.log(`  Setup:  ${BASE_URL}/auctions/${auction.id}/setup`);
+  console.log(`  Lobby:  ${BASE_URL}/auctions/${auction.id}/lobby`);
+  console.log(`  TV:     ${BASE_URL}/tv/${auction.publicToken}`);
   console.log(`  Invito: ${auction.inviteUrl}`);
   console.log(`  Owner:  ${DEV_USERS[0]}`);
+  console.log(`  Bot:    pnpm bots --auction=${auction.id} --count=8 --strategy=random --start --url=${BASE_URL}`);
 
   if (auctionStatus === "live" || auctionStatus === "mid" || auctionStatus === "completed") {
     await printRosterSummary(auction.id);
