@@ -112,6 +112,13 @@ scrive il codice**, altrimenti non verrà mai fatta.
 | `docs/ARCHITECTURE.md` | **Come funziona la web app, spiegato a un umano.** Prosa leggibile, non elenchi di file. Cosa fa ogni pezzo, come interagiscono, perché è stato fatto così. | A fine di ogni fase, obbligatorio |
 | `docs/DECISIONS.md` | Append-only. Ogni scelta non prevista dal piano, con data e motivazione | Al momento della scelta |
 | `docs/RUNBOOK.md` | Come far girare l'app in locale e cosa fare la sera dell'asta | Quando cambia una procedura |
+| `docs/REQUESTS.md` | **Il quaderno dell'utente.** Modifiche che vuole fare *dopo*, annotate mentre prova l'app. **Non toccarlo e non lavorarci.** | Lo scrive lui, non tu |
+
+**`docs/REQUESTS.md` è fuori dal piano di sviluppo.** Non è backlog: sono desiderata raccolti in
+corsa, da affrontare **solo a fasi 0–8 concluse**, e su richiesta esplicita. Non anticiparne i
+contenuti, non "già che ci sono", non citarlo come motivo per deviare da `docs/PLAN.md`. Se una
+richiesta lì dentro contraddice il piano o un invariante, quello si discute quando arriverà il suo
+turno, non prima.
 
 `docs/ARCHITECTURE.md` è il documento che l'utente leggerà fra sei mesi per capire il proprio
 progetto. Scrivilo per quel lettore: paragrafi, non bullet point; il "perché" prima del "come";

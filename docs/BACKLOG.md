@@ -703,6 +703,12 @@ la rotazione dei turni non torna mai indietro.
   Verifica: `pnpm test` verde sull'intera §12 (41/41 contando le fasi precedenti).
   Dipende: F7-01 … F7-04
 
+- [ ] **F7-07bis — Un id malformato deve dare 404, non 500** (rimandato dalla Fase 5)
+  `POST /api/auctions/undefined/action` (e le altre route con `:id`) risponde **500**: l'uuid finto arriva fino a Postgres, che lo rifiuta con un'eccezione. PLAN §17 vuole un codice tipizzato per ogni rifiuto, e un URL sbagliato è un rifiuto come gli altri.
+  Verifica: le tre route con `:id` (`action`, `heartbeat`, `stream`) rispondono `NOT_FOUND` con un id non-uuid, e il caso è coperto da un test.
+  Nota: emerso durante il collaudo della Fase 5, dove il comando di avvio in console aveva preso l'id sbagliato. Non è urgente — è un URL che nessuna pagina genera — ma sta qui perché è la fase in cui si guardano gli errori.
+  Dipende: —
+
 - [ ] **F7-08 — ARCHITECTURE: override e audit**
   Capitolo su ledger, void compensativi, correzione senza undo e la tabella events come memoria dell'asta.
   Verifica: capitolo presente.
