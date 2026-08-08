@@ -112,10 +112,9 @@ export function managerControls(snapshot: Snapshot): ManagerControls {
 
   const absent = absentMembers(snapshot);
   if (absent.length > 0) {
-    const nomi = absent.map((m) => m.teamName).join(", ");
     return {
       canStart: false,
-      startBlocked: `Non hanno la pagina aperta: ${nomi}. L'asta parte quando sono collegati tutti.`,
+      startBlocked: `L'asta può partire quando sono collegati tutti.`,
       canPause,
       canResume,
     };

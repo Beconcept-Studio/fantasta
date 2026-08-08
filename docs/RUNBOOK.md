@@ -243,7 +243,7 @@ pnpm bots --auction=<id> --count=8 --strategy=random   # in un secondo terminale
 ```
 
 **1. La regia.** Entra come l'owner (Marco Bianchi) e vai su `/auctions/<id>/manage` — ci arrivi
-anche dalla dashboard e dalla pagina di configurazione, "Vai alla regia". Devi vedere le otto rose
+anche dalla dashboard e dalla pagina di configurazione, "Regia dell'asta". Devi vedere le otto rose
 con crediti, speso e offerta massima, e i pallini di presence.
 
 **2. Il cancello d'avvio.** Ferma i bot (Ctrl-C) e guarda: entro quindici secondi il pulsante

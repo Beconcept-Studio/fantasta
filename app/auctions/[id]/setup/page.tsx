@@ -73,13 +73,13 @@ export default async function SetupPage({
             href={`/auctions/${auction.id}/manage`}
             className="underline underline-offset-4"
           >
-            Vai alla regia
+            Regia dell'asta
           </Link>
           <Link
             href={`/auctions/${auction.id}/lobby`}
             className="underline underline-offset-4"
           >
-            Vai alla lobby
+            Pannello di configurazione
           </Link>
         </div>
       </header>

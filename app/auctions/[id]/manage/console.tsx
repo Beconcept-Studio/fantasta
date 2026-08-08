@@ -82,11 +82,6 @@ export function ManageConsole({
               riconnessione…
             </Badge>
           )}
-          <span className="text-muted-foreground ml-auto text-sm">
-            {seatsTaken}/{auction.seats} partecipanti · {auction.roleOrder
-              .map((role) => ROLE_LABELS[role])
-              .join(" → ")}
-          </span>
         </div>
 
         <nav className="text-muted-foreground flex flex-wrap gap-4 text-sm">

@@ -162,7 +162,7 @@ export function ControlPanel({
         </p>
       )}
 
-      {beforeStart && (
+      {/* {beforeStart && (
         <ul className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
           {snapshot.members.map((member) => (
             <li
@@ -175,7 +175,7 @@ export function ControlPanel({
             </li>
           ))}
         </ul>
-      )}
+      )} */}
     </section>
   );
 }

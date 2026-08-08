@@ -101,7 +101,7 @@ export function Portal({
               l&apos;asta la avvia, e serve che siate tutti collegati.
             </p>
             <Button asChild variant="outline">
-              <Link href={`/auctions/${auctionId}/lobby`}>Vai alla lobby</Link>
+              <Link href={`/auctions/${auctionId}/lobby`}>Pannello di configurazione</Link>
             </Button>
           </section>
         )}
