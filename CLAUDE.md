@@ -40,7 +40,11 @@ copie della stessa richiesta divergono sempre.
 3. **Gate**: `pnpm test`, `pnpm typecheck` e `pnpm build` verdi, task del file feature spuntati.
    Poi `git merge --no-ff` su `dev`.
 4. **Prova su `dev`**: Docker + seed, `pnpm bots`/`pnpm drive`, `pnpm dev:lan` dal telefono.
-5. `git merge --no-ff` su `main`, versione e tag minor, `CHANGELOG.md`, push. Il deploy parte da solo.
+5. Ancora **su `dev`**: `CHANGELOG.md` datato e `package.json` alla nuova versione. Poi
+   `git merge --no-ff` su `main`, `git tag`, push. Il deploy parte da solo.
+
+Il punto 5 è in quest'ordine di proposito: su `main` **non si committa**, nemmeno per datare il
+changelog. `main` riceve merge e tag, niente altro.
 
 `--no-ff` sempre: il merge commit è dove la macro inizia e finisce, ed è il punto di rollback.
 

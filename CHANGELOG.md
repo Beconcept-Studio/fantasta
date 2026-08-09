@@ -4,7 +4,7 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
-## [1.1.0] — non ancora rilasciata
+## [1.1.0] — 2026-08-09
 
 ### Cambiato
 

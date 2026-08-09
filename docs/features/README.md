@@ -12,9 +12,7 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-| Macro | Tema | Versione |
-|---|---|---|
-| [M0](00-nuova-linea-di-sviluppo.md) | La nuova linea di sviluppo: tre branch, versioni, documenti | v1.1.0 |
+Nessuna.
 
 ## Da pianificare
 
@@ -30,4 +28,6 @@ L'ordine è indicativo: si apre quella che serve.
 
 ## Chiuse
 
-Nessuna.
+| Macro | Tema | Versione |
+|---|---|---|
+| [M0](00-nuova-linea-di-sviluppo.md) | La nuova linea di sviluppo: tre branch, versioni, documenti | v1.1.0 — 2026-08-09 |
