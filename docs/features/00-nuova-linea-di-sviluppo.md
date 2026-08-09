@@ -160,24 +160,24 @@ volta e su richiesta esplicita**.
 
 ## Task
 
-- [ ] **M0-01** — Creare `dev` da `main` e `feature/00-nuova-linea-di-sviluppo` da `dev`
-- [ ] **M0-02** — Taggare `v1.0.0` sul commit `6216aa4` e allineare `package.json`
-- [ ] **M0-03** — Intestazione di archivio su `docs/PLAN.md` e su `docs/BACKLOG.md`. Su `PLAN.md`
+- [x] **M0-01** — Creare `dev` da `main` e `feature/00-nuova-linea-di-sviluppo` da `dev`
+- [x] **M0-02** — Taggare `v1.0.0` sul commit `6216aa4` e allineare `package.json`
+- [x] **M0-03** — Intestazione di archivio su `docs/PLAN.md` e su `docs/BACKLOG.md`. Su `PLAN.md`
       l'ok esplicito è stato dato il 2026-08-09 approvando questa spec: è l'unica modifica
       ammessa a quel file, e la sola ragione per cui non viola la regola della sola lettura
-- [ ] **M0-04** — Creare `docs/features/README.md`, l'indice delle macro
-- [ ] **M0-05** — Creare `CHANGELOG.md` con la sezione `v1.0.0`
-- [ ] **M0-06** — Riscrivere `CLAUDE.md` secondo la sezione 5
-- [ ] **M0-07** — **Eliminare `docs/RUNBOOK.md`** e i rimandi che lo citano (`deploy/deploy.sh`,
+- [x] **M0-04** — Creare `docs/features/README.md`, l'indice delle macro
+- [x] **M0-05** — Creare `CHANGELOG.md` con la sezione `v1.0.0`
+- [x] **M0-06** — Riscrivere `CLAUDE.md` secondo la sezione 5
+- [x] **M0-07** — **Eliminare `docs/RUNBOOK.md`** e i rimandi che lo citano (`deploy/deploy.sh`,
       `deploy/ecosystem.config.cjs`, `lib/db/index.ts`), trasferendo in `CLAUDE.md` le tre
       procedure che il flusso richiede: schema dopo il deploy, rollback a un tag, deploy manuale.
       Decisione dell'owner del 2026-08-09, presa in corso di macro: metà del file era la guida per
       fasi, morta con le fasi, e un documento per metà obsoleto smette di essere creduto anche
       nell'altra metà. Il resto resta leggibile con `git show v1.0.0:docs/RUNBOOK.md`. I rimandi
       in `docs/BACKLOG.md` e `docs/DECISIONS.md` **non** si toccano: sono storia
-- [ ] **M0-08** — Aggiungere a `docs/ARCHITECTURE.md` la nota su come si evolve il progetto dopo
+- [x] **M0-08** — Aggiungere a `docs/ARCHITECTURE.md` la nota su come si evolve il progetto dopo
       v1.0.0 (dove sta la documentazione di una feature, e perché)
-- [ ] **M0-09** — Voce in `docs/DECISIONS.md`: «2026-08-09 — M0, la nuova linea di sviluppo», con
+- [x] **M0-09** — Voce in `docs/DECISIONS.md`: «2026-08-09 — M0, la nuova linea di sviluppo», con
       le scelte e il perché (niente staging, PLAN e BACKLOG congelati, un file per macro)
 - [ ] **M0-10** — Chiusura: merge `--no-ff` su `dev`, prova, merge `--no-ff` su `main`, tag
       `v1.1.0`, push
