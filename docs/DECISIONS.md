@@ -766,3 +766,55 @@ stati riportati sul contratto vero: `canStart` falso, il messaggio parla della r
 di chi manca resta raggiungibile** da `absentMembers`, che è la funzione che la lista dei posti
 usa per il pallino. Il blocco JSX commentato in `controls.tsx` è stato lasciato com'è: sembra un
 segnaposto di una decisione ancora aperta dell'owner, e non è codice che il deploy tocchi.
+
+## 2026-08-09 — M0, la nuova linea di sviluppo
+
+**Non c'è un ambiente di staging, e non è una dimenticanza.** `dev` si prova in locale: Docker,
+seed, bot, e `pnpm dev:lan` per il telefono. Uno staging sul server avrebbe voluto dire un secondo
+sito Ploi, un secondo processo pm2 e un secondo database sulla stessa CX22, più una procedura
+raddoppiata da tenere aggiornata — per un'app che va in produzione davanti a dieci persone una
+volta all'anno. Se un giorno servisse, il flusso non cambia: basta puntarci `DEPLOY_BRANCH=dev`.
+
+**`PLAN.md` e `BACKLOG.md` sono congelati, non estesi.** L'alternativa era continuare ad
+aggiungere «Ciclo N» in fondo al backlog e riscrivere il piano a ogni feature. Congelarli ha due
+vantaggi: `PLAN.md` mantiene lo statuto di documento immutabile che gli invarianti I1–I10 meritano,
+e ciò che si legge per lavorare oggi è un file corto invece di 1.700 righe di storia. **Archivio
+non vuol dire disattivato**: gli invarianti restano vincolanti, ed è scritto nell'intestazione di
+entrambi i file perché è l'equivoco che costerebbe di più.
+
+**Un file per macro-feature, con spec e task insieme.** La separazione fra documento di design e
+piano di implementazione — due file — è più rigorosa ma obbliga a saltare fra due documenti
+mentre si lavora, per un beneficio che qui non esiste: la stessa persona scrive la spec e la
+esegue, a giorni di distanza. Vale la regola 8 di `CLAUDE.md`: niente struttura prima del secondo
+chiamante.
+
+**Le macro sono grosse di proposito.** Il rischio del flusso a tre branch è che ogni correzione
+di una riga diventi un branch, un merge e un deploy. La regola è che una macro è un tema, non un
+task: una correzione piccola vive dentro la macro aperta o aspetta la prossima.
+
+**`--no-ff` obbligatorio su entrambi i merge.** Con il fast-forward la storia si appiattisce e non
+resta traccia di dove una macro cominciava: il merge commit è il punto di rollback.
+
+**Le richieste pianificate spariscono da `REQUESTS.md`.** Due copie della stessa richiesta — una
+nel quaderno, una nel file della feature — divergono sempre, e quando divergono non si sa più
+quale sia la verità. Il quaderno è la lista di ciò che non è ancora stato deciso.
+
+**Il tag `v1.0.0` punta a un commit il cui `package.json` dice `0.1.0`.** Non è stato corretto a
+posteriori: il versionamento comincia adesso e la storia non si riscrive.
+
+**⚠ `docs/RUNBOOK.md` è stato eliminato**, su decisione dell'owner presa a macro già aperta. Metà
+del file era la guida che lo aveva accompagnato attraverso le fasi — il ritmo, che modello usare,
+quando attivarsi — e quella metà è morta con le fasi. Tenere in vita un documento per metà
+obsoleto è il modo migliore per smettere di fidarsi anche dell'altra metà, quella di produzione.
+Le tre procedure che il flusso di sviluppo richiede davvero — schema dopo il deploy, rollback a un
+tag, deploy manuale — sono passate in `CLAUDE.md`, dove vengono lette; tutto il resto (le tre
+password, la checklist §17, la tabella degli incidenti, come rifare la macchina da zero) resta
+recuperabile con `git show v1.0.0:docs/RUNBOOK.md`. Il ragionamento: il costo di perderlo è basso
+perché è recuperabile, il costo di tenerlo è alto perché invecchia in silenzio. I rimandi al
+runbook in `deploy/deploy.sh`, `deploy/ecosystem.config.cjs` e `lib/db/index.ts` sono stati tolti;
+quelli in `BACKLOG.md` e in questo file **no**, perché descrivono cosa era vero quando sono stati
+scritti.
+
+**`CLAUDE.md` è passato da 178 a 234 righe**, sopra il tetto di 230 che ci si era dati. Le righe
+in più sono le procedure ereditate dal runbook: si è preferito sforare di quattro righe piuttosto
+che lasciarle senza casa.
