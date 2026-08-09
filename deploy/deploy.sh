@@ -9,7 +9,7 @@
 # il codice, installa, compila, **copia a mano gli asset statici** e ricarica pm2.
 #
 # Cosa NON fa, di proposito: non applica lo schema al database. `pnpm db:push`
-# resta un comando manuale (vedi docs/RUNBOOK.md). Un `push` automatico a ogni
+# resta un comando manuale (vedi CLAUDE.md). Un `push` automatico a ogni
 # deploy significherebbe una modifica di schema che parte da sola mentre otto
 # persone stanno offrendo, e drizzle-kit non chiede il permesso a nessuno
 # (`strict: false`, DECISIONS 2026-08-07).

@@ -67,7 +67,7 @@ secondo merge si dimentica, la prossima macro-feature riporta in produzione il b
 **Modifiche allo schema.** `pnpm db:push` non è nel deploy e resta manuale, di proposito
 (DECISIONS 2026-08-07). Se una macro-feature tocca `lib/db/schema.ts`, **il merge su `main` non
 basta**: va applicato lo schema a mano sul server. Per questo ogni file feature dichiara in
-testa se tocca lo schema, e il RUNBOOK spiega quando applicarlo rispetto al deploy. È la trappola
+testa se tocca lo schema, e `CLAUDE.md` porta la procedura con l'ordine giusto. È la trappola
 più probabile del nuovo flusso: un'app che va in 500 in produzione perché il codice nuovo
 interroga una colonna che non esiste ancora.
 
@@ -101,7 +101,7 @@ una feature nuova non si scrive lì dentro.
 |---|---|
 | `docs/ARCHITECTURE.md` | Alla chiusura di ogni macro-feature. Criterio di chiusura, non un extra. |
 | `docs/DECISIONS.md` | Append-only, al momento della scelta. Intestazioni per macro: «2026-08-XX — M1, segretezza offerte». |
-| `docs/RUNBOOK.md` | Quando cambia una procedura. |
+| `CHANGELOG.md` | Al merge su `main`. |
 
 **Nuovi.**
 
@@ -168,9 +168,13 @@ volta e su richiesta esplicita**.
 - [ ] **M0-04** — Creare `docs/features/README.md`, l'indice delle macro
 - [ ] **M0-05** — Creare `CHANGELOG.md` con la sezione `v1.0.0`
 - [ ] **M0-06** — Riscrivere `CLAUDE.md` secondo la sezione 5
-- [ ] **M0-07** — Aggiungere a `docs/RUNBOOK.md` il capitolo *Il ciclo di sviluppo*: comandi git,
-      gate di chiusura, cosa fare quando una feature tocca lo schema, come si fa un rollback a un
-      tag
+- [ ] **M0-07** — **Eliminare `docs/RUNBOOK.md`** e i rimandi che lo citano (`deploy/deploy.sh`,
+      `deploy/ecosystem.config.cjs`, `lib/db/index.ts`), trasferendo in `CLAUDE.md` le tre
+      procedure che il flusso richiede: schema dopo il deploy, rollback a un tag, deploy manuale.
+      Decisione dell'owner del 2026-08-09, presa in corso di macro: metà del file era la guida per
+      fasi, morta con le fasi, e un documento per metà obsoleto smette di essere creduto anche
+      nell'altra metà. Il resto resta leggibile con `git show v1.0.0:docs/RUNBOOK.md`. I rimandi
+      in `docs/BACKLOG.md` e `docs/DECISIONS.md` **non** si toccano: sono storia
 - [ ] **M0-08** — Aggiungere a `docs/ARCHITECTURE.md` la nota su come si evolve il progetto dopo
       v1.0.0 (dove sta la documentazione di una feature, e perché)
 - [ ] **M0-09** — Voce in `docs/DECISIONS.md`: «2026-08-09 — M0, la nuova linea di sviluppo», con

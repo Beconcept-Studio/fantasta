@@ -17,7 +17,7 @@ function connectionString(): string {
   const url = process.env.DATABASE_URL;
   if (!url) {
     throw new Error(
-      "DATABASE_URL non è impostata. Copia .env.example in .env (vedi docs/RUNBOOK.md).",
+      "DATABASE_URL non è impostata. Copia .env.example in .env.",
     );
   }
   return url;
