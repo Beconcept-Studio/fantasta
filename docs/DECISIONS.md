@@ -818,3 +818,43 @@ scritti.
 **`CLAUDE.md` è passato da 178 a 234 righe**, sopra il tetto di 230 che ci si era dati. Le righe
 in più sono le procedure ereditate dal runbook: si è preferito sforare di quattro righe piuttosto
 che lasciarle senza casa.
+
+## 2026-08-09 — M1, segretezza e rivelazione delle offerte
+
+**Il conteggio aggregato delle buste è caduto insieme ai nomi.** L'alternativa in campo era
+togliere l'elenco di chi ha consegnato e tenere un «4 su 7», che sembra anonimo. Non lo è: gli
+idonei di un lotto sono spesso due o tre, soprattutto a fine ruolo, e a quel punto il numero fa il
+nome da sé. La richiesta dell'owner parlava di strategie fra competitor, non di importi, quindi
+qualunque cosa distingua un idoneo che si è mosso da uno che non si è mosso è nel perimetro.
+
+**`bidStatus` è stato eliminato dal tipo, non nascosto in un ramo `if`.** La correzione minima
+sarebbe stata emetterlo solo in `LOT_REVEAL`, dove però `reveal` porta già tutto: il campo non
+aveva più nessun consumatore legittimo. Toglierlo dal tipo rende l'invariante strutturale invece
+che sorvegliato — un campo che non esiste non può essere emesso nella fase sbagliata da una
+modifica distratta fra un anno. È lo stesso ragionamento della regola 3.
+
+**Anche la regia perde il contatore.** Nella console del manager il blocco «buste consegnate 4/7»
+era il dato più utile della striscia, e serviva a decidere se premere pausa. È stato sostituito
+dagli idonei, che sono pubblici, perché chi conduce l'asta quasi sempre gioca: lasciarlo lì
+avrebbe dato a un partecipante — uno solo, e per di più quello che controlla la pausa —
+un'informazione che nessun altro ha. La domanda operativa («siamo in un round vero o in un lotto a
+un solo idoneo?») trova risposta lo stesso.
+
+**Il reveal è un componente diverso, non un ramo di `LotCard`.** La card viva e la card chiusa
+hanno cornice, colori e gerarchia tipografica diversi di proposito: il problema segnalato era che
+il momento dell'assegnazione *sembrava* un'asta ancora in corso. Un `if` dentro un componente solo
+avrebbe prodotto la stessa UI con qualche classe condizionale in più, che è esattamente ciò che
+non funzionava. §8bis non è toccata: chiede che l'area del lotto sia sempre presente e sia
+funzione pura dello snapshot, non che sia sempre lo stesso nodo React.
+
+**La card chiusa dice quando si riparte, non a chi tocca.** Mostrare il prossimo chiamante avrebbe
+richiesto di calcolare il turno successivo già durante il reveal e di farlo uscire nello snapshot:
+fattibile riusando `nextSeat`/`nextRole`, ma è un campo in più e un'anteprima che un override del
+manager può smentire mentre la si guarda. Decisione dell'owner: informazione non necessaria, si
+scopre quando il lotto nuovo si apre. Conseguenza pratica notevole — **il server non cambia se non
+per la rimozione di `bidStatus`**, perché la scadenza del reveal è già in `phaseDeadline`.
+
+**Il countdown al prossimo turno non è una barra.** Richiesta esplicita dell'owner, e ha una
+ragione: la barra che scorre è il segnale visivo dell'urgenza durante le offerte. Riusarla sulla
+schermata in cui non si deve fare niente rimetterebbe addosso la fretta da cui la card doveva
+liberare.

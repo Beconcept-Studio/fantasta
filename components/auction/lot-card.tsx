@@ -124,11 +124,18 @@ export function LotCard({
           </>
         )}
 
-        {/* ── Il silenzio, spiegato: delle buste altrui non si sa niente (M1) ── */}
-        <p className="text-muted-foreground text-center text-xs">
-          Le buste sono segrete: chi ha offerto, e quanto, si vede
-          all&apos;apertura.
-        </p>
+        {/*
+          ── Il silenzio, spiegato: delle buste altrui non si sa niente (M1) ──
+          Solo in LOT_OPEN: durante lo spareggio i pareggianti sono già stati
+          annunciati, e ripetere che le buste sono segrete si contraddirebbe con
+          il pannello qui sopra.
+        */}
+        {open && (
+          <p className="text-muted-foreground text-center text-xs">
+            Le buste sono segrete: chi ha offerto, e quanto, si vede
+            all&apos;apertura.
+          </p>
+        )}
       </div>
     </section>
   );

@@ -640,13 +640,29 @@ possibili sono coperte da un test solo — ed è il criterio di chiusura di ques
 sui tre spettatori che esistono: un partecipante, l'owner che organizza senza giocare, e la vista
 TV senza login.
 
-La regola di sanificazione è una, applicata due volte. Degli altri si sa **se** hanno una busta,
-mai **quanto** c'è dentro: `bidStatus` è una lista di booleani. Il proprio importo lo vede solo il
-proprio viewer, in `myBid` — e chi viewer non è, cioè il manager che non gioca e la TV, non ha
-nemmeno quello. Gli importi diventano pubblici in un momento solo, `LOT_REVEAL`, ed è lì che
-compare il campo `reveal` con tutte le buste di tutti i round. L'unica informazione che esce prima
-è l'importo pareggiato durante `LOT_TIE_PREP`, che è il contenuto stesso dell'annuncio di
-spareggio e fra due secondi sarà la soglia pubblica del round successivo.
+La regola di sanificazione è una sola: **finché il lotto è aperto, delle buste altrui non esce
+niente**. Il proprio importo lo vede solo il proprio viewer, in `myBid` — e chi viewer non è, cioè
+il manager che non gioca e la TV, non ha nemmeno quello. Gli importi diventano pubblici in un
+momento solo, `LOT_REVEAL`, ed è lì che compare il campo `reveal` con tutte le buste di tutti i
+round. L'unica informazione che esce prima è l'importo pareggiato durante `LOT_TIE_PREP`, che è il
+contenuto stesso dell'annuncio di spareggio e fra due secondi sarà la soglia pubblica del round
+successivo.
+
+Fino a v1.1.0 la regola era più debole, e diceva: degli altri si sa **se** hanno una busta, mai
+**quanto** c'è dentro. C'era un campo apposta, `bidStatus`, una lista di booleani, e sul telefono
+diventava un pallino verde per ogni busta consegnata, sulla TV un riquadro che si accendeva, nella
+console un contatore `4/7`. Sembrava innocuo perché nessuna cifra usciva. Non lo era: in una stanza
+dove ci si guarda in faccia, sapere chi si è già mosso — e soprattutto chi non si è ancora mosso —
+è già abbastanza per fare strategia. Si aspetta il vicino, si legge la sua fretta, si offre di
+conseguenza; ed è esattamente ciò che la busta chiusa doveva impedire. Con M1 il campo è caduto, e
+con lui il conteggio aggregato: «quattro su sette» sembra anonimo, ma a fine ruolo gli idonei sono
+due o tre e il numero fa il nome da sé.
+
+Il modo in cui è caduto conta quanto il fatto che sia caduto. `bidStatus` non è stato spostato
+dentro un `if` sulla fase: è stato **eliminato dal tipo**. È la differenza fra un invariante
+sorvegliato e uno strutturale — un campo che non esiste non può essere emesso nella fase sbagliata
+da una modifica distratta di qui a un anno. Quello che resta del round è `eligibleMemberIds`, che
+dice chi *potrebbe* offrire ed è comunque deducibile da rose e crediti, pubblici per tutti.
 
 Due dettagli che sembrano tecnici e sono di dominio. Il primo: verso il client escono **uuid**, non
 gli id numerici del motore — quelli sono etichette valide per un solo caricamento, e un client che
@@ -778,9 +794,23 @@ dove già sei.
 La **card del lotto** è un elemento *permanente* del portale finché c'è un lotto corrente. È la
 correzione dell'errore che l'anno scorso ha reso l'app inutilizzabile: se l'unica interfaccia per
 offrire è un modale, chi lo chiude non ha più modo di rientrare nel lotto. La card mostra
-giocatore, ruolo, squadra, countdown, la propria offerta, chi ha consegnato la busta — solo il
-booleano, mai la cifra — e il pulsante che riapre il modale. Attraversa senza cambiare identità le
-tre fasi di un lotto: le offerte, l'annuncio dello spareggio, l'apertura delle buste.
+giocatore, ruolo, squadra, countdown, la propria offerta e il pulsante che riapre il modale. Degli
+altri non dice niente, e lo dichiara: una riga spiega che le buste sono segrete fino all'apertura,
+perché senza quella spiegazione la card sembra semplicemente rotta.
+
+Le card sono **due**, e si danno il cambio con la fase. Finché il lotto è vivo — le offerte, e
+l'annuncio dello spareggio — comanda `LotCard`: cornice accesa, barra che scorre, countdown grande,
+un pulsante da premere. Quando le buste si aprono subentra `LotClosedCard`, che ha una faccia
+diversa perché è un momento diverso: superficie spenta, nessuna barra, nessun pulsante, e il numero
+grande in alto non è più il tempo che scappa ma il prezzo già pagato. Sotto, tutte le offerte di
+tutti i round con la vincente in evidenza; in fondo, staccato, quanto manca alla ripresa. Prima di
+M1 il reveal viveva dentro la card viva, con la stessa cornice e la stessa barra, e chi guardava il
+telefono per tre secondi non aveva modo di capire che il lotto era finito se non leggendo.
+
+Che siano due componenti invece di uno non intacca la permanenza: quella chiede che l'area del
+lotto ci sia sempre e sia funzione pura dello snapshot, non che sia sempre lo stesso nodo React.
+La scelta fra le due la fa la fase, che è nello snapshot, quindi chi rientra a metà reveal trova la
+card chiusa con il countdown giusto esattamente come chi non si è mai disconnesso.
 
 Il **modale** è un overlay sopra la card, e la frase da tenere a mente è che *non è una notifica*:
 è una vista sullo stato corrente. Si apre da sé quando c'è un round aperto e sono fra gli idonei;
@@ -948,6 +978,15 @@ importo di busta chiusa. **La TV non nasconde gli importi: non li riceve.** Il c
 della fase è esattamente questo, e si verifica leggendo il JSON: durante `LOT_OPEN` la stringa
 `"amount"` nel messaggio non compare affatto, e ricompare solo in `LOT_REVEAL`, che è il momento in
 cui le buste si aprono per tutti.
+
+Questo schermo era anche il posto in cui la vecchia regola faceva più danno. Fino a v1.1.0, durante
+le offerte, la TV mostrava un riquadro per squadra che si accendeva alla consegna della busta: un
+tabellone delle intenzioni altrui, grande abbastanza da leggerlo da quattro metri, in mezzo a
+un'asta che dovrebbe essere segreta. Adesso durante il lotto restano il giocatore e il countdown,
+con una riga che dichiara il silenzio — uno schermo che non dice niente sembra uno schermo piantato,
+e in una stanza «non succede niente» e «si è bloccato» hanno lo stesso aspetto. All'apertura delle
+buste la TV mostra vincitore, prezzo e **tutti** i round: prima ne mostrava uno solo, l'ultimo, che
+in uno spareggio significava nascondere proprio le offerte che lo spareggio l'avevano causato.
 
 Il layout è governato da un posto: un televisore in fondo a una stanza, con dieci persone che
 guardano da tre o quattro metri. Da lì discendono tre cose. Niente hover, niente scroll, niente

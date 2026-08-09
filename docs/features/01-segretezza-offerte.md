@@ -144,23 +144,23 @@ racconta, e quando.
 
 ## Task
 
-- [ ] **M1-01** — Aprire `feature/01-segretezza-offerte` da `dev`; scrivere questo file, togliere
+- [x] **M1-01** — Aprire `feature/01-segretezza-offerte` da `dev`; scrivere questo file, togliere
       le tre richieste da `docs/REQUESTS.md`, aggiornare `docs/features/README.md`
-- [ ] **M1-02** — Eliminare `SnapshotBidStatus` e `bidStatus` da `lib/realtime/types.ts` e il
+- [x] **M1-02** — Eliminare `SnapshotBidStatus` e `bidStatus` da `lib/realtime/types.ts` e il
       blocco che lo costruisce in `serializeLot`; riscrivere il commento in testa a
       `lib/engine/snapshot.ts` con l'invariante rafforzato
-- [ ] **M1-03** — Eliminare `envelopes()` e `EnvelopeState` da `lib/realtime/portal.ts`
-- [ ] **M1-04** — `LotCard` senza la sezione delle buste, con la riga che spiega il silenzio
-- [ ] **M1-05** — Nuovo `components/auction/lot-closed-card.tsx` e sua adozione in `portal.tsx`;
+- [x] **M1-03** — Eliminare `envelopes()` e `EnvelopeState` da `lib/realtime/portal.ts`
+- [x] **M1-04** — `LotCard` senza la sezione delle buste, con la riga che spiega il silenzio
+- [x] **M1-05** — Nuovo `components/auction/lot-closed-card.tsx` e sua adozione in `portal.tsx`;
       `reveal-panel.tsx` resta con `TiePanel` e la lista delle offerte, riusata dalla card chiusa
-- [ ] **M1-06** — TV: via `Envelopes`; reveal con tutti i round e la riga del prossimo turno
-- [ ] **M1-07** — Console: `In gara N` al posto di `Buste consegnate N/M`
-- [ ] **M1-08** — Test: `tests/db/i8.test.ts` verifica che in `LOT_OPEN` lo snapshot **non
+- [x] **M1-06** — TV: via `Envelopes`; reveal con tutti i round e la riga del prossimo turno
+- [x] **M1-07** — Console: `In gara N` al posto di `Buste consegnate N/M`
+- [x] **M1-08** — Test: `tests/db/i8.test.ts` verifica che in `LOT_OPEN` lo snapshot **non
       contenga** alcuna traccia delle buste altrui, per tutti e tre i viewer (partecipante,
       manager, TV), con un controllo sull'insieme esatto delle chiavi di `currentLot`; rimuovere i
       test di `envelopes` da `tests/portal.test.ts`; aggiornare `tests/snapshot-factory.ts`
-- [ ] **M1-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi
-- [ ] **M1-10** — `docs/ARCHITECTURE.md` con l'invariante rafforzato e le due card;
+- [x] **M1-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi
+- [x] **M1-10** — `docs/ARCHITECTURE.md` con l'invariante rafforzato e le due card;
       `docs/DECISIONS.md` con le tre scelte non ovvie di questa macro
 - [ ] **M1-11** — Chiusura: merge `--no-ff` su `dev`, prova con Docker + seed + `pnpm bots` e dal
       telefono con `pnpm dev:lan`, poi — **solo su richiesta dell'owner** — `CHANGELOG.md`,
