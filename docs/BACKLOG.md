@@ -796,9 +796,10 @@ la rotazione dei turni non torna mai indietro.
   Verifica: il documento copre l'intera app allo stato finale. ✓ Capitolo «Il posto dove gira»: il diagramma della topologia, perché il processo va avviato in un modo preciso (i due lasciti di `standalone`, e `fork`/1 istanza come invariante), l'unica riga di nginx che conta e come si **misura** che funzioni, il deploy e la ragione della guardia sull'asta viva, i bot che si firmano il cookie, il tempo in UTC, i backup provati e la traccia doppia della serata. Riscritto anche «Cosa non c'è ancora»: niente alta disponibilità, niente staging, niente monitoraggio — tre scelte, non tre dimenticanze.
   Dipende: F8-06
 
-- [ ] **F8-08 — GATE Fase 8**
+- [x] **F8-08 — GATE Fase 8**
   Criterio ✅: un'asta completa a 8 partecipanti in produzione. Aggiorna `CLAUDE.md`.
-  Verifica: criterio dimostrato; checklist pre-asta eseguita almeno una volta per intero.
+  Verifica: criterio dimostrato; checklist pre-asta eseguita almeno una volta per intero. ✓ Criterio dimostrato il **2026-08-09**: asta a 8 bot `COMPLETED` su `https://fantasta.rggndr.it`. `pnpm test` **327/327**, `pnpm build`, `pnpm lint` e `pnpm typecheck` verdi. `CLAUDE.md` e la guida per l'owner in `docs/RUNBOOK.md` aggiornate: non ci sono più fasi da aprire.
+  ⚠ **Della checklist §17 restano all'owner i punti 5 e 6**, che richiedono la serata vera: otto persone che fanno login e compaiono `LIVE` in lobby prima di cominciare, e `pm2 logs asta` aperto per tutta la durata. I punti 1–4 (backup con copia scaricata, asta di prova a 8 bot in produzione, cancellazione, vista TV) sono stati eseguiti oggi.
   Dipende: tutti i F8-*
 
 ---

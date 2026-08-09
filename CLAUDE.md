@@ -19,29 +19,31 @@ inventando: annota la domanda e aspetta. Un'assunzione silenziosa qui costa un'a
 
 ---
 
-## Fase corrente
+## Stato: fasi 0–8 chiuse, l'app è in produzione
 
-> **FASE 8 — Deploy** · da aprire con **Opus** (il default di progetto: nessun `/model` da
-> digitare). Fasi 0–7 chiuse: la 7 il **2026-08-08**, con **327 test verdi** e i due criteri ✅
-> dimostrati — void + riassegnazione manuale che riporta crediti e rose a uno stato coerente (due
-> righe a database, **una sola viva**, l'annullata con `voided_at`, I2 rispettata) e l'export che
-> riempie `FantaSquadra` e `Costo` e riapre nel nostro stesso parser. Aggiorna questa riga a ogni
-> passaggio di fase.
+> **Tutte le fasi del piano sono chiuse.** La 8 il **2026-08-09**, con **327 test verdi** e i
+> criteri ✅ dimostrati sul server: un'asta completa a 8 giocata su
+> **<https://fantasta.rggndr.it>** e portata a `COMPLETED` (8 rose da 25 giocatori, crediti tutti
+> ≥ 0), lo stream verificato senza buffering (snapshot a 0s, `: ping` a +15s e +30s), il boot
+> recovery riprovato **sul server** con un `pm2 restart` a metà round — **buco massimo di 4,0
+> secondi su 1260 transizioni**, cioè dentro il ritmo naturale dell'asta — e il `pg_dump`
+> ripristinato su un database separato con I2 verificata sui dati recuperati.
 
-In Fase 8 si porta tutto **su una macchina vera**: Hetzner CX22 con Ploi, Postgres locale alla
-macchina, nginx davanti con `proxy_buffering off` sulla rotta dello stream (senza, gli snapshot
-arrivano a blocchi e i countdown vanno a scatti), Let's Encrypt, `pm2` con `--max-memory-restart`
-e un `pg_dump` giornaliero in cron con la procedura di restore **provata almeno una volta**. Il
-criterio ✅ è un'asta completa a 8 partecipanti giocata in produzione, poi cancellata; e la
-checklist pre-asta di `docs/PLAN.md` §17 va eseguita per intero almeno una volta.
+Da qui in avanti **non ci sono più fasi**: il lavoro è manutenzione e le richieste raccolte in
+`docs/REQUESTS.md`, da affrontare **solo su richiesta esplicita dell'utente** e una alla volta.
+Resta all'owner l'esecuzione della checklist pre-asta di `docs/PLAN.md` §17 il giorno dell'asta
+vera — i comandi sono in `docs/RUNBOOK.md`, capitolo "Produzione e serata dell'asta".
 
-Attenzione alle due cose che in locale non si vedono: il redirect URI di **produzione** va aggiunto
-nella console Google prima che il login funzioni, e `output: 'standalone'` vuole che i file statici
-siano copiati accanto al bundle. Il boot recovery (F3-14) va riprovato **sul server**, con
-`pm2 restart` a metà round.
+**La produzione, in breve.** Hetzner CX22 (`46.225.231.138`), Ubuntu 26.04, Ploi; Postgres 16
+sulla stessa macchina; un solo processo Node sotto pm2 (`asta`, **fork, 1 istanza**) su
+`127.0.0.1:3000`, nginx davanti con Let's Encrypt; deploy automatico a ogni push su `main`
+(~2 minuti); `pg_dump` alle 04:15 UTC con retention 14. Tutto il resto è in `docs/RUNBOOK.md`.
 
-Le fasi sono cancelli sequenziali (`docs/PLAN.md` §11). Non si apre una fase finché tutti i
-criteri ✅ della precedente non sono verdi.
+**Tre regole operative che valgono da adesso.** **La sera dell'asta non si pusha su `main`**: il
+deploy si rifiuta di partire con un'asta `LIVE` o `PAUSED`, ma la fase di setup non è protetta.
+Dopo una modifica di `.env` serve `pm2 reload deploy/ecosystem.config.cjs --update-env`, **non**
+`pm2 restart asta`. E `pnpm db:push` **non è nel deploy**: lo schema si applica a mano, di
+proposito.
 
 **Regole che la Fase 7 ha reso concrete e che restano vincolanti.** **Niente undo** (⚠ P1): un
 lotto sbagliato si corregge con `voidAssignment` + `manualAssign`, la rotazione dei turni non torna
@@ -51,11 +53,12 @@ mai indietro. **Solo senza un lotto in contesa**: gli override sono rifiutati co
 `ledger` — un void invece **non** scrive nessuna riga compensativa, perché il credito è una formula
 e il prezzo esce dalla somma da solo.
 
-**A ogni chiusura di fase (task di GATE), ricapitola all'utente la sua parte**: i test manuali
-che deve eseguire di persona per il gate appena chiuso, cosa lo aspetta nella fase successiva
-**e con quale modello aprire la prossima sessione** (tabella in `docs/RUNBOOK.md`: il default di
-progetto è Opus via `.claude/settings.json`; per le Fasi 2 e 3 deve digitare `/model fable`),
-seguendo la "Guida per l'owner" in `docs/RUNBOOK.md`.
+**Regole che la Fase 8 ha reso concrete.** **Un processo solo**: `exec_mode: "fork"` e
+`instances: 1` in `deploy/ecosystem.config.cjs` non sono una preferenza — in cluster mode ogni
+copia eseguirebbe `instrumentation.ts`, cioè due sweep sulla stessa asta. **Il server gira in
+UTC**, processo compreso: la conversione a `Europe/Rome` è solo di rendering. E **`pnpm build` fa
+parte della verifica**, non del deploy: `next build` esegue ESLint e un errore di lint blocca la
+build di produzione anche con `pnpm dev` e `pnpm test` verdi.
 
 ---
 
@@ -152,6 +155,9 @@ un diagramma testuale dove serve. **Aggiornarlo è un criterio di chiusura della
 - **Buffering SSE**: in nginx serve `proxy_buffering off` sulla route dello stream.
 - **Mobile**: il portale partecipante è **mobile-first**, non desktop con breakpoint. Si offre dal
   telefono, sotto pressione, con 30 secondi di countdown.
+- **`next build` esegue ESLint**: un errore di lint **fa fallire la build di produzione**, anche
+  con `pnpm dev`, `pnpm test` e `pnpm typecheck` verdi. `pnpm build` va dato **prima** di chiudere
+  qualunque lavoro con della UI dentro, non la sera del deploy.
 - **Chunk client stantio in dev**: dopo molte modifiche con `pnpm dev` acceso, il browser può
   chiedere un bundle che non esiste più — `404 su /_next/static/chunks/app/.../page.js`. Il sintomo
   è ingannevole: la pagina *si carica* ma non idrata, quindi il portale resta fermo su "Mi collego

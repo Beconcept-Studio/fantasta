@@ -6,19 +6,17 @@ Questa sezione è per l'utente umano: cosa devi fare tu, fase per fase, e cosa p
 **A ogni chiusura di fase, Claude deve ricapitolarti i punti di questa guida relativi al gate
 appena chiuso e alla fase che si apre** (regola in `CLAUDE.md`).
 
-> **Dove siamo.** Fasi 0–6 chiuse, la 6 il **2026-08-08** con 275 test verdi. Adesso l'asta si
-> conduce per intero da dentro l'applicazione: la **regia** (`/auctions/<id>/manage`, solo tua) ha
-> il recap delle rose, l'avvio con la scelta del posto di partenza, pausa e ripresa e l'alert di
-> chi cade; la **vista TV** (`/tv/<public_token>`) si apre senza login e non riceve nessun importo
-> a busta chiusa. **Ti restano da fare i collaudi visivi delle Fasi 3, 4 e 6** — i comandi sono
-> nella tabella qui sotto e, per la 6, nella sezione "Il collaudo della Fase 6". La prossima è la
-> **Fase 7 — Override e chiusura** (assegnazione manuale, void, rettifiche di budget, export
-> xlsx), da aprire in una sessione nuova col modello di default (Opus): nessun `/model` da
-> digitare.
+> **Dove siamo: finito.** Fasi 0–8 chiuse, la 8 il **2026-08-09**. L'applicazione è in produzione
+> su **<https://fantasta.rggndr.it>**, con il deploy automatico a ogni push su `main`, il backup
+> notturno e il restore già provato. Non ci sono più fasi da aprire.
 >
-> Nota per la Fase 3: `pnpm drive` continua a funzionare, ma se vuoi rifare quella demo sappi
-> che ora l'avvio richiede la presence di tutti i membri — il driver batte gli heartbeat da sé,
-> non devi fare niente.
+> **Quello che resta a te** è il capitolo "Produzione e serata dell'asta", in fondo a questo file:
+> la **checklist pre-asta di PLAN §17**, da eseguire il giorno dell'asta vera coi comandi già
+> scritti. E, se non li hai ancora fatti, i collaudi visivi delle Fasi 3, 4 e 6 rimasti in sospeso
+> nella tabella qui sotto — ora si possono fare direttamente in produzione.
+>
+> Le richieste che hai annotato in `docs/REQUESTS.md` sono il lavoro dopo: si affrontano una alla
+> volta, in sessioni dedicate, e solo quando lo chiedi tu.
 
 ### Il ritmo generale (vale per ogni fase)
 
@@ -48,7 +46,7 @@ alta densità di logica, dove conviene il modello più capace:
 | Fasi | Modello | Cosa devi fare |
 |---|---|---|
 | **2 — Motore** e **3 — Persistenza/timer** | **Fable** | Apri la sessione e digita `/model fable` prima del prompt di apertura |
-| Tutte le altre (0, 1, 4, 5, 6, 7, 8) | **Opus** | Niente: è il default di progetto |
+| Tutte le altre (0, 1, 4, 5, 6, 7, 8) e la manutenzione | **Opus** | Niente: è il default di progetto |
 
 Perché così: la Fase 2 è quella dove "si rompe tutto" (invarianti, casi limite dei tiebreak,
 idempotenza) e la Fase 3 aggiunge concorrenza e lock — lì la capacità extra di Fable paga.
@@ -76,7 +74,7 @@ tenere a mente questa tabella.
 | ~~**5 — Portale partecipante**~~ ✓ | Fatto il 2026-08-08: telefono vero + un browser sul Mac dentro un'asta con sei bot, tutti sull'IP di LAN. Nessun disallineamento fra i due dispositivi; tastierino numerico e nessuno zoom forzato. La procedura resta scritta qui sotto ("Il collaudo della Fase 5"): serve di nuovo ogni volta che si tocca il portale. |
 | ~~**6 — Manager e TV**~~ ✓ | Il collaudo è scritto passo per passo qui sotto ("Il collaudo della Fase 6"). In due parole: apri la **regia** e avvia da lì un'asta con bot scegliendo il posto di partenza, prova pausa e ripresa, killa un bot e guarda comparire l'alert; poi apri la **vista TV in incognito** (senza login) e verifica che durante le offerte non si veda nessun importo. Se hai una TV o un proiettore, provala lì per la leggibilità: è l'unica cosa che a schermo di computer non si può giudicare. ~30 minuti. |
 | **7 — Override** | Il collaudo è scritto passo per passo qui sotto ("Il collaudo della Fase 7"). In due parole: simula la serata storta — pausa → cancella un giocatore da una rosa → riassegna manualmente → riprendi — e verifica che crediti e rose tornino da soli. Poi esporta l'xlsx e **aprilo in Excel**: `FantaSquadra` e `Costo` riempite, e il giocatore corretto risulta della squadra nuova. ~20 minuti. |
-| **8 — Deploy** ⚠ | Alto coinvolgimento tuo: server Hetzner, Ploi, DNS del dominio, redirect URI di **produzione** nella console Google, env sul server. Poi l'asta di prova a 8 bot in produzione e la checklist pre-asta di PLAN.md §17, eseguita da te punto per punto. |
+| ~~**8 — Deploy**~~ ✓ | Fatto il 2026-08-09: server Hetzner adottato in Ploi, dominio, certificato, redirect URI di produzione, `.env` sul server, asta a 8 bot portata a `COMPLETED` in produzione con `pm2 restart` a metà, backup e restore provati. **Ti resta la checklist pre-asta di PLAN §17**, da eseguire per intero il giorno dell'asta vera: comandi nel capitolo "Produzione e serata dell'asta". |
 
 ### Consigli trasversali
 
