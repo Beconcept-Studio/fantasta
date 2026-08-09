@@ -45,7 +45,7 @@ const ROOT = path.resolve(__dirname, "..");
 function readEnvFile(file) {
   if (!fs.existsSync(file)) {
     throw new Error(
-      `Manca ${file}. Copia deploy/env.production.example in .env e riempilo (vedi docs/RUNBOOK.md).`,
+      `Manca ${file}. Copia deploy/env.production.example in .env e riempilo.`,
     );
   }
   const out = {};

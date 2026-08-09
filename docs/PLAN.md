@@ -1,6 +1,13 @@
 # Asta Fantacalcio a Busta Chiusa — Piano di Build
 
-Documento di specifica operativa. Da usare come `CLAUDE.md` (o `docs/PLAN.md`) nel repository.
+> **Archivio di v1.0.0. Non aggiornare.** Lo sviluppo corrente vive in `docs/features/`.
+>
+> Archivio **non** vuol dire disattivato: le regole marcate **INVARIANTE** — I1–I10 in
+> particolare — restano vincolanti per sempre. Significa solo che questo documento non si
+> estende: una feature nuova non si scrive qui dentro.
+
+Documento di specifica operativa di v1.0.0, redatto prima della Fase 0 e rispettato fino alla
+chiusura della Fase 8 il 2026-08-09.
 Ogni sezione è vincolante: le regole marcate **INVARIANTE** non sono negoziabili durante l'implementazione.
 
 ---
