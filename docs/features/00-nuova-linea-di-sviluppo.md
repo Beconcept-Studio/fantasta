@@ -1,6 +1,6 @@
 # M0 — La nuova linea di sviluppo
 
-> **Stato:** in corso · **Aperta il** 2026-08-09 · **Uscirà con** v1.1.0
+> **Stato:** chiusa · **Aperta e chiusa il** 2026-08-09 · **Uscita con** v1.1.0
 > **Tocca lo schema del database?** No.
 > **Invarianti coinvolti:** nessuno. Questa macro non tocca codice applicativo.
 
@@ -179,7 +179,7 @@ volta e su richiesta esplicita**.
       v1.0.0 (dove sta la documentazione di una feature, e perché)
 - [x] **M0-09** — Voce in `docs/DECISIONS.md`: «2026-08-09 — M0, la nuova linea di sviluppo», con
       le scelte e il perché (niente staging, PLAN e BACKLOG congelati, un file per macro)
-- [ ] **M0-10** — Chiusura: merge `--no-ff` su `dev`, prova, merge `--no-ff` su `main`, tag
+- [x] **M0-10** — Chiusura: merge `--no-ff` su `dev`, prova, merge `--no-ff` su `main`, tag
       `v1.1.0`, push
 
 ## Verifica
