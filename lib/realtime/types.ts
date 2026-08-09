@@ -81,16 +81,6 @@ export type SnapshotPlayer = {
   fvm: number;
 };
 
-/**
- * Chi ha una busta nel round corrente. **Mai l'importo**: durante `LOT_OPEN`
- * questo booleano è tutto ciò che si può sapere delle offerte altrui (I8).
- */
-export type SnapshotBidStatus = {
-  memberId: string;
-  hasBid: boolean;
-  withdrawn: boolean;
-};
-
 export type SnapshotRevealBid = {
   memberId: string;
   amount: number;
@@ -133,9 +123,16 @@ export type SnapshotLot = {
   /** ISO — la scadenza delle offerte, che è anche quella contro cui il server valida. */
   endsAt: string;
   closedAt: string | null;
-  /** Chi può offrire nel round corrente (`round_eligibility`). */
+  /**
+   * Chi può offrire nel round corrente (`round_eligibility`).
+   *
+   * È l'unica cosa che si sa degli altri finché le buste non si aprono, e non
+   * dice niente delle offerte: dice chi *potrebbe* offrire, ed è comunque
+   * deducibile da rose e crediti, che tutti vedono già. Chi ha davvero
+   * consegnato — non l'importo: proprio il fatto di aver consegnato — non esce
+   * dal server in nessuna forma prima di `LOT_REVEAL` (M1, §1).
+   */
   eligibleMemberIds: string[];
-  bidStatus: SnapshotBidStatus[];
   tie: SnapshotTie | null;
   reveal: SnapshotReveal | null;
 };

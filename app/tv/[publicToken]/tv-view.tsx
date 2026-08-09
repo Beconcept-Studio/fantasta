@@ -35,9 +35,12 @@ import { cn } from "@/lib/utils";
  *    (`text-4xl`), le etichette di contorno — quelle che si leggono una volta e
  *    poi si sanno — stanno a 24 px, e ciò che decide la serata (nome del
  *    giocatore, countdown, prezzo di aggiudicazione) sta fra i 128 e i 144 px.
- * 3. **Nessun importo a busta chiusa.** Non perché li nascondiamo: perché lo
- *    snapshot della TV non li contiene (I8). L'unica cosa che si sa delle buste
- *    è quante sono arrivate, finché non si aprono.
+ * 3. **Niente di niente sulle buste, finché non si aprono.** Non perché lo
+ *    nascondiamo qui: perché lo snapshot della TV non lo contiene (I8, e da M1
+ *    nemmeno chi ha consegnato o quante buste sono arrivate). Era proprio
+ *    questo schermo il problema: un riquadro che si accendeva per ogni busta
+ *    consegnata, grande abbastanza da leggerlo da quattro metri, cioè un
+ *    tabellone delle intenzioni altrui in mezzo a un'asta segreta.
  */
 export function TvView({
   auctionId,
@@ -226,7 +229,7 @@ function LotStage({
       </div>
 
       {reveal !== null ? (
-        <RevealStage snapshot={snapshot} />
+        <RevealStage snapshot={snapshot} offset={offset} />
       ) : lot.tie !== null ? (
         <div className="space-y-4 text-center">
           <p className="text-3xl text-white/70">
@@ -248,7 +251,7 @@ function LotStage({
         </div>
       ) : (
         <div className="space-y-6">
-          <Envelopes snapshot={snapshot} />
+          <SealedBids />
           <BigCountdown
             deadline={lot.endsAt}
             offset={offset}
@@ -261,54 +264,39 @@ function LotStage({
 }
 
 /**
- * Le buste consegnate: **il nome, e se è arrivata**. Mai la cifra — e non è una
- * scelta di questo componente: nello snapshot della TV la cifra non c'è.
+ * Il posto dove stavano le buste consegnate.
+ *
+ * Non è rimasto vuoto di proposito: uno schermo che durante il lotto non dice
+ * niente sembra uno schermo fermo, e in una stanza con dieci persone che
+ * guardano la TV «non succede niente» e «si è piantato» hanno lo stesso aspetto.
+ * Una riga che dichiara il silenzio lo rende una regola invece che un guasto.
  */
-function Envelopes({ snapshot }: { snapshot: Snapshot }) {
-  const lot = snapshot.currentLot;
-  if (lot === null) return null;
-  const arrivate = lot.bidStatus.filter((b) => b.hasBid).length;
-
+function SealedBids() {
   return (
-    <div className="space-y-4">
-      <p className="text-center text-4xl text-white/75">
-        Buste consegnate{" "}
-        <span className="font-semibold text-white">
-          {arrivate}/{lot.bidStatus.length}
-        </span>
-      </p>
-      <ul className="flex flex-wrap justify-center gap-3">
-        {lot.bidStatus.map((status) => {
-          const member = memberById(snapshot, status.memberId);
-          return (
-            <li
-              key={status.memberId}
-              className={cn(
-                "rounded-xl border-2 px-4 py-2 text-3xl",
-                status.withdrawn
-                  ? "border-white/25 text-white/45 line-through"
-                  : status.hasBid
-                    ? "border-emerald-400 bg-emerald-400/15 text-white"
-                    : "border-white/30 text-white/65",
-              )}
-            >
-              {memberLabel(member)}
-              <span className="ml-2 text-2xl">
-                {status.withdrawn ? "ritirato" : status.hasBid ? "✓" : "…"}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <p className="text-center text-4xl text-white/60">
+      Le buste sono segrete fino allo scadere
+    </p>
   );
 }
 
-/** L'apertura delle buste: l'unico momento in cui gli importi sono pubblici. */
-function RevealStage({ snapshot }: { snapshot: Snapshot }) {
+/**
+ * L'apertura delle buste: l'unico momento in cui gli importi sono pubblici.
+ *
+ * Mostra **tutti** i round, non solo l'ultimo. Prima di M1 la TV mostrava le
+ * offerte del round finale: in uno spareggio significava nascondere proprio le
+ * buste che lo spareggio l'avevano causato, e chi guardava vedeva due cifre
+ * uguali senza sapere da dove venissero.
+ */
+function RevealStage({
+  snapshot,
+  offset,
+}: {
+  snapshot: Snapshot;
+  offset: number;
+}) {
   const reveal = snapshot.currentLot?.reveal;
   if (!reveal) return null;
-  const ultimo = reveal.rounds[reveal.rounds.length - 1];
+  const { auction } = snapshot;
 
   return (
     <div className="space-y-6">
@@ -321,23 +309,46 @@ function RevealStage({ snapshot }: { snapshot: Snapshot }) {
         </p>
       </div>
 
-      <div className="flex flex-wrap justify-center gap-x-8 gap-y-3">
-        {[...ultimo.bids]
-          .sort((a, b) => b.amount - a.amount)
-          .map((bid) => (
-            <p
-              key={bid.memberId}
-              className={cn(
-                "text-4xl",
-                bid.withdrawnAt !== null && "text-white/45 line-through",
-                bid.memberId === reveal.winnerMemberId && "font-semibold",
-              )}
-            >
-              {memberLabel(memberById(snapshot, bid.memberId))}{" "}
-              <span className="tabular-nums">{bid.amount}</span>
+      {reveal.rounds.map((round) => (
+        <div key={round.roundNo} className="space-y-2">
+          {reveal.rounds.length > 1 && (
+            <p className="text-center text-2xl tracking-[0.2em] text-white/45 uppercase">
+              {round.roundNo === 1
+                ? "Buste"
+                : `Spareggio · da ${round.minAmount}`}
             </p>
-          ))}
-      </div>
+          )}
+          <div className="flex flex-wrap justify-center gap-x-8 gap-y-3">
+            {[...round.bids]
+              .sort((a, b) => b.amount - a.amount)
+              .map((bid) => (
+                <p
+                  key={bid.memberId}
+                  className={cn(
+                    "text-4xl",
+                    bid.withdrawnAt !== null && "text-white/45 line-through",
+                    bid.memberId === reveal.winnerMemberId &&
+                      round.roundNo === reveal.rounds.length &&
+                      "font-semibold text-emerald-300",
+                  )}
+                >
+                  {memberLabel(memberById(snapshot, bid.memberId))}{" "}
+                  <span className="tabular-nums">{bid.amount}</span>
+                </p>
+              ))}
+          </div>
+        </div>
+      ))}
+
+      <p className="text-center text-3xl text-white/55">
+        Prossimo turno ·{" "}
+        <Countdown
+          deadline={auction.phaseDeadline}
+          offset={offset}
+          pausedAt={auction.pausedAt}
+          className="font-semibold text-white"
+        />
+      </p>
     </div>
   );
 }

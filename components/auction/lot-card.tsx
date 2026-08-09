@@ -1,36 +1,36 @@
 "use client";
 
 import { Countdown, CountdownBar } from "@/components/auction/countdown";
-import { RevealPanel, TiePanel } from "@/components/auction/reveal-panel";
+import { TiePanel } from "@/components/auction/reveal-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
 import {
   amEligible,
   amInTie,
-  envelopes,
   haveWithdrawn,
   memberById,
   memberLabel,
 } from "@/lib/realtime/portal";
 import type { Snapshot } from "@/lib/realtime/types";
-import { cn } from "@/lib/utils";
 
 /**
- * La card del lotto (F5-04): **elemento permanente** del portale finché
- * `currentLot != null`.
+ * La card del **lotto vivo** (F5-04): `LOT_OPEN` e `LOT_TIE_PREP`. Quando le
+ * buste si aprono il testimone passa a `LotClosedCard`, che ha un'altra faccia
+ * perché è un altro momento.
  *
  * È la risposta di §8bis al problema che l'anno scorso rendeva l'app
  * inutilizzabile: se l'unica interfaccia per offrire è un modale, chi lo chiude
  * per sbaglio — o chi ha il telefono che va in standby — non ha più modo di
  * rientrare nel lotto. La card non sparisce mai: mostra a che punto siamo,
- * quanto ho offerto io, chi ha consegnato la busta, e ha il pulsante che
- * riapre il modale.
+ * quanto ho offerto io, e ha il pulsante che riapre il modale.
  *
- * Attraversa tutte e tre le fasi di un lotto senza cambiare identità:
- * `LOT_OPEN` (offerte), `LOT_TIE_PREP` (annuncio dello spareggio, F5-08),
- * `LOT_REVEAL` (buste aperte, F5-09). Chi rientra a metà trova la fase giusta
- * perché la fase è nello snapshot, non nella memoria del browser.
+ * **Degli altri non dice niente** (M1). Fino a v1.1.0 c'era un elenco delle
+ * buste consegnate, un pallino verde per chi si era mosso: informazione che lo
+ * snapshot non porta più, perché in una stanza dove ci si guarda in faccia
+ * sapere chi ha già consegnato basta per fare strategia anche senza sapere
+ * quanto. Al suo posto c'è una riga che spiega il silenzio — se non si dice
+ * perché, la card sembra rotta.
  */
 export function LotCard({
   snapshot,
@@ -54,7 +54,6 @@ export function LotCard({
   const caller = memberById(snapshot, lot.calledByMemberId);
   const iCalled = lot.calledByMemberId === myMemberId;
   const withdrawn = haveWithdrawn(snapshot);
-  const rows = envelopes(snapshot, myMemberId);
 
   return (
     <section className="bg-card overflow-hidden rounded-xl border shadow-sm">
@@ -90,27 +89,13 @@ export function LotCard({
         <CountdownBar
           deadline={open ? lot.endsAt : snapshot.auction.phaseDeadline}
           offset={offset}
-          totalSeconds={
-            open
-              ? timers.bidSeconds
-              : phase === "LOT_TIE_PREP"
-                ? timers.tiePrepSeconds
-                : timers.revealSeconds
-          }
+          totalSeconds={open ? timers.bidSeconds : timers.tiePrepSeconds}
           pausedAt={pausedFor}
         />
       </header>
 
       {/* ── Il cuore, che cambia con la fase ── */}
       <div className="space-y-3 px-4 pb-4">
-        {phase === "LOT_REVEAL" && lot.reveal !== null && (
-          <RevealPanel
-            reveal={lot.reveal}
-            snapshot={snapshot}
-            myMemberId={myMemberId}
-          />
-        )}
-
         {phase === "LOT_TIE_PREP" && lot.tie !== null && (
           <TiePanel
             amount={lot.tie.amount}
@@ -139,49 +124,11 @@ export function LotCard({
           </>
         )}
 
-        {/* ── Le buste degli altri: solo un booleano (I8) ── */}
-        {rows.length > 0 && phase !== "LOT_REVEAL" && (
-          <div className="space-y-1.5">
-            <h3 className="text-muted-foreground text-xs tracking-wide uppercase">
-              Buste consegnate
-            </h3>
-            <ul className="flex flex-wrap gap-1.5">
-              {rows.map((row) => (
-                <li
-                  key={row.member.id}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
-                    row.withdrawn && "text-muted-foreground line-through",
-                    !row.withdrawn &&
-                      row.hasBid &&
-                      "border-emerald-600/40 bg-emerald-600/10",
-                    row.isMe && "font-medium",
-                  )}
-                  title={
-                    row.withdrawn
-                      ? "Si è ritirato"
-                      : row.hasBid
-                        ? "Ha consegnato la busta"
-                        : "Non ha ancora offerto"
-                  }
-                >
-                  <span
-                    className={cn(
-                      "size-1.5 rounded-full",
-                      row.hasBid && !row.withdrawn
-                        ? "bg-emerald-600"
-                        : "bg-muted-foreground/40",
-                    )}
-                  />
-                  {row.isMe ? "tu" : row.member.teamName}
-                </li>
-              ))}
-            </ul>
-            <p className="text-muted-foreground text-xs">
-              Gli importi si vedono solo all&apos;apertura delle buste.
-            </p>
-          </div>
-        )}
+        {/* ── Il silenzio, spiegato: delle buste altrui non si sa niente (M1) ── */}
+        <p className="text-muted-foreground text-center text-xs">
+          Le buste sono segrete: chi ha offerto, e quanto, si vede
+          all&apos;apertura.
+        </p>
       </div>
     </section>
   );
