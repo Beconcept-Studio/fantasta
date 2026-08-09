@@ -98,4 +98,8 @@ else
 fi
 pm2 save --force
 
-echo "✓ deploy completato — pm2 logs asta per seguire l'app"
+# L'ultima riga del log di Ploi dice *quale* commit sta girando: senza, per
+# sapere se un deploy automatico è arrivato davvero bisogna entrare sul server
+# e chiederlo a git.
+echo "✓ deploy completato — in produzione: $(git log --oneline -1)"
+echo "  pm2 logs asta   per seguire l'app in diretta"
