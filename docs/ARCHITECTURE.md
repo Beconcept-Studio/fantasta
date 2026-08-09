@@ -1124,18 +1124,170 @@ qualcuno aggiungerà.
 
 ---
 
+## Il posto dove gira
+
+Tutto quello che hai letto finora vive su **una macchina sola**, ed è la conseguenza pratica della
+scelta raccontata all'inizio: un processo Node persistente, con i timer in memoria e il registro
+delle connessioni SSE in una variabile globale, non si può spalmare su più server senza
+smontarlo. La topologia è quindi la più semplice possibile, e non è un ripiego — è ciò che rende
+la concorrenza governabile da un `SELECT … FOR UPDATE`.
+
+```text
+        internet
+            │  https
+            ▼
+     ┌──────────────┐
+     │    nginx     │  certificato Let's Encrypt, proxy_buffering off sullo stream
+     └──────┬───────┘
+            │  http, 127.0.0.1:3000
+            ▼
+     ┌──────────────┐
+     │   Node       │  un processo, sotto pm2 (fork, 1 istanza)
+     │   Next.js    │  · lo scheduler: sweep ogni secondo + timer armati
+     │   standalone │  · il registro delle connessioni SSE
+     └──────┬───────┘
+            │  socket locale
+            ▼
+     ┌──────────────┐
+     │ PostgreSQL16 │  stessa macchina: nessuna latenza di rete nel lock
+     └──────────────┘
+```
+
+Una CX22 di Hetzner: due vCPU, quattro gigabyte, circa quattro euro al mese. Il processo ne usa
+centocinquanta megabyte, un'asta intera a otto produce milleduecento righe in `events` e il dump
+compresso dell'intero database sta in centoventitré kilobyte. Il dimensionamento non è stato un
+problema per un solo istante, ed è esattamente ciò che ci si aspetta da dodici persone in una
+stanza per due ore all'anno.
+
+### Perché il processo va avviato in un modo preciso
+
+`output: 'standalone'` produce una cartella autoconsistente con dentro un `server.js` e le sole
+dipendenze che servono davvero. Due cose di quel formato hanno conseguenze che si pagano in
+produzione e in nessun altro posto.
+
+La prima: **`.next/static` e `public/` non ci finiscono dentro**. Vanno copiati a mano accanto al
+bundle, e se non lo fai la pagina si carica ma senza CSS e senza idratazione — il che significa
+che il portale resta fermo sulla scritta «Mi collego all'asta…», nessuno stream parte, e il
+sintomo sembra un problema di realtime mentre è un file mancante. È il motivo per cui lo script di
+deploy fa quella copia e poi **verifica di averla fatta**, fallendo il deploy se il CSS non è al
+suo posto: un errore rumoroso al momento giusto vale più di dieci minuti di diagnosi al momento
+sbagliato.
+
+La seconda: `server.js` fa `process.chdir(__dirname)` e gira quindi con la working directory
+dentro `.next/standalone`, dove **non esiste nessun `.env`**. Le variabili d'ambiente non possono
+arrivare da lì, e devono essere passate dall'esterno: se ne occupa `deploy/ecosystem.config.cjs`,
+il file di configurazione di pm2, che legge il `.env` della radice con un parser di dieci righe e
+lo consegna al processo aggiungendo `NODE_ENV`, `HOSTNAME=127.0.0.1` e `TZ=UTC`. Il file è
+committato e non contiene nessun segreto: la password del database resta scritta in un posto solo.
+Se manca una delle cinque variabili del piano, pm2 non parte affatto — meglio un errore all'avvio
+che un login che gira a vuoto la sera dell'asta.
+
+Dentro quel file c'è una riga che vale la pena non toccare mai: `exec_mode: "fork"` con
+`instances: 1`. In cluster mode pm2 avvierebbe una copia del processo per core, e **ogni copia
+eseguirebbe `instrumentation.ts`**: due sweep che fanno avanzare la stessa asta, cioè il bug
+contro cui esiste la guardia `globalThis.__scheduler`, riprodotto in produzione a comando. Il
+lock e l'invariante di versione lo renderebbero probabilmente innocuo, ma "probabilmente innocuo"
+non è il modo in cui si conduce un'asta.
+
+### nginx, e l'unica riga che conta
+
+Davanti al processo c'è nginx, che termina il TLS e inoltra tutto a `127.0.0.1:3000`. La
+configurazione è quella standard di Ploi con **due `location`** al posto di quello che serviva un
+sito statico, e la differenza fra i due è tutta in una manciata di righe: sulla rotta dello stream
+il buffering è spento.
+
+Senza `proxy_buffering off`, nginx accumula la risposta e la consegna a blocchi. Su una risposta
+normale non lo noteresti; su un canale che manda uno snapshot per transizione significa che gli
+aggiornamenti arrivano a gruppi e i countdown dei partecipanti si muovono a scatti di trenta
+secondi. È il tipo di guasto peggiore, perché l'applicazione *sembra* funzionare. La difesa è
+doppia di proposito: l'app manda anche `X-Accel-Buffering: no` sulla risposta dello stream, e
+nginx quell'header lo rispetta. Una protegge dal giorno in cui Ploi rigenererà la configurazione
+del sito, l'altra dal giorno in cui un refactoring toglierà l'header.
+
+La prova che tutto questo funziona non è una lettura della configurazione ma una misura:
+aprendo lo stream da fuori e marcando ogni riga con l'ora in cui arriva, si vede lo snapshot al
+secondo zero e i `: ping` a quindici e a trenta. Col buffering attivo arriverebbero tutti insieme
+alla chiusura della connessione.
+
+### Il deploy
+
+Un push su `main` fa partire un webhook di GitHub verso Ploi, che esegue `deploy/deploy.sh` sul
+server. Lo script è in git accanto al codice che deploya — non nel pannello di un servizio — così
+la procedura è versionata insieme a ciò che installa, e in Ploi resta una riga sola che la
+richiama.
+
+L'ordine è: rifiutare di partire se un'asta è viva, allineare il codice con `git reset --hard`,
+installare, compilare, copiare gli asset statici, ricaricare pm2. Due dettagli meritano una nota.
+`pnpm install` usa `--prod=false` perché `next build` ha bisogno di TypeScript, Tailwind ed
+eslint-config-next, che stanno tutti in `devDependencies`: senza quel flag la build muore sul
+primo import di Tailwind, ed è il classico "in locale funziona". E `pnpm db:push` **non c'è**: lo
+schema si applica a mano, perché `drizzle-kit` gira senza chiedere conferme e una modifica di
+schema che parte da sola mentre otto persone stanno offrendo è un rischio che non ha nessun
+contrappeso.
+
+La guardia sull'asta viva merita di essere spiegata, perché a prima vista è ridondante: il riavvio
+in sé è innocuo, lo stato è tutto a database e il boot recovery riprende in un attimo. Ma la build
+avviene **sul posto**, dura due minuti, e per quei due minuti il processo in esecuzione legge file
+da una cartella che si sta riscrivendo. Non è la fine del mondo; è agitazione gratuita nel momento
+peggiore. Per questo lo script si ferma con `LIVE` o `PAUSED` — e `PAUSED` è compreso di proposito,
+perché è lo stato in cui l'owner mette l'asta *mentre sta risolvendo un problema*.
+
+### I bot, in produzione
+
+Il collaudo che chiude il cerchio è un'asta completa a otto giocata sul server vero, e a giocarla
+sono i bot. Ma i bot si autenticavano col provider `dev`, che in produzione non esiste per
+costruzione — e non sarebbe bastato aggiungere un interruttore, perché il server standalone di
+Next imposta `NODE_ENV=production` da sé prima che il nostro codice possa dire la sua.
+
+La soluzione è che i bot **si firmano da soli il cookie di sessione**. La sessione di questa
+applicazione è un JWT cifrato e la chiave è `AUTH_SECRET`; chi ha quel segreto — il server, e lo
+script che legge lo stesso `.env` sulla stessa macchina — può emetterne uno valido. Non è una
+scorciatoia nell'autenticazione: **all'applicazione non è stato aggiunto nessun modo di entrare**,
+e chi possiede `AUTH_SECRET` possiede già tutto. In cambio il cammino di codice è uno solo, identico
+in sviluppo e in produzione, il che è precisamente la proprietà che si vuole da uno strumento di
+collaudo: ciò che funziona in prova funziona la sera dell'asta.
+
+L'unica differenza fra i due ambienti la fa il nome del cookie, che Auth.js prefissa con
+`__Secure-` quando l'app gira in https — e siccome quel nome è anche il *salt* della derivazione
+della chiave, sbagliarlo produrrebbe un token che il server scarta in silenzio. Per questo lo
+script, appena firmato il cookie, lo prova subito contro `/api/auth/session`: un errore
+comprensibile in partenza invece di una sfilza di 401 a metà asta.
+
+### Il tempo, i backup, e cosa si vede
+
+Il server gira in **UTC**, e non solo la macchina: anche il processo, perché la variabile è fissata
+nella configurazione di pm2 e non dipende da cosa dice il sistema operativo. Ogni orario nel
+database e nei log è quindi UTC, e la conversione a `Europe/Rome` avviene soltanto quando un
+numero viene disegnato su uno schermo. È una regola noiosa che si ripaga da sola la prima volta che
+qualcuno confronta due timestamp.
+
+Ogni notte un `pg_dump` comprime l'intero database in `~/backups` e tiene gli ultimi quattordici.
+Il formato è SQL semplice gzippato e non il formato `custom` di Postgres, per una ragione poco
+tecnica: un dump che si legge con `zless` e si ripristina con `psql` è un dump che riesci a usare
+alle undici di sera senza rileggere il manuale. Accanto c'è uno script che il backup lo **prova**:
+ripristina l'ultimo dump su un database separato, conta le righe e verifica che sulle rose
+ripristinate valga ancora l'invariante I2 — nessun giocatore assegnato due volte. Un backup che si
+ripristina ma con una rosa incoerente non è un backup buono, e la differenza si vede solo
+controllando.
+
+Della serata, infine, resta una traccia doppia. Su `stdout` — cioè in `pm2 logs asta`, che l'owner
+tiene aperto su un terminale per tutta la durata — scorre una riga per transizione, e leggerle in
+diretta è il modo più immediato di sapere a che punto è l'asta. A database, la tabella `events`
+conserva le stesse transizioni per sempre: milleduecentosessanta righe per un'asta a otto, ed è lì
+che si va a guardare quando qualcuno chiede «ma quel portiere a quanto era andato?».
+
+---
+
 ## Cosa non c'è ancora
 
-Alla fine della Fase 7 l'applicazione fa tutto quello che serve la sera dell'asta. L'owner la fa
-partire dal posto che vuole, la mette in pausa, corregge gli sbagli senza toccare il database,
-scarica il file da ricaricare su Fantacalcio.it; la stanza segue dal televisore e ciascuno offre
-dal proprio telefono.
+Con la Fase 8 l'applicazione è completa e vive su un indirizzo pubblico. L'unico pezzo rimasto
+fuori dal piano è l'area `/admin` — l'elenco di tutte le aste e di tutti gli utenti per chi ha il
+flag di amministratore: è comoda, non serve a giocare.
 
-Quello che manca è **il posto dove farla girare**. Oggi tutto questo vive su `pnpm dev` e su un
-Postgres in Docker sul portatile: la Fase 8 è il deploy — una macchina piccola, nginx davanti con
-il buffering spento sullo stream, il certificato, `pm2` che riavvia il processo se la memoria
-cresce, e un `pg_dump` ogni notte. Il criterio di chiusura è un'asta completa a otto partecipanti
-giocata in produzione.
-
-Fuori scopo per la prima asta resta l'area `/admin`, cioè l'elenco di tutte le aste e di tutti gli
-utenti per chi ha il flag di amministratore: è comodo, non serve a giocare.
+Restano poi le cose che un'applicazione usata **una sera all'anno** può permettersi di non avere, e
+vale la pena che siano una scelta consapevole invece di una dimenticanza. Non c'è alta
+disponibilità: se la macchina muore durante l'asta, si riparte da un backup su una macchina nuova,
+e nel frattempo l'asta è ferma. Non c'è un ambiente di staging: la prova generale si fa in
+produzione con i bot e poi si cancella, che per questo progetto è più onesto — collauda la macchina
+vera. E non c'è nessun monitoraggio automatico: il controllo è un umano che guarda `pm2 logs` con
+dieci persone intorno, ed è il monitoraggio con il tempo di reazione più breve che ci sia.

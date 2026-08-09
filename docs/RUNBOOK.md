@@ -371,8 +371,8 @@ pnpm db:studio            # ispezione del database dal browser
 
 **`drive` e `bots` non sono la stessa cosa.** Il driver è un processo che gioca da solo, con il
 proprio scheduler: serve a dimostrare che il motore funziona, e non ha bisogno dell'app accesa. I
-bot sono **client**: vogliono l'app accesa (`pnpm dev`), fanno login col provider `dev`, aprono lo
-stream SSE e agiscono via HTTP come farebbe un telefono. Sono quelli da usare per guardare una
+bot sono **client**: vogliono l'app accesa (`pnpm dev`), si firmano un cookie di sessione con
+`AUTH_SECRET`, aprono lo stream SSE e agiscono via HTTP come farebbe un telefono. Sono quelli da usare per guardare una
 schermata mentre l'asta va avanti — e, a differenza del driver, fanno arrivare gli aggiornamenti
 anche al tuo browser.
 
@@ -432,4 +432,209 @@ LIVE, entro un secondo.
 
 ## Produzione e serata dell'asta
 
-*(Sezione da compilare in Fase 8, task F8-05: checklist pre-asta e runbook incidenti.)*
+### La macchina, in sei righe
+
+| | |
+|---|---|
+| Indirizzo | **<https://fantasta.rggndr.it>** · IP `46.225.231.138` |
+| Server | Hetzner CX22 (2 vCPU, 4 GB), Ubuntu 26.04 LTS, gestito con **Ploi** |
+| Fuso | **UTC**, sia la macchina sia il processo (`TZ=UTC` in `deploy/ecosystem.config.cjs`). Ogni orario nei log e nel database è UTC: d'estate l'ora italiana è **+2** |
+| Accesso | `ssh ploi@46.225.231.138` (solo chiave; il login per password è disattivato) |
+| Cartella | `/home/ploi/fantasta.rggndr.it` |
+| Processo | un solo processo Node sotto **pm2**, che si chiama `asta`, in ascolto su `127.0.0.1:3000` con **nginx** davanti |
+
+Tre password diverse, che è facile confondere: quella **di sudo dell'utente `ploi`** (sta nel
+pannello di Ploi; serve per `systemctl`, `nginx`, `sudo -u postgres`), quella **del database**
+(sta solo dentro `.env`, e la usano l'app e il backup), e la **passphrase della chiave SSH**, che
+non lascia mai il tuo Mac.
+
+### Entrare e guardare cosa succede
+
+```bash
+ssh ploi@46.225.231.138
+cd /home/ploi/fantasta.rggndr.it
+export DB="$(sed -n 's/^DATABASE_URL="\(.*\)"$/\1/p' .env)"   # per interrogare il database
+
+pm2 status                     # il processo `asta` è online?
+pm2 logs asta                  # l'asta in diretta: una riga per transizione
+pm2 logs asta --lines 50 --nostream
+pm2 describe asta | grep -E "uptime|restarts|memory"
+```
+
+`export DB=…` vale **solo nella sessione in cui lo dai**: in una tab nuova va rifatto, insieme al
+`cd`.
+
+### Il deploy
+
+Il deploy parte **da solo a ogni push su `main`** (webhook GitHub → Ploi → `deploy/deploy.sh`) e
+dura **circa due minuti**. Si può anche lanciare a mano, dal pulsante di Ploi o dal server:
+
+```bash
+cd /home/ploi/fantasta.rggndr.it && ./deploy/deploy.sh
+```
+
+Cosa fa, in ordine: rifiuta di partire se un'asta è `LIVE` o `PAUSED`, `git reset --hard
+origin/main`, `pnpm install --frozen-lockfile --prod=false`, `pnpm build`, **copia `.next/static`
+dentro `.next/standalone`**, `pm2 reload`. Finisce stampando il commit finito in produzione, e
+quella riga si legge anche nel log di Ploi (*Deployments*).
+
+> ⚠ **La sera dell'asta non si pusha su `main`.** La guardia protegge la finestra pericolosa —
+> asta viva — ma non la fase di setup: lì un deploy sono due minuti di pagine ballerine e di
+> presence che si riazzera mentre i partecipanti stanno entrando in lobby. Se vuoi la cintura in
+> più, spegni *Quick deploy* dal pannello di Ploi per quella sera e riaccendilo il giorno dopo.
+> Se serve davvero deployare ad asta viva: `DEPLOY_DURING_AUCTION=1 ./deploy/deploy.sh`.
+
+**Se cambi una variabile in `.env`**, il deploy non basta:
+
+```bash
+pm2 reload deploy/ecosystem.config.cjs --update-env
+```
+
+e **non** `pm2 restart asta`: è l'ecosystem file a leggere `.env`, e lo fa quando pm2 lo valuta —
+un restart per nome riparte con l'ambiente vecchio, e sembra che la modifica non abbia avuto
+effetto.
+
+Lo **schema del database non si applica mai da solo**: `pnpm db:push` è un comando manuale, di
+proposito. `drizzle-kit` gira con `strict: false` e non chiede il permesso a nessuno.
+
+### Checklist pre-asta (PLAN §17) — da eseguire il giorno stesso
+
+**1. Backup completo, e una copia scaricata in locale.**
+
+```bash
+# sul server
+cd /home/ploi/fantasta.rggndr.it && ./deploy/db-backup.sh && ls -lh ~/backups/
+# dal tuo Mac
+scp ploi@46.225.231.138:'~/backups/asta-*.sql.gz' ~/Downloads/
+```
+
+**2. Asta di prova a 8 bot con timer accelerati, portata a `COMPLETED`, in produzione.**
+
+```bash
+pnpm db:seed --auction-status=ready      # stampa id, link TV e la riga dei bot già pronta
+pnpm bots --auction=<ID> --count=8 --strategy=random --start --url=https://fantasta.rggndr.it
+```
+
+Sono ~200 lotti in 10–20 minuti. A fine corsa i controlli che contano:
+
+```bash
+psql "$DB" -c "select status, completed_at from auctions where id='<ID>';"
+psql "$DB" -c "
+select m.team_name, count(a.id) giocatori, m.budget_initial - coalesce(sum(a.price),0) crediti
+from members m left join assignments a on a.member_id=m.id and a.voided_at is null
+where m.auction_id='<ID>' group by m.team_name, m.budget_initial order by 1;"
+```
+
+Atteso: `COMPLETED`, otto rose da **25** giocatori, crediti tutti **≥ 0**.
+
+**3. Cancellazione dell'asta di prova, e l'asta vera in `READY`.**
+
+```bash
+psql "$DB" -c "delete from auctions where id='<ID-DI-PROVA>';"
+psql "$DB" -c "delete from users where google_sub is null;"   # via i 12 utenti finti del seed
+psql "$DB" -c "select name, status from auctions;"            # deve restare solo quella vera, READY
+```
+
+Il `DELETE` porta via tutto per cascata ed è l'unico posto in cui è legittimo: la regola 5 vieta
+di *correggere* con `DELETE` dentro un'asta viva, non di buttarne una intera.
+
+**4. Vista TV sul dispositivo di proiezione, provata con un lotto finto.** Il link è
+`https://fantasta.rggndr.it/tv/<public_token>`; il token si legge dalla regia o così:
+
+```bash
+psql "$DB" -c "select name, public_token from auctions;"
+```
+
+Aprila **in incognito**: non ha login, e il token *è* la sua autenticazione. Se sul televisore
+qualcosa è illeggibile, quello è il momento di scoprirlo.
+
+**5. Ogni partecipante fa login e compare `LIVE` in lobby, prima di cominciare.** È un cancello
+vero, non un consiglio: `startAuction` rifiuta finché **tutti** i membri non hanno la pagina
+aperta in primo piano. Sulla regia (`/manage`) ogni posto ha il suo pallino.
+
+**6. `pm2 logs asta` aperto su un terminale, visibile a te per tutta la durata.**
+
+```bash
+ssh ploi@46.225.231.138 'pm2 logs asta'
+```
+
+### Se qualcosa va storto in diretta
+
+**La pausa è sempre il primo passo.** Non esiste uno stato in cui mettere in pausa peggiori le
+cose: le scadenze vengono congelate e poi traslate, non perse.
+
+| Sintomo | Azione |
+|---|---|
+| Un partecipante non riesce a offrire | Pausa. Guarda presence e `max_bid` sulla regia. Se serve, a lotto chiuso il manager sistema con `manualAssign` |
+| Un lotto si è chiuso con l'esito sbagliato | Pausa → `voidAssignment` dell'assegnazione errata → `manualAssign` con l'esito giusto → resume. **La rotazione dei turni non torna indietro** |
+| Un client resta indietro | Ricarica la pagina. Ogni schermata è funzione dello snapshot: non c'è niente da recuperare |
+| Il telefono di qualcuno si è disconnesso | Basta che riapra la pagina. Nel frattempo, al suo turno scatta l'auto-pick e le sue offerte si fermano a 1 |
+| Il server non risponde | `pm2 restart asta`. Lo stato è tutto a database e il boot recovery riprende **dentro il ritmo dell'asta** (misurato: buco massimo 4 secondi su 1260 transizioni). Se il downtime supera il tempo residuo, lo sweep chiude il round con le buste già a database; esito sbagliato → pausa → void → manualAssign |
+| La pagina si carica senza stile e non risponde | Manca `.next/static` dentro `.next/standalone`: rilancia `./deploy/deploy.sh`, che la copia e fallisce esplicitamente se non ci riesce |
+| I countdown si muovono a scatti di 30 secondi | nginx sta bufferizzando lo stream: controlla che il `location ~ ^/api/auctions/[^/]+/stream$` con `proxy_buffering off` sia ancora nella config del sito (Ploi la riscrive quando rinnova il certificato) |
+| Dubbio su cosa sia successo | `psql "$DB" -c "select * from events where auction_id='<ID>' order by id desc limit 50;"` |
+| Il processo mangia memoria | pm2 lo riavvia da sé a 512 MB, e il boot recovery copre il riavvio. Normale sta sui 150 MB |
+
+Verificare lo stato in un colpo d'occhio, da terminale:
+
+```bash
+psql "$DB" -c "select name, status, phase, state_version, phase_deadline from auctions;"
+```
+
+### Backup e restore
+
+Il `pg_dump` gira ogni notte alle **04:15 UTC** (06:15 italiane) e tiene gli ultimi **14** dump in
+`~/backups`, con il log in `~/backups/backup.log`.
+
+```bash
+./deploy/db-backup.sh          # un backup adesso
+./deploy/db-restore-check.sh   # prova il restore dell'ultimo dump su un DB separato, poi lo butta
+crontab -l                     # controlla che il cron ci sia
+```
+
+`db-restore-check.sh` non tocca mai la produzione: ricrea `asta_restore_check`, ci ripristina il
+dump, conta le righe, **verifica I2** (nessun giocatore assegnato due volte fra le righe vive) e
+cancella la copia. Chiede la password di sudo.
+
+**Restore vero, sopra la produzione** — solo se il database è compromesso, e con l'app ferma:
+
+```bash
+pm2 stop asta
+gunzip -c ~/backups/asta-<data>.sql.gz | psql "$DB"
+pm2 start asta
+psql "$DB" -c "select name, status, state_version from auctions;"
+```
+
+Il dump contiene i `DROP` in testa (`--clean --if-exists`), quindi si ripristina anche sopra un
+database che contiene già qualcosa.
+
+### Le cose che si rompono solo in produzione
+
+Cinque trappole che in locale non esistono, tutte già pagate una volta:
+
+1. **Il redirect URI di Google** va aggiunto a mano nella console per il dominio di produzione
+   (`https://fantasta.rggndr.it/api/auth/callback/google`), e l'app va **pubblicata**: in modalità
+   *Testing* entrano solo gli account aggiunti come utenti di test. Se il login dà
+   `invalid_client`, il problema è `AUTH_GOOGLE_ID`; se dà `redirect_uri_mismatch`, è l'URI. Per
+   vedere cosa manda davvero l'app basta leggere il parametro `client_id` del redirect verso
+   `accounts.google.com`.
+2. **`output: 'standalone'` non copia `.next/static` né `public/`.** Senza, la pagina si carica
+   senza CSS e senza idratazione — e il sintomo (il portale fermo su «Mi collego all'asta…»)
+   sembra un problema di realtime. Lo fa `deploy.sh`, che si ferma se la copia non è riuscita.
+3. **Gli import di `instrumentation.ts` devono restare dentro l'`if (NEXT_RUNTIME === "nodejs")`**,
+   altrimenti `pg` finisce nel bundle edge e ogni pagina risponde 500.
+4. **`proxy_buffering off` sulla rotta dello stream**, o i countdown vanno a scatti.
+5. **`next build` esegue ESLint**: un errore di lint **blocca la build di produzione** anche se
+   `pnpm dev` e `pnpm test` sono verdi. Per questo `pnpm build` va dato **prima** di chiudere una
+   fase, non la sera del deploy.
+
+### Rifare la macchina da zero
+
+Se un giorno il server sparisse, la sequenza completa è: creare un Hetzner CX22 con Ubuntu LTS →
+adottarlo in Ploi come *Custom server* scegliendo **PostgreSQL 16** e *Do not install PHP* →
+puntare il record A del dominio → creare il sito e agganciare il repository → creare database e
+utente → `cp deploy/env.production.example .env` e riempirlo → `pnpm install --frozen-lockfile
+--prod=false`, `pnpm db:push`, `./deploy/deploy.sh`, `pm2 startup` e `pm2 save` → incollare i due
+`location` di `deploy/nginx-asta.conf` nella config del sito **dopo** aver emesso il certificato
+(l'emissione riscrive quel file) → rimettere il cron del backup. Tutto ciò che serve è in `deploy/`
+e in questo capitolo.

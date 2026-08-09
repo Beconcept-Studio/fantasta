@@ -760,36 +760,40 @@ la rotazione dei turni non torna mai indietro.
   ⚠ Due inciampi utili da ricordare: il `client_id` di Google era stato riempito col redirect URI (Google risponde `invalid_client`, non `redirect_uri_mismatch` — si diagnostica leggendo il parametro `client_id` nel redirect verso Google); e una modifica di `.env` richiede `pm2 reload deploy/ecosystem.config.cjs --update-env`, **non** `pm2 restart asta`, perché è l'ecosystem file a leggere `.env` quando pm2 lo valuta.
   Dipende: F7-09
 
-- [ ] **F8-02 — nginx per SSE**
+- [x] **F8-02 — nginx per SSE**
   `proxy_buffering off` sulla route dello stream + Let's Encrypt.
-  Verifica: `curl -N` sullo stream in produzione riceve snapshot e ping in tempo reale, senza buffering.
+  Verifica: `curl -N` sullo stream in produzione riceve snapshot e ping in tempo reale, senza buffering. ✓ Con ogni riga marcata dall'ora d'arrivo: `event: snapshot` al secondo 0, `: ping` a **+15s** e a **+30s**. Con il buffering attivo sarebbero arrivate tutte insieme allo scadere della connessione.
+  Fatto: due `location` in `deploy/nginx-asta.conf`, incollati nel server block generato da Ploi — quello dello stream con `proxy_buffering off`, `proxy_request_buffering off`, `proxy_cache off`, `gzip off` e timeout a un'ora; quello generale con `client_max_body_size 10M` per l'upload del listone (il default di 1 MB avrebbe dato un 413 in fase di setup). La difesa è doppia di proposito: l'app manda già `X-Accel-Buffering: no`. Certificato Let's Encrypt emesso da Ploi **prima** di modificare la config, perché l'emissione riscrive quel file.
   Dipende: F8-01
 
-- [ ] **F8-03 — pm2 e boot recovery**
+- [x] **F8-03 — pm2 e boot recovery**
   `pm2` con `--max-memory-restart`; `pm2 restart` in produzione a metà asta di prova → recovery entro 1s.
-  Verifica: restart durante un round di prova: l'asta prosegue come da F3-14.
+  Verifica: restart durante un round di prova: l'asta prosegue come da F3-14. ✓ `pm2 restart asta` dato a ~100 assegnazioni su 200. Prova oggettiva a posteriori: sulle **1260 transizioni** dell'asta il buco più lungo fra due consecutive è di **4,0 secondi**, e con `bid_seconds = 3` la cadenza naturale è 3–4 — il riavvio **non si distingue dal rumore di fondo**. I bot hanno perso lo stream e si sono riconnessi da soli entro un secondo.
+  Fatto: `deploy/ecosystem.config.cjs`, `max_memory_restart: 512M`, `pm2 startup` + `pm2 save` registrati (riparte al boot della macchina), `pm2-logrotate` installato.
   Dipende: F8-01
 
-- [ ] **F8-04 — Backup**
+- [x] **F8-04 — Backup**
   `pg_dump` giornaliero in cron con retention; procedura di restore provata una volta.
-  Verifica: il dump di oggi esiste ed è restorabile su un DB vuoto.
+  Verifica: il dump di oggi esiste ed è restorabile su un DB vuoto. ✓ Dump di 123 KB con dentro l'asta di prova completa, ripristinato su `asta_restore_check`: 200 assegnazioni, 774 offerte, 1260 eventi, 495 giocatori, **I2 verificata sui dati ripristinati**, database di prova rimosso. Provato di proposito **prima** di cancellare l'asta di prova: un dump pieno è una prova seria, uno vuoto no.
+  Fatto: `deploy/db-backup.sh` (SQL semplice gzippato, `--clean --if-exists --no-owner`, rifiuta un dump sotto il KB o un gzip corrotto, retention 14) in cron alle **04:15 UTC** (06:15 italiane); `deploy/db-restore-check.sh` ripristina su un database separato, conta le righe e ricontrolla I2 senza mai toccare la produzione.
   Dipende: F8-01
 
-- [ ] **F8-05 — RUNBOOK di produzione**
+- [x] **F8-05 — RUNBOOK di produzione**
   Checklist pre-asta di §17 (6 punti) + tabella runbook incidenti (senza undo: correzioni via void + manualAssign), aggiornati con i comandi reali del server.
-  Verifica: la checklist è eseguibile punto per punto senza conoscenze non scritte.
+  Verifica: la checklist è eseguibile punto per punto senza conoscenze non scritte. ✓ Capitolo «Produzione e serata dell'asta» in `docs/RUNBOOK.md`: coordinate della macchina, le **tre password diverse** che è facile confondere, il deploy (automatico su push, ~2 minuti, con la regola «la sera dell'asta non si pusha»), la checklist §17 coi comandi copiabili, la tabella degli incidenti con i numeri misurati, backup e restore (compreso il restore vero sopra la produzione), le cinque trappole che esistono solo in produzione e la procedura per rifare la macchina da zero.
   Dipende: F8-03, F8-04
 
-- [ ] **F8-06 — Asta di prova in produzione**
+- [x] **F8-06 — Asta di prova in produzione**
   Asta completa a 8 bot con timer accelerati portata a COMPLETED su produzione, poi cancellata.
   Verifica: ✅ criterio di fase — asta COMPLETED in produzione; `events` coerente; l'asta di prova rimossa.
   Fatto (codice): i bot non passano più dal provider `dev`, che in produzione non esiste per costruzione — e non sarebbe bastata un'env var, perché il server standalone forza `NODE_ENV=production` da sé. `sessionCookie()` in `scripts/bots.ts` emette il JWT di sessione con `encode()` di `next-auth/jwt` usando `AUTH_SECRET`, e **verifica subito** che il server lo accetti (`GET /api/auth/session` deve restituire l'id giusto), invece di scoprirlo da una sfilza di 401 a metà asta. Il nome del cookie segue lo schema (`__Secure-` su https) perché Auth.js usa **il nome come salt** della chiave. Nessuna superficie di login aggiunta all'app: chi ha `AUTH_SECRET` ha già tutto. Vedi DECISIONS 2026-08-08.
   ✓ **Prova generale in locale**: asta a 8 bot dallo `START` a `COMPLETED`, 8 rose da 25 giocatori (200 assegnazioni vive), crediti tutti positivi (I3), `state_version` 827.
+  ✓ **In produzione, il criterio ✅ della fase**: asta a 8 bot su `https://fantasta.rggndr.it`, `COMPLETED` alle 10:46:14 del 2026-08-09, 8 rose da **25 giocatori esatti**, crediti tutti ≥ 0, **1260 righe in `events`** (con dentro il `pm2 restart` di F8-03), 774 offerte. Poi asta cancellata e utenti di prova rimossi: database di produzione con **zero aste e un solo utente**, quello vero — punto 3 della checklist §17.
   Dipende: F8-02, F8-03
 
-- [ ] **F8-07 — ARCHITECTURE: capitolo finale**
+- [x] **F8-07 — ARCHITECTURE: capitolo finale**
   Deploy, topologia (un processo, un DB, una macchina), e come leggere i log in diretta.
-  Verifica: il documento copre l'intera app allo stato finale.
+  Verifica: il documento copre l'intera app allo stato finale. ✓ Capitolo «Il posto dove gira»: il diagramma della topologia, perché il processo va avviato in un modo preciso (i due lasciti di `standalone`, e `fork`/1 istanza come invariante), l'unica riga di nginx che conta e come si **misura** che funzioni, il deploy e la ragione della guardia sull'asta viva, i bot che si firmano il cookie, il tempo in UTC, i backup provati e la traccia doppia della serata. Riscritto anche «Cosa non c'è ancora»: niente alta disponibilità, niente staging, niente monitoraggio — tre scelte, non tre dimenticanze.
   Dipende: F8-06
 
 - [ ] **F8-08 — GATE Fase 8**
