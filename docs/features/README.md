@@ -12,7 +12,9 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna.
+| Macro | Tema | Aperta il |
+|---|---|---|
+| [M1](01-segretezza-offerte.md) | Segretezza e rivelazione delle offerte | 2026-08-09 |
 
 ## Da pianificare
 
