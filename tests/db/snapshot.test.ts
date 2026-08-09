@@ -104,7 +104,7 @@ describe.runIf(dbUp)("F4-01 — snapshot durante LOT_OPEN", () => {
     expect(snap.serverNow).toBe(new Date(t0 + 1_200).toISOString());
   });
 
-  it("§12.31 — degli altri si sa se hanno offerto, mai quanto", async () => {
+  it("§12.31 — degli altri non si sa né quanto né se hanno offerto", async () => {
     const game = await gameAuction();
     const t0 = Date.now();
     unwrap(await startAuction(game.ownerId, game.auctionId, 0, t0));
@@ -115,24 +115,21 @@ describe.runIf(dbUp)("F4-01 — snapshot durante LOT_OPEN", () => {
 
     const snap = await snapshotOf(game.auctionId, game.memberIds[2], t0 + 1_200);
 
-    const status = snap.currentLot?.bidStatus ?? [];
-    expect(status).toHaveLength(8); // tutti idonei al primo lotto
-    expect(status.find((s) => s.memberId === game.memberIds[1])).toEqual({
-      memberId: game.memberIds[1],
-      hasBid: true,
-      withdrawn: false,
-    });
-    // Il chiamante ha l'auto-bid a 1: ha una busta, ma la cifra non si vede.
-    expect(status.find((s) => s.memberId === game.memberIds[0])?.hasBid).toBe(true);
-    expect(status.find((s) => s.memberId === game.memberIds[2])?.hasBid).toBe(false);
+    // Del round esce solo chi *potrebbe* offrire: al primo lotto sono tutti.
+    expect(snap.currentLot?.eligibleMemberIds).toHaveLength(8);
     expect(snap.myBid).toBeNull();
     expect(snap.currentLot?.reveal).toBeNull();
     // Nessun campo `amount` da nessuna parte: non c'è cifra da cui risalire.
     // (`minAmount` non conta — la soglia del round è pubblica per definizione.)
     expect(JSON.stringify(snap)).not.toContain('"amount"');
+    // E nemmeno una traccia di chi ha consegnato: il chiamante ha l'auto-bid a
+    // 1 e il seat 1 ha appena offerto 42, ma dal lotto i due sono
+    // indistinguibili dal seat 3, che non ha fatto niente (M1). La guardia
+    // forte — l'insieme esatto delle chiavi — sta in `i8.test.ts`.
+    expect(snap.currentLot).not.toHaveProperty("bidStatus");
   });
 
-  it("il ritiro è visibile come tale, e la propria offerta resta con withdrawnAt", async () => {
+  it("il ritiro resta con withdrawnAt, e lo vede solo chi si è ritirato", async () => {
     const game = await gameAuction();
     const t0 = Date.now();
     unwrap(await startAuction(game.ownerId, game.auctionId, 0, t0));
@@ -145,10 +142,12 @@ describe.runIf(dbUp)("F4-01 — snapshot durante LOT_OPEN", () => {
     const mine = await snapshotOf(game.auctionId, game.memberIds[1], t0 + 1_600);
     expect(mine.myBid?.withdrawnAt).toBe(new Date(t0 + 1_500).toISOString());
 
+    // Fino a v1.1.0 il ritiro era pubblico. Non lo è più: sapere che qualcuno
+    // è uscito dal lotto è esattamente il genere di informazione su cui si fa
+    // strategia (M1). Chi lo scopre lo scopre all'apertura delle buste.
     const other = await snapshotOf(game.auctionId, game.memberIds[2], t0 + 1_600);
-    expect(
-      other.currentLot?.bidStatus.find((s) => s.memberId === game.memberIds[1]),
-    ).toEqual({ memberId: game.memberIds[1], hasBid: false, withdrawn: true });
+    expect(other.myBid).toBeNull();
+    expect(JSON.stringify(other.currentLot)).not.toContain("withdrawn");
   });
 });
 

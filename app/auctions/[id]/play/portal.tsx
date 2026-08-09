@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { BidModal } from "@/components/auction/bid-modal";
 import { LotCard } from "@/components/auction/lot-card";
+import { LotClosedCard } from "@/components/auction/lot-closed-card";
 import { MembersPanel } from "@/components/auction/members-panel";
 import { PickPanel, PickWaiting } from "@/components/auction/pick-panel";
 import { PortalHeader } from "@/components/auction/portal-header";
@@ -115,14 +116,28 @@ export function Portal({
           </section>
         )}
 
-        {screen.kind === "LOT" && lot !== null && (
-          <LotCard
-            snapshot={snapshot}
-            myMemberId={myMemberId}
-            offset={offset}
-            onOpenBid={() => setDismissedLotId(null)}
-          />
-        )}
+        {/*
+          Due card per lo stesso posto: il lotto vivo e il lotto chiuso sono due
+          momenti diversi e devono avere due facce diverse (M1). La scelta è
+          della fase, quindi dello snapshot: chi rientra a metà reveal trova la
+          card chiusa come chi non si è mai disconnesso (I10).
+        */}
+        {screen.kind === "LOT" &&
+          lot !== null &&
+          (snapshot.auction.phase === "LOT_REVEAL" ? (
+            <LotClosedCard
+              snapshot={snapshot}
+              myMemberId={myMemberId}
+              offset={offset}
+            />
+          ) : (
+            <LotCard
+              snapshot={snapshot}
+              myMemberId={myMemberId}
+              offset={offset}
+              onOpenBid={() => setDismissedLotId(null)}
+            />
+          ))}
 
         {screen.kind === "PICK_MINE" && (
           <PickPanel

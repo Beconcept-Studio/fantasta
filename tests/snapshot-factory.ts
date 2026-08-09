@@ -52,11 +52,6 @@ export function lot(patch: Partial<SnapshotLot> = {}): SnapshotLot {
     endsAt: iso(30_000),
     closedAt: null,
     eligibleMemberIds: [ME, OTHER, THIRD],
-    bidStatus: [
-      { memberId: ME, hasBid: false, withdrawn: false },
-      { memberId: OTHER, hasBid: true, withdrawn: false },
-      { memberId: THIRD, hasBid: false, withdrawn: false },
-    ],
     tie: null,
     reveal: null,
     ...patch,
