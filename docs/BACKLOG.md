@@ -1,5 +1,8 @@
 # BACKLOG — Asta Fantacalcio a Busta Chiusa
 
+> **Archivio di v1.0.0. Non aggiornare.** Tutti i task delle fasi 0–8 sono chiusi. Il lavoro
+> corrente è in `docs/features/`: una macro-feature per file, spec e task insieme.
+
 Scomposizione operativa delle fasi di `docs/PLAN.md` §11. Ogni task è completabile e
 verificabile in isolamento. Nessuna fase si apre finché il task di gate della precedente
 non è verde.

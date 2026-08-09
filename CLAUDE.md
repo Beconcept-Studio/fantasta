@@ -4,61 +4,54 @@ Web app per gestire un'asta di Fantacalcio a busta chiusa in tempo reale.
 8–12 partecipanti, tutti nella stessa stanza, che offrono dal telefono mentre un portale manager
 è proiettato su una TV.
 
-**La specifica completa è in `docs/PLAN.md`. È vincolante.** Questo file contiene solo ciò che
-deve restare in contesto sempre.
+**v1.0.0 è in produzione su <https://fantasta.rggndr.it>.** La specifica con cui è stata
+costruita è `docs/PLAN.md`: è **archivio**, non si estende più, ma **i suoi invarianti I1–I10
+restano vincolanti per sempre**. Il lavoro corrente vive in `docs/features/`.
 
 ---
 
 ## Regola zero
 
-Prima di scrivere codice per una fase, **rileggi la sezione di `docs/PLAN.md` che la riguarda**.
-Non lavorare a memoria: il piano contiene invarianti numerati che vanno rispettati alla lettera.
+Prima di scrivere codice per una macro-feature, **rileggi il suo file in `docs/features/` e gli
+invarianti di `docs/PLAN.md` che tocca**. Non lavorare a memoria: gli invarianti sono numerati e
+vanno rispettati alla lettera.
 
-Se qualcosa nel piano è ambiguo o sbagliato, **fermati e chiedi**. Non risolvere l'ambiguità
-inventando: annota la domanda e aspetta. Un'assunzione silenziosa qui costa un'asta rifatta.
+Se qualcosa è ambiguo o sbagliato, **fermati e chiedi**. Non risolvere l'ambiguità inventando:
+annota la domanda e aspetta. Un'assunzione silenziosa qui costa un'asta rifatta.
 
 ---
 
-## Stato: fasi 0–8 chiuse, l'app è in produzione
+## Come si lavora: una macro-feature alla volta, tre branch
 
-> **Tutte le fasi del piano sono chiuse.** La 8 il **2026-08-09**, con **327 test verdi** e i
-> criteri ✅ dimostrati sul server: un'asta completa a 8 giocata su
-> **<https://fantasta.rggndr.it>** e portata a `COMPLETED` (8 rose da 25 giocatori, crediti tutti
-> ≥ 0), lo stream verificato senza buffering (snapshot a 0s, `: ping` a +15s e +30s), il boot
-> recovery riprovato **sul server** con un `pm2 restart` a metà round — **buco massimo di 4,0
-> secondi su 1260 transizioni**, cioè dentro il ritmo naturale dell'asta — e il `pg_dump`
-> ripristinato su un database separato con I2 verificata sui dati recuperati.
+Non ci sono più fasi. C'è una **macro-feature** per volta: un tema coerente abbastanza da
+giustificare un branch e un merge in produzione. Nasce dalle richieste in `docs/REQUESTS.md`, si
+apre **solo su richiesta esplicita dell'utente**, e ha un file suo in `docs/features/NN-nome.md`
+con spec e task insieme. Quando una richiesta entra in una macro, **sparisce dal quaderno**: due
+copie della stessa richiesta divergono sempre.
 
-Da qui in avanti **non ci sono più fasi**: il lavoro è manutenzione e le richieste raccolte in
-`docs/REQUESTS.md`, da affrontare **solo su richiesta esplicita dell'utente** e una alla volta.
-Resta all'owner l'esecuzione della checklist pre-asta di `docs/PLAN.md` §17 il giorno dell'asta
-vera — i comandi sono in `docs/RUNBOOK.md`, capitolo "Produzione e serata dell'asta".
+| Branch | Cos'è | Chi lo tocca |
+|---|---|---|
+| `main` | **La produzione.** Ogni push fa partire il deploy (~2 min). | Solo merge da `dev`. Mai un commit diretto. |
+| `dev` | **L'integrazione.** Si prova in locale; nessun deploy la guarda. | Solo merge da `feature/*`. |
+| `feature/NN-nome` | **Una macro-feature.** Nasce da `dev`, muore in `dev`. | Qui si committa, anche in piccolo. |
 
-**La produzione, in breve.** Hetzner CX22 (`46.225.231.138`), Ubuntu 26.04, Ploi; Postgres 16
-sulla stessa macchina; un solo processo Node sotto pm2 (`asta`, **fork, 1 istanza**) su
-`127.0.0.1:3000`, nginx davanti con Let's Encrypt; deploy automatico a ogni push su `main`
-(~2 minuti); `pg_dump` alle 04:15 UTC con retention 14. Tutto il resto è in `docs/RUNBOOK.md`.
+1. `git switch dev && git pull` → `git switch -c feature/NN-nome`
+2. Si lavora e si committa liberamente: è il branch a essere macro, non il commit.
+3. **Gate**: `pnpm test`, `pnpm typecheck` e `pnpm build` verdi, task del file feature spuntati.
+   Poi `git merge --no-ff` su `dev`.
+4. **Prova su `dev`**: Docker + seed, `pnpm bots`/`pnpm drive`, `pnpm dev:lan` dal telefono.
+5. `git merge --no-ff` su `main`, versione e tag minor, `CHANGELOG.md`, push. Il deploy parte da solo.
 
-**Tre regole operative che valgono da adesso.** **La sera dell'asta non si pusha su `main`**: il
-deploy si rifiuta di partire con un'asta `LIVE` o `PAUSED`, ma la fase di setup non è protetta.
-Dopo una modifica di `.env` serve `pm2 reload deploy/ecosystem.config.cjs --update-env`, **non**
-`pm2 restart asta`. E `pnpm db:push` **non è nel deploy**: lo schema si applica a mano, di
-proposito.
+`--no-ff` sempre: il merge commit è dove la macro inizia e finisce, ed è il punto di rollback.
 
-**Regole che la Fase 7 ha reso concrete e che restano vincolanti.** **Niente undo** (⚠ P1): un
-lotto sbagliato si corregge con `voidAssignment` + `manualAssign`, la rotazione dei turni non torna
-mai indietro. **Solo senza un lotto in contesa**: gli override sono rifiutati con `phase ∈
-{LOT_OPEN, LOT_TIE_PREP}`, anche ad asta in pausa (la pausa congela la fase, non la azzera). E
-**mai un `DELETE`** (regola 5): si scrive `voided_at`, e le rettifiche di budget sono righe di
-`ledger` — un void invece **non** scrive nessuna riga compensativa, perché il credito è una formula
-e il prezzo esce dalla somma da solo.
+**Niente branch per interventi piccoli.** Una correzione di una riga vive dentro la macro aperta,
+oppure aspetta la prossima.
 
-**Regole che la Fase 8 ha reso concrete.** **Un processo solo**: `exec_mode: "fork"` e
-`instances: 1` in `deploy/ecosystem.config.cjs` non sono una preferenza — in cluster mode ogni
-copia eseguirebbe `instrumentation.ts`, cioè due sweep sulla stessa asta. **Il server gira in
-UTC**, processo compreso: la conversione a `Europe/Rome` è solo di rendering. E **`pnpm build` fa
-parte della verifica**, non del deploy: `next build` esegue ESLint e un errore di lint blocca la
-build di produzione anche con `pnpm dev` e `pnpm test` verdi.
+**Due eccezioni.** *Hotfix*: `fix/nome` da `main`, poi merge su `main` **e subito dopo su `dev`** —
+se il secondo si dimentica, la prossima macro riporta in produzione il bug appena tolto.
+*Schema*: se una macro tocca `lib/db/schema.ts` il merge su `main` **non basta**, perché
+`pnpm db:push` non è nel deploy e va dato a mano sul server. Il file della feature lo dichiara in
+testa; la procedura è in «Regole operative di produzione».
 
 ---
 
@@ -85,6 +78,60 @@ build di produzione anche con `pnpm dev` e `pnpm test` verdi.
 
 ---
 
+## Regole operative di produzione
+
+**Niente undo.** Un lotto sbagliato si corregge con `voidAssignment` + `manualAssign`: la
+rotazione dei turni non torna mai indietro.
+
+**Gli override solo senza un lotto in contesa.** Sono rifiutati con `phase ∈ {LOT_OPEN,
+LOT_TIE_PREP}`, anche ad asta in pausa — la pausa congela la fase, non la azzera.
+
+**Mai un `DELETE`** (regola 5): si scrive `voided_at`. Un void **non** scrive righe compensative,
+perché il credito è una formula e il prezzo esce dalla somma da solo.
+
+**Un processo solo.** `exec_mode: "fork"` e `instances: 1` in `deploy/ecosystem.config.cjs` non
+sono una preferenza: in cluster mode ogni copia eseguirebbe `instrumentation.ts`, cioè due sweep
+sulla stessa asta.
+
+**Il server gira in UTC**, processo compreso: `Europe/Rome` è solo rendering. **Dopo una modifica
+di `.env`** serve `pm2 reload deploy/ecosystem.config.cjs --update-env`, **non** `pm2 restart asta`.
+
+**La sera dell'asta non si pusha su `main`.** Il deploy si rifiuta di partire con un'asta `LIVE`
+o `PAUSED`, ma la fase di setup non è protetta.
+
+**La macchina, in breve.** Hetzner CX22 (`46.225.231.138`), Ubuntu 26.04, Ploi; Postgres 16 sulla
+stessa macchina; un solo processo Node sotto pm2 (`asta`) su `127.0.0.1:3000`, nginx davanti con
+Let's Encrypt; deploy automatico a ogni push su `main` (~2 minuti); `pg_dump` alle 04:15 UTC con
+retention 14, in `deploy/db-backup.sh`. Il runbook è stato eliminato in v1.1.0 e resta leggibile
+con `git show v1.0.0:docs/RUNBOOK.md`; le tre procedure che servono al flusso sono qui sotto.
+
+**Una macro che tocca lo schema.** Dopo che il deploy è finito, sul server, con nessuna asta
+`LIVE` o `PAUSED`:
+
+```bash
+cd ~/asta && pnpm db:push
+pm2 reload deploy/ecosystem.config.cjs --update-env
+```
+
+Se il cambio è distruttivo (una colonna che sparisce, un tipo che cambia), prima un `pg_dump`:
+`deploy/db-backup.sh`.
+
+**Tornare indietro a una versione.** È a questo che servono i tag:
+
+```bash
+cd ~/asta && git fetch --tags && git reset --hard v1.2.0
+pnpm install --prod=false && pnpm build
+pm2 reload deploy/ecosystem.config.cjs --update-env
+```
+
+⚠ Se la versione da cui torni indietro aveva cambiato lo schema, il rollback del codice **non**
+riporta indietro il database: serve il restore da `pg_dump` (`deploy/db-restore-check.sh` mostra
+come si rilegge un dump).
+
+**Deployare a mano**, se il webhook non parte: `cd ~/asta && ./deploy/deploy.sh`.
+
+---
+
 ## Stack
 
 Next.js 15 (App Router, `output: 'standalone'`) · TypeScript · shadcn/ui + Tailwind ·
@@ -108,7 +155,19 @@ pnpm db:seed --auction-status=ready    # + asta a 8 pronta, listone importato
 pnpm db:seed --auction-status=mid      # asta LIVE già a metà (attenzione: con l'app accesa prosegue da sola)
 pnpm drive --auction=<id>              # gioca un'asta READY/LIVE fino a COMPLETED, senza UI
 pnpm test                 # vitest, fake timers obbligatori; i test in tests/db/ vogliono Postgres
+pnpm typecheck            # tsc --noEmit
+pnpm build                # next build — esegue ESLint: fa parte del gate, non del deploy
 pnpm bots --auction=<id> --count=7 --strategy=random|tie|aggressive|passive
+```
+
+Il ciclo git:
+
+```bash
+git switch dev && git pull
+git switch -c feature/NN-nome                          # apre una macro
+git switch dev && git merge --no-ff feature/NN-nome    # a gate verde
+git switch main && git merge --no-ff dev               # quando dev convince
+git tag -a v1.N.0 -m "MN — tema" && git push origin main --tags
 ```
 
 ---
@@ -120,22 +179,20 @@ scrive il codice**, altrimenti non verrà mai fatta.
 
 | File | Cosa contiene | Quando si aggiorna |
 |---|---|---|
-| `docs/PLAN.md` | La specifica. **Sola lettura.** | Solo su richiesta esplicita dell'utente |
-| `docs/BACKLOG.md` | Task atomici con checkbox, raggruppati per fase | A ogni task completato |
-| `docs/ARCHITECTURE.md` | **Come funziona la web app, spiegato a un umano.** Prosa leggibile, non elenchi di file. Cosa fa ogni pezzo, come interagiscono, perché è stato fatto così. | A fine di ogni fase, obbligatorio |
-| `docs/DECISIONS.md` | Append-only. Ogni scelta non prevista dal piano, con data e motivazione | Al momento della scelta |
-| `docs/RUNBOOK.md` | Come far girare l'app in locale e cosa fare la sera dell'asta | Quando cambia una procedura |
-| `docs/REQUESTS.md` | **Il quaderno dell'utente.** Modifiche che vuole fare *dopo*, annotate mentre prova l'app. **Non toccarlo e non lavorarci.** | Lo scrive lui, non tu |
-
-**`docs/REQUESTS.md` è fuori dal piano di sviluppo.** Non è backlog: sono desiderata raccolti in
-corsa, da affrontare **solo a fasi 0–8 concluse**, e su richiesta esplicita. Non anticiparne i
-contenuti, non "già che ci sono", non citarlo come motivo per deviare da `docs/PLAN.md`. Se una
-richiesta lì dentro contraddice il piano o un invariante, quello si discute quando arriverà il suo
-turno, non prima.
+| `docs/features/NN-nome.md` | **Il lavoro corrente.** Spec e task di una macro, nello stesso file | Task spuntati mentre si lavora |
+| `docs/features/README.md` | L'indice: macro aperte, chiuse, e in quale versione | All'apertura e alla chiusura di una macro |
+| `docs/ARCHITECTURE.md` | **Come funziona la web app, spiegato a un umano.** Prosa leggibile, non elenchi di file. Il perché prima del come | Alla chiusura di ogni macro, obbligatorio |
+| `docs/DECISIONS.md` | Append-only. Ogni scelta non ovvia, con data e motivazione | Al momento della scelta |
+| `CHANGELOG.md` | Una sezione per versione: cosa è cambiato per chi usa l'app | Al merge su `main` |
+| `docs/REQUESTS.md` | **Il quaderno dell'utente.** Lo scrive lui | Claude lo tocca **solo** per togliere le richieste appena pianificate in una macro |
+| `docs/PLAN.md`, `docs/BACKLOG.md` | **Archivio di v1.0.0.** Gli invarianti di `PLAN.md` restano vincolanti | Mai |
 
 `docs/ARCHITECTURE.md` è il documento che l'utente leggerà fra sei mesi per capire il proprio
 progetto. Scrivilo per quel lettore: paragrafi, non bullet point; il "perché" prima del "come";
-un diagramma testuale dove serve. **Aggiornarlo è un criterio di chiusura della fase, non un extra.**
+un diagramma testuale dove serve. **Aggiornarlo è un criterio di chiusura della macro, non un extra.**
+
+`docs/REQUESTS.md` è il quaderno in cui l'utente annota cosa vuole cambiare mentre usa l'app.
+**Non ci si lavora e non se ne anticipano i contenuti.**
 
 ---
 
@@ -144,9 +201,9 @@ un diagramma testuale dove serve. **Aggiornarlo è un criterio di chiusura della
 - **Scheduler duplicato in dev**: HMR rieseguirà `instrumentation.ts`. Usa
   `globalThis.__scheduler ??= start()`.
 - **Ogni singleton di processo va su `globalThis`**, non in una variabile di modulo: Next compila
-  `instrumentation.ts` e i route handler in **bundle separati**, quindi dello stesso file
-  esistono due copie. È così che il registro delle connessioni SSE e l'hook di broadcast si
-  erano trovati in due mondi diversi — stream aperto e poi silenzio per tutta l'asta.
+  `instrumentation.ts` e i route handler in **bundle separati**, quindi dello stesso file esistono
+  due copie. È così che registro SSE e hook di broadcast si erano trovati in due mondi diversi —
+  stream aperto e poi silenzio per tutta l'asta.
 - **Gli import di `instrumentation.ts` vanno dentro `if (process.env.NEXT_RUNTIME === "nodejs")`**,
   non dopo un `return` di guardia: solo il blocco `if` viene eliminato come ramo morto. Altrimenti
   `pg` finisce nel bundle edge e **l'app non parte affatto** (500 su ogni pagina).
@@ -160,10 +217,9 @@ un diagramma testuale dove serve. **Aggiornarlo è un criterio di chiusura della
   qualunque lavoro con della UI dentro, non la sera del deploy.
 - **Chunk client stantio in dev**: dopo molte modifiche con `pnpm dev` acceso, il browser può
   chiedere un bundle che non esiste più — `404 su /_next/static/chunks/app/.../page.js`. Il sintomo
-  è ingannevole: la pagina *si carica* ma non idrata, quindi il portale resta fermo su "Mi collego
-  all'asta…" e non parte nessuno stream né heartbeat. Non è un bug dell'app: riavvia il dev server.
-  Prima di indagare su un client che "non riceve snapshot", controlla la console per un 404 su un
-  chunk.
+  inganna: la pagina *si carica* ma non idrata, il portale resta su "Mi collego all'asta…" e non
+  parte nessuno stream. Non è un bug dell'app: riavvia il dev server. Prima di indagare su un
+  client che "non riceve snapshot", cerca un 404 su un chunk nella console.
 
 ---
 

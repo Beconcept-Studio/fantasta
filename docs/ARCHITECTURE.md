@@ -1291,3 +1291,51 @@ e nel frattempo l'asta è ferma. Non c'è un ambiente di staging: la prova gener
 produzione con i bot e poi si cancella, che per questo progetto è più onesto — collauda la macchina
 vera. E non c'è nessun monitoraggio automatico: il controllo è un umano che guarda `pm2 logs` con
 dieci persone intorno, ed è il monitoraggio con il tempo di reazione più breve che ci sia.
+
+---
+
+## Come questo progetto cresce, da qui in avanti
+
+Tutto quello che hai letto fin qui è stato costruito in nove fasi, fra il 6 e il 9 agosto 2026,
+seguendo una specifica scritta prima di iniziare — `docs/PLAN.md` — e un elenco di task —
+`docs/BACKLOG.md`. Quei due documenti sono ancora nel repository, ma sono archivio: raccontano
+come si è arrivati a v1.0.0, non cosa succede adesso. Il che non li rende innocui da ignorare:
+gli invarianti numerati di `PLAN.md` restano la specifica del motore, e valgono oggi come il
+primo giorno. Congelato vuol dire che non cresce più, non che non conta più.
+
+Adesso il progetto cresce per **macro-feature**. Una macro è un tema coerente abbastanza da
+giustificare un branch e un merge in produzione: «rendere segrete le offerte finché il lotto è
+aperto» è una macro, «cambiare il colore di un bottone» no — quella vive dentro la macro aperta,
+o aspetta la prossima. Ogni macro ha un file in `docs/features/`, che contiene nello stesso posto
+la spec e i task: quando lo riapri fra sei mesi trovi in un documento solo cosa doveva fare e
+cosa è stato fatto, senza dover incrociare due file che nel frattempo hanno preso strade diverse.
+
+Le richieste arrivano da `docs/REQUESTS.md`, il quaderno dove l'owner annota cosa vorrebbe
+cambiare mentre usa l'app. Nel momento in cui una richiesta viene pianificata dentro una macro,
+sparisce dal quaderno: il contenuto raffinato vive nel file della feature, e il quaderno resta la
+lista di ciò che non è ancora stato deciso. È una regola contro la ridondanza — due copie della
+stessa richiesta divergono sempre, e quando divergono non sai più quale delle due è la verità.
+
+Il codice viaggia su tre branch: `main` è la produzione e ogni push fa partire il deploy, `dev` è
+dove le macro si integrano e si provano in locale, e ogni macro ha il suo `feature/NN-nome`. Non
+c'è un ambiente di staging, per la stessa ragione descritta nel capitolo precedente: la prova si
+fa in locale con i bot e il telefono, e la prova generale vera si fa in produzione. Le versioni
+sono tag semantici — una macro in produzione è un minor, un hotfix è una patch — e `CHANGELOG.md`
+dice, versione per versione, cosa è cambiato per chi usa l'app. Il valore vero dei tag è il
+rollback: `git reset --hard v1.2.0` sul server è più rassicurante che cercare uno sha nei log
+mentre dieci persone aspettano.
+
+Una sola cosa di questo meccanismo può fare male davvero, ed è bene saperla prima che succeda: il
+deploy **non** applica lo schema al database. Se una macro tocca `lib/db/schema.ts`, portarla su
+`main` mette in produzione del codice che interroga colonne che ancora non esistono. Per questo
+ogni file di feature dichiara in testa se tocca lo schema, e `CLAUDE.md` porta la procedura con
+l'ordine giusto. Non è una dimenticanza: è la stessa scelta descritta più sopra, quella per cui
+`drizzle-kit` non deve poter modificare un database da solo mentre un'asta è in corso.
+
+C'era, fino a v1.0.0, un `docs/RUNBOOK.md` che raccoglieva queste procedure insieme alla guida
+che ha accompagnato la build fase per fase. È stato eliminato in v1.1.0 perché la metà che serviva
+durante la costruzione non serve più, e tenere in vita un documento per metà obsoleto è il modo
+migliore per non fidarsi più nemmeno dell'altra metà. Quello che il flusso di sviluppo richiede
+davvero è passato in `CLAUDE.md`; il resto — le tre password del server, la checklist pre-asta,
+la tabella degli incidenti misurati, come rifare la macchina da zero — resta leggibile con
+`git show v1.0.0:docs/RUNBOOK.md`, che è esattamente il genere di cosa per cui i tag esistono.
