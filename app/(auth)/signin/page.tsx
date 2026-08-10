@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { currentUser, isDevAuthEnabled, listDevUsers } from "@/lib/auth";
 
 import { signInAsDevUser, signInWithGoogle } from "./actions";
+import { PasswordForm } from "./password-form";
 
 export const metadata = { title: "Entra — Asta Fantacalcio" };
 
@@ -19,15 +20,25 @@ export default async function SignInPage() {
           Asta Fantacalcio
         </h1>
         <p className="text-muted-foreground text-sm">
-          Entra col tuo account Google per creare o partecipare a un&apos;asta.
+          Entra per creare o partecipare a un&apos;asta.
         </p>
       </header>
 
+      {/* Google resta in cima: è la strada di chi c'era già, ed è quella che
+          non chiede di ricordarsi niente. */}
       <form action={signInWithGoogle}>
         <Button type="submit" className="w-full" size="lg">
           Entra con Google
         </Button>
       </form>
+
+      <div className="flex items-center gap-3">
+        <span className="bg-border h-px flex-1" />
+        <span className="text-muted-foreground text-xs uppercase">oppure</span>
+        <span className="bg-border h-px flex-1" />
+      </div>
+
+      <PasswordForm />
 
       {isDevAuthEnabled && (
         <section className="space-y-3 border-t pt-6">

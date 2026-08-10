@@ -12,16 +12,28 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna.
+Nessuna. La prossima si apre su richiesta esplicita.
 
 ## Da pianificare
 
-Nessuna: `docs/REQUESTS.md` è vuoto, e il quaderno lo scrive l'owner.
+**[M6 — Amministrazione](06-amministrazione.md)**: il pannello, con la lista degli utenti e quella
+delle aste. Spec concordata e scritta, **non aperta**: si apre su richiesta esplicita. Non tocca lo
+schema. La dipendenza da M5 è soddisfatta — M5 è in v1.6.0 — e M6 porta con sé il pulsante che
+sostituisce l'unica cosa che M5 ha lasciato scoperta: la verifica a mano di un indirizzo, che oggi
+è una `UPDATE` sul server.
+
+Le due sono nate da una sessione di spec sola, il 2026-08-10, e sono state **tagliate in due di
+proposito**. M5 tocca la strada del login — l'unica cosa che, se si rompe, chiude fuori tutti — e
+introduce l'unica dipendenza esterna del progetto; M6 è un pannello. Due profili di rischio così
+diversi vogliono due tag e due punti di rollback: un rollback del pannello non deve portarsi via la
+registrazione. E la dipendenza è a senso unico — la lista utenti di M6, senza M5, non avrebbe niente
+da amministrare.
 
 ## Chiuse
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M5](05-identita.md) | Identità — registrazione con email e password, verifica dell'indirizzo, recupero | v1.6.0 — 2026-08-10 |
 | [M4](04-simulazione.md) | Simulazione in-app — l'asta di prova dall'interfaccia, con i bot dentro l'app | v1.5.0 — 2026-08-10 |
 | [M3](03-tracciabilita.md) | Tracciabilità — il verbale delle rose e lo storico dell'asta | v1.4.0 — 2026-08-10 |
 | [M2](02-navigazione.md) | Navigazione e identità delle pagine | v1.3.0 — 2026-08-10 |

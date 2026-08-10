@@ -28,6 +28,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { db, pool } from "../lib/db";
 import { auctions, events, users } from "../lib/db/schema";
 import { ensureBotUsers } from "../lib/engine/bots";
+import { hashPassword } from "../lib/engine/password";
 import { transition } from "../lib/engine/machine";
 import { persistTransition, withAuctionLock } from "../lib/engine/mutate";
 import { credits, maxBid } from "../lib/engine/rules";
@@ -157,12 +158,38 @@ function emailFor(displayName: string): string {
 }
 
 /**
+ * La password dei dodici utenti di prova (M5).
+ *
+ * Esiste per collaudare **la strada email+password in locale senza posta**:
+ * si entra da `/signin` con `marco.bianchi@example.test` e questa password,
+ * esattamente come farà un partecipante la sera dell'asta. Il provider `dev`
+ * resta ed è più veloce, ma salta tutto ciò che M5 ha aggiunto.
+ *
+ * Non è un segreto e non deve sembrarlo: gli utenti che la portano hanno un
+ * indirizzo `@example.test`, che è un dominio riservato e irraggiungibile.
+ */
+const DEV_PASSWORD = "asta-di-prova-1";
+
+/**
  * I 12 utenti di prova. `google_sub` resta NULL: è ciò che li distingue da un
  * account Google vero ed è il filtro con cui la pagina di login costruisce la
  * lista "Entra come …".
+ *
+ * ⚠ **`email_verified_at` va scritto** (M5 §9). Questi utenti non hanno né
+ * `google_sub` né una verifica alle spalle: nascerebbero non verificati, e la
+ * scala di `requireUser()` li lascerebbe **tutti fermi su `/verify`** — cioè la
+ * prova in locale si romperebbe al primo login, con un codice che nessuno può
+ * leggere perché non c'è nessuna casella di posta dietro `@example.test`.
  */
 async function seedUsers(): Promise<{ created: number; ids: string[] }> {
   let created = 0;
+  const now = new Date();
+  // Un hash solo per tutti e dodici: sono la stessa password, e scryptarla
+  // dodici volte costerebbe un secondo di seed per niente. Il salt è quindi
+  // condiviso fra utenti di prova, il che va benissimo per degli utenti di
+  // prova e **non** è ciò che fa `registerWithPassword`, dove ogni riga ha
+  // il suo.
+  const passwordHash = await hashPassword(DEV_PASSWORD);
 
   for (const displayName of DEV_USERS) {
     const email = emailFor(displayName);
@@ -171,16 +198,23 @@ async function seedUsers(): Promise<{ created: number; ids: string[] }> {
     });
 
     if (existing) {
-      if (existing.displayName !== displayName) {
-        await db
-          .update(users)
-          .set({ displayName })
-          .where(eq(users.id, existing.id));
-      }
+      // Anche le righe di un seed precedente vanno allineate: chi ha fatto
+      // `pnpm db:seed` prima di M5 ha dodici utenti senza verifica e senza
+      // password, e senza questo `update` resterebbero inutilizzabili.
+      await db
+        .update(users)
+        .set({
+          displayName,
+          passwordHash: existing.passwordHash ?? passwordHash,
+          emailVerifiedAt: existing.emailVerifiedAt ?? now,
+        })
+        .where(eq(users.id, existing.id));
       continue;
     }
 
-    await db.insert(users).values({ displayName, email });
+    await db
+      .insert(users)
+      .values({ displayName, email, passwordHash, emailVerifiedAt: now });
     created += 1;
   }
 
@@ -512,6 +546,11 @@ async function main(): Promise<void> {
   const { created, ids } = await seedUsers();
   console.log(
     `Utenti: ${created} creati, ${ids.length} utenti di prova a database.`,
+  );
+  // Stampata, non solo scritta nel codice: serve a collaudare `/signin` con
+  // email e password, che è l'unica strada che il provider `dev` non prova.
+  console.log(
+    `  Password di tutti (M5): ${DEV_PASSWORD} — es. ${emailFor(DEV_USERS[0])}`,
   );
 
   // I dodici bot (M4). Li crea anche il primo riempimento dall'interfaccia —

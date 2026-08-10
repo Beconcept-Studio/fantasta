@@ -84,6 +84,22 @@ if (missing.length > 0) {
   throw new Error(`.env incompleto: manca ${missing.join(", ")}.`);
 }
 
+/**
+ * Le cinque dell'SMTP (M5) **avvisano, non fermano**: senza di loro l'app parte
+ * e il login Google funziona come sempre — è solo la registrazione con email a
+ * restare a metà, con l'account creato e il codice mai partito. Farne un errore
+ * fatale vorrebbe dire che il giorno del deploy di M5 l'applicazione non si
+ * avvia affatto, che è molto peggio del problema che eviterebbe.
+ */
+const SMTP_KEYS = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "MAIL_FROM"];
+const missingSmtp = SMTP_KEYS.filter((key) => !fileEnv[key]);
+if (missingSmtp.length > 0) {
+  console.warn(
+    `⚠ .env senza SMTP: manca ${missingSmtp.join(", ")}. ` +
+      `I codici di verifica non partiranno e chi si registra con email resterà su /verify.`,
+  );
+}
+
 module.exports = {
   apps: [
     {

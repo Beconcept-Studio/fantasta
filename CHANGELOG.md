@@ -4,6 +4,75 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.6.0] — 2026-08-10
+
+**M5 — Identità.** Ci si può registrare con email e password, non solo con Google. Chi non ha un
+account Google — o non vuole collegarlo qui — adesso entra, e la sera dell'asta non resta in piedi
+accanto alla TV a guardare gli altri giocare.
+
+### ⚠ Per chi aggiorna il server
+
+Questa versione **cambia lo schema del database**, e a differenza delle altre **non basta
+`pnpm db:push`**: serve anche una riga di `psql`, senza la quale al primo caricamento *tutti* gli
+utenti che c'erano già finiscono davanti alla schermata del codice, chi amministra compreso.
+
+**Prima** del push, per sapere se il nuovo vincolo di unicità passa (se questa query restituisce
+righe, il push fallisce e vanno sistemate prima):
+
+```sql
+SELECT lower(email), count(*) FROM users
+WHERE email IS NOT NULL GROUP BY 1 HAVING count(*) > 1;
+```
+
+**Dopo** il deploy, con nessuna asta in corso:
+
+```bash
+cd /home/ploi/fantasta.rggndr.it && pnpm db:push
+psql -c "UPDATE users SET email_verified_at = created_at
+         WHERE google_sub IS NOT NULL AND email_verified_at IS NULL"
+pm2 reload deploy/ecosystem.config.cjs --update-env
+```
+
+Servono inoltre **cinque variabili nuove nel `.env`** — `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
+`SMTP_PASS`, `MAIL_FROM` — senza le quali l'applicazione parte lo stesso e il login con Google
+continua a funzionare, ma i codici di verifica non partono. `pnpm mail:check` dice in trenta secondi
+se le credenziali sono giuste, senza spedire niente.
+
+Nessuna colonna sparisce e nessun tipo cambia, quindi il backup preventivo non è obbligatorio — ma
+questa versione tocca il login, che è l'unica cosa che se si rompe chiude fuori tutti:
+`deploy/db-backup.sh` costa trenta secondi.
+
+### Aggiunto
+
+- **La registrazione con email e password.** Si sceglie un indirizzo e una password di almeno dieci
+  caratteri — nessuna regola su maiuscole o simboli, la lunghezza conta di più — e arriva un codice
+  a sei cifre da inserire nella schermata successiva. Il nome e cognome si scrivono dopo, dove si
+  sono sempre scritti.
+- **La conferma dell'indirizzo.** Finché il codice non è stato inserito non si fa nulla: non si
+  creano aste, non si entra su invito, non si gioca. Il codice vale quindici minuti, si può
+  sbagliare cinque volte, e in ogni schermata di rifiuto c'è il pulsante per farsene mandare un
+  altro — quello nuovo annulla il precedente.
+- **«Password dimenticata».** Stesso meccanismo: si chiede l'indirizzo, arriva un codice, si sceglie
+  la password nuova. È anche l'unico modo di *cambiare* la propria password.
+- **Le due strade portano allo stesso account.** Chi si è registrato con email e password e poi
+  entra con Google usando lo stesso indirizzo ritrova le sue aste: non nasce un secondo utente.
+
+### Da sapere
+
+- ⚠ **Se entri con Google su un indirizzo registrato con una password mai confermata, quella
+  password smette di funzionare.** Sembra severo ed è deliberato: è ciò che impedisce a un
+  estraneo di registrare il tuo indirizzo con una password sua e ritrovarsela valida sul tuo
+  account il giorno in cui entri da Google. Se la password l'avevi messa tu, la rimetti da
+  «Password dimenticata». Se invece l'indirizzo era già confermato, non cambia nulla e restano
+  valide entrambe le strade.
+- **Un account nato da Google entra da Google.** Su quell'indirizzo la registrazione con password
+  viene rifiutata, e «Password dimenticata» risponde che si entra con Google.
+- **Un account Google senza indirizzo email verificato non entra**, e lo dice.
+- **Cambiare la password non chiude le sessioni aperte altrove**: chi era già dentro su un altro
+  dispositivo ci resta.
+- **Troppi tentativi di accesso falliti sullo stesso indirizzo bloccano per un quarto d'ora**, e un
+  accesso riuscito azzera il conteggio.
+
 ## [1.5.0] — 2026-08-10
 
 **M4 — Simulazione in-app.** Un'asta di prova si lancia dall'applicazione, con dei partecipanti
