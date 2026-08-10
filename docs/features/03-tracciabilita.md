@@ -158,11 +158,13 @@ reveal ha perso il dato.
 Chi non è né owner né membro prende un `notFound()`, non un 403: l'esistenza di un'asta a cui non
 partecipi non è una tua informazione.
 
-**Osservazione fuori scopo, e volutamente non risolta qui:** la lobby oggi non verifica
+**Osservazione fuori scopo, risolta come decisione e non come codice:** la lobby non verifica
 l'appartenenza — `getAuctionOverview` torna `null` solo se l'asta non esiste, quindi qualunque
-utente autenticato può vedere la lobby di qualunque asta. Lo storico si gating da sé come si deve.
-Allineare la lobby è una decisione dell'owner e, se la vuole, una riga in `docs/REQUESTS.md`: non
-un effetto collaterale di questa macro.
+utente autenticato può vedere la lobby di qualunque asta. Chiesto all'owner in chiusura di macro, la
+risposta è stata che non gli interessa proteggerla: resta così **per scelta**, ed è registrato in
+`docs/DECISIONS.md` perché altrimenti fra sei mesi sembra una dimenticanza e qualcuno la «aggiusta».
+Non è un buco rimasto aperto, è un requisito che non c'è. Lo storico invece si protegge da sé —
+quello contiene le buste, e le buste hanno un invariante.
 
 **La pagina è renderizzata dal server a ogni caricamento, senza stream.** Lo storico non è lo stato
 dell'asta, quindi non passa da `serializeSnapshot` (regola 3) e non ha niente da ricevere in tempo
@@ -355,9 +357,16 @@ generico. Due export sono due funzioni, non un export parametrico.
 - [x] **M3-11** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi
 - [x] **M3-12** — `docs/ARCHITECTURE.md` con la tracciabilità: i due export e lo storico, con il
       perché della barriera; `docs/DECISIONS.md` con le scelte non ovvie di questa macro
+- [x] **M3-14** — Fuori spec, su richiesta esplicita dell'owner durante la chiusura: togliere il
+      warning di `next build` su `app/layout.tsx`, preesistente da v1.3.1. `import { version }` da un
+      modulo JSON diventa import del default più una costante — la named import smetterebbe di
+      compilare quando i moduli JSON esporranno solo il default, e si romperebbe durante un deploy
 - [ ] **M3-13** — Chiusura: merge `--no-ff` su `dev`, prova con Docker + seed + `pnpm bots` e dal
       telefono con `pnpm dev:lan`, poi — **solo su richiesta dell'owner** — `CHANGELOG.md`,
       `package.json` a `1.4.0`, merge `--no-ff` su `main`, tag `v1.4.0`, push
+      → Merge su `dev` il 2026-08-10. **Prova confermata dall'owner** lo stesso giorno: I8 a video
+      (owner e partecipante, lotto aperto), void e riassegnazione, i due download, il nome squadra
+      rifiutato, la ricerca e lo spareggio. Restano da fare solo i passi di rilascio, su sua richiesta.
 
 ## Verifica
 
