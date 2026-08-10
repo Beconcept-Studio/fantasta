@@ -103,7 +103,7 @@ export function LobbyLive({
             role="status"
             className="rounded-md border border-emerald-600/40 bg-emerald-600/10 px-3 py-2 text-sm font-medium"
           >
-            L&apos;asta è partita: ti porto sul tuo portale…
+            L&apos;asta è partita: ti porto all&apos;asta live…
           </p>
         )}
 
@@ -122,7 +122,7 @@ export function LobbyLive({
               href={`/auctions/${auctionId}/play`}
               className="font-medium underline underline-offset-4"
             >
-              Torna al tuo portale
+              Torna all&apos;asta live
             </Link>{" "}
             — quando riprende ti ci porto io.
           </p>

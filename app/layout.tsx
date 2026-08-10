@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { LiveBanner, type LiveMembership } from "@/components/auction/live-banner";
+import { Navbar } from "@/components/nav/navbar";
 import { currentUser } from "@/lib/auth";
 import { listUserAuctions } from "@/lib/engine/setup";
 
@@ -41,8 +42,9 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Il banner globale di §8bis: sta qui perché deve comparire su *tutte* le
-  // pagine. Chi non è autenticato non ha aste, e la lettura non avviene.
+  // Il banner globale di §8bis e la navbar di M2: stanno qui perché devono
+  // comparire su *tutte* le pagine, e da una sola lettura dell'utente. Chi non
+  // è autenticato non ha aste, e la seconda lettura non avviene.
   const user = await currentUser();
   const live: LiveMembership[] =
     user === null
@@ -68,6 +70,7 @@ export default async function RootLayout({
     <html lang="it" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased">
         <LiveBanner auctions={live} />
+        <Navbar user={user === null ? null : { name: user.displayName }} />
         {children}
       </body>
     </html>

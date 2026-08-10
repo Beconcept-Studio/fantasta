@@ -14,9 +14,18 @@ import { usePathname } from "next/navigation";
  * rientrare sarebbe ricordarsi l'URL.
  *
  * Sta nel layout radice, quindi compare davvero su tutte le pagine — dashboard
- * inclusa, come chiede il piano. L'unica pagina in cui si nasconde è il portale
- * di quell'asta: lì un banner che porta dove già sei ruberebbe righe allo
- * schermo del telefono, che è la risorsa più scarsa dell'app.
+ * inclusa, come chiede il piano. Si nasconde in due soli posti.
+ *
+ * Sul **portale di quell'asta**: lì un banner che porta dove già sei ruberebbe
+ * righe allo schermo del telefono, che è la risorsa più scarsa dell'app.
+ *
+ * E sulla **vista TV**, che non è una pagina di chi la guarda. Il layout radice
+ * gira anche lì, quindi finché l'owner ha una sessione aperta nello stesso
+ * browser questo banner si incollava in cima allo schermo proiettato: una
+ * striscia verde che invita ad andare al proprio portale, sopra un tabellone che
+ * guarda tutta la stanza. Sottraeva anche altezza a un layout che vive di
+ * `h-dvh` e non ha scroll. La navbar si toglie di mezzo su `/tv/` per la stessa
+ * ragione, e qui il controllo è lo stesso.
  */
 export type LiveMembership = {
   id: string;
@@ -26,6 +35,8 @@ export type LiveMembership = {
 
 export function LiveBanner({ auctions }: { auctions: LiveMembership[] }) {
   const pathname = usePathname();
+  if (pathname.startsWith("/tv/")) return null;
+
   const visible = auctions.filter(
     (auction) => pathname !== `/auctions/${auction.id}/play`,
   );

@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 import { Countdown } from "@/components/auction/countdown";
 import { PresenceDot, PRESENCE_LABELS } from "@/components/auction/presence-dot";
 import { RosterGrid } from "@/components/auction/roster-grid";
@@ -31,13 +29,10 @@ import { OverridePanel } from "./overrides";
  */
 export function ManageConsole({
   auctionId,
-  publicToken,
   ownerIsMember,
   pool,
 }: {
   auctionId: string;
-  /** Il token della vista TV: da qui esce l'unico link che la apre. */
-  publicToken: string;
   /** Se l'owner gioca, questa pagina deve battere il suo heartbeat. */
   ownerIsMember: boolean;
   /** Il listone dell'asta, per il pannello delle correzioni (F7-05). */
@@ -64,56 +59,29 @@ export function ManageConsole({
 
   return (
     <main className="mx-auto w-full max-w-6xl space-y-6 p-6">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {auction.name}
-          </h1>
-          <Badge
-            variant={auction.status === "PAUSED" ? "destructive" : "secondary"}
-          >
-            {phaseLabel(snapshot)}
+      {/* Il nome dell'asta, la navigazione fra le sezioni e il link alla vista
+          TV stanno da M2 nell'intestazione comune, sopra questa pagina. Qui
+          resta ciò che è solo della regia: la fase, che arriva dallo stream, e
+          lo scarico delle rose, che è un'azione e non una destinazione. */}
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Badge
+          variant={auction.status === "PAUSED" ? "destructive" : "secondary"}
+        >
+          {phaseLabel(snapshot)}
+        </Badge>
+        {!connected && (
+          <Badge variant="outline" className="border-amber-500/50">
+            riconnessione…
           </Badge>
-          {!connected && (
-            <Badge variant="outline" className="border-amber-500/50">
-              riconnessione…
-            </Badge>
-          )}
-        </div>
-
-        <nav className="text-muted-foreground flex flex-wrap gap-4 text-sm">
-          <Link href="/dashboard" className="hover:text-foreground">
-            ← Le tue aste
-          </Link>
-          <Link
-            href={`/auctions/${auctionId}/setup`}
-            className="hover:text-foreground"
-          >
-            Configurazione
-          </Link>
-          <Link
-            href={`/auctions/${auctionId}/lobby`}
-            className="hover:text-foreground"
-          >
-            Lobby
-          </Link>
-          <a
-            href={`/tv/${publicToken}`}
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-foreground"
-          >
-            Vista TV ↗
-          </a>
-          {/* Un link, non un pulsante: è una GET che scarica un file, e il
-              browser sa già farlo (F7-06). */}
-          <a
-            href={`/api/auctions/${auctionId}/export`}
-            className="hover:text-foreground"
-          >
-            Scarica le rose (.xlsx) ↓
-          </a>
-        </nav>
+        )}
+        {/* Un link, non un pulsante: è una GET che scarica un file, e il
+            browser sa già farlo (F7-06). */}
+        <a
+          href={`/api/auctions/${auctionId}/export`}
+          className="text-muted-foreground hover:text-foreground ml-auto text-sm"
+        >
+          Scarica le rose (.xlsx) ↓
+        </a>
       </header>
 
       <PresenceBanner snapshot={snapshot} />

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 
 import { and, asc, count, eq, inArray, or, sql } from "drizzle-orm";
+import { cache } from "react";
 
 import { db } from "@/lib/db";
 import {
@@ -807,8 +808,15 @@ export type AuctionOverview = {
  * Non è `serializeSnapshot` (regola 3): quella funzione serializza lo stato
  * *dell'asta in corso* ed è l'unico punto che può far uscire importi di
  * offerte. Qui siamo prima dell'avvio, non esistono né lotti né buste.
+ *
+ * ⚠ È avvolta in `cache()` di React perché da M2 la chiamano **due volte per
+ * richiesta**: il layout dell'asta, che ne ricava badge, titolo e sotto-navbar,
+ * e poi la pagina. La memoizzazione dura quanto la singola richiesta e non
+ * altro: fuori da un contesto di render React esegue la funzione senza
+ * memoizzare nulla, quindi test e script continuano a leggere il database vero
+ * a ogni chiamata.
  */
-export async function getAuctionOverview(
+export const getAuctionOverview = cache(async function getAuctionOverview(
   auctionId: string,
   viewerUserId: string,
 ): Promise<AuctionOverview | null> {
@@ -875,7 +883,7 @@ export async function getAuctionOverview(
     viewerIsOwner: auction.ownerUserId === viewerUserId,
     viewerMember: memberRows.find((m) => m.userId === viewerUserId) ?? null,
   };
-}
+});
 
 /** Il listone dell'asta, per la tabella di anteprima nel setup. */
 export async function listPlayers(

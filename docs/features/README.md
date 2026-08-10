@@ -12,7 +12,9 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna. La prossima è **M2**, qui sotto.
+| Macro | Tema | Branch |
+|---|---|---|
+| [M2](02-navigazione.md) | Navigazione e identità delle pagine — navbar, sotto-navbar, titolo con badge dell'asta, TV come tabellone di recap | `feature/02-navigazione`, aperto il 2026-08-10 |
 
 ## Da pianificare
 
@@ -21,7 +23,6 @@ L'ordine è indicativo: si apre quella che serve.
 
 | Macro | Tema |
 |---|---|
-| **M2** | Navigazione e identità delle pagine — navbar, sotto-navbar, titolo con badge dell'asta, portale TV compatto |
 | **M3** | Tracciabilità — esportazione delle rose in un CSV unico, pagina di log dell'asta e dei lotti |
 | **M4** | Simulazione in-app — asta simulata dall'interfaccia: l'owner partecipa, gli altri X sono bot |
 
