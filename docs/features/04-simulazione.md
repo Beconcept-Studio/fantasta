@@ -309,10 +309,10 @@ sue mosse.
       è in corso un'asta reale»
 - [x] **M4-12** — `deleteAuction()` e il pannello in fondo alla configurazione, con il nome da
       digitare e la riga su stdout
-- [ ] **M4-13** — Test puri: `bot-brain` (non ri-offre se ha già `myBid`, rispetta `minAmount` e
+- [x] **M4-13** — Test puri: `bot-brain` (non ri-offre se ha già `myBid`, rispetta `minAmount` e
       `maxBid`, `tie` converge, il ritardo è deterministico e stabile fra due processi), `domain`
       esteso
-- [ ] **M4-14** — Test con Postgres: `fillWithBots` (i cinque rifiuti), il tick (**sta fermo con
+- [x] **M4-14** — Test con Postgres: `fillWithBots` (i cinque rifiuti), il tick (**sta fermo con
       un'asta reale in corso**; il bot riceve uno snapshot costruito col **proprio** memberId),
       `deleteAuction` (rifiuta `LIVE`/`PAUSED`, rifiuta chi non è owner, il cascade porta via
       tutto), il `CHECK` `is_admin AND is_bot`
