@@ -1,11 +1,12 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-import NextAuth, { type Profile } from "next-auth";
+import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { redirect } from "next/navigation";
 
 import { db } from "@/lib/db";
 import { type User, users } from "@/lib/db/schema";
+import { upsertGoogleUser } from "@/lib/engine/accounts";
 
 /**
  * Autenticazione dell'applicazione.
@@ -34,36 +35,6 @@ export const isDevAuthEnabled = process.env.NODE_ENV !== "production";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * Crea o aggiorna la riga `users` a partire dal profilo Google.
- *
- * `display_name` resta deliberatamente vuoto al primo accesso: il nome e
- * cognome li scrive l'utente nell'onboarding (PLAN §2), non li deduciamo dal
- * profilo Google. Sui login successivi non lo tocchiamo mai più.
- */
-async function upsertGoogleUser(
-  googleSub: string,
-  profile: Profile | undefined,
-): Promise<User> {
-  const [row] = await db
-    .insert(users)
-    .values({
-      googleSub,
-      email: profile?.email ?? null,
-      avatarUrl: profile?.picture ?? null,
-    })
-    .onConflictDoUpdate({
-      target: users.googleSub,
-      set: {
-        email: profile?.email ?? null,
-        avatarUrl: profile?.picture ?? null,
-      },
-    })
-    .returning();
-
-  return row;
-}
 
 /**
  * La lista dei provider, con `NODE_ENV` passato come parametro invece che letto
@@ -108,8 +79,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user, account, profile }) {
       if (account?.provider === "google" && account.providerAccountId) {
-        const row = await upsertGoogleUser(account.providerAccountId, profile);
-        token.uid = row.id;
+        const hooked = await upsertGoogleUser({
+          googleSub: account.providerAccountId,
+          email: profile?.email ?? null,
+          emailVerified: profile?.email_verified === true,
+          avatarUrl: profile?.picture ?? null,
+        });
+        if (!hooked.ok) throw new Error(hooked.error.message);
+        token.uid = hooked.value.id;
         // Solo per precompilare il form di onboarding: non finisce a database.
         token.suggestedName = profile?.name ?? null;
       } else if (user?.id) {
