@@ -229,6 +229,44 @@ export function describeEvent({ type, payload, lotSeq }: LogEventInput): string 
   }
 }
 
+// ─── Gli orari ───────────────────────────────────────────────────────────────
+
+/**
+ * Il server gira in UTC, processo compreso: **`Europe/Rome` è solo rendering**,
+ * e questo è il punto in cui la conversione avviene per lo storico.
+ *
+ * Il fuso è fissato qui e non lasciato al browser di chi guarda: le persone che
+ * discutono di un lotto sono nella stessa stanza, e devono leggere lo stesso
+ * orario — anche se una di loro ha il telefono su un altro fuso. Ed è la stessa
+ * ora che l'owner vede sul server nei log di `pm2`, il che rende confrontabili
+ * le due cose senza fare aritmetica a mente.
+ *
+ * `Intl` fa il resto, ora legale compresa: sommare due ore fisse funzionerebbe
+ * in agosto e sbaglierebbe a gennaio.
+ */
+const ROME = "Europe/Rome";
+
+/** «21:04:12» — l'ora di una busta, al secondo, perché è il secondo che decide. */
+export function romeTime(iso: string): string {
+  return new Intl.DateTimeFormat("it-IT", {
+    timeZone: ROME,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(iso));
+}
+
+/** «10 agosto, 21:04» — per le righe in cui il giorno conta. */
+export function romeDateTime(iso: string): string {
+  return new Intl.DateTimeFormat("it-IT", {
+    timeZone: ROME,
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
+
 // ─── La ricerca ──────────────────────────────────────────────────────────────
 
 /**

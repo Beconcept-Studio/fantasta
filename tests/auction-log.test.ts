@@ -6,6 +6,8 @@ import {
   isNotableEvent,
   isPublicLot,
   lotSearchText,
+  romeDateTime,
+  romeTime,
 } from "@/lib/auction-log";
 
 /**
@@ -39,9 +41,11 @@ describe("isPublicLot — I8, e la riga che lo garantisce", () => {
   });
 
   it("resta fuori anche se avesse già un vincitore, cosa che il motore non fa mai", () => {
-    expect(
-      isPublicLot({ status: "OPEN", winnerMemberId: "x", finalPrice: 91 }),
-    ).toBe(false);
+    // Assegnato a una variabile e non passato come literal: `isPublicLot`
+    // dichiara di guardare solo `status`, ed è giusto che la firma resti quella
+    // — è il controllo sui literal freschi di TypeScript a volere questo giro.
+    const impossibile = { status: "OPEN", winnerMemberId: "x", finalPrice: 91 };
+    expect(isPublicLot(impossibile)).toBe(false);
   });
 
   it("uno stato che non conosciamo non è pubblico", () => {
@@ -178,6 +182,33 @@ describe("isNotableEvent — cosa entra nel blocco delle correzioni", () => {
    */
   it("tiene dentro un tipo che non conosciamo", () => {
     expect(isNotableEvent("SEED_FAST_FORWARD")).toBe(true);
+  });
+});
+
+/**
+ * Il server gira in UTC, processo compreso: `Europe/Rome` è **solo** rendering.
+ * Questi due test fissano quella conversione, ed è il posto giusto per farlo —
+ * una pagina che sbagliasse fuso mostrerebbe orari di due ore prima proprio
+ * dove servono a decidere chi ha offerto per primo.
+ */
+describe("romeTime e romeDateTime — l'ora che si legge", () => {
+  // 19:04:12 UTC in agosto sono le 21:04:12 a Roma (UTC+2).
+  const estate = "2026-08-10T19:04:12.000Z";
+  // In gennaio l'offset è +1: la stessa ora UTC fa le 20:04.
+  const inverno = "2026-01-10T19:04:12.000Z";
+
+  it("rende l'ora italiana, non quella del processo", () => {
+    expect(romeTime(estate)).toBe("21:04:12");
+  });
+
+  it("segue l'ora legale invece di sommare due ore fisse", () => {
+    expect(romeTime(inverno)).toBe("20:04:12");
+  });
+
+  it("la data lunga porta giorno e ora insieme", () => {
+    const testo = romeDateTime(estate);
+    expect(testo).toContain("21:04");
+    expect(testo).toContain("10");
   });
 });
 

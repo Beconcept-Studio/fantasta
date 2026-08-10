@@ -343,16 +343,16 @@ generico. Due export sono due funzioni, non un export parametrico.
       `loadAuctionState`, la query su `events` con il join su `users`, e **la barriera I8 di §5 con
       il commento che dice perché**
 - [x] **M3-07** — `lib/auction-nav.ts`: la quinta sezione `log`
-- [ ] **M3-08** — `app/auctions/[id]/log/page.tsx` e `log/lots-log.tsx`: i due blocchi, il campo di
+- [x] **M3-08** — `app/auctions/[id]/log/page.tsx` e `log/lots-log.tsx`: i due blocchi, il campo di
       ricerca, l'ora di aggiornamento, la riga che spiega il lotto assente ad asta `LIVE`
-- [ ] **M3-09** — Test puri: `tests/rose-csv.test.ts` (intestazione, ordinamento, solo assegnati,
+- [x] **M3-09** — Test puri: `tests/rose-csv.test.ts` (intestazione, ordinamento, solo assegnati,
       la rete sui caratteri), `tests/auction-log.test.ts` (`describeEvent` su ogni tipo notevole e
       su uno sconosciuto), `tests/auction-nav.test.ts` e `tests/setup-rules.test.ts` estesi
-- [ ] **M3-10** — Test con Postgres: `tests/db/log.test.ts` — **l'asserzione I8 di §5**, più le tre
+- [x] **M3-10** — Test con Postgres: `tests/db/log.test.ts` — **l'asserzione I8 di §5**, più le tre
       autorizzazioni (owner sì, membro sì, estraneo `notFound`) e il lotto annullato che resta
       visibile e marcato; `tests/db/export.test.ts` esteso con l'annullata che non compare e la
       manuale che sì
-- [ ] **M3-11** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi
+- [x] **M3-11** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi
 - [ ] **M3-12** — `docs/ARCHITECTURE.md` con la tracciabilità: i due export e lo storico, con il
       perché della barriera; `docs/DECISIONS.md` con le scelte non ovvie di questa macro
 - [ ] **M3-13** — Chiusura: merge `--no-ff` su `dev`, prova con Docker + seed + `pnpm bots` e dal
