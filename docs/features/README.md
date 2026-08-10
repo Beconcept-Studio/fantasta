@@ -12,12 +12,7 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-| Macro | Tema | Aperta il |
-|---|---|---|
-| [M4](04-simulazione.md) | Simulazione in-app — un'asta di prova dall'interfaccia, con i bot dentro l'app | 2026-08-10 |
-
-⚠ M4 **tocca lo schema**: dopo il deploy serve `pnpm db:push` a mano sul server. È dichiarato in
-testa al file della macro.
+Nessuna.
 
 ## Da pianificare
 
@@ -27,6 +22,7 @@ Nessuna: `docs/REQUESTS.md` è vuoto, e il quaderno lo scrive l'owner.
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M4](04-simulazione.md) | Simulazione in-app — l'asta di prova dall'interfaccia, con i bot dentro l'app | v1.5.0 — 2026-08-10 |
 | [M3](03-tracciabilita.md) | Tracciabilità — il verbale delle rose e lo storico dell'asta | v1.4.0 — 2026-08-10 |
 | [M2](02-navigazione.md) | Navigazione e identità delle pagine | v1.3.0 — 2026-08-10 |
 | [M1](01-segretezza-offerte.md) | Segretezza e rivelazione delle offerte | v1.2.0 — 2026-08-10 |

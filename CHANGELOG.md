@@ -4,6 +4,54 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.5.0] — 2026-08-10
+
+**M4 — Simulazione in-app.** Un'asta di prova si lancia dall'applicazione, con dei partecipanti
+finti che giocano davvero. Prima serviva accendere il database, lanciare un seed da riga di
+comando, copiare l'id dell'asta e far partire uno script in un terminale a parte.
+
+### ⚠ Per chi aggiorna il server
+
+Questa versione **cambia lo schema del database**. Dopo che il deploy è finito, e con nessuna asta
+in corso, va dato a mano sul server:
+
+```bash
+cd ~/asta && pnpm db:push
+pm2 reload deploy/ecosystem.config.cjs --update-env
+```
+
+Il cambio è additivo — tre colonne nuove con un valore di default, niente che sparisce — quindi non
+serve un backup preventivo e i dati esistenti non vengono toccati.
+
+### Aggiunto
+
+- **L'asta simulata.** Alla creazione compare una casella «Asta simulata»: l'asta che ne nasce è
+  identica a una vera — stessa configurazione, stesso listone, stessa lobby, stessa regia, stessa
+  TV — e in più si può riempire di partecipanti finti. La casella si decide **una volta sola**: non
+  si può trasformare un'asta vera in una di prova, né il contrario.
+- **I partecipanti simulati**, nel pannello accanto agli inviti: si sceglie quanti bot aggiungere ai
+  posti liberi e come offrono — un misto verosimile, tutti al massimo, tutti al minimo, o tutti
+  sulla stessa cifra, che è il modo di far scattare uno spareggio a comando. I bot giocano dal
+  server, quindi risultano collegati da soli e l'asta si avvia senza aspettare nessuno.
+- **Il badge «simulazione»**, in elenco aste, in cima a ogni schermata dell'asta e sulla TV. Con due
+  schede aperte, le due aste si distinguono senza guardare l'indirizzo.
+- **La cancellazione di un'asta**, in fondo alla configurazione, per chi l'ha creata. Per confermare
+  si scrive il nome dell'asta: un pulsante si clicca per riflesso, un nome no.
+- **L'amministratore dell'applicazione**, che non è chi possiede un'asta: è un permesso a parte, e
+  per ora serve solo a creare aste simulate e a riempirle di bot. Chi ce l'ha gioca le aste come
+  tutti gli altri.
+
+### Da sapere
+
+- **Mentre è in corso un'asta vera, i bot di ogni simulazione si fermano.** Non è un guasto: è la
+  regola che tiene i partecipanti finti lontani dalla serata che conta. La configurazione della
+  simulazione lo scrive, e i bot ripartono da soli quando l'asta vera è finita.
+- **Nella simulazione le buste restano chiuse anche per i bot.** Giocandoci contro non si viene
+  battuti di un credito ogni volta: vedono quello che vede un telefono, cioè la propria offerta e
+  nient'altro.
+- **Cancellare un'asta porta via tutto quello che le appartiene** — rose, storico, buste,
+  rettifiche — e non si torna indietro. Un'asta in corso o in pausa non si può cancellare.
+
 ## [1.4.0] — 2026-08-10
 
 **M3 — Tracciabilità.** Una macro sola, e risponde a due domande: cosa è successo durante l'asta, e

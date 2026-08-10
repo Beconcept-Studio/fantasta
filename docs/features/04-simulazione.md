@@ -1,6 +1,6 @@
 # M4 — Simulazione in-app
 
-> **Stato:** in corso · **Aperta il** 2026-08-10
+> **Stato:** chiusa · **Aperta il** 2026-08-10 · **Uscita con** v1.5.0, il 2026-08-10
 > **Tocca lo schema del database?** **Sì, in modo puramente additivo.** Tre colonne nuove con
 > default e un `CHECK`: `users.is_bot`, `auctions.is_simulated`, `members.bot_strategy`. Nessuna
 > colonna sparisce, nessun tipo cambia — quindi **niente `pg_dump` preventivo**, ma `pnpm db:push`
@@ -322,7 +322,7 @@ sue mosse.
       si firmano il JWT da sé); `docs/DECISIONS.md`: il tick separato, i due booleani, lo
       stand-down, A+B; `docs/HOWTO-PROVA-LOCALE.md` riscritto attorno alla simulazione, senza
       `drive`
-- [ ] **M4-17** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
+- [x] **M4-17** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       dell'owner** — `CHANGELOG.md`, `package.json` a `1.5.0`, merge `--no-ff` su `main`, tag
       `v1.5.0`, push, e **`pnpm db:push` a mano sul server** a deploy finito
 
