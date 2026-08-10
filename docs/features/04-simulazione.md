@@ -296,11 +296,11 @@ sue mosse.
       la casella nel form di creazione, visibile solo a lui
 - [x] **M4-06** — `fillWithBots()` in `lib/engine/setup.ts` sopra `addMember`, con i cinque rifiuti
       tipizzati di §2
-- [ ] **M4-07** — `lib/engine/bot-brain.ts`: `decide()` puro, il ritardo derivato, le quattro
+- [x] **M4-07** — `lib/engine/bot-brain.ts`: `decide()` puro, il ritardo derivato, le quattro
       strategie
-- [ ] **M4-08** — `lib/engine/bots.ts`: il giro del tick — stand-down, heartbeat, mosse via
+- [x] **M4-08** — `lib/engine/bots.ts`: il giro del tick — stand-down, heartbeat, mosse via
       `lib/engine/actions.ts`, snapshot costruito col memberId del bot
-- [ ] **M4-09** — `instrumentation.ts`: il secondo intervallo sotto la sua guardia `globalThis`,
+- [x] **M4-09** — `instrumentation.ts`: il secondo intervallo sotto la sua guardia `globalThis`,
       dentro il ramo `nodejs` e con gli import dinamici lì dentro
 - [ ] **M4-10** — `scripts/bots.ts` riscritto sopra `decide()`; `scripts/drive.ts` rimosso con il
       suo comando in `package.json`
