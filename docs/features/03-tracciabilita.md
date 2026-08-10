@@ -293,11 +293,11 @@ generico. Due export sono due funzioni, non un export parametrico.
 
 - [x] **M3-01** — Aprire `feature/03-tracciabilita` da `dev`; scrivere questo file, togliere le due
       richieste da `docs/REQUESTS.md`, aggiornare `docs/features/README.md`
-- [ ] **M3-02** — `lib/rose-csv.ts`: `roseCsvRows()`, `buildRoseCsv()` e la rete sui caratteri
+- [x] **M3-02** — `lib/rose-csv.ts`: `roseCsvRows()`, `buildRoseCsv()` e la rete sui caratteri
       proibiti. Modulo puro, zero dipendenze
-- [ ] **M3-03** — `validateTeamName` rifiuta virgola e virgolette; `pattern` sui due `Input` di
+- [x] **M3-03** — `validateTeamName` rifiuta virgola e virgolette; `pattern` sui due `Input` di
       `join-form.tsx` e `members-panel.tsx`
-- [ ] **M3-04** — `exportRoseCsv()` in `lib/engine/export.ts`; `exportFileName(nome, basename)` con
+- [x] **M3-04** — `exportRoseCsv()` in `lib/engine/export.ts`; `exportFileName(nome, basename)` con
       il secondo parametro; le due rotte `export/listone` e `export/rose`, via la vecchia `export`;
       i due link in `manage/console.tsx`
 - [ ] **M3-05** — `lib/auction-log.ts`: i tipi dello storico e `describeEvent()`, compreso il tipo

@@ -122,13 +122,38 @@ export function normalizeName(value: unknown): string | null {
   return name;
 }
 
-/** Nome squadra: stesse regole del nome dell'asta, messaggio diverso. */
+/**
+ * I caratteri che il nome di una squadra non può contenere (M3 §2).
+ *
+ * Il verbale delle rose è un CSV a virgole **senza virgolette**, e un formato
+ * così pretende che i valori non contengano il separatore. Fra virgolettare
+ * all'uscita e impedire il carattere all'ingresso si è scelto il secondo: il
+ * file resta leggibile a occhio, che è tutto il punto di un verbale.
+ *
+ * Il punto e virgola passa di proposito — con la virgola come separatore è
+ * innocuo, e togliere caratteri legittimi a un nome di fantasia si paga in
+ * fastidio ogni volta che qualcuno entra in un'asta.
+ *
+ * ⚠ La restrizione è **solo** del nome squadra e non di `normalizeName`, che è
+ * condivisa con il nome dell'asta: quello finisce in uno slug di nome file,
+ * dove una virgola non fa danno. Restringere anche lui sarebbe un effetto
+ * collaterale, non una decisione.
+ */
+const TEAM_NAME_FORBIDDEN = /[,"]/;
+
+/** Nome squadra: le regole del nome dell'asta, più i caratteri di `TEAM_NAME_FORBIDDEN`. */
 export function validateTeamName(value: unknown): Result<string> {
   const name = normalizeName(value);
   if (name === null) {
     return fail(
       "INVALID_TEAM_NAME",
       `Il nome della squadra deve avere fra ${NAME_MIN} e ${NAME_MAX} caratteri.`,
+    );
+  }
+  if (TEAM_NAME_FORBIDDEN.test(name)) {
+    return fail(
+      "INVALID_TEAM_NAME",
+      "Il nome della squadra non può contenere virgole né virgolette.",
     );
   }
   return ok(name);

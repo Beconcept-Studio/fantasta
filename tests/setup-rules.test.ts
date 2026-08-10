@@ -204,4 +204,36 @@ describe("validateTeamName", () => {
       if (!result.ok) expect(result.error.code).toBe("INVALID_TEAM_NAME");
     }
   });
+
+  /**
+   * M3 §2 — il verbale delle rose è un CSV a virgole senza virgolette, e un
+   * formato così pretende che i valori non contengano il separatore. Si
+   * impedisce il carattere all'ingresso invece di virgolettare all'uscita:
+   * il file resta leggibile a occhio, che è tutto il punto di un verbale.
+   */
+  it("rifiuta la virgola, che nel CSV delle rose sarebbe una colonna in più", () => {
+    const result = validateTeamName("Real Pastasciutta, che ridere");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("INVALID_TEAM_NAME");
+    expect(result.error.message).toContain("virgole");
+  });
+
+  it("rifiuta le virgolette", () => {
+    const result = validateTeamName('I "Fenomeni"');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("INVALID_TEAM_NAME");
+    expect(result.error.message).toContain("virgolette");
+  });
+
+  it("lascia passare il punto e virgola, che con la virgola come separatore è innocuo", () => {
+    expect(validateTeamName("Ajax; Amsterdam").ok).toBe(true);
+  });
+
+  it("distingue il messaggio della lunghezza da quello dei caratteri", () => {
+    const short = validateTeamName("ab");
+    if (short.ok) throw new Error("un nome di due caratteri va rifiutato");
+    expect(short.error.message).not.toContain("virgole");
+  });
 });

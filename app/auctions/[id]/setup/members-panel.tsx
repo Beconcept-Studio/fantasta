@@ -86,6 +86,8 @@ export function MembersPanel({
           <input type="hidden" name="auctionId" value={auctionId} />
           <Label htmlFor="ownerTeamName">Partecipa anche tu</Label>
           <div className="flex gap-2">
+            {/* Come nel form di join: `pattern` anticipa la regola,
+                il server rifiuta comunque (regola 6). */}
             <Input
               id="ownerTeamName"
               name="teamName"
@@ -93,6 +95,8 @@ export function MembersPanel({
               required
               minLength={3}
               maxLength={60}
+              pattern={'[^,"]+'}
+              title="Senza virgole né virgolette"
             />
             <Button type="submit" variant="outline" disabled={joining}>
               {joining ? "Entro…" : "Entra"}
