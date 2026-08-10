@@ -158,9 +158,14 @@ riavviare `pnpm dev`.
 
 1. Il dev server ha davvero letto il `.env`? Se hai aggiunto le variabili **dopo** averlo avviato,
    riavvia `pnpm dev`.
-2. Le credenziali funzionano? Si controlla senza spedire niente, con `verify()` di nodemailer: apre
-   la connessione, si autentica e chiude. Un errore qui è credenziali o porta sbagliate (587 in
-   STARTTLS, 465 in TLS implicito).
+2. Le credenziali funzionano? **`pnpm mail:check`**: apre la connessione, si autentica, chiude, e
+   **non manda niente**. Un errore qui è credenziali o porta sbagliate (587 in STARTTLS, 465 in TLS
+   implicito). Con `pnpm mail:check --to=<indirizzo>` manda anche un'email di prova vera.
+
+   ⚠ Se `pnpm mail:check` funziona e l'applicazione no, **il problema non è l'SMTP**: è che il
+   processo dell'app ha in ambiente un `.env` diverso, perché è stato avviato prima della modifica.
+   In locale si riavvia `pnpm dev`; in produzione serve
+   `pm2 reload deploy/ecosystem.config.cjs --update-env`, **non** `pm2 restart asta`.
 3. Il server SMTP ha accettato il messaggio ma non arriva? Guarda il pannello del provider: con
    MailerSend gli account in prova accettano solo destinatari del dominio amministratore, e il
    `MAIL_FROM` deve stare **sul dominio verificato** — altrimenti l'invio viene rifiutato, e

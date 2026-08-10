@@ -368,9 +368,22 @@ Sul server, a deploy finito, con nessuna asta `LIVE` o `PAUSED`:
 
 ```bash
 cd /home/ploi/fantasta.rggndr.it && pnpm db:push
-psql -c "UPDATE users SET email_verified_at = created_at WHERE google_sub IS NOT NULL"
+psql -c "UPDATE users SET email_verified_at = created_at
+         WHERE google_sub IS NOT NULL AND email_verified_at IS NULL"
 pm2 reload deploy/ecosystem.config.cjs --update-env
 ```
+
+⚠ **`AND email_verified_at IS NULL` è stato aggiunto dopo aver collaudato la query in locale**, e
+non è cosmetico: senza, la `UPDATE` tocca *tutte* le righe con `google_sub` — comprese quelle già
+verificate, riscrivendone il timestamp con `created_at`. Al primo colpo in produzione è innocuo,
+perché lì nessuno ha ancora `email_verified_at`; ma renderebbe il comando **non ripetibile**, e un
+comando di deploy che si può dare una volta sola è un comando che qualcuno darà due volte. Con la
+condizione, rieseguirlo aggiorna zero righe.
+
+Il collaudo in locale (2026-08-10) ha verificato le due metà che contano: una riga «di ieri»
+(`google_sub` valorizzato, `email_verified_at` nullo) **viene** verificata, e una riga nata da M5
+(password, mai verificata) **non** viene toccata. Ha anche un test suo in `tests/db/accounts.test.ts`,
+così la query del deploy non è più solo una riga in un documento che nessuno ha mai eseguito.
 
 ⚠ **Il backfill non è opzionale, e `pnpm db:push` non lo fa.** In produzione ogni account è entrato
 da Google e nessuno ha `email_verified_at`: senza quella `UPDATE`, al primo caricamento **tutti gli

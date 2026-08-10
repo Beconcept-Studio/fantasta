@@ -467,3 +467,79 @@ suite("identità — il recupero della password (M5 §4)", () => {
     expect(codes.some((c) => c.purpose === "RESET_PASSWORD")).toBe(true);
   });
 });
+
+suite("identità — il backfill del deploy (M5 §10)", () => {
+  /**
+   * ⚠ **La riga di `psql` che si dà sul server, collaudata qui.**
+   *
+   * `pnpm db:push` crea la colonna ma non la riempie: in produzione ogni account
+   * è entrato da Google e nessuno ha `email_verified_at`, quindi senza questa
+   * `UPDATE` il primo caricamento dopo il deploy manderebbe **tutti** gli utenti
+   * esistenti sulla schermata del codice, owner compreso. Ne uscirebbero — il
+   * codice arriva davvero — ma è un incidente evitabile con una riga.
+   *
+   * Il test esiste perché quella riga, fino a M5, era soltanto scritta in un
+   * documento: nessuno l'aveva mai eseguita prima di digitarla sul server, di
+   * sera, con l'asta alle porte.
+   *
+   * ⚠ Il `WHERE` porta un filtro sull'email che **non** è nel comando vero: qui
+   * serve a non toccare le righe degli altri file di test, che girano in worker
+   * paralleli sullo stesso database. Ciò che il test verifica è il resto della
+   * condizione — chi viene toccato e chi no.
+   */
+  it("verifica le righe di Google e non tocca quelle nate da M5", async () => {
+    const marca = crypto.randomUUID();
+    const vecchio = `vecchio.${marca}@backfill.test`;
+    const nuovo = `nuovo.${marca}@backfill.test`;
+    const giaVerificato = `verificato.${marca}@backfill.test`;
+    const primaDi = new Date("2020-01-01T00:00:00.000Z");
+
+    const righe = await db
+      .insert(users)
+      .values([
+        // Com'è oggi in produzione: entrata da Google, prima che la colonna esistesse.
+        {
+          googleSub: `backfill-${marca}`,
+          email: vecchio,
+          displayName: "Utente Di Ieri",
+          createdAt: primaDi,
+        },
+        // Nata da M5: password, mai verificata. Non deve essere toccata.
+        { email: nuovo, passwordHash: "scrypt$32768$8$1$AAA$BBB" },
+        // Già verificata: il timestamp vero non deve essere riscritto.
+        {
+          googleSub: `backfill-ok-${marca}`,
+          email: giaVerificato,
+          emailVerifiedAt: new Date("2026-01-01T00:00:00.000Z"),
+          createdAt: primaDi,
+        },
+      ])
+      .returning({ id: users.id });
+    created.push(...righe.map((r) => r.id));
+
+    await db.execute(sql`
+      UPDATE users SET email_verified_at = created_at
+      WHERE google_sub IS NOT NULL
+        AND email_verified_at IS NULL
+        AND email LIKE ${`%${marca}@backfill.test`}
+    `);
+
+    const dopo = new Map(
+      (
+        await db
+          .select({ email: users.email, verificato: users.emailVerifiedAt })
+          .from(users)
+          .where(sql`${users.email} LIKE ${`%${marca}@backfill.test`}`)
+      ).map((r) => [r.email, r.verificato]),
+    );
+
+    // Chi c'era già entra senza passare da /verify.
+    expect(dopo.get(vecchio)?.toISOString()).toBe(primaDi.toISOString());
+    // Chi si è registrato con una password e non ha verificato, resta fuori.
+    expect(dopo.get(nuovo)).toBeNull();
+    // E il comando è ripetibile: un timestamp vero non viene sovrascritto.
+    expect(dopo.get(giaVerificato)?.toISOString()).toBe(
+      "2026-01-01T00:00:00.000Z",
+    );
+  });
+});
