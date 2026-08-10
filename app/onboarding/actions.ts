@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { currentUser, setDisplayName } from "@/lib/auth";
+import { currentUser, isVerified, setDisplayName } from "@/lib/auth";
 
 export type OnboardingState = { error?: string };
 
@@ -12,6 +12,9 @@ export async function saveDisplayName(
 ): Promise<OnboardingState> {
   const user = await currentUser();
   if (!user) redirect("/signin");
+  // Regola 6: la pagina ha già mandato via chi non è verificato, e il server
+  // rifiuta comunque — una server action è una rotta come tutte le altre.
+  if (!isVerified(user)) redirect("/verify");
 
   const displayName = formData.get("displayName");
   if (typeof displayName !== "string") {

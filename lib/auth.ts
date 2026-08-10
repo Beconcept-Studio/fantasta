@@ -6,18 +6,32 @@ import { redirect } from "next/navigation";
 
 import { db } from "@/lib/db";
 import { type User, users } from "@/lib/db/schema";
-import { upsertGoogleUser } from "@/lib/engine/accounts";
+import {
+  authenticateWithPassword,
+  upsertGoogleUser,
+} from "@/lib/engine/accounts";
 
 /**
  * Autenticazione dell'applicazione.
  *
- * Due provider:
+ * Tre provider:
  *
- * - **Google**, l'unico modo di entrare in produzione (PLAN §2).
+ * - **Google**, la prima strada, e fino a M5 l'unica (PLAN §2).
+ * - **`email`**, la seconda: indirizzo e password, con l'indirizzo verificato
+ *   da un codice prima di poter fare qualunque altra cosa (M5). Esiste perché
+ *   la sera dell'asta la persona che un account Google non ce l'ha, o non vuole
+ *   collegarlo qui, non è un caso di studio: è un amico in piedi accanto alla
+ *   TV che non riesce a entrare.
  * - **`dev`**, un Credentials provider registrato solo fuori produzione, che
  *   apre una sessione per un utente già presente a database senza passare da
  *   Google. Serve perché collaudare un'asta a 8 richiederebbe 8 account Google
  *   reali (PLAN §15). Un test automatico verifica che in produzione non esista.
+ *
+ * ⚠ Le due strade portano **alla stessa riga di `users`**, e l'indirizzo email
+ * è la chiave che le tiene insieme (M5 §2). La regola meno ovvia di tutta
+ * l'autenticazione — un aggancio Google su una riga non verificata azzera
+ * `password_hash` — sta in `lib/engine/accounts.ts`, col suo attacco scritto
+ * accanto.
  *
  * La sessione è un **JWT**, non una riga a database: nessuna tabella adapter
  * (DECISIONS, P17). Il token porta soltanto l'id interno dell'utente; tutto il
@@ -65,7 +79,38 @@ export function buildProviders(
     },
   });
 
-  return [Google({}), ...(nodeEnv !== "production" ? [devProvider] : [])];
+  /**
+   * La seconda strada d'ingresso (M5). È un Credentials provider come `dev`,
+   * ma non ha niente in comune con lui: qui si verifica una password, e la
+   * lista dei provider in produzione diventa `["google", "email"]` — che è
+   * ancora un'uguaglianza esatta nel test, non un «almeno questi».
+   */
+  const emailProvider = Credentials({
+    id: "email",
+    name: "Email e password",
+    credentials: {
+      email: { label: "Email", type: "email" },
+      password: { label: "Password", type: "password" },
+    },
+    authorize: async (credentials) => {
+      const result = await authenticateWithPassword(
+        credentials?.email,
+        credentials?.password,
+      );
+      // ⚠ Anche un utente **non verificato** entra: non verificato non è non
+      // autenticato. La sessione serve proprio a portarlo su `/verify` e a
+      // dargli il pulsante per farsi rimandare il codice.
+      if (!result.ok) return null;
+      const user = result.value;
+      return { id: user.id, name: user.displayName, email: user.email };
+    },
+  });
+
+  return [
+    Google({}),
+    emailProvider,
+    ...(nodeEnv !== "production" ? [devProvider] : []),
+  ];
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -110,15 +155,50 @@ export async function currentUser(): Promise<User | null> {
 }
 
 /**
- * Guardia delle pagine autenticate. Manda a `/signin` chi non è loggato e a
- * `/onboarding` chi non ha ancora scritto nome e cognome: è così che
- * `display_name` diventa obbligatorio *prima* di qualsiasi altra pagina.
+ * Guardia delle pagine autenticate: **una scala a tre gradini**, in quest'ordine.
+ *
+ * ```
+ * sessione?   no → /signin
+ * verificato? no → /verify
+ * ha un nome? no → /onboarding
+ *                → la pagina
+ * ```
+ *
+ * Il gradino di mezzo è di M5, e la sua posizione non è casuale: **la verifica
+ * viene prima dell'onboarding** di proposito, perché non si raccoglie il nome
+ * di qualcuno per un indirizzo che potrebbe non esistere.
+ *
+ * ⚠ **Accesso rigido**: chi non è verificato non fa nulla. Non crea aste, non
+ * entra in un'asta su invito, non gioca. Ha un prezzo dichiarato — fra M5 e M6
+ * non esiste il pulsante «verifica a mano», e se a un amico l'email non arriva
+ * l'unico rimedio è una `UPDATE` sul server (M5 §9).
+ *
+ * ⚠ **La scala vale solo per chi ci passa.** Chi scrive una pagina nuova usa
+ * `requireUser()`; `currentUser()` è per chi la scala la sta *implementando*
+ * (`/signin`, `/verify`, `/onboarding`, la navbar) o per le rotte API, dove un
+ * redirect non ha senso e la risposta giusta è un 401. L'audit di M5-09 è in
+ * `docs/features/05-identita.md`.
  */
 export async function requireUser(): Promise<User> {
   const user = await currentUser();
   if (!user) redirect("/signin");
+  if (!isVerified(user)) redirect("/verify");
   if (!user.displayName) redirect("/onboarding");
   return user;
+}
+
+/**
+ * Ha dimostrato di controllare il proprio indirizzo?
+ *
+ * Una condizione sola, senza eccezioni: la colonna è scritta o non lo è. Le due
+ * categorie che «non hanno niente da dimostrare» non sono un'eccezione qui, ma
+ * una riga a database — **il seed scrive `email_verified_at`** ai dodici utenti
+ * di prova (M5 §9), e in produzione lo scrive il backfill del deploy (§10).
+ * Un'eccezione nel codice avrebbe risparmiato quelle due righe e lasciato per
+ * sempre la domanda «e questo caso qui, è verificato o no?».
+ */
+export function isVerified(user: User): boolean {
+  return user.emailVerifiedAt !== null;
 }
 
 /** Nome suggerito dal profilo Google, per precompilare l'onboarding. */

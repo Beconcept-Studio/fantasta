@@ -1,14 +1,24 @@
 import { redirect } from "next/navigation";
 
-import { currentUser, suggestedDisplayName } from "@/lib/auth";
+import { currentUser, isVerified, suggestedDisplayName } from "@/lib/auth";
 
 import { OnboardingForm } from "./onboarding-form";
 
 export const metadata = { title: "Come ti chiami? — Asta Fantacalcio" };
 
+/**
+ * Il terzo gradino della scala, e usa `currentUser()` perché **è** un gradino:
+ * chiamare `requireUser()` da qui sarebbe un ciclo di redirect.
+ *
+ * ⚠ Il rimando a `/verify` non è ridondante. Senza, chi digita `/onboarding`
+ * nella barra degli indirizzi salterebbe il gradino di mezzo e si scriverebbe
+ * il nome per un indirizzo che potrebbe non esistere: la scala vale solo per
+ * chi ci passa, e questa pagina è raggiungibile per conto suo.
+ */
 export default async function OnboardingPage() {
   const user = await currentUser();
   if (!user) redirect("/signin");
+  if (!isVerified(user)) redirect("/verify");
   if (user.displayName) redirect("/dashboard");
 
   return (

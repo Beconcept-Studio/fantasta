@@ -515,3 +515,129 @@ export async function verifyEmail(
 
   return ok(null);
 }
+
+// ─── Il recupero della password ──────────────────────────────────────────────
+
+/**
+ * Perché un account può **non** avere una password da recuperare.
+ *
+ * Un account di solo Google che chiede «password dimenticata» non se la vede
+ * creare dal nulla: sarebbe la direzione Google → password di §2 per un'altra
+ * strada, e quella direzione è chiusa. La frase lo dice, invece di far provare
+ * e riprovare.
+ */
+function noPasswordToReset(user: User): Result<never> {
+  if (user.googleSub !== null) {
+    return fail(
+      "EMAIL_IS_GOOGLE",
+      "Questo account entra con Google: usa «Entra con Google», non serve nessuna password.",
+    );
+  }
+  return fail(
+    "ACCOUNT_NOT_FOUND",
+    "Questo account non ha una password da recuperare.",
+  );
+}
+
+/**
+ * `/forgot`: manda un codice per cambiare la password.
+ *
+ * ⚠ **Questo flusso è non autenticato**, al contrario di `/verify`: chi lo usa
+ * è per definizione fuori. Il codice si cerca quindi per *(email, purpose)* e
+ * le difese non possono appoggiarsi a una sessione — i cinque tentativi della
+ * tabella valgono comunque, e sopra ci va il limite per IP di `lib/rate-limit`,
+ * che applica chi chiama.
+ *
+ * ⚠ **Un limite noto, scritto invece che scoperto:** un reset **non invalida le
+ * sessioni già aperte altrove**, perché le sessioni sono JWT e non righe a
+ * database (P17). Vedi `docs/DECISIONS.md`.
+ */
+export async function requestPasswordReset(
+  email: unknown,
+  now: Date = new Date(),
+): Promise<Result<{ mailSent: boolean }>> {
+  if (typeof email !== "string") {
+    return fail("INVALID_EMAIL", "Scrivi il tuo indirizzo email.");
+  }
+  const user = await findUserByEmail(email);
+  // Dall'enumerazione degli account non ci difendiamo, ed è una decisione
+  // scritta in `docs/DECISIONS.md`: dire «questo indirizzo non c'è» è utile a
+  // chi ha sbagliato a digitarlo, e ciò che protegge un account è la password.
+  if (!user || !user.email) {
+    return fail("ACCOUNT_NOT_FOUND", "Nessun account con questo indirizzo.");
+  }
+  if (user.passwordHash === null) return noPasswordToReset(user);
+
+  const allowed = checkResendAllowed(
+    await lastCodeSentAt(user.id, "RESET_PASSWORD"),
+    now,
+  );
+  if (!allowed.ok) return allowed;
+
+  const mailSent = await deliverCode(
+    user.id,
+    user.email,
+    "RESET_PASSWORD",
+    now,
+  );
+  return ok({ mailSent });
+}
+
+/**
+ * `/reset`: codice e password nuova, in un colpo solo.
+ *
+ * **Un codice, non un link**: niente token negli URL da farsi inoltrare per
+ * sbaglio, e una schermata in meno da scrivere.
+ *
+ * ⚠ `email_verified_at` **non** si tocca qui, ed è deliberato: chi arriva da
+ * `/forgot` senza aver mai verificato entra e trova `/verify`, che è il gradino
+ * giusto e che il codice glielo rimanda. Far verificare l'indirizzo di rimbalzo
+ * sarebbe difendibile — la prova è la stessa — ma sarebbe una regola in più che
+ * nessuno ha chiesto, e le regole dell'identità si contano.
+ */
+export async function resetPassword(
+  input: { email: unknown; code: unknown; password: unknown },
+  now: Date = new Date(),
+): Promise<Result<null>> {
+  if (typeof input.email !== "string") {
+    return fail("INVALID_EMAIL", "Scrivi il tuo indirizzo email.");
+  }
+  const user = await findUserByEmail(input.email);
+  if (!user) {
+    return fail("ACCOUNT_NOT_FOUND", "Nessun account con questo indirizzo.");
+  }
+  if (user.passwordHash === null) return noPasswordToReset(user);
+
+  // La password si valida **prima** di consumare il codice: chi ne sceglie una
+  // troppo corta non deve perdere il codice appena ricevuto e ricominciare.
+  const password = validatePassword(input.password);
+  if (!password.ok) return password;
+
+  const row = await liveCode(user.id, "RESET_PASSWORD");
+  const usable = checkCodeUsable(row, now);
+  if (!usable.ok) return usable;
+
+  const given = typeof input.code === "string" ? input.code.trim() : "";
+  if (!sameHash(hashCode(given), row!.codeHash)) {
+    const [updated] = await db
+      .update(emailCodes)
+      .set({ attempts: sql`${emailCodes.attempts} + 1` })
+      .where(eq(emailCodes.id, row!.id))
+      .returning({ attempts: emailCodes.attempts });
+    return wrongCodeMessage(updated.attempts);
+  }
+
+  const passwordHash = await hashPassword(password.value);
+  await db.transaction(async (tx) => {
+    await tx
+      .update(emailCodes)
+      .set({ consumedAt: now })
+      .where(and(eq(emailCodes.id, row!.id), isNull(emailCodes.consumedAt)));
+    await tx
+      .update(users)
+      .set({ passwordHash })
+      .where(eq(users.id, user.id));
+  });
+
+  return ok(null);
+}
