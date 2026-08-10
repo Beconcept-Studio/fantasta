@@ -433,30 +433,44 @@ email · niente UI per cambiare la propria password da dentro l'app: chi la vuol
       `clientIp()` prende quindi l'**ultimo** elemento della lista, l'unico che ha scritto nginx.
       Prendere il primo — che è la lettura ovvia della specifica dell'header — avrebbe reso il
       limite aggirabile mandando un `X-Forwarded-For` a mano.
-- [ ] **M5-07** — `lib/engine/accounts.ts`: registrazione (utente prima, invio dopo), emissione del
+- [x] **M5-07** — `lib/engine/accounts.ts`: registrazione (utente prima, invio dopo), emissione del
       codice con consumo del precedente, verifica, reinvio
-- [ ] **M5-08** — `lib/auth.ts`: il provider `email`; l'aggancio Google per email; **il rifiuto se
+- [x] **M5-08** — `lib/auth.ts`: il provider `email`; l'aggancio Google per email; **il rifiuto se
       `email_verified` è falso**; l'email che non si riscrive più a ogni login; ⚠ **l'azzeramento di
       `password_hash` sull'aggancio a una riga non verificata**
-- [ ] **M5-09** — `requireUser()`: il terzo gradino verso `/verify`, in mezzo agli altri due; audit
+- [x] **M5-09** — `requireUser()`: il terzo gradino verso `/verify`, in mezzo agli altri due; audit
       delle pagine che usano `currentUser()` scavalcando la scala (sospetto: `/join/[token]`)
-- [ ] **M5-10** — Recupero: `/forgot`, `/reset`, il rifiuto se `password_hash` è nullo, il limite per
+      → **Audit svolto.** Il sospetto era infondato: `/join/[token]` usa già `requireUser()`, quindi
+      il gradino nuovo lo protegge senza toccare quella pagina. I due punti che rifacevano la scala
+      **a mano** erano altri, e sono stati allineati: `app/page.tsx` (la radice, che smista) e
+      `app/onboarding/page.tsx` più la sua server action — senza il rimando, chi digitava
+      `/onboarding` nella barra degli indirizzi saltava il gradino di mezzo.
+      Gli altri usi di `currentUser()` restano corretti e sono di due specie: le pagine che la scala
+      la **implementano** (`/signin`, `/verify`, `/onboarding`), dove `requireUser()` sarebbe un
+      ciclo di redirect, e le **rotte API** (`stream`, `action`, `heartbeat`, i due export) più la
+      navbar, dove a una `fetch` non si risponde con un redirect.
+      ⚠ Le rotte API non hanno bisogno del gradino: un utente non verificato non può diventare
+      membro di nessuna asta — `joinAuction` e `createAuction` passano da `requireUser()` — quindi
+      da quelle rotte riceve già `FORBIDDEN` o `NOT_FOUND`.
+- [x] **M5-10** — Recupero: `/forgot`, `/reset`, il rifiuto se `password_hash` è nullo, il limite per
       IP sul flusso non autenticato
-- [ ] **M5-11** — UI: `/signup` (solo email e password), `/verify` col reinvio e il conto dei
+- [x] **M5-11** — UI: `/signup` (solo email e password), `/verify` col reinvio e il conto dei
       tentativi, i due form del recupero, e i link dalla pagina `/signin`. Mobile-first
-- [ ] **M5-12** — `tests/auth-providers.test.ts`: valore atteso `["google", "email"]`, **uguaglianza
+- [x] **M5-12** — `tests/auth-providers.test.ts`: valore atteso `["google", "email"]`, **uguaglianza
       esatta mantenuta**, il test su `dev` intatto
-- [ ] **M5-13** — Test puri: `account-rules` con i fake timer (scaduto, quinto tentativo, reinvio
+- [x] **M5-13** — Test puri: `account-rules` con i fake timer (scaduto, quinto tentativo, reinvio
       prima dei 60 secondi), `password` (round-trip, hash diversi con lo stesso input, rifiuto sotto
       i 10 caratteri), `rate-limit` (soglia, azzeramento al successo, sfratto)
-- [ ] **M5-14** — Test con Postgres: **il furto d'account di §2** (aggancio a riga non verificata →
+- [x] **M5-14** — Test con Postgres: **il furto d'account di §2** (aggancio a riga non verificata →
       `password_hash` nullo; aggancio a riga verificata → password intatta); nessuna seconda riga con
       la stessa email; il `UNIQUE` che rifiuta; registrazione su indirizzo già di Google rifiutata;
       reset rifiutato su account di solo Google; un codice nuovo consuma il precedente
-- [ ] **M5-15** — `pnpm db:seed`: `email_verified_at` e la password nota per i dodici utenti
-- [ ] **M5-16** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ `pnpm build` con
+- [x] **M5-15** — `pnpm db:seed`: `email_verified_at` e la password nota per i dodici utenti
+- [x] **M5-16** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ `pnpm build` con
       `pnpm dev` **spento**)
-- [ ] **M5-17** — `docs/ARCHITECTURE.md`: il capitolo sull'identità — le due strade, l'aggancio
+      → 495 test verdi su 35 file, `tsc --noEmit` pulito, build completata con le quattro rotte
+      nuove (`/signup`, `/verify`, `/forgot`, `/reset`) nell'elenco.
+- [x] **M5-17** — `docs/ARCHITECTURE.md`: il capitolo sull'identità — le due strade, l'aggancio
       asimmetrico e il perché, la scala di `requireUser()`. `docs/DECISIONS.md`: lo scostamento da
       PLAN §2, SMTP e `nodemailer`, scrypt invece di bcrypt, l'enumerazione non difesa, le sessioni
       non revocate al reset. `docs/HOWTO-PROVA-LOCALE.md`: il codice su stdout e la password del seed

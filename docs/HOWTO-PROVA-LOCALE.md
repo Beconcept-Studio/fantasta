@@ -22,6 +22,7 @@ Il seed stampa a fine corsa tutto quello che serve, id dell'asta compreso:
 
 ```text
 Utenti: 0 creati, 12 utenti di prova a database.
+  Password di tutti (M5): asta-di-prova-1 — es. marco.bianchi@example.test
 Asta "Asta di prova" creata: stato READY, 8 posti, listone importato.
   Setup:  http://localhost:3000/auctions/<id>/setup
   Lobby:  http://localhost:3000/auctions/<id>/lobby
@@ -118,6 +119,45 @@ produzione non ci sia.
 
 La lista del login è in ordine alfabetico, quindi «Marco Bianchi» non è il primo pulsante: cercalo
 per nome, non per posizione.
+
+### Provare invece la strada email e password (M5)
+
+L'accesso di sviluppo è comodo ma **salta esattamente ciò che M5 ha aggiunto**. Per collaudare la
+seconda strada, sulla stessa pagina di login, sopra la sezione di sviluppo:
+
+- **Email**: `marco.bianchi@example.test` — la regola è nome.cognome, tutto minuscolo, senza accenti.
+- **Password**: `asta-di-prova-1`, uguale per tutti e dodici. La stampa anche il seed.
+
+I dodici utenti del seed nascono **già verificati** (`email_verified_at` scritto): senza, finirebbero
+tutti su `/verify` a chiedere un codice che nessuno può leggere, perché dietro `@example.test` non
+c'è nessuna casella di posta.
+
+### Provare il giro completo della registrazione
+
+⚠ **In locale non serve nessuna credenziale SMTP: il codice esce sullo stdout del dev server.**
+Tienilo sott'occhio nel terminale di `pnpm dev`, dove compare così:
+
+```text
+──── EMAIL (non inviata: siamo fuori produzione) ────
+A:       mario@example.com
+Oggetto: Il tuo codice di verifica
+CODICE:  418302
+────────────────────────────────────────────────────
+```
+
+1. `/signup`, un indirizzo qualsiasi e una password di almeno 10 caratteri.
+2. Copia il codice dal terminale e incollalo su `/verify`.
+3. Poi `/onboarding` per il nome, e sei nella dashboard.
+
+Le cose che vale la pena provare a mano, perché i test le coprono ma vederle è un'altra cosa:
+
+- **Non verificato non fa niente**: con l'account appena creato e il codice non inserito, prova ad
+  aprire `/dashboard` o un link d'invito — rimbalzi su `/verify`.
+- **Il codice scaduto**: `UPDATE email_codes SET expires_at = now() - interval '1 minute'
+  WHERE consumed_at IS NULL;` e riprova. La schermata lo dice e offre il pulsante.
+- **Il recupero**: `/forgot` con lo stesso indirizzo, poi il codice dal terminale su `/reset`.
+- **Il reinvio troppo presto**: due click di fila su «Mandami un altro codice» — il secondo viene
+  rifiutato con i secondi che mancano. Quel limite vive nel database, non in memoria.
 
 ## 5. I bot
 
