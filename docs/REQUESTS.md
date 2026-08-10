@@ -1,23 +1,6 @@
-### Portale TV - Visualizzazione più compatta
-Crea una UI più compatta, con testi più adatti ad un Macbook che a una TV. Se proprio devo migliorare la leggibilità farò zoom della schermata.
-
 ### Esportazione rose
 Deve essere prodotto un unico file con le seguenti informazioni:
 - nome_squadra,id_calciatore,crediti_spesi
-
-### Navbar di navigazione
-Inserimento di una navbar di navigazione per semplificare la navigazione degli utenti.
-Cosa inserire:
-- Logo: Per il momento scrivi il nome "Fantasta"
-- Nome utente
-- Bottone per il logout
-
-Quando sono all'interno dell'asta vorrei avere anche una sotto navbar con le voci di menù che mi possono aiutare a navigare tra le sezioni disponibili.
-
-### Miglioramento titoli pagine
-Al momento quando navigo l'applicazione non è chiaro in che pagina sia.
-Voglio ristrutturare la sezione dove vedo il nome dell'asta.
-In quella posizione vorrei vedere il titolo della pagina, con un badge sopra che indica il nome dell'asta in cui sto agendo.
 
 ### Testing avanzato
 Vorrei avere una sezione dove posso lanciare una simulazione di asta.

@@ -12,7 +12,7 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna. La prossima è **M2**, qui sotto.
+Nessuna. La prossima è **M3**, qui sotto.
 
 ## Da pianificare
 
@@ -21,7 +21,6 @@ L'ordine è indicativo: si apre quella che serve.
 
 | Macro | Tema |
 |---|---|
-| **M2** | Navigazione e identità delle pagine — navbar, sotto-navbar, titolo con badge dell'asta, portale TV compatto |
 | **M3** | Tracciabilità — esportazione delle rose in un CSV unico, pagina di log dell'asta e dei lotti |
 | **M4** | Simulazione in-app — asta simulata dall'interfaccia: l'owner partecipa, gli altri X sono bot |
 
@@ -29,6 +28,7 @@ L'ordine è indicativo: si apre quella che serve.
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M2](02-navigazione.md) | Navigazione e identità delle pagine | v1.3.0 — 2026-08-10 |
 | [M1](01-segretezza-offerte.md) | Segretezza e rivelazione delle offerte | v1.2.0 — 2026-08-10 |
 | [M0](00-nuova-linea-di-sviluppo.md) | La nuova linea di sviluppo: tre branch, versioni, documenti | v1.1.0 — 2026-08-09 |
 

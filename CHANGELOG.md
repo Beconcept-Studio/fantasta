@@ -4,6 +4,44 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.3.0] — 2026-08-10
+
+**M2 — Navigazione e identità delle pagine.** Una macro sola, e riguarda il muoversi dentro l'app.
+
+### Aggiunto
+
+- **Una navbar su ogni pagina**: il nome dell'app, che riporta alla lista delle aste, il tuo nome e
+  il pulsante per uscire. Prima l'uscita esisteva solo nella lista delle aste.
+- **Dentro un'asta, un menù delle sezioni.** Configurazione, Lobby, Regia, Asta live e il link alla
+  vista TV: ognuno vede le voci che gli competono, e sono sempre le stesse dall'inizio alla fine
+  della serata. Prima ogni pagina aveva i propri link, diversi dagli altri, e in due punti la voce
+  «Pannello di configurazione» portava alla lobby — motivo per cui la configurazione dei tempi ad
+  asta iniziata sembrava irraggiungibile.
+
+### Cambiato
+
+- **Il titolo di ogni pagina dice adesso la pagina**, con il nome dell'asta in un'etichetta sopra.
+  Prima il titolo era il nome dell'asta: tre schermate diverse si presentavano tutte allo stesso
+  modo, e l'unica informazione che mancava era dove ti trovavi.
+- **La vista TV è diventata un tabellone di recap.** Tre quarti dello schermo sono tutte le squadre
+  con la rosa completa, i prezzi pagati e i crediti residui; gli slot ancora da riempire restano
+  disegnati, così si vede a colpo d'occhio chi è indietro. Il quarto rimanente è il lotto in corso.
+  Al momento delle buste aperte la squadra che ha vinto si accende nel tabellone, col giocatore
+  appena preso in evidenza dentro la sua rosa. Prima la pagina era tarata per essere letta da
+  quattro metri su un televisore, e su un portatile spendeva metà schermo per un countdown che ogni
+  partecipante ha già in mano.
+- **Il portale del partecipante si chiama «Asta live»**, che dice cosa ci trovi invece di come si
+  chiama. L'indirizzo della pagina non è cambiato: i link già aperti continuano a funzionare.
+- Nell'intestazione della vista TV, al posto del totale speso e dell'ordine dei ruoli, c'è lo
+  **stato dell'asta** — in corso o in pausa. È la risposta alla domanda di chi alza gli occhi e
+  trova tutti i numeri immobili.
+
+### Corretto
+
+- **Il richiamo «Asta in corso» non compare più sopra la vista TV.** Se chi proiettava era anche
+  loggato nello stesso browser, quella striscia verde si incollava in cima allo schermo condiviso e
+  invitava tutta la stanza ad andare al suo portale.
+
 ## [1.2.0] — 2026-08-10
 
 Due macro in un rilascio: **M1** era ferma su `dev` da ieri e non è mai arrivata in produzione.

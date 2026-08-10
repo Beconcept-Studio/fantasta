@@ -5,7 +5,7 @@ import { getAuctionOverview, listPickPool } from "@/lib/engine/setup";
 
 import { ManageConsole } from "./console";
 
-export const metadata = { title: "Regia dell'asta" };
+export const metadata = { title: "Regia dell'asta — Asta Fantacalcio" };
 
 /**
  * `/auctions/[id]/manage` — il portale del manager (PLAN §10).
@@ -16,12 +16,15 @@ export const metadata = { title: "Regia dell'asta" };
  * si guarda un tabellone — è l'esatto opposto del vincolo del portale
  * partecipante, che è mobile-first perché si gioca dal telefono.
  *
- * Il server fa tre cose e nessuna è preparare la schermata: verifica che chi
- * entra sia l'owner, passa il `public_token` (che serve al link della vista TV,
- * e da nessun'altra parte è recuperabile) e dice se l'owner è anche un membro —
- * perché in quel caso questa pagina deve battere l'heartbeat, altrimenti il
- * cancello d'avvio non si passerebbe mai da qui. Lo stato dell'asta arriva
- * dallo stream e da lì soltanto (regola 7).
+ * Il server fa due cose e nessuna è preparare la schermata: verifica che chi
+ * entra sia l'owner, e dice se l'owner è anche un membro — perché in quel caso
+ * questa pagina deve battere l'heartbeat, altrimenti il cancello d'avvio non si
+ * passerebbe mai da qui. Lo stato dell'asta arriva dallo stream e da lì soltanto
+ * (regola 7).
+ *
+ * Il `public_token` non passa più di qui: da M2 il link alla vista TV sta
+ * nell'intestazione comune a tutte le sezioni dell'asta, che il token ce
+ * l'ha già.
  */
 export default async function ManagePage({
   params,
@@ -45,7 +48,6 @@ export default async function ManagePage({
   return (
     <ManageConsole
       auctionId={id}
-      publicToken={overview.auction.publicToken}
       ownerIsMember={overview.viewerMember !== null}
       pool={pool}
     />
