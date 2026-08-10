@@ -236,9 +236,16 @@ correzioni. Lo storico non nasconde le riassegnazioni: le racconta.
 
 **`getAuctionLog` non scrive query nuove sui lotti.** Usa `loadAuctionState` di `mutate.ts` — che già
 carica lotti, round, buste, assegnazioni e i nomi, ed è ciò che `loadForSnapshot` fa a ogni broadcast
-— senza lock, perché non si muta niente e la regola 4 vieta di mutare, non di leggere. L'unica query
-propria è quella su `events`, con il join su `users` per scrivere «da Andrea» invece di un uuid:
-`payload.actor` è un id utente.
+— senza lock, perché non si muta niente e la regola 4 vieta di mutare, non di leggere. Le query
+proprie sono quelle su `events`, e servono a scrivere «da Andrea» invece di un uuid, perché in una
+disputa «chi» è metà della domanda.
+
+**Sono due, e non un join, per una ragione che avrebbe rotto la pagina in produzione.** In
+`payload.actor` non c'è sempre un id utente: le transizioni decise dal tempo scrivono `"system"`, il
+seed scrive `"seed"`, e un `->>'actor'` castato a `uuid` dentro un join **solleva** su quelle righe.
+La pagina sarebbe andata in 500 esattamente sulle aste più interessanti — quelle in cui il tempo ha
+fatto scadere qualcosa. Quindi si leggono gli eventi, si tengono gli `actor` che *sembrano* uuid, e i
+nomi si prendono con una seconda query.
 
 Gli uuid dei lotti non servono — sulle righe dello storico non si agisce, e la chiave naturale è
 `seq`. Servono solo per l'inverso: `refs.lots` permette di risalire dal `lotId` dentro un payload al
@@ -253,29 +260,59 @@ Una pagina che mostrasse le buste del lotto in contesa violerebbe I8 e, con il r
 lo violerebbe anche solo dicendo che una busta è stata consegnata. Ed è il rischio vero di questa
 macro: il dato è tutto lì, in memoria, un `map` di distanza.
 
-**La barriera è una riga in `lib/engine/log.ts`:**
+**La barriera è `isPublicLot`, in `lib/auction-log.ts`**, applicata da `publicLots` in
+`lib/engine/log.ts`:
 
 ```ts
-state.lots.filter((lot) => lot.status === "RESOLVED")
+export function isPublicLot(lot: { status: string }): boolean {
+  return lot.status === "RESOLVED";
+}
 ```
 
 Funziona perché **non è un confine nuovo: è quello del motore**. `enterReveal` scrive
 `status: "RESOLVED"` nel momento esatto in cui entra in `LOT_REVEAL`, cioè quando le buste
 diventano pubbliche e l'assegnazione viene committata. Quindi «lotto risolto» ≡ «buste già state
 pubbliche», per costruzione e non per attenzione — e un lotto in `LOT_OPEN` o in `LOT_TIE_PREP` non
-arriva mai alla pagina, nemmeno come riga vuota.
+arriva mai alla pagina, nemmeno come riga vuota. Ad asta in pausa vale gratis: la pausa congela la
+fase e non azzera lo `status` del lotto.
 
-È lo stesso mestiere di `serializeSnapshot`, che carica tutto e decide cosa esce; e come lì, il
-punto di decisione è **uno solo**. Ma non è uno snapshot e non deve diventarlo (regola 3):
-`serializeSnapshot` non si tocca, `Snapshot` non guadagna campi, lo stream non trasporta storico.
+È lo stesso mestiere di `serializeSnapshot`, che carica tutto e decide cosa esce. Ma non è uno
+snapshot e non deve diventarlo (regola 3): `serializeSnapshot` non si tocca, `Snapshot` non guadagna
+campi, lo stream non trasporta storico.
 
 **Con asta `LIVE` la pagina spiega l'assenza** invece di lasciarla notare: «Il lotto in corso non
 compare: le buste restano chiuse fino all'apertura.» È una frase costruita su `auction.status` e non
 fa uscire niente. Il conteggio dice «312 lotti risolti» e non mente.
 
-Il test che vale questa macro è in `tests/db/log.test.ts`: un'asta con un lotto `LOT_OPEN` e tre
-buste dentro, e l'asserzione che **in tutto ciò che `getAuctionLog` restituisce non compaia nessuno
-di quei tre importi**.
+#### Il predicato sta in un file puro, e non era la scelta iniziale
+
+In fase di spec la barriera era una riga dentro `lib/engine/log.ts`. È stata spostata per una cosa
+scoperta **rompendola di proposito**: togliendo il filtro, il test in `tests/db/log.test.ts`
+continuava a passare. Il motivo è che `serializeLot` scarta comunque i lotti senza vincitore e senza
+prezzo, e un lotto aperto non ne ha — quindi era *quel* controllo a escludere il lotto in contesa, e
+l'asserzione non stava dimostrando ciò che diceva di dimostrare.
+
+Ne restano due cose, entrambe volute:
+
+1. **Due protezioni sovrapposte**, e nessuna delle due va rimossa perché «l'altra basta». Si coprono
+   a vicenda solo perché il motore non produce mai un lotto `OPEN` con un vincitore; contare su
+   quella coincidenza vorrebbe dire affidare I8 a un dettaglio di implementazione di `enterReveal`
+   invece che a una regola dichiarata. Il commento in `serializeLot` lo dice a chi passerà da lì.
+2. **Il predicato in un modulo puro**, dove si prova da solo — su un lotto costruito a mano che è
+   `OPEN` *e* ha un vincitore. Quello stato il motore non lo genera mai, ed è esattamente perché non
+   lo genera che è l'unico caso capace di distinguere questo controllo da tutti gli altri.
+
+I due test, quindi, dicono due cose diverse: quello puro in `tests/auction-log.test.ts` prova che **il
+guardiano guarda**, quello con Postgres in `tests/db/log.test.ts` prova che **il lotto aperto non
+compare** — un'asta con un lotto `LOT_OPEN` e tre buste dentro, e l'asserzione che in tutto ciò che
+`getAuctionLog` restituisce non compaia nessuno di quei tre importi, né all'owner né al partecipante
+che sta offrendo, né ad asta in pausa.
+
+⚠ Quell'asserzione cerca le cifre dentro tutto il payload, quindi prima toglie i numeri che un
+importo non sono e che per caso contengono le stesse cifre: gli istanti ISO, gli uuid (che finiscono
+anche dentro i nomi utente dei test) e gli `id` di `events`, che sono un `bigserial` globale. Senza
+quelle esclusioni il test falliva **a caso**, secondo i byte prodotti dal generatore di uuid — ed è
+il modo peggiore, perché un rosso che va e viene si finisce per ignorare.
 
 ### 6. Cosa non cambia
 
@@ -300,12 +337,12 @@ generico. Due export sono due funzioni, non un export parametrico.
 - [x] **M3-04** — `exportRoseCsv()` in `lib/engine/export.ts`; `exportFileName(nome, basename)` con
       il secondo parametro; le due rotte `export/listone` e `export/rose`, via la vecchia `export`;
       i due link in `manage/console.tsx`
-- [ ] **M3-05** — `lib/auction-log.ts`: i tipi dello storico e `describeEvent()`, compreso il tipo
+- [x] **M3-05** — `lib/auction-log.ts`: i tipi dello storico e `describeEvent()`, compreso il tipo
       sconosciuto reso in modo generico. Modulo puro, zero dipendenze
-- [ ] **M3-06** — `lib/engine/log.ts`: `getAuctionLog()` — autorizzazione owner-o-membro,
+- [x] **M3-06** — `lib/engine/log.ts`: `getAuctionLog()` — autorizzazione owner-o-membro,
       `loadAuctionState`, la query su `events` con il join su `users`, e **la barriera I8 di §5 con
       il commento che dice perché**
-- [ ] **M3-07** — `lib/auction-nav.ts`: la quinta sezione `log`
+- [x] **M3-07** — `lib/auction-nav.ts`: la quinta sezione `log`
 - [ ] **M3-08** — `app/auctions/[id]/log/page.tsx` e `log/lots-log.tsx`: i due blocchi, il campo di
       ricerca, l'ora di aggiornamento, la riga che spiega il lotto assente ad asta `LIVE`
 - [ ] **M3-09** — Test puri: `tests/rose-csv.test.ts` (intestazione, ordinamento, solo assegnati,

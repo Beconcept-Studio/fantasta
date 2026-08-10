@@ -33,6 +33,7 @@ describe("le sezioni visibili dipendono dal ruolo", () => {
       "lobby",
       "manage",
       "play",
+      "log",
     ]);
   });
 
@@ -41,6 +42,7 @@ describe("le sezioni visibili dipendono dal ruolo", () => {
       "setup",
       "lobby",
       "manage",
+      "log",
     ]);
   });
 
@@ -48,7 +50,23 @@ describe("le sezioni visibili dipendono dal ruolo", () => {
     expect(auctionSections(participant).map((s) => s.key)).toEqual([
       "lobby",
       "play",
+      "log",
     ]);
+  });
+
+  /**
+   * M3 §3 — lo storico lo vedono owner e membri. Un partecipante che vuole
+   * contestare un lotto deve poterlo guardare da sé, e I10 vale anche qui: le
+   * buste non si rivedono da nessun'altra parte dopo i secondi di reveal, tanto
+   * meno se è stato premuto «Prosegui asta».
+   */
+  it("lo storico lo vede sia il proprietario sia il partecipante", () => {
+    for (const viewer of [owner, ownerNotPlaying, participant]) {
+      expect(
+        auctionSections(viewer).some((s) => s.key === "log"),
+        JSON.stringify(viewer),
+      ).toBe(true);
+    }
   });
 
   it("chi non è né proprietario né membro non ha sezioni", () => {
@@ -83,6 +101,7 @@ describe("la sezione attiva si ricava dal pathname", () => {
     ["lobby", "Lobby"],
     ["manage", "Regia dell'asta"],
     ["play", "Asta live"],
+    ["log", "Storico dell'asta"],
   ])("/%s è la sezione con titolo «%s»", (segment, title) => {
     const section = activeSection(`/auctions/${AUCTION}/${segment}`);
     expect(section?.key).toBe(segment);
@@ -99,7 +118,10 @@ describe("la sezione attiva si ricava dal pathname", () => {
     expect(activeSection(`/auctions/${AUCTION}`)).toBeNull();
   });
 
+  // ⚠ Fino a M3 questo test usava `/log` come esempio di segmento inesistente.
+  // Ora `/log` è una sezione, quindi l'esempio è cambiato — ed è la ragione per
+  // cui il test è servito: la lista è una sola, e chi la allunga lo scopre qui.
   it("un segmento che non è una sezione non ne inventa una", () => {
-    expect(activeSection(`/auctions/${AUCTION}/log`)).toBeNull();
+    expect(activeSection(`/auctions/${AUCTION}/statistiche`)).toBeNull();
   });
 });
