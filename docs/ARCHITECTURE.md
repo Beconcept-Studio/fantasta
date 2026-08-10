@@ -779,6 +779,66 @@ sola.
 
 ---
 
+## Come ci si sposta, e come si sa dove si è
+
+Per un anno ogni pagina si è scritta la propria navigazione. Non era una svista: le pagine sono
+nate in fasi diverse, ognuna ha aggiunto i link che le servivano, e nessuna ha mai avuto il compito
+di guardare le altre. Il risultato, arrivati a cinque schermate, erano cinque navigazioni diverse —
+la regia con cinque link testuali in cima, il portale con due in fondo alla pagina (cioè, su un
+telefono, dopo tutto il resto), lobby e setup con due ciascuna e nessun accordo su quali.
+
+Il difetto vero non era la disomogeneità ma una sua conseguenza: **la voce «Pannello di
+configurazione» puntava alla lobby**, in due punti diversi. Chi cercava la configurazione cliccava
+esattamente quella e finiva altrove, mentre il link giusto esisteva, nella regia, in mezzo ad altri
+quattro. Un'etichetta e la sua destinazione tenute insieme da nient'altro che l'attenzione, scritte
+in quattro posti, divergono quattro volte.
+
+La risposta è un posto solo. `lib/auction-nav.ts` tiene su una riga sola, per ogni sezione, il
+segmento di URL, la voce di menù e il titolo della pagina; la sotto-navbar e il titolo escono
+entrambi da lì, quindi non possono più raccontare due cose diverse. Il file non ha nessuna
+dipendenza — è il gemello di `lib/domain.ts`, e per la stessa ragione: lo legge anche il componente
+client che evidenzia la voce attiva, e importare l'ORM per quattro stringhe manderebbe Drizzle sul
+telefono.
+
+Sopra tutto c'è una **navbar globale** nel layout radice: la scritta *Fantasta* che riporta alla
+lista delle aste, il nome di chi è entrato, l'uscita. Il blocco utente si disegna solo se c'è una
+sessione e il nome solo se esiste, il che copre senza casi speciali sia `/signin` (dove non c'è
+sessione) sia `/onboarding` (dove il nome è proprio ciò che si sta scrivendo, ma l'uscita deve
+esserci: è l'unica via di fuga per chi è entrato con l'account sbagliato). Si toglie di mezzo sulla
+sola vista TV, che è pubblica e proiettata.
+
+Dentro un'asta, un layout su `/auctions/[id]` legge una volta chi guarda e che rapporto ha con
+quell'asta, e da due booleani — la possiede, ci gioca — ricava le sezioni. **Dipendono dal ruolo e
+mai dallo stato dell'asta**, e non è solo prevedibilità: il ruolo non cambia mentre guardi la
+pagina, lo stato sì, e una sotto-navbar renderizzata dal server mostrerebbe voci sbagliate dopo la
+prima transizione — a meno di alimentarla dallo snapshot, cioè di trasformare la navigazione in
+stato di gioco. Il layout decide cosa *mostrare*, mai cosa si può *fare*: sono le pagine a
+respingere chi non deve entrare, e le azioni a ricontrollare comunque sul server.
+
+Nella stessa intestazione il nome dell'asta è tornato a essere ciò che è — **contesto, quindi un
+badge** — e il titolo dice finalmente il nome della pagina. Prima erano tre schermate diverse che si
+presentavano tutte come «Serie A 2026», cioè l'unica cosa che chi guarda già sa.
+
+Quel che invece **non** è salito nell'intestazione è lo stato dell'asta. Il suo badge è letto dal
+server all'apertura della pagina e lì resta fermo: in regia si troverebbe accanto al badge di fase
+che arriva dallo stream, a dire il contrario. Sta nel contenuto di lobby e configurazione, dove ogni
+riga viene dalla stessa lettura e ha quindi la stessa età.
+
+Un dettaglio che sembra estetico e non lo è: **niente di tutto questo è sticky**. Il requisito nasce
+dal portale, dove lo spazio verticale è la risorsa più scarsa dell'applicazione e non può essere
+speso per una barra di navigazione mentre scorre un countdown di otto secondi; applicarlo ovunque
+non costa nulla, perché le altre pagine sono documenti e non cruscotti, ed evita un incastro a tre
+livelli di `z-index`. Restano incollati i due che devono esserlo: il banner dell'asta in corso, che
+è il richiamo d'emergenza, e l'intestazione del portale, che tiene crediti e offerta massima sempre
+in vista.
+
+Il costo tecnico di tutto questo è una riga: `getAuctionOverview` è avvolta in `cache()` di React,
+perché ora la chiamano sia il layout sia la pagina. La memoizzazione dura quanto la richiesta e non
+altro — fuori da un contesto di render React la funzione viene semplicemente eseguita, quindi test e
+script continuano a leggere il database vero a ogni chiamata.
+
+---
+
 ## Il portale del partecipante
 
 Qui l'applicazione incontra la persona: un telefono tenuto con una mano, in una stanza dove
@@ -944,8 +1004,9 @@ pressione — c'è un portatile sul tavolo e uno schermo in fondo alla stanza.
 ### La regia, su `/auctions/[id]/manage`
 
 Solo l'owner: chi non ha creato l'asta riceve un 404, non un messaggio — di quella pagina non deve
-sapere niente. Il server verifica quello, legge il `public_token` (che serve a costruire il link
-della TV e non è recuperabile altrove) e si ferma lì; il resto arriva dallo stream.
+sapere niente. Il server verifica quello e si ferma lì; il resto arriva dallo stream. Il
+`public_token`, che serve a costruire il link della TV e non è recuperabile altrove, dalla v1.3.0
+non passa più di qui: lo legge l'intestazione comune a tutte le sezioni dell'asta.
 
 Il cuore della pagina è il **recap**: una scheda per squadra con crediti, speso, offerta massima e
 la rosa ruolo per ruolo, tutte insieme sullo schermo. È l'informazione che a voce non si riesce a
@@ -979,8 +1040,9 @@ esplicitamente, perché è la prima domanda che viene in mente leggendolo.
 Dalla Fase 7 la regia ha anche un **pannello di correzioni**, chiuso di default perché non è roba
 da usare per sbaglio: assegnazione manuale, cancellazione di un giocatore da una rosa, rettifica
 dei crediti. Si spegne da solo quando c'è un lotto in contesa, e la prima cosa che scrive è che un
-pulsante «annulla» non esiste. Come funziona e perché è fatto così sta nel capitolo dopo. Nella
-barra dei link, accanto alla vista TV, c'è anche il download del file `.xlsx` con le rose dentro.
+pulsante «annulla» non esiste. Come funziona e perché è fatto così sta nel capitolo dopo. In cima
+alla pagina, accanto al badge di fase, c'è anche il download del file `.xlsx` con le rose dentro:
+è un'azione della regia, non una destinazione, e per questo non è finita nella sotto-navbar.
 
 ### La TV, su `/tv/[publicToken]`
 
@@ -1006,21 +1068,48 @@ e in una stanza «non succede niente» e «si è bloccato» hanno lo stesso aspe
 buste la TV mostra vincitore, prezzo e **tutti** i round: prima ne mostrava uno solo, l'ultimo, che
 in uno spareggio significava nascondere proprio le offerte che lo spareggio l'avevano causato.
 
-Il layout è governato da un posto: un televisore in fondo a una stanza, con dieci persone che
-guardano da tre o quattro metri. Da lì discendono tre cose. Niente hover, niente scroll, niente
-click: nessuna informazione può stare dietro a un'interazione, perché chi guarda non ha un mouse, e
-tutto ciò che conta sta in una schermata sola — intestazione, il lotto al centro, la classifica dei
-crediti sul fianco. Bianco su nero **fisso**, l'unica pagina dell'applicazione che ignora il tema di
-sistema: un proiettore non ha una preferenza, e un tema chiaro in una stanza al buio è illeggibile.
-E dimensioni che vengono da un conto invece che dall'occhio — a 1080p su un cinquanta pollici un
-pixel vale circa mezzo millimetro, la leggibilità a quattro metri chiede un carattere alto quasi tre
-centimetri, quindi nessun dato scende sotto i trentasei pixel e il nome del giocatore, il countdown
-e il prezzo di aggiudicazione stanno fra i 128 e i 144.
+Per un anno il layout è stato governato da un posto che non era quello vero. Le misure venivano da
+un conto — a 1080p su un cinquanta pollici un pixel vale circa mezzo millimetro, la leggibilità a
+quattro metri chiede un carattere alto quasi tre centimetri — quindi nessun dato scendeva sotto i
+trentasei pixel, e il nome del giocatore, il countdown e il prezzo stavano fra i 128 e i 144. Il
+conto era giusto; l'ipotesi no. Nella pratica questa pagina sta su un portatile, a mezzo metro, e
+quel vincolo produceva soltanto spreco: metà schermo per un countdown che ognuno ha già in mano,
+e una classifica ridotta al totale `11/25` perché quattro frazioni per ruolo, da lontano, diventano
+una riga di numerini.
 
-C'è una conseguenza minore ma vera di questa distanza: la classifica mostra la rosa come totale
-(`11/25`) e non come quattro frazioni per ruolo. Le quattro frazioni sono perfette su un monitor a
-mezzo metro e diventano una riga di numerini a quattro metri; il dettaglio, chi lo vuole, ce l'ha
-sul telefono.
+Da v1.3.0 la TV **cambia natura, non scala**. Tre quarti dello schermo sono un tabellone: tutte le
+squadre su due righe, ciascuna con la rosa completa, i prezzi pagati e i crediti residui. Le colonne
+sono `ceil(squadre / 2)`, così otto squadre danno quattro colonne larghe e dodici ne danno sei
+strette. Gli slot ancora da riempire restano **disegnati**, tratteggiati: ogni card è alta uguale
+dalla prima chiamata all'ultima, la griglia non balla a ogni acquisto, e chi è indietro si vede a
+colpo d'occhio. È questa l'informazione che nessuno in quella stanza può tenere a mente da solo, ed
+è per questo che merita lo schermo grande.
+
+Il quarto rimanente è il lotto in corso — giocatore, countdown, buste aperte — che resta il più
+leggibile della colonna ma non più della pagina.
+
+**La forma non cambia mai**, nemmeno nel momento più teatrale. Al reveal le buste si aprono nella
+colonna mentre nel tabellone la card del vincitore si accende, col giocatore appena aggiudicato in
+evidenza dentro la sua nuova rosa: l'assegnazione è già scritta quando le buste si aprono, quindi
+quel nome comparirebbe lì comunque. I due lati raccontano insieme la stessa cosa — chi ha vinto, a
+quanto, e com'è adesso la sua rosa — e il recap non sparisce proprio nell'istante in cui uno vuole
+confrontare i crediti residui.
+
+Due cose sopravvivono dalla versione precedente, ed è perché non dipendevano dalla distanza. Niente
+hover, niente scroll, niente click: nessuna informazione può stare dietro a un'interazione, perché
+chi guarda non ha un mouse. E bianco su nero **fisso**, l'unica pagina dell'applicazione che ignora
+il tema di sistema, perché uno schermo condiviso non ha una preferenza e un tema chiaro in una
+stanza al buio è illeggibile.
+
+Il prezzo di questa densità è dichiarato nel file invece che scoperto la sera dell'asta: su 900
+pixel di altezza ogni card ha circa 430 pixel per venticinque righe, cioè sedici pixel a riga con il
+testo a undici. Ci sta, ma sotto gli ottocento pixel di altezza il tabellone non è più leggibile.
+È una pagina da portatile, dichiaratamente — chi ha bisogno di più corpo fa zoom, ed è esattamente
+la richiesta da cui questo lavoro è nato.
+
+Niente di tutto questo ha richiesto una riga in più dal server: le rose erano già dentro lo
+snapshot della TV, e i prezzi che si leggono nel tabellone sono assegnazioni chiuse, non offerte in
+corso. `serializeSnapshot` non è stata toccata, e I8 è dove era.
 
 ---
 

@@ -242,8 +242,8 @@ metà lotto trova la stessa pagina di prima, adesso con sopra una navbar.
 - [x] **M2-08** — Test: `tests/auction-nav.test.ts` — sezioni per proprietario-che-gioca,
       proprietario-che-non-gioca e partecipante; sezione attiva ricavata da un pathname; titolo di
       ogni sezione. Vitest secco, niente Postgres
-- [ ] **M2-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi
-- [ ] **M2-10** — `docs/ARCHITECTURE.md` con la navigazione e la nuova TV; `docs/DECISIONS.md` con
+- [x] **M2-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi
+- [x] **M2-10** — `docs/ARCHITECTURE.md` con la navigazione e la nuova TV; `docs/DECISIONS.md` con
       le scelte non ovvie di questa macro
 - [ ] **M2-11** — Chiusura: merge `--no-ff` su `dev`, prova con Docker + seed + `pnpm bots` e dal
       telefono con `pnpm dev:lan`, poi — **solo su richiesta dell'owner** — `CHANGELOG.md`,

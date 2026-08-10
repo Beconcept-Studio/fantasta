@@ -963,3 +963,64 @@ anche per `PAUSED`, l'owner veniva rispedito al portale a ogni tentativo di attr
 correzione non ha bisogno di compensazioni: alla ripresa lo stato torna `LIVE`, l'effetto riparte
 e accompagna al portale chi era rimasto in lobby. Resta un avviso con il link al portale, perché
 in pausa nessuno viene più spostato e la porta va lasciata visibile.
+
+## 2026-08-10 — M2, navigazione e identità delle pagine
+
+**Un modulo puro invece di quattro elenchi di link.** La navigazione era scritta a mano in quattro
+pagine, e in due punti la voce «Pannello di configurazione» puntava alla lobby. La correzione ovvia
+sarebbe stata sistemare i due link; quella scelta è `lib/auction-nav.ts`, dove segmento di URL, voce
+di menù e titolo della pagina stanno sulla stessa riga e da lì escono sia la sotto-navbar sia il
+titolo. Un link sbagliato si ripresenta appena si aggiunge una pagina; un posto solo no. Il modulo
+non ha dipendenze, come `lib/domain.ts` e per la stessa ragione: lo legge anche il componente client
+che evidenzia la voce attiva.
+
+**Le sezioni dipendono dal ruolo e mai dallo stato dell'asta.** L'alternativa — voci contestuali,
+«Configurazione» che sparisce a `COMPLETED` — mostra meno voci morte ma trasforma la navigazione in
+stato di gioco: renderizzata dal server a inizio pagina, mentirebbe dopo la prima transizione, e
+per non mentire dovrebbe essere alimentata dallo snapshot. Il ruolo, al contrario, non cambia
+mentre guardi la pagina. Voci fisse significa anche che nessuno impara la posizione di un pulsante
+e poi non lo ritrova.
+
+**Il titolo lo decide la rotta, non la pagina.** `activeSection` ricava la sezione dal `pathname`.
+Una pagina che dichiara il proprio titolo può mentire su dove si trova — è precisamente il bug di
+partenza, in un'altra forma; la barra degli indirizzi no.
+
+**Lo `StatusBadge` non sale nell'intestazione.** È letto dal server all'apertura della pagina e lì
+resta fermo: nell'intestazione comune si troverebbe, in regia, accanto al badge di fase che arriva
+dallo stream, a dire il contrario. Resta nel contenuto di lobby e configurazione, dove ogni riga
+viene dalla stessa lettura e ha la stessa età. Il badge dell'asta, invece, porta solo il **nome** —
+un fatto di setup, che stantio non può diventare.
+
+**Niente di sticky, nemmeno sul desktop.** Il requisito nasce dal portale, dove lo spazio verticale
+è del countdown. Applicarlo ovunque costa nulla e toglie di mezzo un incastro a tre livelli di
+`z-index` fra banner, navbar e intestazione del portale: un comportamento solo, invece di uno con
+un'eccezione.
+
+**Nome e uscita in chiaro, non in un menu a tendina.** Un menu con due voci è un'astrazione prima
+del secondo chiamante (regola 8): costerebbe un componente shadcn nuovo, del JavaScript client su
+ogni pagina e due tocchi per uscire.
+
+**`getAuctionOverview` avvolta in `cache()`.** Layout e pagina la chiamano entrambi. Verificato che
+fuori da un contesto di render React la funzione venga semplicemente eseguita: i test che rileggono
+l'overview dopo una mutazione, e si aspettano di vedere il cambiamento, restano verdi.
+
+**La TV cambia natura, non scala.** La richiesta era «testi più adatti a un MacBook che a una TV».
+Dimezzare i corpi avrebbe soddisfatto la lettera e sprecato la risposta: il motivo per cui la TV
+mostrava poco non era la dimensione del testo ma il fatto di essere progettata per quattro metri di
+distanza — mezzo schermo a un countdown che ognuno ha già in mano, e la rosa ridotta a `11/25`
+perché quattro frazioni da lontano sono illeggibili. Su un portatile quei vincoli non esistono più,
+quindi tre quarti di schermo diventano un tabellone con tutte le rose complete. L'estensione è stata
+decisa esplicitamente dall'owner in fase di spec, ed è annotata anche in `docs/features/02-navigazione.md`.
+
+**Gli slot vuoti restano disegnati.** Costano righe che si potrebbero risparmiare, ma tengono le
+card alte uguali: la griglia non balla a ogni acquisto, e il tabellone risponde anche alla domanda
+«quanti gliene mancano», che è la seconda che uno si fa guardandolo.
+
+**Il reveal non prende lo schermo.** Le buste si aprono nella colonna mentre la card del vincitore
+si accende nel tabellone. Costa poco — il giocatore aggiudicato compare lì da sé, perché
+l'assegnazione è già scritta quando le buste si aprono — e evita che il recap sparisca proprio
+nell'istante in cui si vogliono confrontare i crediti residui.
+
+**Il limite di leggibilità è scritto nel file.** Sotto gli ~800px di altezza il tabellone non si
+legge più. È una pagina da portatile per scelta, e una scelta dichiarata è diversa da un difetto
+scoperto la sera dell'asta.
