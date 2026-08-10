@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { StatusBadge } from "@/components/setup/status-badge";
@@ -32,43 +31,24 @@ export default async function LobbyPage({
   const overview = await getAuctionOverview(id, user.id);
   if (!overview) notFound();
 
-  const { auction, members, viewerMember, viewerIsOwner } = overview;
+  const { auction, members, viewerMember } = overview;
   const canLeave =
     viewerMember !== null &&
     (auction.status === "DRAFT" || auction.status === "READY");
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 p-6">
-      <header className="space-y-2">
-        <Link
-          href="/dashboard"
-          className="text-muted-foreground hover:text-foreground text-sm"
-        >
-          ← Le tue aste
-        </Link>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {auction.name}
-          </h1>
-          <StatusBadge status={auction.status} />
-        </div>
-        {viewerIsOwner && (
-          <div className="flex flex-wrap gap-4 text-sm">
-            <Link
-              href={`/auctions/${auction.id}/manage`}
-              className="underline underline-offset-4"
-            >
-              Regia dell&apos;asta
-            </Link>
-            <Link
-              href={`/auctions/${auction.id}/setup`}
-              className="underline underline-offset-4"
-            >
-              Configura l&apos;asta
-            </Link>
-          </div>
-        )}
-      </header>
+    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
+      {/* Lo `StatusBadge` sta nel contenuto e non nell'intestazione, che da M2
+          è comune a tutte le pagine dell'asta. Non è una questione di posto:
+          questo badge è letto dal server all'apertura della pagina e non si
+          aggiorna da solo, quindi può stare solo dove tutto il resto ha la sua
+          stessa età — qui, dove ogni riga viene dallo stesso
+          `getAuctionOverview`. In regia si troverebbe accanto al badge di fase
+          che arriva dallo stream, a dire il contrario. */}
+      <p className="flex items-center gap-2 text-sm">
+        <span className="text-muted-foreground">Stato dell&apos;asta:</span>
+        <StatusBadge status={auction.status} />
+      </p>
 
       <LobbyLive
         auctionId={auction.id}

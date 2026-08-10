@@ -5,8 +5,6 @@ import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import { listUserAuctions } from "@/lib/engine/setup";
 
-import { signOutAction } from "./actions";
-
 export const metadata = { title: "Le tue aste — Asta Fantacalcio" };
 
 export default async function DashboardPage() {
@@ -15,18 +13,10 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-8 p-6">
-      <header className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Le tue aste</h1>
-          <p className="text-muted-foreground text-sm">
-            Ciao {user.displayName}.
-          </p>
-        </div>
-        <form action={signOutAction}>
-          <Button type="submit" variant="outline" size="sm">
-            Esci
-          </Button>
-        </form>
+      {/* Il nome e l'uscita stanno nella navbar da M2: qui resterebbero due
+          volte sulla stessa schermata. */}
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight">Le tue aste</h1>
       </header>
 
       {auctions.length === 0 ? (

@@ -123,7 +123,7 @@ export function Portal({
               l&apos;asta la avvia, e serve che siate tutti collegati.
             </p>
             <Button asChild variant="outline">
-              <Link href={`/auctions/${auctionId}/lobby`}>Pannello di configurazione</Link>
+              <Link href={`/auctions/${auctionId}/lobby`}>Vai alla lobby</Link>
             </Button>
           </section>
         )}
@@ -206,20 +206,6 @@ export function Portal({
           <MembersPanel snapshot={snapshot} myMemberId={myMemberId} />
         </section>
 
-        <footer className="flex items-center justify-between gap-3 pt-2">
-          <Link
-            href="/dashboard"
-            className="text-muted-foreground hover:text-foreground text-sm"
-          >
-            ← Le tue aste
-          </Link>
-          <Link
-            href={`/auctions/${auctionId}/lobby`}
-            className="text-muted-foreground hover:text-foreground text-sm"
-          >
-            Lobby
-          </Link>
-        </footer>
       </main>
 
       {lot !== null && (

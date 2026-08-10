@@ -7,14 +7,20 @@
 
 ## Obiettivo
 
-L'applicazione ha cinque schermate — configurazione, lobby, regia, portale, TV — e nessun modo di
-passare dall'una all'altra. Chi entra in regia ci resta: non c'è un link che riporti alla
-configurazione, e infatti la configurazione dei tempi ad asta iniziata, che esiste da v1.2.0, era
-di fatto irraggiungibile. Chi entra nel portale ci resta allo stesso modo. L'unico appiglio è il
-`← Le tue aste` che lobby e setup si sono scritte per conto proprio, e un blocco di link
-nell'intestazione della setup in cui la voce «Pannello di configurazione» punta alla lobby — che è
-il sintomo di ciò che sta sotto: **ogni pagina si arrangia con la propria navigazione, e nessuno
-tiene allineate le etichette con le destinazioni.**
+L'applicazione ha cinque schermate — configurazione, lobby, regia, portale, TV — e cinque
+navigazioni diverse, una per pagina, scritte a mano ognuna per conto suo. La regia ha cinque link
+testuali in cima; il portale ne ha due **in fondo alla pagina**, cioè sotto tutto, che sul telefono
+significa dopo uno scroll completo; lobby e setup ne hanno due ciascuna, e nessuna delle quattro
+porta dove portano le altre.
+
+Il sintomo che ha fatto aprire questa macro è preciso: **la voce «Pannello di configurazione» punta
+alla lobby**, in due posti diversi — nell'intestazione della setup e sulla card d'attesa del
+portale. Chi cerca la configurazione clicca esattamente quella voce e finisce altrove; la
+configurazione dei tempi ad asta iniziata, che esiste da v1.2.0, sembra irraggiungibile pur avendo
+un link che la raggiunge, nella regia, sotto l'etichetta giusta ma in mezzo ad altri quattro.
+
+Non è un link da correggere. È che **un'etichetta e la sua destinazione, tenute insieme da nient'altro
+che l'attenzione, prima o poi divergono** — e in quattro posti diversi divergono quattro volte.
 
 Il secondo problema è dove ti trovi. Il titolo di ogni pagina è il **nome dell'asta**, cioè la cosa
 che in quel momento sai già: sono tre schermate diverse che si presentano tutte come «Serie A
@@ -120,10 +126,19 @@ lettura.
 
 ### 3. Cosa sparisce dalle pagine
 
-Con l'intestazione nel layout, dalle pagine se ne vanno: i `← Le tue aste` di lobby e setup, i due
-blocchi di link dell'owner (compreso quello mal etichettato), e gli `<h1>{auction.name}` di lobby,
-setup e regia. Le pagine restano contenuto. Possono ancora rendere un sottotitolo sotto
-l'intestazione — la setup ha la sua riga che spiega quando l'asta diventa pronta, e resta dov'è.
+Con l'intestazione nel layout se ne vanno tutte e quattro le navigazioni fatte in casa: i
+`← Le tue aste` di lobby, setup, regia e portale; il blocco di link nell'intestazione della setup e
+quello della regia; il footer in fondo al portale. Se ne vanno anche gli `<h1>{auction.name}` di
+lobby, setup e regia, e con loro le due occorrenze di «Pannello di configurazione» che puntavano
+alla lobby — quella sulla card d'attesa del portale non è navigazione fra sezioni e resta, con
+l'etichetta corretta in **«Vai alla lobby»**.
+
+Restano al loro posto le cose che sono della singola pagina e non destinazioni: in regia il badge
+di fase, che arriva dallo stream, e il link che scarica le rose, che è un'azione; nella setup la
+riga che spiega quando l'asta diventa pronta.
+
+`ManageConsole` perde la prop `publicToken`: le serviva solo per comporre il link alla vista TV, che
+ora sta nell'intestazione comune.
 
 **Lo `StatusBadge` non entra nell'intestazione**, ed è una scelta e non una dimenticanza. Sarebbe
 letto dal server una volta e resterebbe fermo mentre l'asta parte; sulla regia si troverebbe
@@ -210,21 +225,21 @@ metà lotto trova la stessa pagina di prima, adesso con sopra una navbar.
 
 - [x] **M2-01** — Aprire `feature/02-navigazione` da `dev`; scrivere questo file, togliere le tre
       richieste da `docs/REQUESTS.md`, aggiornare `docs/features/README.md`
-- [ ] **M2-02** — `lib/auction-nav.ts`: sezioni, etichette, titoli e visibilità per ruolo, modulo
+- [x] **M2-02** — `lib/auction-nav.ts`: sezioni, etichette, titoli e visibilità per ruolo, modulo
       puro senza dipendenze
-- [ ] **M2-03** — `components/nav/navbar.tsx` e `components/nav/actions.ts`; montaggio nel layout
+- [x] **M2-03** — `components/nav/navbar.tsx` e `components/nav/actions.ts`; montaggio nel layout
       radice sotto il `LiveBanner`; via il pulsante «Esci» dalla dashboard e
       `app/dashboard/actions.ts`
-- [ ] **M2-04** — `app/auctions/[id]/layout.tsx` con badge, titolo e sotto-navbar; `cache()` su
+- [x] **M2-04** — `app/auctions/[id]/layout.tsx` con badge, titolo e sotto-navbar; `cache()` su
       `getAuctionOverview` in `lib/engine/setup.ts`
-- [ ] **M2-05** — Ripulire le pagine: via i `← Le tue aste`, i blocchi di link dell'owner e gli
+- [x] **M2-05** — Ripulire le pagine: via i `← Le tue aste`, i blocchi di link dell'owner e gli
       `<h1>` col nome dell'asta da lobby, setup e regia; `StatusBadge` ricollocato nel contenuto di
       lobby e setup; `metadata.title` di ogni pagina allineato ai titoli della tabella §2
 - [ ] **M2-06** — TV, il tabellone: griglia delle squadre a `ceil(posti/2)` colonne su due righe,
       card con rosa completa e slot tratteggiati, evidenza del turno e del vincitore
 - [ ] **M2-07** — TV, la colonna del lotto: tutte le schermate attuali in scala ridotta, striscia
       di contesto in cima, commento in testa al file riscritto
-- [ ] **M2-08** — Test: `tests/auction-nav.test.ts` — sezioni per proprietario-che-gioca,
+- [x] **M2-08** — Test: `tests/auction-nav.test.ts` — sezioni per proprietario-che-gioca,
       proprietario-che-non-gioca e partecipante; sezione attiva ricavata da un pathname; titolo di
       ogni sezione. Vitest secco, niente Postgres
 - [ ] **M2-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi

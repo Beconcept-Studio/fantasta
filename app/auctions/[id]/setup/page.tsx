@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
@@ -18,7 +17,7 @@ import { ListonePanel } from "./listone-panel";
 import { MembersPanel } from "./members-panel";
 import { SettingsForm } from "./settings-form";
 
-export const metadata = { title: "Configura l'asta — Asta Fantacalcio" };
+export const metadata = { title: "Configurazione dell'asta — Asta Fantacalcio" };
 
 /**
  * La pagina dell'owner: configurazione, listone, inviti, membri.
@@ -49,39 +48,20 @@ export default async function SetupPage({
   const baseUrl = `${proto}://${host}`;
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 p-6">
+    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
+      {/* Lo `StatusBadge` è letto dal server insieme al resto della pagina e
+          resta con il resto della pagina: nell'intestazione comune a tutte le
+          sezioni starebbe fermo mentre l'asta parte. */}
       <header className="space-y-2">
-        <Link
-          href="/dashboard"
-          className="text-muted-foreground hover:text-foreground text-sm"
-        >
-          ← Le tue aste
-        </Link>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {auction.name}
-          </h1>
+        <p className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Stato dell&apos;asta:</span>
           <StatusBadge status={auction.status} />
-        </div>
+        </p>
         <p className="text-muted-foreground text-sm">
           {auction.status === "READY"
             ? "Tutto a posto: posti pieni e listone sufficiente. L'asta si avvia dalla regia, quando siete tutti collegati."
             : "L'asta sarà pronta quando i posti saranno pieni e il listone importato basterà per ogni ruolo."}
         </p>
-        <div className="flex flex-wrap gap-4 text-sm">
-          <Link
-            href={`/auctions/${auction.id}/manage`}
-            className="underline underline-offset-4"
-          >
-            Regia dell&apos;asta
-          </Link>
-          <Link
-            href={`/auctions/${auction.id}/lobby`}
-            className="underline underline-offset-4"
-          >
-            Pannello di configurazione
-          </Link>
-        </div>
       </header>
 
       <Card>

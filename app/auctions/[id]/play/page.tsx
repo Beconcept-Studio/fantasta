@@ -5,7 +5,7 @@ import { getAuctionOverview, listPickPool } from "@/lib/engine/setup";
 
 import { Portal } from "./portal";
 
-export const metadata = { title: "Asta — il tuo portale" };
+export const metadata = { title: "Il tuo portale — Asta Fantacalcio" };
 
 /**
  * `/auctions/[id]/play` — il portale del partecipante (PLAN §10).
