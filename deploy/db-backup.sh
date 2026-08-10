@@ -3,7 +3,7 @@
 # Il backup del database (F8-04). Gira ogni giorno da cron e si può lanciare a
 # mano — è il punto 1 della checklist pre-asta di PLAN §17:
 #
-#   ~/asta/deploy/db-backup.sh
+#   /home/ploi/fantasta.rggndr.it/deploy/db-backup.sh
 #
 # Crontab (l'ora è UTC, come tutto sul server):
 #   15 4 * * * /home/ploi/asta/deploy/db-backup.sh >> /home/ploi/backups/backup.log 2>&1

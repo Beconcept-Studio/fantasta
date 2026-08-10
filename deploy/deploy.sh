@@ -3,7 +3,7 @@
 # Il deploy di produzione (F8-01). È lo script che si incolla nel campo
 # "Deploy script" del sito su Ploi, e che si può lanciare a mano dal server:
 #
-#   cd ~/asta && ./deploy/deploy.sh
+#   cd /home/ploi/fantasta.rggndr.it && ./deploy/deploy.sh
 #
 # Cosa fa, nell'ordine: si rifiuta di partire se c'è un'asta in corso, aggiorna
 # il codice, installa, compila, **copia a mano gli asset statici** e ricarica pm2.

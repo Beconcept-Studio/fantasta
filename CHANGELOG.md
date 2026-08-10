@@ -16,7 +16,7 @@ Questa versione **cambia lo schema del database**. Dopo che il deploy è finito,
 in corso, va dato a mano sul server:
 
 ```bash
-cd ~/asta && pnpm db:push
+cd /home/ploi/fantasta.rggndr.it && pnpm db:push
 pm2 reload deploy/ecosystem.config.cjs --update-env
 ```
 

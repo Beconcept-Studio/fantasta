@@ -4,9 +4,9 @@
 # script ripristina un dump su un database **nuovo e separato**, conta le righe
 # che contano e poi lo butta. Non tocca mai il database di produzione.
 #
-#   ~/asta/deploy/db-restore-check.sh                  # l'ultimo dump
-#   ~/asta/deploy/db-restore-check.sh ~/backups/asta-2026-08-08_0415.sql.gz
-#   KEEP_DB=1 ~/asta/deploy/db-restore-check.sh        # non cancella la copia
+#   /home/ploi/fantasta.rggndr.it/deploy/db-restore-check.sh                  # l'ultimo dump
+#   /home/ploi/fantasta.rggndr.it/deploy/db-restore-check.sh ~/backups/asta-2026-08-08_0415.sql.gz
+#   KEEP_DB=1 /home/ploi/fantasta.rggndr.it/deploy/db-restore-check.sh        # non cancella la copia
 #
 # Serve `sudo` senza password verso l'utente `postgres` (su Ploi l'utente `ploi`
 # ce l'ha): creare e cancellare database non è una cosa che l'utente

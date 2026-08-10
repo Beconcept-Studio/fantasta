@@ -7,7 +7,7 @@
 > sul server **va dato a mano dopo il deploy**, come da «Regole operative di produzione»:
 >
 > ```bash
-> cd ~/asta && pnpm db:push
+> cd /home/ploi/fantasta.rggndr.it && pnpm db:push
 > pm2 reload deploy/ecosystem.config.cjs --update-env
 > ```
 >

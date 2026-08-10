@@ -107,14 +107,24 @@ o `PAUSED`, ma la fase di setup non è protetta.
 **La macchina, in breve.** Hetzner CX22 (`46.225.231.138`), Ubuntu 26.04, Ploi; Postgres 16 sulla
 stessa macchina; un solo processo Node sotto pm2 (`asta`) su `127.0.0.1:3000`, nginx davanti con
 Let's Encrypt; deploy automatico a ogni push su `main` (~2 minuti); `pg_dump` alle 04:15 UTC con
-retention 14, in `deploy/db-backup.sh`. Il runbook è stato eliminato in v1.1.0 e resta leggibile
+retention 14, in `deploy/db-backup.sh`.
+
+⚠ **L'app sta in `/home/ploi/fantasta.rggndr.it`**, che è la convenzione di Ploi — una cartella per
+dominio, non per nome del processo. Fino a v1.5.0 questo file diceva `~/asta`, che sul server non
+esiste: la procedura qui sotto è stata seguita alla lettera e si è fermata al primo comando. Se un
+giorno il percorso non torna, chiedilo a pm2 invece di indovinarlo — lo sa per forza, è quello da
+cui sta girando l'app:
+
+```bash
+pm2 describe asta | grep -iE "script path|exec cwd"
+``` Il runbook è stato eliminato in v1.1.0 e resta leggibile
 con `git show v1.0.0:docs/RUNBOOK.md`; le tre procedure che servono al flusso sono qui sotto.
 
 **Una macro che tocca lo schema.** Dopo che il deploy è finito, sul server, con nessuna asta
 `LIVE` o `PAUSED`:
 
 ```bash
-cd ~/asta && pnpm db:push
+cd /home/ploi/fantasta.rggndr.it && pnpm db:push
 pm2 reload deploy/ecosystem.config.cjs --update-env
 ```
 
@@ -124,7 +134,7 @@ Se il cambio è distruttivo (una colonna che sparisce, un tipo che cambia), prim
 **Tornare indietro a una versione.** È a questo che servono i tag:
 
 ```bash
-cd ~/asta && git fetch --tags && git reset --hard v1.2.0
+cd /home/ploi/fantasta.rggndr.it && git fetch --tags && git reset --hard v1.2.0
 pnpm install --prod=false && pnpm build
 pm2 reload deploy/ecosystem.config.cjs --update-env
 ```
@@ -133,7 +143,7 @@ pm2 reload deploy/ecosystem.config.cjs --update-env
 riporta indietro il database: serve il restore da `pg_dump` (`deploy/db-restore-check.sh` mostra
 come si rilegge un dump).
 
-**Deployare a mano**, se il webhook non parte: `cd ~/asta && ./deploy/deploy.sh`.
+**Deployare a mano**, se il webhook non parte: `cd /home/ploi/fantasta.rggndr.it && ./deploy/deploy.sh`.
 
 ---
 
