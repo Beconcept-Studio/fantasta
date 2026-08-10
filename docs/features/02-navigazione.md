@@ -235,9 +235,9 @@ metà lotto trova la stessa pagina di prima, adesso con sopra una navbar.
 - [x] **M2-05** — Ripulire le pagine: via i `← Le tue aste`, i blocchi di link dell'owner e gli
       `<h1>` col nome dell'asta da lobby, setup e regia; `StatusBadge` ricollocato nel contenuto di
       lobby e setup; `metadata.title` di ogni pagina allineato ai titoli della tabella §2
-- [ ] **M2-06** — TV, il tabellone: griglia delle squadre a `ceil(posti/2)` colonne su due righe,
+- [x] **M2-06** — TV, il tabellone: griglia delle squadre a `ceil(posti/2)` colonne su due righe,
       card con rosa completa e slot tratteggiati, evidenza del turno e del vincitore
-- [ ] **M2-07** — TV, la colonna del lotto: tutte le schermate attuali in scala ridotta, striscia
+- [x] **M2-07** — TV, la colonna del lotto: tutte le schermate attuali in scala ridotta, striscia
       di contesto in cima, commento in testa al file riscritto
 - [x] **M2-08** — Test: `tests/auction-nav.test.ts` — sezioni per proprietario-che-gioca,
       proprietario-che-non-gioca e partecipante; sezione attiva ricavata da un pathname; titolo di
