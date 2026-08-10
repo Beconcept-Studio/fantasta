@@ -284,11 +284,11 @@ sue mosse.
 
 ## Task
 
-- [ ] **M4-01** — Aprire `feature/04-simulazione` da `dev`; scrivere questo file, togliere
+- [x] **M4-01** — Aprire `feature/04-simulazione` da `dev`; scrivere questo file, togliere
       «Testing avanzato» da `docs/REQUESTS.md`, aggiornare `docs/features/README.md`
-- [ ] **M4-02** — Schema: `users.is_bot`, `auctions.is_simulated`, `members.bot_strategy`, il
+- [x] **M4-02** — Schema: `users.is_bot`, `auctions.is_simulated`, `members.bot_strategy`, il
       `CHECK` che vieta `is_admin AND is_bot`; `pnpm db:push` in locale
-- [ ] **M4-03** — `lib/domain.ts`: `isAppAdmin()`, `BOT_STRATEGIES` con le etichette italiane, e il
+- [x] **M4-03** — `lib/domain.ts`: `isAppAdmin()`, `BOT_STRATEGIES` con le etichette italiane, e il
       testo del badge. Nessuna dipendenza, come i suoi gemelli
 - [ ] **M4-04** — `ensureBotUsers()` idempotente; `listDevUsers()` esclude i bot; l'`authorize` del
       provider `dev` li rifiuta; il seed chiama `ensureBotUsers()`

@@ -53,3 +53,43 @@ export type AuctionPhase = (typeof AUCTION_PHASES)[number];
 /** I tagli ammessi di partecipanti: segmented control, mai input libero. */
 export const SEAT_OPTIONS = [8, 10, 12] as const;
 export type SeatCount = (typeof SEAT_OPTIONS)[number];
+
+// ─── Simulazione (M4) ────────────────────────────────────────────────────────
+
+/**
+ * Come si comporta un bot dentro un round. Sta su `members.bot_strategy`, cioè
+ * **sul membro e non sull'utente-bot**: se «Bot 3» fosse aggressivo per sempre
+ * le identità sarebbero più riconoscibili, ma si perderebbe l'asta con tutti in
+ * pareggio — l'unico modo di innescare uno spareggio a comando, che a mano è
+ * quasi impossibile riprodurre.
+ */
+export const BOT_STRATEGIES = ["random", "aggressive", "passive", "tie"] as const;
+export type BotStrategy = (typeof BOT_STRATEGIES)[number];
+
+export const BOT_STRATEGY_LABELS: Record<BotStrategy, string> = {
+  random: "Verosimile",
+  aggressive: "Aggressivo",
+  passive: "Prudente",
+  tie: "Pareggio",
+};
+
+/** Il marchio di un'asta di prova, ovunque la si guardi. */
+export const SIMULATION_BADGE = "simulazione";
+
+/**
+ * L'amministratore **dell'applicazione**, che non è l'owner di un'asta.
+ *
+ * ⚠ In questo progetto «owner» è già chi possiede *un'asta*: conduce la sua e
+ * basta. L'amministratore è un permesso su una persona — gioca le aste come
+ * tutti gli altri — e in M4 può fare una cosa sola: creare aste simulate e
+ * riempirle di bot. Cosa altro potrà fare si deciderà quando servirà.
+ *
+ * Il parametro è strutturale di proposito: così una pagina chiede «è un
+ * amministratore?» senza importare il tipo `User` da `lib/db/schema`, che è
+ * esattamente ciò che la regola ESLint su `lib/db` vieta.
+ */
+export function isAppAdmin(
+  user: { isAdmin: boolean } | null | undefined,
+): boolean {
+  return user?.isAdmin === true;
+}

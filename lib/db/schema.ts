@@ -18,6 +18,7 @@ import {
 import {
   type AuctionPhase,
   type AuctionStatus,
+  type BotStrategy,
   ROLES,
   type Role,
 } from "@/lib/domain";
@@ -45,17 +46,36 @@ import {
 
 // ─── Utenti ──────────────────────────────────────────────────────────────────
 
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  googleSub: text("google_sub").unique(),
-  email: text("email"),
-  displayName: text("display_name"),
-  avatarUrl: text("avatar_url"),
-  isAdmin: boolean("is_admin").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+/**
+ * ⚠ `is_admin` e `is_bot` sono **due permessi indipendenti su una persona**, non
+ * un tipo di utente in due valori (M4). Un amministratore dell'applicazione
+ * gioca le aste come tutti gli altri, ed è per questo che non c'è una colonna
+ * sola a tre valori: modellerebbe «amministratore» come se fosse una specie.
+ *
+ * L'unica combinazione che due booleani permettono e che non deve esistere è
+ * `is_admin AND is_bot`, e la vieta il `CHECK`. È la stessa logica degli indici
+ * parziali di I1 e I2: se una regola si può rendere **impossibile** invece che
+ * sorvegliata, si rende impossibile.
+ */
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    googleSub: text("google_sub").unique(),
+    email: text("email"),
+    displayName: text("display_name"),
+    avatarUrl: text("avatar_url"),
+    isAdmin: boolean("is_admin").notNull().default(false),
+    /** Un partecipante simulato. Le sue mosse le decide il tick di `lib/engine/bots.ts`. */
+    isBot: boolean("is_bot").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check("users_admin_not_bot_check", sql`NOT (${t.isAdmin} AND ${t.isBot})`),
+  ],
+);
 
 // ─── Asta ────────────────────────────────────────────────────────────────────
 
@@ -102,6 +122,16 @@ export const auctions = pgTable(
      */
     includeOutOfList: boolean("include_out_of_list").notNull().default(false),
 
+    /**
+     * Un'asta di prova, i cui posti si riempiono di bot (M4).
+     *
+     * ⚠ **Si scrive alla creazione e non cambia più**: `updateAuctionSettings`
+     * non la conosce, e non esiste nessuna via per accenderla dopo. È ciò che
+     * rende *strutturalmente* impossibile che dei bot finiscano in un'asta
+     * vera — non un controllo da ricordarsi, l'assenza della strada.
+     */
+    isSimulated: boolean("is_simulated").notNull().default(false),
+
     currentRole: text("current_role").$type<Role>(),
     currentSeatIndex: integer("current_seat_index"),
     /**
@@ -142,6 +172,12 @@ export const members = pgTable(
     /** Ordine di rotazione, 0-based, assegnato in ordine di join (P13). */
     seatIndex: integer("seat_index").notNull(),
     budgetInitial: integer("budget_initial").notNull(),
+    /**
+     * Come offre questo membro, se è un bot; `null` per una persona (M4). Sta
+     * qui e non su `users` perché lo stesso bot gioca due aste con due
+     * strategie diverse — ed è quello che permette l'asta tutta in pareggio.
+     */
+    botStrategy: text("bot_strategy").$type<BotStrategy>(),
     /** Telemetria di presence: si scrive fuori da `withAuctionLock` (P8). */
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     isVisible: boolean("is_visible").notNull().default(false),
