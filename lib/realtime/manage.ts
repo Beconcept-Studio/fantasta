@@ -68,6 +68,8 @@ export type ManagerControls = {
   startBlocked: string | null;
   canPause: boolean;
   canResume: boolean;
+  /** «Prosegui asta»: chiudere il reveal senza aspettarne la scadenza. */
+  canSkipReveal: boolean;
 };
 
 /**
@@ -78,35 +80,34 @@ export type ManagerControls = {
  * setup — e **tutti i membri in presence LIVE**. Non "non OFFLINE": LIVE. Chi
  * ha il telefono in tasca all'avvio scopre l'asta partita dopo aver perso il
  * primo lotto, e non è un errore recuperabile.
+ *
+ * `canSkipReveal` ripete la guardia di `skipReveal`: asta `LIVE` — non in
+ * pausa, che congela la fase — e fase `LOT_REVEAL`. Come sempre, disabilitare
+ * non è autorizzare: chi non possiede l'asta viene rifiutato dal server anche
+ * se il pulsante gli comparisse davanti (regola 6).
  */
 export function managerControls(snapshot: Snapshot): ManagerControls {
-  const { status } = snapshot.auction;
-  const canPause = status === "LIVE";
-  const canResume = status === "PAUSED";
+  const { status, phase } = snapshot.auction;
+  // I comandi ad asta in corso non dipendono dal cancello d'avvio: si
+  // calcolano una volta e valgono per tutti i rami qui sotto.
+  const running = {
+    canPause: status === "LIVE",
+    canResume: status === "PAUSED",
+    canSkipReveal: status === "LIVE" && phase === "LOT_REVEAL",
+  };
 
   if (status === "LIVE" || status === "PAUSED") {
-    return {
-      canStart: false,
-      startBlocked: "L'asta è già in corso.",
-      canPause,
-      canResume,
-    };
+    return { canStart: false, startBlocked: "L'asta è già in corso.", ...running };
   }
   if (status === "COMPLETED") {
-    return {
-      canStart: false,
-      startBlocked: "L'asta è finita.",
-      canPause,
-      canResume,
-    };
+    return { canStart: false, startBlocked: "L'asta è finita.", ...running };
   }
   if (status === "DRAFT") {
     return {
       canStart: false,
       startBlocked:
         "Mancano dei partecipanti: l'asta parte quando tutti i posti sono occupati.",
-      canPause,
-      canResume,
+      ...running,
     };
   }
 
@@ -115,11 +116,10 @@ export function managerControls(snapshot: Snapshot): ManagerControls {
     return {
       canStart: false,
       startBlocked: `L'asta può partire quando sono collegati tutti.`,
-      canPause,
-      canResume,
+      ...running,
     };
   }
-  return { canStart: true, startBlocked: null, canPause, canResume };
+  return { canStart: true, startBlocked: null, ...running };
 }
 
 // ─── Il recap ────────────────────────────────────────────────────────────────

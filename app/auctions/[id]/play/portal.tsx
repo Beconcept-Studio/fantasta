@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { BidModal } from "@/components/auction/bid-modal";
 import { LotCard } from "@/components/auction/lot-card";
+import { LotClosedCard } from "@/components/auction/lot-closed-card";
 import { MembersPanel } from "@/components/auction/members-panel";
 import { PickPanel, PickWaiting } from "@/components/auction/pick-panel";
 import { PortalHeader } from "@/components/auction/portal-header";
@@ -12,6 +13,7 @@ import { RosterGrid } from "@/components/auction/roster-grid";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
 import { sendAction } from "@/lib/realtime/action";
+import { managerControls } from "@/lib/realtime/manage";
 import {
   memberById,
   memberLabel,
@@ -46,10 +48,20 @@ import { useAuctionStream, useHeartbeat } from "@/lib/realtime/use-auction-strea
 export function Portal({
   auctionId,
   pool,
+  viewerIsOwner,
 }: {
   auctionId: string;
   /** Il listone dell'asta, letto una volta dal server: non viaggia nello snapshot. */
   pool: PoolPlayer[];
+  /**
+   * Se chi guarda possiede l'asta: abilita «Prosegui asta» sulla card chiusa.
+   *
+   * Arriva come prop e non dallo snapshot, per la stessa ragione del listone:
+   * non è stato di gioco, non cambia durante la serata, e nello snapshot
+   * verrebbe spedito a tutti a ogni transizione per un booleano che nasce col
+   * link. Non autorizza niente — `skipReveal` ricontrolla lato server.
+   */
+  viewerIsOwner: boolean;
 }) {
   const { snapshot, connected, offset } = useAuctionStream(auctionId);
   useHeartbeat(auctionId);
@@ -57,6 +69,16 @@ export function Portal({
   // ⚠ §8bis — vive **solo** qui: non è persistito, non è sincronizzato, e al
   // lotto successivo diventa irrilevante da sé perché l'id cambia.
   const [dismissedLotId, setDismissedLotId] = useState<string | null>(null);
+  const [skipping, setSkipping] = useState(false);
+
+  async function skipReveal() {
+    setSkipping(true);
+    await sendAction(auctionId, { type: "SKIP_REVEAL" });
+    setSkipping(false);
+    // Nessun messaggio di conferma: la conferma è il lotto successivo che si
+    // apre da solo. Se il server rifiuta — reveal già scaduto mentre premevi —
+    // lo snapshot è già andato avanti lo stesso, e non c'è niente da dire.
+  }
 
   if (snapshot === null) {
     return (
@@ -115,14 +137,34 @@ export function Portal({
           </section>
         )}
 
-        {screen.kind === "LOT" && lot !== null && (
-          <LotCard
-            snapshot={snapshot}
-            myMemberId={myMemberId}
-            offset={offset}
-            onOpenBid={() => setDismissedLotId(null)}
-          />
-        )}
+        {/*
+          Due card per lo stesso posto: il lotto vivo e il lotto chiuso sono due
+          momenti diversi e devono avere due facce diverse (M1). La scelta è
+          della fase, quindi dello snapshot: chi rientra a metà reveal trova la
+          card chiusa come chi non si è mai disconnesso (I10).
+        */}
+        {screen.kind === "LOT" &&
+          lot !== null &&
+          (snapshot.auction.phase === "LOT_REVEAL" ? (
+            <LotClosedCard
+              snapshot={snapshot}
+              myMemberId={myMemberId}
+              offset={offset}
+              onSkip={
+                viewerIsOwner && managerControls(snapshot).canSkipReveal
+                  ? skipReveal
+                  : null
+              }
+              skipPending={skipping}
+            />
+          ) : (
+            <LotCard
+              snapshot={snapshot}
+              myMemberId={myMemberId}
+              offset={offset}
+              onOpenBid={() => setDismissedLotId(null)}
+            />
+          ))}
 
         {screen.kind === "PICK_MINE" && (
           <PickPanel

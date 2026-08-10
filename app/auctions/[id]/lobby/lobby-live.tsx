@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -28,11 +29,20 @@ import { cn } from "@/lib/utils";
  *    sarebbe impossibile da passare.
  * 2. **Il passaggio automatico al portale.** L'asta parte con un countdown di
  *    chiamata già in corso: chi resta in lobby a guardare i pallini ha già
- *    perso secondi. Appena lo snapshot dice `LIVE` (o `PAUSED`), il membro
- *    viene portato su `/play`. È l'unico `router.push` automatico dell'app, e
- *    non è una scorciatoia allo stato: la decisione la prende lo snapshot, non
- *    un evento ricevuto — chi arriva in lobby ad asta già iniziata viene
- *    spostato allo stesso modo, al primo snapshot (regola 7).
+ *    perso secondi. Appena lo snapshot dice `LIVE`, il membro viene portato su
+ *    `/play`. È l'unico `router.push` automatico dell'app, e non è una
+ *    scorciatoia allo stato: la decisione la prende lo snapshot, non un evento
+ *    ricevuto — chi arriva in lobby ad asta già iniziata viene spostato allo
+ *    stesso modo, al primo snapshot (regola 7).
+ *
+ *    **In pausa no.** La spinta esiste perché nessuno perda secondi di un'asta
+ *    che corre, e in pausa non scorre niente: è anzi il momento in cui si va a
+ *    cambiare i tempi, che si cambiano dalla configurazione — raggiungibile
+ *    dalla lobby. Finché la spinta valeva anche per `PAUSED`, l'owner non
+ *    riusciva ad attraversarla: veniva rispedito al portale a ogni tentativo.
+ *    Non serve niente per rimettere in carreggiata chi resta qui durante la
+ *    pausa: alla ripresa lo stato torna `LIVE`, l'effetto riparte e lo
+ *    accompagna al portale da sé.
  *
  * L'elenco parte dai dati che la pagina ha già letto dal database e si arricchisce
  * di presence quando arriva lo snapshot: nessun momento di lista vuota.
@@ -61,15 +71,13 @@ export function LobbyLive({
   const { snapshot, connected } = useAuctionStream(auctionId);
   useHeartbeat(auctionId, viewerMemberId !== null);
 
-  const started =
-    snapshot !== null &&
-    (snapshot.auction.status === "LIVE" || snapshot.auction.status === "PAUSED");
+  const running = snapshot !== null && snapshot.auction.status === "LIVE";
 
   useEffect(() => {
-    if (started && viewerMemberId !== null) {
+    if (running && viewerMemberId !== null) {
       router.push(`/auctions/${auctionId}/play`);
     }
-  }, [started, viewerMemberId, auctionId, router]);
+  }, [running, viewerMemberId, auctionId, router]);
 
   const presenceOf = (memberId: string): Presence | null =>
     snapshot?.members.find((m) => m.id === memberId)?.presence ?? null;
@@ -90,12 +98,33 @@ export function LobbyLive({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {started && (
+        {running && (
           <p
             role="status"
             className="rounded-md border border-emerald-600/40 bg-emerald-600/10 px-3 py-2 text-sm font-medium"
           >
             L&apos;asta è partita: ti porto sul tuo portale…
+          </p>
+        )}
+
+        {/*
+          In pausa nessuno viene spostato, quindi qui serve una porta invece di
+          un annuncio: chi vuole tornare a giocare ci va da sé, chi è venuto a
+          cambiare i tempi resta.
+        */}
+        {snapshot?.auction.status === "PAUSED" && viewerMemberId !== null && (
+          <p
+            role="status"
+            className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm"
+          >
+            L&apos;asta è in pausa.{" "}
+            <Link
+              href={`/auctions/${auctionId}/play`}
+              className="font-medium underline underline-offset-4"
+            >
+              Torna al tuo portale
+            </Link>{" "}
+            — quando riprende ti ci porto io.
           </p>
         )}
 

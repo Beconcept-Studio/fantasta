@@ -18,13 +18,25 @@ import {
 /**
  * F4-08 — **il criterio ✅ della Fase 4**, e l'unica cosa di questa fase che
  * la sera dell'asta si vede o non si vede: durante `LOT_OPEN` nessun client
- * riceve l'importo dell'offerta di qualcun altro (I8).
+ * riceve l'importo dell'offerta di qualcun altro (I8)… e da M1 nemmeno il fatto
+ * che quell'offerta esista.
  *
  * Il test non chiama `serializeSnapshot`: apre davvero la route SSE e legge il
  * primo messaggio, per i **tre** spettatori possibili — un partecipante,
  * l'owner che organizza senza giocare, la vista TV. Sono le tre uscite del
  * sistema; se una perdesse una cifra, l'asta a busta chiusa non sarebbe più
  * chiusa, e non è il tipo di bug che si scopre in diretta.
+ *
+ * Due strumenti, e la scelta è deliberata:
+ *
+ * - **l'insieme esatto delle chiavi** di `currentLot`, invece di un
+ *   `bidStatus === undefined`. Un giorno l'informazione potrebbe rientrare con
+ *   un altro nome — `envelopes`, `delivered`, `bidCount` — e un test che nomina
+ *   il campo morto non se ne accorgerebbe;
+ * - **il confronto fra due partecipanti**, uno che ha consegnato la busta e uno
+ *   che non l'ha fatto. Se i loro `currentLot` sono identici byte per byte,
+ *   allora dal lotto non si deduce chi si è mosso: non c'è niente da confrontare
+ *   perché non c'è niente di diverso.
  *
  * `@/lib/auth` è finto perché fuori da una richiesta vera non c'è una
  * sessione: quello che si sta collaudando è la sanificazione, non Auth.js.
@@ -112,7 +124,27 @@ async function firstSnapshot(response: Response): Promise<Snapshot> {
   return JSON.parse(data.slice("data: ".length)) as Snapshot;
 }
 
-describe.runIf(dbUp)("F4-08 — I8 sui tre viewer", () => {
+/**
+ * Le uniche chiavi che `currentLot` può avere durante `LOT_OPEN`. Se questo
+ * elenco cresce, la modifica va guardata in faccia: ogni campo nuovo del lotto
+ * è un candidato a raccontare qualcosa delle buste.
+ */
+const LOT_KEYS = [
+  "autoCalled",
+  "calledByMemberId",
+  "closedAt",
+  "eligibleMemberIds",
+  "endsAt",
+  "id",
+  "minAmount",
+  "player",
+  "reveal",
+  "roundNo",
+  "seq",
+  "tie",
+];
+
+describe.runIf(dbUp)("F4-08 — I8 e M1 sui tre viewer", () => {
   it("il partecipante vede la propria offerta e nessun'altra", async () => {
     const game = await auctionInLotOpen();
     currentUser.mockResolvedValue({ id: game.userIds[1] });
@@ -123,18 +155,28 @@ describe.runIf(dbUp)("F4-08 — I8 sui tre viewer", () => {
     expect(snap.viewerMemberId).toBe(game.memberIds[1]);
     expect(snap.myBid?.amount).toBe(31);
     // L'unica cifra di offerta nello snapshot è la sua: nel lotto non c'è
-    // nessun campo `amount`, solo booleani.
+    // nessun campo `amount`.
     expect(JSON.stringify(snap.currentLot)).not.toContain('"amount"');
     expect(JSON.stringify(snap)).not.toContain('"amount":57');
     expect(snap.currentLot?.reveal).toBeNull();
-    expect(snap.currentLot?.bidStatus).toEqual(
-      expect.arrayContaining([
-        { memberId: game.memberIds[2], hasBid: true, withdrawn: false },
-      ]),
-    );
+    expect(Object.keys(snap.currentLot!).sort()).toEqual(LOT_KEYS);
   });
 
-  it("il manager che non gioca non vede nessun importo", async () => {
+  it("chi ha consegnato e chi non l'ha fatto ricevono lo stesso lotto", async () => {
+    const game = await auctionInLotOpen();
+
+    currentUser.mockResolvedValue({ id: game.userIds[1] }); // ha offerto 31
+    const offerente = await firstSnapshot(await openStream(game.auctionId));
+    currentUser.mockResolvedValue({ id: game.userIds[4] }); // non ha offerto
+    const silenzioso = await firstSnapshot(await openStream(game.auctionId));
+
+    // La differenza fra i due sta tutta nella propria busta, mai nel lotto.
+    expect(offerente.myBid?.amount).toBe(31);
+    expect(silenzioso.myBid).toBeNull();
+    expect(silenzioso.currentLot).toEqual(offerente.currentLot);
+  });
+
+  it("il manager che non gioca non vede né importi né buste", async () => {
     const game = await auctionInLotOpen();
     currentUser.mockResolvedValue({ id: game.ownerId });
 
@@ -143,12 +185,14 @@ describe.runIf(dbUp)("F4-08 — I8 sui tre viewer", () => {
     expect(snap.viewerMemberId).toBeNull();
     expect(snap.myBid).toBeNull();
     expect(JSON.stringify(snap)).not.toContain('"amount"');
+    // Nemmeno il conteggio: chi conduce l'asta quasi sempre gioca (M1, §5).
+    expect(Object.keys(snap.currentLot!).sort()).toEqual(LOT_KEYS);
     // Vede tutto il resto: è il portale proiettato, deve poter condurre l'asta.
     expect(snap.members).toHaveLength(8);
-    expect(snap.currentLot?.bidStatus.filter((b) => b.hasBid)).toHaveLength(3);
+    expect(snap.currentLot?.eligibleMemberIds).toHaveLength(8);
   });
 
-  it("la vista TV entra col public token e non vede nessun importo", async () => {
+  it("la vista TV entra col public token e non vede né importi né buste", async () => {
     const game = await auctionInLotOpen();
     // Nessuna sessione: la TV è un browser senza login.
     currentUser.mockResolvedValue(null);
@@ -160,6 +204,7 @@ describe.runIf(dbUp)("F4-08 — I8 sui tre viewer", () => {
     expect(snap.viewerMemberId).toBeNull();
     expect(snap.myBid).toBeNull();
     expect(JSON.stringify(snap)).not.toContain('"amount"');
+    expect(Object.keys(snap.currentLot!).sort()).toEqual(LOT_KEYS);
   });
 
   it("in LOT_REVEAL, e solo lì, gli importi diventano pubblici", async () => {

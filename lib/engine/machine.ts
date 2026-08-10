@@ -49,6 +49,8 @@ export function transition(
       return withdrawBid(state, event.memberId, now);
     case "ADVANCE":
       return advance(state, now);
+    case "SKIP_REVEAL":
+      return skipReveal(state, now);
     case "PAUSE":
       return pause(state, now);
     case "RESUME":
@@ -394,6 +396,39 @@ function advance(state: AuctionState, now: Millis): Result<AuctionState> {
  */
 function advanceReveal(state: AuctionState, now: Millis): AuctionState {
   return nextTurn(state, now);
+}
+
+/**
+ * «Prosegui asta»: la regia chiude il reveal prima della sua scadenza.
+ *
+ * È l'**unico** evento che fa avanzare una fase senza che il tempo sia
+ * passato, e per questo sta qui e non dentro `advance`: la guardia
+ * `now < phaseDeadline` esiste perché timer e sweep possano chiamare `ADVANCE`
+ * quante volte vogliono senza combinare guai (I7), e allentarla per fare
+ * spazio a un pulsante l'avrebbe resa inutile per tutti e due i chiamanti.
+ *
+ * L'effetto è `nextTurn`, cioè **la stessa identica funzione** che gira alla
+ * scadenza: non esiste una seconda strada per passare il turno, e quindi non
+ * c'è niente da tenere allineato. Cambia solo *quando*, e la deadline della
+ * fase successiva nasce dall'istante in cui si è premuto.
+ *
+ * Idempotenza (I7): dopo il primo salto la fase non è più `LOT_REVEAL`, quindi
+ * il secondo click trova questa guardia e viene rifiutato senza effetti. In
+ * pausa lo stato è `PAUSED`, non `LIVE`: la pausa congela la fase, e da lì si
+ * riparte con RESUME, non saltando.
+ *
+ * Chi può premere non si decide qui: il motore non sa chi possiede l'asta.
+ * La verifica di proprietà sta in `skipReveal` di `actions.ts`, come per
+ * PAUSE e RESUME.
+ */
+function skipReveal(state: AuctionState, now: Millis): Result<AuctionState> {
+  if (state.status !== "LIVE" || state.phase !== "LOT_REVEAL") {
+    return fail(
+      "WRONG_PHASE",
+      "Si prosegue solo mentre le buste sono aperte.",
+    );
+  }
+  return ok(nextTurn(state, now));
 }
 
 /**

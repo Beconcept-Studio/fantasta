@@ -213,11 +213,24 @@ function unwrap<T>(
  * READY all'ultimo join. Con `draft` si toglie l'ultimo partecipante, che è
  * esattamente ciò che fa retrocedere lo stato — un modo di verificare, ogni
  * volta che si esegue il seed, che quella derivazione funzioni davvero.
+ *
+ * **L'owner entra per ultimo, sempre.** Il posto lo assegna l'ordine di join
+ * (`seatIndex` = quanti c'erano prima), quindi entrando per ultimo l'owner si
+ * prende l'ultimo posto — ed è esattamente quello che `pnpm bots --count=7`
+ * lascia libero, perché i bot prendono i posti a partire da zero. È ciò che
+ * permette di provare l'asta dal vivo restando l'owner: la regia e il portale
+ * dello stesso utente, nello stesso browser, senza cambiare account.
  */
 async function seedAuction(
   userIds: string[],
   status: "draft" | "ready" | AdvancedStatus,
-): Promise<{ id: string; status: string; inviteUrl: string; publicToken: string }> {
+): Promise<{
+  id: string;
+  status: string;
+  inviteUrl: string;
+  publicToken: string;
+  ownerSeatIndex: number;
+}> {
   if (userIds.length < SEED_SEATS) {
     throw new Error(
       `Servono almeno ${SEED_SEATS} utenti di prova, ne ho trovati ${userIds.length}.`,
@@ -250,9 +263,11 @@ async function seedAuction(
   const { token } = unwrap(await createInvite(ownerId, auctionId));
 
   // Tutti dentro tranne che per `draft`, dove un posto resta libero apposta.
+  // L'owner chiude sempre la fila: il suo è l'ultimo posto occupato.
   const joiners = status === "draft" ? SEED_SEATS - 1 : SEED_SEATS;
-  for (let i = 0; i < joiners; i += 1) {
-    unwrap(await joinAuction(userIds[i], token, TEAM_NAMES[i]));
+  const seating = [...userIds.slice(1, joiners), ownerId];
+  for (let i = 0; i < seating.length; i += 1) {
+    unwrap(await joinAuction(seating[i], token, TEAM_NAMES[i]));
   }
 
   if (status === "live" || status === "mid" || status === "completed") {
@@ -268,6 +283,7 @@ async function seedAuction(
     status: row!.status,
     publicToken: row!.publicToken,
     inviteUrl: `${BASE_URL}/join/${token}`,
+    ownerSeatIndex: seating.length - 1,
   };
 }
 
@@ -496,8 +512,19 @@ async function main(): Promise<void> {
   console.log(`  Lobby:  ${BASE_URL}/auctions/${auction.id}/lobby`);
   console.log(`  TV:     ${BASE_URL}/tv/${auction.publicToken}`);
   console.log(`  Invito: ${auction.inviteUrl}`);
-  console.log(`  Owner:  ${DEV_USERS[0]}`);
-  console.log(`  Bot:    pnpm bots --auction=${auction.id} --count=8 --strategy=random --start --url=${BASE_URL}`);
+  console.log(
+    `  Owner:  ${DEV_USERS[0]} — seat ${auction.ownerSeatIndex}, l'ultimo occupato`,
+  );
+  // Due comandi, non uno: i bot prendono i posti da zero in su, quindi con uno
+  // in meno del pieno il posto che resta libero è proprio quello dell'owner.
+  console.log(`  Bot, giocano tutti:`);
+  console.log(
+    `    pnpm bots --auction=${auction.id} --count=${SEED_SEATS} --strategy=random --start --url=${BASE_URL}`,
+  );
+  console.log(`  Bot, giochi tu come ${DEV_USERS[0]} (tieni aperto il portale, poi avvia dalla regia):`);
+  console.log(
+    `    pnpm bots --auction=${auction.id} --count=${SEED_SEATS - 1} --strategy=random --url=${BASE_URL}`,
+  );
 
   if (auctionStatus === "live" || auctionStatus === "mid" || auctionStatus === "completed") {
     await printRosterSummary(auction.id);

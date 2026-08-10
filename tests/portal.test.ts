@@ -7,7 +7,6 @@ import {
   canWithdraw,
   checkAmount,
   countdownLabel,
-  envelopes,
   parseAmount,
   pausedRemaining,
   portalScreen,
@@ -191,13 +190,7 @@ describe("apertura del modale", () => {
 
   it("chi non è idoneo non se lo vede aprire", () => {
     const s = snapshot({
-      currentLot: lot({
-        eligibleMemberIds: [OTHER, THIRD],
-        bidStatus: [
-          { memberId: OTHER, hasBid: true, withdrawn: false },
-          { memberId: THIRD, hasBid: false, withdrawn: false },
-        ],
-      }),
+      currentLot: lot({ eligibleMemberIds: [OTHER, THIRD] }),
     });
     expect(shouldOpenBidDialog(s, ME, null)).toBe(false);
   });
@@ -263,20 +256,12 @@ describe("ritiro", () => {
   });
 });
 
-// ─── Le buste degli altri (I8) ───────────────────────────────────────────────
-
-describe("buste degli altri", () => {
-  it("degli idonei si sa solo se hanno consegnato, in ordine di seat", () => {
-    const rows = envelopes(snapshot(), ME);
-    expect(rows.map((r) => [r.member.id, r.hasBid, r.isMe])).toEqual([
-      [ME, false, true],
-      [OTHER, true, false],
-      [THIRD, false, false],
-    ]);
-    // La riga non ha nessun campo con un importo: I8 vale anche in memoria.
-    expect(Object.keys(rows[0])).toEqual(["member", "hasBid", "withdrawn", "isMe"]);
-  });
-});
+// ─── Le buste degli altri ────────────────────────────────────────────────────
+//
+// Non c'è niente da collaudare qui, ed è il risultato di M1: delle buste altrui
+// lo snapshot non porta più niente, quindi non esiste una funzione che le legga.
+// La guardia sta in `tests/db/i8.test.ts`, dove ha senso — sull'insieme esatto
+// delle chiavi che escono davvero dalla route SSE.
 
 // ─── La chiamata (F5-10) ─────────────────────────────────────────────────────
 

@@ -9,6 +9,7 @@ import {
   pickPlayer,
   placeBid,
   resumeAuction,
+  skipReveal,
   startAuction,
   withdrawBid,
 } from "@/lib/engine/actions";
@@ -344,5 +345,77 @@ describe.runIf(dbUp)("F3-07 — pause e resume (§12.29 su DB)", () => {
     expect((await auctionRow(game.auctionId)).pausedAt!.getTime()).toBe(
       now + 1000,
     );
+  });
+});
+
+describe.runIf(dbUp)("«Prosegui asta» — la regia chiude il reveal in anticipo", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+    setBroadcastHook(() => {});
+  });
+
+  /** Un lotto già assegnato: l'asta è in LOT_REVEAL con la sua deadline. */
+  async function inReveal(now: number) {
+    const game = await liveWithOpenLot(now);
+    const roundEnds = game.state.lots[0].rounds[0].endsAt;
+    const revealed = unwrap(await advancePhase(game.auctionId, roundEnds));
+    expect(revealed.state.phase).toBe("LOT_REVEAL");
+    return { ...game, revealEndsAt: revealed.state.phaseDeadline! };
+  }
+
+  it("passa il turno subito e riarma la deadline sull'istante del click", async () => {
+    const now = Date.now();
+    const game = await inReveal(now);
+    const clickAt = game.revealEndsAt - 4000;
+
+    const after = unwrap(
+      await skipReveal(game.ownerId, game.auctionId, clickAt),
+    );
+
+    expect(after.state.phase).toBe("WAITING_PICK");
+    // La deadline nasce dall'istante del click, non da quella del reveal che
+    // stiamo saltando: è la differenza fra «prosegui» e «fai finta che sia
+    // scaduto». Legata alla config, non a un numero: i fixture hanno timer
+    // corti e un 30_000 scritto qui sarebbe verde per caso.
+    expect(after.state.phaseDeadline).toBe(
+      clickAt + after.state.config.pickSeconds * 1000,
+    );
+    expect(after.state.phaseDeadline).toBeLessThan(game.revealEndsAt + 30_000);
+    const row = await auctionRow(game.auctionId);
+    expect(row.phase).toBe("WAITING_PICK");
+    // L'assegnazione era già committata all'ingresso del reveal: saltare
+    // l'attesa non deve toccarla.
+    expect(after.state.assignments).toHaveLength(1);
+  });
+
+  it("è dell'owner: a un partecipante è rifiutato", async () => {
+    const now = Date.now();
+    const game = await inReveal(now);
+    const result = await skipReveal(
+      game.userIds[1],
+      game.auctionId,
+      game.revealEndsAt - 4000,
+    );
+    expect(result).toMatchObject({ ok: false, error: { code: "FORBIDDEN" } });
+  });
+
+  it("fuori dal reveal è rifiutato e non bumpa state_version", async () => {
+    const now = Date.now();
+    const game = await liveWithOpenLot(now); // siamo in LOT_OPEN
+    const version = (await auctionRow(game.auctionId)).stateVersion;
+
+    const result = await skipReveal(game.ownerId, game.auctionId, now + 1000);
+    expect(result).toMatchObject({ ok: false, error: { code: "WRONG_PHASE" } });
+    expect((await auctionRow(game.auctionId)).stateVersion).toBe(version);
+  });
+
+  it("ad asta in pausa è rifiutato: prima si riprende", async () => {
+    const now = Date.now();
+    const game = await inReveal(now);
+    const pauseAt = game.revealEndsAt - 5000;
+    unwrap(await pauseAuction(game.ownerId, game.auctionId, pauseAt));
+
+    const result = await skipReveal(game.ownerId, game.auctionId, pauseAt + 100);
+    expect(result).toMatchObject({ ok: false, error: { code: "WRONG_PHASE" } });
   });
 });

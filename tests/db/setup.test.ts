@@ -228,6 +228,50 @@ describe.skipIf(!dbUp)("updateAuctionSettings — matrice di modificabilità", (
     expect(row!.bidSeconds).toBe(45);
   });
 
+  // ⚠ Il form della configurazione manda **tutti** i campi a ogni salvataggio,
+  // nome compreso: è un `<form>`, non una patch costruita a mano. Finché il
+  // server guardava se il nome *c'era* invece che se era *cambiato*, ogni
+  // salvataggio ad asta iniziata veniva rifiutato in blocco e i timer non si
+  // sono mai potuti toccare, nonostante la pagina lo promettesse.
+  it("accetta i timer anche quando il form rimanda il nome invariato", async () => {
+    const ownerId = await user("owner");
+    const id = await auction(ownerId);
+    const before = await db.query.auctions.findFirst({
+      where: eq(auctions.id, id),
+    });
+    await db.update(auctions).set({ status: "LIVE" }).where(eq(auctions.id, id));
+
+    const result = await updateAuctionSettings(ownerId, id, {
+      name: before!.name,
+      revealSeconds: 40,
+    });
+    expect(result.ok).toBe(true);
+
+    const row = await db.query.auctions.findFirst({
+      where: eq(auctions.id, id),
+    });
+    expect(row!.revealSeconds).toBe(40);
+  });
+
+  it("rifiuta comunque il nome davvero cambiato ad asta iniziata", async () => {
+    const ownerId = await user("owner");
+    const id = await auction(ownerId);
+    await db.update(auctions).set({ status: "LIVE" }).where(eq(auctions.id, id));
+
+    const result = await updateAuctionSettings(ownerId, id, {
+      name: "Un altro nome",
+      revealSeconds: 40,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("WRONG_STATUS");
+
+    // E il rifiuto è totale: il timer non passa di straforo.
+    const row = await db.query.auctions.findFirst({
+      where: eq(auctions.id, id),
+    });
+    expect(row!.revealSeconds).not.toBe(40);
+  });
+
   it("rifiuta chi non è l'owner", async () => {
     const ownerId = await user("owner");
     const intruderId = await user("intruso");

@@ -4,7 +4,6 @@ import { db } from "@/lib/db";
 import { auctions } from "@/lib/db/schema";
 import type {
   Snapshot,
-  SnapshotBidStatus,
   SnapshotLot,
   SnapshotMember,
   SnapshotMyBid,
@@ -28,11 +27,23 @@ import type { AuctionState, Lot, LotRound, Millis } from "./types";
  * trapela non è un bug: è l'asta rifatta. Con una funzione sola, il test I8 su
  * partecipante, manager e vista TV copre tutte le uscite possibili.
  *
- * La sanificazione ha una regola sola, applicata due volte:
+ * La sanificazione ha una regola sola: **finché il lotto è aperto, delle buste
+ * altrui non esce niente**. Non l'importo — che è I8 — e nemmeno il fatto che
+ * una busta sia stata consegnata. Il proprio importo lo vede solo il proprio
+ * viewer (`myBid`); chi viewer non è — il manager che non gioca, la TV — non
+ * vede nemmeno quello.
  *
- * - degli altri si sa **se** hanno offerto, mai **quanto** (`bidStatus`);
- * - il proprio importo lo vede solo il proprio viewer (`myBid`), e chi viewer
- *   non è — il manager che non gioca, la TV — non vede nemmeno quello.
+ * Il rafforzamento è di M1 (`docs/features/01-segretezza-offerte.md`) e nasce
+ * dall'asta vera: in una stanza dove ci si guarda in faccia, sapere chi si è
+ * già mosso — e soprattutto chi non si è mosso — basta per fare strategia. Non
+ * serve la cifra. Per questo è caduto anche il conteggio aggregato: «quattro
+ * buste su sette» sembra anonimo e non lo è, perché a fine ruolo gli idonei
+ * sono due o tre.
+ *
+ * L'invariante è **strutturale, non sorvegliato**: il campo che portava quel
+ * dato — `bidStatus` — non è stato spostato in un ramo `if`, è stato eliminato
+ * dal tipo. Un campo che non esiste non può essere emesso nella fase sbagliata
+ * da una modifica distratta di qui a un anno.
  *
  * Gli importi diventano pubblici in un momento solo, `LOT_REVEAL`, ed è lì che
  * compare `reveal`. L'unica informazione che esce prima è l'importo pareggiato
@@ -159,18 +170,9 @@ function serializeLot(
   if (!player) throw new Error(`lotto ${lot.id} su un giocatore sconosciuto`);
   const pv = loaded.view.players.get(lot.playerId);
 
-  // ⚠ I8 — di ogni altro esce un booleano, mai una cifra.
-  const bidStatus: SnapshotBidStatus[] = round.eligibleMemberIds.map(
-    (memberId) => {
-      const bid = round.bids.find((b) => b.memberId === memberId);
-      return {
-        memberId,
-        hasBid: bid !== undefined && bid.withdrawnAt === null,
-        withdrawn: bid?.withdrawnAt != null,
-      };
-    },
-  );
-
+  // ⚠ Di `round.bids` non esce niente: né le cifre (I8), né chi le ha
+  // consegnate (M1). Il round contribuisce solo con `eligibleMemberIds`, che
+  // parla di chi *potrebbe* offrire.
   return {
     id: uuid,
     seq: lot.seq,
@@ -188,7 +190,6 @@ function serializeLot(
     endsAt: iso(round.endsAt),
     closedAt: iso(round.closedAt),
     eligibleMemberIds: round.eligibleMemberIds,
-    bidStatus,
     tie: state.phase === "LOT_TIE_PREP" ? serializeTie(lot) : null,
     reveal: state.phase === "LOT_REVEAL" ? serializeReveal(lot) : null,
   };

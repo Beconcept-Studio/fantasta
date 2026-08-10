@@ -202,11 +202,17 @@ function PresenceBanner({ snapshot }: { snapshot: Snapshot }) {
 
 /**
  * Dove siamo adesso, in una striscia sola: fase, countdown, e — se c'è un lotto
- * aperto — chi ha chiamato chi e quante buste sono arrivate.
+ * aperto — chi ha chiamato chi e quante squadre sono in gara.
  *
  * Non è un secondo pannello di reveal: quello è della TV. Qui serve a decidere
- * se è il momento di premere pausa, che è una domanda a cui «siamo a metà di un
- * round con tre buste consegnate» risponde e «l'asta è LIVE» no.
+ * se è il momento di premere pausa, che è una domanda a cui «siamo in un round
+ * con sette idonei» risponde e «l'asta è LIVE» no.
+ *
+ * Fino a v1.1.0 il numero era «buste consegnate 4/7», ed era il dato più utile
+ * dei due. È caduto con M1, e non per distrazione: chi gestisce l'asta quasi
+ * sempre gioca, quindi lasciarlo qui avrebbe dato a un partecipante — uno solo
+ * — di sapere chi si era già mosso. Gli idonei sono pubblici e rispondono alla
+ * stessa domanda operativa: se sono uno, il lotto si chiude da solo.
  */
 function LiveStrip({
   snapshot,
@@ -233,7 +239,6 @@ function LiveStrip({
     );
   }
 
-  const buste = lot?.bidStatus.filter((b) => b.hasBid).length ?? 0;
   const idonei = lot?.eligibleMemberIds.length ?? 0;
 
   return (
@@ -259,12 +264,10 @@ function LiveStrip({
       {lot !== null && auction.phase === "LOT_OPEN" && (
         <div>
           <p className="text-muted-foreground text-xs tracking-wide uppercase">
-            Buste consegnate
+            In gara
           </p>
-          {/* Solo il conteggio: gli importi non li ha nemmeno il manager (I8). */}
-          <p className="text-lg font-semibold tabular-nums">
-            {buste}/{idonei}
-          </p>
+          {/* Gli idonei, non le buste: di quelle non sa niente nemmeno la regia. */}
+          <p className="text-lg font-semibold tabular-nums">{idonei}</p>
         </div>
       )}
 

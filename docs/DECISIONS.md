@@ -818,3 +818,148 @@ scritti.
 **`CLAUDE.md` è passato da 178 a 234 righe**, sopra il tetto di 230 che ci si era dati. Le righe
 in più sono le procedure ereditate dal runbook: si è preferito sforare di quattro righe piuttosto
 che lasciarle senza casa.
+
+## 2026-08-09 — M1, segretezza e rivelazione delle offerte
+
+**Il conteggio aggregato delle buste è caduto insieme ai nomi.** L'alternativa in campo era
+togliere l'elenco di chi ha consegnato e tenere un «4 su 7», che sembra anonimo. Non lo è: gli
+idonei di un lotto sono spesso due o tre, soprattutto a fine ruolo, e a quel punto il numero fa il
+nome da sé. La richiesta dell'owner parlava di strategie fra competitor, non di importi, quindi
+qualunque cosa distingua un idoneo che si è mosso da uno che non si è mosso è nel perimetro.
+
+**`bidStatus` è stato eliminato dal tipo, non nascosto in un ramo `if`.** La correzione minima
+sarebbe stata emetterlo solo in `LOT_REVEAL`, dove però `reveal` porta già tutto: il campo non
+aveva più nessun consumatore legittimo. Toglierlo dal tipo rende l'invariante strutturale invece
+che sorvegliato — un campo che non esiste non può essere emesso nella fase sbagliata da una
+modifica distratta fra un anno. È lo stesso ragionamento della regola 3.
+
+**Anche la regia perde il contatore.** Nella console del manager il blocco «buste consegnate 4/7»
+era il dato più utile della striscia, e serviva a decidere se premere pausa. È stato sostituito
+dagli idonei, che sono pubblici, perché chi conduce l'asta quasi sempre gioca: lasciarlo lì
+avrebbe dato a un partecipante — uno solo, e per di più quello che controlla la pausa —
+un'informazione che nessun altro ha. La domanda operativa («siamo in un round vero o in un lotto a
+un solo idoneo?») trova risposta lo stesso.
+
+**Il reveal è un componente diverso, non un ramo di `LotCard`.** La card viva e la card chiusa
+hanno cornice, colori e gerarchia tipografica diversi di proposito: il problema segnalato era che
+il momento dell'assegnazione *sembrava* un'asta ancora in corso. Un `if` dentro un componente solo
+avrebbe prodotto la stessa UI con qualche classe condizionale in più, che è esattamente ciò che
+non funzionava. §8bis non è toccata: chiede che l'area del lotto sia sempre presente e sia
+funzione pura dello snapshot, non che sia sempre lo stesso nodo React.
+
+**La card chiusa dice quando si riparte, non a chi tocca.** Mostrare il prossimo chiamante avrebbe
+richiesto di calcolare il turno successivo già durante il reveal e di farlo uscire nello snapshot:
+fattibile riusando `nextSeat`/`nextRole`, ma è un campo in più e un'anteprima che un override del
+manager può smentire mentre la si guarda. Decisione dell'owner: informazione non necessaria, si
+scopre quando il lotto nuovo si apre. Conseguenza pratica notevole — **il server non cambia se non
+per la rimozione di `bidStatus`**, perché la scadenza del reveal è già in `phaseDeadline`.
+
+**Il countdown al prossimo turno non è una barra.** Richiesta esplicita dell'owner, e ha una
+ragione: la barra che scorre è il segnale visivo dell'urgenza durante le offerte. Riusarla sulla
+schermata in cui non si deve fare niente rimetterebbe addosso la fretta da cui la card doveva
+liberare.
+
+---
+
+## 2026-08-09 — Prova in locale: l'owner è l'ultimo posto
+
+**Nel seed l'owner entra per ultimo.** Prima era `userIds[0]` a joinare per primo, quindi l'owner
+era il seat 0. I bot però prendono i posti **a partire da zero** (`memberRows.slice(0, count)`),
+per cui `--count=7` liberava l'ultimo posto — un utente qualsiasi — e mai quello dell'owner. Chi
+voleva giocare di persona doveva entrare come un altro utente, e perdeva la regia: `/manage`
+esiste solo per l'owner. Invertendo l'ordine di join, l'owner si prende l'ultimo posto ed è
+esattamente quello che i bot lasciano libero: **regia e portale dello stesso utente, in due
+schede, senza cambiare account**.
+
+Le alternative erano un flag `--skip-seat` sui bot (più codice, e due posti da tenere allineati)
+o rassegnarsi a cambiare browser. La strada scelta non tocca né i bot né l'applicazione: sposta
+una riga nel seed, che è il posto dove i posti si assegnano.
+
+Conseguenze accettate: il seat 0 non è più dell'owner, quindi all'avvio (`startSeatIndex: 0`) non
+è lui il primo a chiamare; e con `--auction-status=draft` l'owner è il seat 6, perché lì i posti
+occupati sono sette. L'invariante che conta resta vero in tutti i casi — **l'owner è sempre
+l'ultimo posto occupato**.
+
+Questa è una comodità di sviluppo, non la funzionalità: la macro **M4 — Simulazione in-app**
+resta in piedi e serve a far girare i bot dall'interfaccia, senza terminale.
+
+---
+
+## 2026-08-09 — «Prosegui asta»: la regia chiude il reveal in anticipo
+
+**Un evento nuovo, `SKIP_REVEAL`, e non una deadline accorciata.** Il modo più corto di scrivere
+questa funzione sarebbe stato mettere `phase_deadline = now` e lasciare che lo sweep facesse il
+resto: nessun evento nuovo, tre righe. È stata scartata per due ragioni. La prima è la
+tracciabilità: nel log resterebbe un `ADVANCE` di sistema, e fra sei mesi, davanti a una disputa,
+non ci sarebbe modo di sapere che qualcuno ha premuto un pulsante. La seconda è che introdurrebbe
+fino a un secondo di attesa — il passo dello sweep — che è esattamente ciò che il pulsante deve
+togliere.
+
+Scartata anche l'idea di **allentare la guardia dentro `advance`**. Quel `if (now <
+state.phaseDeadline) return ok(state)` è ciò che rende `ADVANCE` idempotente (I7) e permette a
+timer e sweep di chiamarla quante volte vogliono: aprirle un'eccezione per fare spazio a un
+pulsante l'avrebbe resa inaffidabile per i suoi due chiamanti veri. `SKIP_REVEAL` vive accanto ad
+`ADVANCE`, non dentro.
+
+**L'effetto è `nextTurn`, la stessa identica funzione della scadenza.** Non esiste una seconda
+strada per passare il turno, quindi non c'è niente da tenere allineato: cambia solo *quando*, e la
+deadline della fase successiva nasce dall'istante del click. Il test lo verifica confrontando lo
+stato prodotto dal salto con quello prodotto dalla scadenza, invece di riscrivere le attese.
+
+**L'idempotenza non ha avuto bisogno di codice.** Dopo il primo salto la fase non è più
+`LOT_REVEAL`, quindi il secondo click trova la guardia e viene rifiutato: I7 esce dalla forma
+della macchina, non da un flag.
+
+**Solo l'owner, e la verifica sta nell'azione.** Il motore non sa chi possiede l'asta — è la
+stessa ragione per cui il cancello di presence di `START` non è nella macchina. `skipReveal` in
+`actions.ts` chiama `requireOwner` come fanno pausa e ripresa; il pulsante nascosto agli altri è
+comodità, non sicurezza (regola 6).
+
+**Il client sa di essere l'owner da una prop, non dallo snapshot.** `viewerIsOwner` arriva a
+`Portal` dalla pagina server, come già fa il listone. Metterlo nello snapshot avrebbe significato
+spedire a tutti, a ogni transizione, un booleano che nasce col link e non cambia per tutta la
+serata — e allargare `serializeSnapshot`, che è il punto in cui si decide cosa può uscire (regola
+3, I8).
+
+**Restano fuori il turno di chiamata e la preparazione dello spareggio.** Tagliare l'attesa del
+pick non è «riparti», è far scattare l'auto-pick al posto di qualcuno: stessa etichetta, funzione
+diversa. Lo spareggio dura due secondi e serve a far capire che si ricomincia. Decisione
+dell'owner: il pulsante esiste solo dove l'attesa non serve a nessuno.
+
+**`reveal_seconds` non cambia**: resta configurabile e resta la scadenza automatica. Il pulsante
+è una scorciatoia, non una sostituzione — un'asta condotta senza toccarlo si comporta come prima.
+
+---
+
+## 2026-08-10 — Tre correzioni attorno alla configurazione ad asta iniziata
+
+**Il salvataggio dei tempi non ha mai funzionato, e il test lo diceva verde.** `updateAuctionSettings`
+decideva se una patch fosse strutturale guardando `patch.name !== undefined`, cioè se il campo
+*fosse arrivato*, non se fosse *cambiato*. La configurazione è un `<form>`: rimanda tutti i campi
+che non stanno dentro un fieldset disabilitato, e il nome era fuori da tutti. Risultato: ogni
+salvataggio ad asta iniziata portava con sé il nome invariato e veniva rifiutato in blocco, con il
+messaggio che spiegava che si possono cambiare solo i timer — mentre era proprio un timer quello
+che si stava cambiando.
+
+Il test che avrebbe dovuto proteggerlo passava una patch con il solo `bidSeconds`, cioè una patch
+che il form vero non produce mai. È il modo tipico in cui un test resta verde su una funzione
+rotta: prova l'unità con un input che nessun chiamante le passa. I due test nuovi passano il nome
+invariato come fa il form, e verificano che un nome davvero diverso continui a essere rifiutato.
+
+**Il nome è passato dentro un fieldset disabilitato.** Il server lo considera strutturale, quindi
+la UI non deve prometterlo modificabile: un fieldset disabilitato, oltre a spegnere il campo, non
+lo invia affatto: la classe di bug qui sopra non si ripresenta.
+
+**L'avviso è costante e non è un errore.** «Ad asta iniziata si possono cambiare solo i timer, che
+valgono dal lotto successivo» era un errore rosso dopo il click. Ora è un avviso ambra sopra il
+form: è una regola del posto in cui ti trovi, va letta prima di compilare, e la sua seconda metà
+— «dal lotto successivo» — non è un divieto ma la risposta alla domanda vera, «se cambio adesso,
+quando vale?».
+
+**La lobby non spinge più al portale ad asta in pausa.** Il `router.push` automatico serve perché
+nessuno perda secondi di un'asta che corre; in pausa non scorre niente, ed è anzi il momento in
+cui si va a cambiare i tempi — dalla configurazione, che si raggiunge dalla lobby. Finché valeva
+anche per `PAUSED`, l'owner veniva rispedito al portale a ogni tentativo di attraversarla. La
+correzione non ha bisogno di compensazioni: alla ripresa lo stato torna `LIVE`, l'effetto riparte
+e accompagna al portale chi era rimasto in lobby. Resta un avviso con il link al portale, perché
+in pausa nessuno viene più spostato e la porta va lasciata visibile.

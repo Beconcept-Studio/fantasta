@@ -276,34 +276,10 @@ export function haveWithdrawn(snapshot: Snapshot): boolean {
 
 // ─── Le buste degli altri ────────────────────────────────────────────────────
 
-export type EnvelopeState = {
-  member: SnapshotMember;
-  /** Ha una busta consegnata. **Mai l'importo** durante LOT_OPEN (I8). */
-  hasBid: boolean;
-  withdrawn: boolean;
-  isMe: boolean;
-};
-
-/** Gli idonei del round con lo stato della loro busta, in ordine di seat. */
-export function envelopes(
-  snapshot: Snapshot,
-  myMemberId: string | null,
-): EnvelopeState[] {
-  const lot = snapshot.currentLot;
-  if (lot === null) return [];
-  return lot.bidStatus.flatMap((status) => {
-    const member = memberById(snapshot, status.memberId);
-    if (member === null) return [];
-    return [
-      {
-        member,
-        hasBid: status.hasBid,
-        withdrawn: status.withdrawn,
-        isMe: status.memberId === myMemberId,
-      },
-    ];
-  });
-}
+// Non c'è niente da leggere, e non è una dimenticanza: finché il lotto è
+// aperto, delle buste altrui lo snapshot non porta niente da cui derivare
+// qualcosa (M1, §1). La funzione che stava qui — `envelopes()` — leggeva un
+// campo che non esiste più.
 
 // ─── Lo spareggio ────────────────────────────────────────────────────────────
 

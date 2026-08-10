@@ -8,9 +8,10 @@ import { cn } from "@/lib/utils";
  *
  * È l'unico momento in cui gli importi sono pubblici, e lo sono perché lo
  * snapshot li porta solo qui (`currentLot.reveal`, popolato in `LOT_REVEAL` e
- * mai prima — invariante I8). Il pannello non nasconde e non riassume niente:
- * tutte le offerte di tutti i round, perché è la trasparenza che rende
- * accettabile un'asta a busta chiusa fatta fra amici.
+ * mai prima — I8 e M1). Il pannello non nasconde e non riassume niente: tutte
+ * le offerte di tutti i round, perché è la trasparenza che rende accettabile
+ * un'asta a busta chiusa fatta fra amici, e perché per trenta secondi prima non
+ * si era saputo niente di niente.
  *
  * Due dettagli che servono a capire un esito contestato:
  *
@@ -21,6 +22,9 @@ import { cn } from "@/lib/utils";
  *   (a parità di importo vince `MIN(amount_set_at)`, e il timestamp è quello
  *   ereditato dal round 1), quindi è l'unico modo di leggere il risultato senza
  *   fidarsi sulla parola.
+ *
+ * Qui c'è solo l'elenco: il vincitore, il prezzo e la cornice sono di
+ * `LotClosedCard`, che è la schermata di cui questo è il corpo.
  */
 
 function relativeLabel(amountSetAt: string, baseMs: number): string {
@@ -29,7 +33,7 @@ function relativeLabel(amountSetAt: string, baseMs: number): string {
   return `+${delta}s`;
 }
 
-export function RevealPanel({
+export function RevealBids({
   reveal,
   snapshot,
   myMemberId,
@@ -40,26 +44,8 @@ export function RevealPanel({
   myMemberId: string | null;
   className?: string;
 }) {
-  const winner = memberById(snapshot, reveal.winnerMemberId);
-  const iWon = reveal.winnerMemberId === myMemberId;
-
   return (
     <div className={cn("space-y-4", className)}>
-      <div
-        className={cn(
-          "rounded-lg border p-3 text-center",
-          iWon
-            ? "border-emerald-600/40 bg-emerald-600/5"
-            : "bg-muted/40 border-transparent",
-        )}
-      >
-        <p className="text-muted-foreground text-xs tracking-wide uppercase">
-          {iWon ? "L'hai preso tu" : "Assegnato a"}
-        </p>
-        <p className="mt-0.5 text-lg font-semibold">{memberLabel(winner)}</p>
-        <p className="text-3xl font-semibold tabular-nums">{reveal.price}</p>
-      </div>
-
       {reveal.rounds.map((round) => {
         const base = Math.min(
           ...round.bids.map((bid) => Date.parse(bid.amountSetAt)),
@@ -92,8 +78,8 @@ export function RevealPanel({
                   <li
                     key={`${round.roundNo}-${bid.memberId}`}
                     className={cn(
-                      "flex items-baseline gap-2 rounded-md border px-2.5 py-1.5 text-sm",
-                      isWinner && "border-emerald-600/40 bg-emerald-600/5",
+                      "bg-background flex items-baseline gap-2 rounded-md border px-2.5 py-1.5 text-sm",
+                      isWinner && "border-emerald-600/50 bg-emerald-600/10",
                       withdrawn && "text-muted-foreground",
                     )}
                   >
@@ -109,6 +95,7 @@ export function RevealPanel({
                     <span
                       className={cn(
                         "shrink-0 font-medium tabular-nums",
+                        isWinner && "text-emerald-700 dark:text-emerald-400",
                         withdrawn && "line-through",
                       )}
                     >
