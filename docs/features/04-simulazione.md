@@ -290,7 +290,7 @@ sue mosse.
       `CHECK` che vieta `is_admin AND is_bot`; `pnpm db:push` in locale
 - [x] **M4-03** — `lib/domain.ts`: `isAppAdmin()`, `BOT_STRATEGIES` con le etichette italiane, e il
       testo del badge. Nessuna dipendenza, come i suoi gemelli
-- [ ] **M4-04** — `ensureBotUsers()` idempotente; `listDevUsers()` esclude i bot; l'`authorize` del
+- [x] **M4-04** — `ensureBotUsers()` idempotente; `listDevUsers()` esclude i bot; l'`authorize` del
       provider `dev` li rifiuta; il seed chiama `ensureBotUsers()`
 - [ ] **M4-05** — `createAuction` accetta `isSimulated` e lo rifiuta a chi non è amministratore;
       la casella nel form di creazione, visibile solo a lui

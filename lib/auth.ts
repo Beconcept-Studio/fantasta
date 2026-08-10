@@ -1,4 +1,4 @@
-import { asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import NextAuth, { type Profile } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
@@ -86,6 +86,10 @@ export function buildProviders(
       });
       // Solo utenti seeded: chi ha un google_sub entra da Google.
       if (!row || row.googleSub !== null) return null;
+      // E mai un bot (M4): non perché impersonarlo sarebbe pericoloso — non
+      // può fare niente che un partecipante non possa — ma perché una lista di
+      // identità di comodo che si sporca da sola smette di essere utile.
+      if (row.isBot) return null;
       return { id: row.id, name: row.displayName, email: row.email };
     },
   });
@@ -159,13 +163,14 @@ export async function setDisplayName(
 
 /**
  * Gli utenti selezionabili dal provider `dev`: quelli creati dal seed, cioè
- * senza `google_sub`. Vuoto in produzione.
+ * senza `google_sub` — **e non i bot** (M4), che sono altrettanti utenti senza
+ * `google_sub` ma non sono nessuno da impersonare. Vuoto in produzione.
  */
 export async function listDevUsers(): Promise<User[]> {
   if (!isDevAuthEnabled) return [];
   return db
     .select()
     .from(users)
-    .where(isNull(users.googleSub))
+    .where(and(isNull(users.googleSub), eq(users.isBot, false)))
     .orderBy(asc(users.displayName));
 }
