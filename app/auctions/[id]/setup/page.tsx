@@ -150,7 +150,27 @@ export default async function SetupPage({
               : "Ad asta iniziata restano modificabili solo i tempi."}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/*
+            L'avviso sta **sopra il form e sempre**, non nella risposta al
+            salvataggio: quello che il server può dire dopo il click è un
+            errore, e un errore arriva quando ormai hai compilato. Qui è una
+            regola del posto in cui ti trovi, e va letta prima di toccare i
+            campi — anche perché la seconda metà («dal lotto successivo») non è
+            un divieto ma la risposta alla domanda che uno si fa davvero:
+            «cambio adesso, quando vale?».
+          */}
+          {!editable && (
+            <p
+              role="status"
+              className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm"
+            >
+              Ad asta iniziata si possono cambiare <strong>solo i timer</strong>
+              , e valgono <strong>dal lotto successivo</strong>: un countdown
+              già in corso non si accorcia. Posti, crediti, slot, ordine dei
+              ruoli e nome restano quelli.
+            </p>
+          )}
           <SettingsForm
             auctionId={auction.id}
             structuralDisabled={!editable}

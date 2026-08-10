@@ -40,5 +40,7 @@ export default async function PlayPage({
 
   const pool = await listPickPool(id);
 
-  return <Portal auctionId={id} pool={pool} />;
+  return (
+    <Portal auctionId={id} pool={pool} viewerIsOwner={overview.viewerIsOwner} />
+  );
 }

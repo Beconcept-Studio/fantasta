@@ -330,3 +330,32 @@ describe("assignablePlayers — chi si può assegnare a mano", () => {
     expect(assignablePlayers(pool, snapshot(), null, "nessuno")).toHaveLength(0);
   });
 });
+
+// ─── «Prosegui asta»: chiudere il reveal prima della scadenza ────────────────
+
+describe("prosegui asta", () => {
+  const inPhase = (phase: "LOT_OPEN" | "LOT_REVEAL" | "WAITING_PICK") =>
+    snapshot({ auction: { ...snapshot().auction, phase } });
+
+  it("si può proseguire mentre le buste sono aperte", () => {
+    expect(managerControls(inPhase("LOT_REVEAL")).canSkipReveal).toBe(true);
+  });
+
+  it("non si può durante il lotto o l'attesa della chiamata", () => {
+    expect(managerControls(inPhase("LOT_OPEN")).canSkipReveal).toBe(false);
+    expect(managerControls(inPhase("WAITING_PICK")).canSkipReveal).toBe(false);
+  });
+
+  it("ad asta in pausa non si prosegue: prima si riprende", () => {
+    const paused = snapshot({
+      auction: {
+        ...snapshot().auction,
+        status: "PAUSED",
+        phase: "LOT_REVEAL",
+        pausedAt: iso(5_000),
+      },
+    });
+    expect(managerControls(paused).canSkipReveal).toBe(false);
+    expect(managerControls(paused).canResume).toBe(true);
+  });
+});

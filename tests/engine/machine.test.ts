@@ -771,3 +771,54 @@ describe("machine: START e percorso completo — §12.21, §12.22, §12.24", () 
     expect(new Set(state.assignments.map((a) => a.playerId)).size).toBe(8);
   });
 });
+
+describe("machine: SKIP_REVEAL — la regia taglia l'attesa delle buste aperte", () => {
+  /** Un lotto chiuso e assegnato: siamo in LOT_REVEAL, con la sua deadline. */
+  function inReveal(): AuctionState {
+    const opened = run(stateInWaitingPick(), [[pick("m0", "q1"), T0]]);
+    const endsAt = opened.lots[0].rounds[0].endsAt;
+    return run(opened, [
+      [bidEvent("m1", 30), T0 + sec(5)],
+      [{ type: "ADVANCE" }, endsAt],
+    ]);
+  }
+
+  it("salta l'attesa e lascia lo stesso stato che avrebbe prodotto la scadenza", () => {
+    const reveal = inReveal();
+    expect(reveal.phase).toBe("LOT_REVEAL");
+    const deadline = reveal.phaseDeadline!;
+    const early = deadline - sec(7);
+
+    const skipped = run(reveal, [[{ type: "SKIP_REVEAL" }, early]]);
+    const expired = run(reveal, [[{ type: "ADVANCE" }, deadline]]);
+
+    // Il turno passa esattamente come sarebbe passato da solo: cambia solo
+    // *quando*, e la deadline nuova nasce dall'istante in cui si preme.
+    expect(skipped.phase).toBe("WAITING_PICK");
+    expect(skipped.currentSeatIndex).toBe(expired.currentSeatIndex);
+    expect(skipped.currentRole).toBe(expired.currentRole);
+    expect(skipped.currentLotId).toBeNull();
+    expect(skipped.assignments).toEqual(expired.assignments);
+    expect(skipped.phaseDeadline).toBe(early + sec(30));
+  });
+
+  it("è rifiutato in ogni fase che non sia il reveal", () => {
+    const waiting = stateInWaitingPick();
+    expectFail(waiting, { type: "SKIP_REVEAL" }, T0, "WRONG_PHASE");
+
+    const open = run(waiting, [[pick("m0", "q1"), T0]]);
+    expectFail(open, { type: "SKIP_REVEAL" }, T0 + sec(1), "WRONG_PHASE");
+  });
+
+  it("premuto due volte non salta due lotti (I7)", () => {
+    const reveal = inReveal();
+    const now = reveal.phaseDeadline! - sec(7);
+    const once = run(reveal, [[{ type: "SKIP_REVEAL" }, now]]);
+    expectFail(once, { type: "SKIP_REVEAL" }, now + 50, "WRONG_PHASE");
+  });
+
+  it("non tocca un'asta in pausa: la pausa congela la fase", () => {
+    const paused = run(inReveal(), [[{ type: "PAUSE" }, T0 + sec(31)]]);
+    expectFail(paused, { type: "SKIP_REVEAL" }, T0 + sec(32), "WRONG_PHASE");
+  });
+});

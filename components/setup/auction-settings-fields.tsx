@@ -28,7 +28,14 @@ export function AuctionSettingsFields({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
+      {/*
+        Il nome sta dentro un fieldset come tutto il resto della struttura: il
+        server lo considera strutturale, e un campo che sembra modificabile ma
+        viene rifiutato è peggio di uno spento. Un `fieldset` disabilitato non
+        invia i propri campi, quindi ad asta iniziata il nome non parte
+        nemmeno.
+      */}
+      <fieldset className="space-y-2" disabled={structuralDisabled}>
         <Label htmlFor="name">Nome dell&apos;asta</Label>
         <Input
           id="name"
@@ -38,8 +45,9 @@ export function AuctionSettingsFields({
           minLength={3}
           maxLength={60}
           placeholder="Lega dei Rossi 2026"
+          disabled={structuralDisabled}
         />
-      </div>
+      </fieldset>
 
       <fieldset className="space-y-2" disabled={structuralDisabled}>
         <legend className="text-sm font-medium">Partecipanti</legend>

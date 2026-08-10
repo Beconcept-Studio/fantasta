@@ -176,5 +176,6 @@ export type AuctionEvent =
   | { type: "PLACE_BID"; memberId: string; amount: number }
   | { type: "WITHDRAW_BID"; memberId: string }
   | { type: "ADVANCE" }
+  | { type: "SKIP_REVEAL" }
   | { type: "PAUSE" }
   | { type: "RESUME" };

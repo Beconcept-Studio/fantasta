@@ -1,0 +1,315 @@
+# Come si avvia una prova in locale
+
+Questo file esiste per una ragione sola: non doversi più ricordare a memoria l'ordine dei comandi
+per mettere in piedi un'asta finta e giocarci. Non aggiunge niente al progetto, racconta cosa c'è
+già.
+
+Il percorso è sempre lo stesso: **Postgres acceso → seed → app accesa → login come owner → bot**.
+Fuori da quest'ordine qualcosa non funziona, e i motivi sono spiegati sotto.
+
+---
+
+## In quattro comandi
+
+```bash
+docker compose up -d                     # 1. Postgres su localhost:5433
+pnpm db:seed --auction-status=ready      # 2. 12 utenti + un'asta a 8 pronta a partire
+pnpm dev                                 # 3. l'app (lasciala accesa: ha lo scheduler)
+# 4. dal browser: http://localhost:3000 → "Entra come Marco Bianchi"
+```
+
+Il seed stampa a fine corsa tutto quello che serve, id dell'asta compreso:
+
+```text
+Utenti: 0 creati, 12 utenti di prova a database.
+Asta "Asta di prova" creata: stato READY, 8 posti, listone importato.
+  Setup:  http://localhost:3000/auctions/<id>/setup
+  Lobby:  http://localhost:3000/auctions/<id>/lobby
+  TV:     http://localhost:3000/tv/<publicToken>
+  Invito: http://localhost:3000/join/<token>
+  Owner:  Marco Bianchi — seat 7, l'ultimo occupato
+  Bot, giocano tutti:
+    pnpm bots --auction=<id> --count=8 --strategy=random --start --url=http://localhost:3000
+  Bot, giochi tu come Marco Bianchi (tieni aperto il portale, poi avvia dalla regia):
+    pnpm bots --auction=<id> --count=7 --strategy=random --url=http://localhost:3000
+```
+
+**Copia la riga che ti serve.** Sono i due comandi dei bot già compilati con l'id giusto: il primo
+per guardare un'asta che si gioca da sola, il secondo per giocarla tu. È il modo più veloce per non
+andare a cercare l'id dell'asta da nessuna parte.
+
+---
+
+## 1. Postgres
+
+```bash
+docker compose up -d          # la prima volta anche: pnpm db:push
+docker compose ps             # deve dire "Up (healthy)"
+```
+
+La porta sull'host è **5433**, non 5432 (c'è un altro Postgres su quella macchina — vedi
+`docs/DECISIONS.md`, 2026-08-07). `DATABASE_URL` nel `.env` la conosce già.
+
+`pnpm db:push` serve solo la prima volta, o dopo una macro-feature che ha toccato
+`lib/db/schema.ts`.
+
+## 2. Il seed
+
+```bash
+pnpm db:seed                             # solo i 12 utenti di prova, nessuna asta
+pnpm db:seed --auction-status=ready      # + un'asta a 8, listone importato, tutti seduti
+```
+
+Senza `--auction-status` **non nasce nessuna asta**: si ottengono soltanto i dodici utenti con cui
+funziona l'accesso di sviluppo. È il caso in cui si vuole creare l'asta a mano dall'interfaccia,
+per collaudare il setup.
+
+Gli stati generabili sono cinque:
+
+| `--auction-status=` | Cosa produce |
+|---|---|
+| `draft` | asta a 8 con **un posto libero**: serve a vedere il ritorno READY → DRAFT |
+| `ready` | asta a 8 piena, in attesa dell'avvio. **È quello da usare quasi sempre** |
+| `live` | asta appena avviata, primo turno di chiamata aperto |
+| `mid` | asta già a metà: metà degli slot assegnati, crediti consumati, rose vere |
+| `completed` | asta finita, per guardare i tabelloni finali |
+
+Il seed è **idempotente sugli utenti** e **distruttivo sull'asta di prova**: l'asta chiamata «Asta
+di prova» viene cancellata e rifatta da zero a ogni esecuzione, così si riparte sempre da uno
+stato noto. Gli stati avanzati non sono righe scritte a mano: il seed fa girare il motore vero su
+un orologio virtuale, quindi ciò che trovi a database è uno stato che l'applicazione sa produrre.
+
+⚠ **`mid` con l'app accesa prosegue da sola.** Lo scheduler trova un'asta LIVE con una deadline
+davanti e comincia a chiudere i round: se ti serve ferma per guardarla, mettila in pausa dalla
+regia appena entri.
+
+## 3. L'app
+
+```bash
+pnpm dev          # http://localhost:3000
+pnpm dev:lan      # come sopra ma raggiungibile dal telefono; stampa l'URL da digitare
+```
+
+**Deve restare accesa per tutta la prova.** Non è solo l'interfaccia: è quel processo ad avere lo
+scheduler, cioè l'unica cosa che chiude i round allo scadere dei timer. Con l'app spenta i bot
+offrono e poi l'asta resta immobile per sempre.
+
+`pnpm dev:lan` è la variante da usare quando la prova è "il portale sul telefono vero": passa ad
+Auth.js l'IP di LAN, altrimenti dopo il login il telefono finirebbe su un indirizzo morto.
+
+## 4. Entrare come chi ha creato l'asta
+
+Vai su <http://localhost:3000>. Sotto il pulsante di Google c'è una sezione **«Accesso di
+sviluppo»** con un pulsante per ciascuno dei dodici utenti del seed. Esiste solo fuori produzione:
+è un provider registrato solo se `NODE_ENV !== "production"`, e un test automatico verifica che in
+produzione non ci sia.
+
+**L'owner dell'asta di prova è sempre `Marco Bianchi`** — il primo dei dodici utenti. Clicca
+«Entra come Marco Bianchi» e da lì hai tutto:
+
+| Dove | Cosa ci fai |
+|---|---|
+| `/dashboard` | l'elenco delle sue aste: «Asta di prova» è lì |
+| `/auctions/<id>/setup` | timer, slot, budget, listone, inviti |
+| `/auctions/<id>/lobby` | chi è seduto, chi è collegato |
+| `/auctions/<id>/manage` | **la regia**: avvio, pausa, override, correzioni. Solo l'owner |
+| `/auctions/<id>/play` | il suo portale da partecipante (è anche il seat 0) |
+| `/tv/<publicToken>` | la vista TV: è **pubblica**, aprila in un'altra scheda senza login |
+
+La lista del login è in ordine alfabetico, quindi «Marco Bianchi» non è il primo pulsante: cercalo
+per nome, non per posizione.
+
+## 5. I bot
+
+```bash
+pnpm bots --auction=<id> --count=8 --strategy=random --start
+```
+
+I bot sono **client veri**: si firmano un cookie di sessione con `AUTH_SECRET`, aprono lo stream
+SSE come farebbe un browser e agiscono via HTTP. Non toccano il motore nel proprio processo — è
+per questo che, mentre girano, quello che vedi sullo schermo si muove davvero.
+
+| Opzione | A cosa serve |
+|---|---|
+| `--auction=<id>` | obbligatoria. L'id lo stampa il seed |
+| `--count=N` | quanti seat far giocare ai bot, **a partire dal seat 0**. Senza, li prende tutti. `--count=7` lascia libero l'ultimo posto, che è quello dell'owner |
+| `--strategy=random` | offerte casuali basse: il comportamento realistico, per una prova lunga |
+| `--strategy=aggressive` | tutti al massimo consentito: brucia i crediti e mette alla prova i limiti |
+| `--strategy=passive` | tutti al minimo: utile per vedere i lotti che si chiudono al prezzo base |
+| `--strategy=tie` | tutti sullo stesso importo: **è il modo di innescare lo spareggio a comando**, che a mano è quasi impossibile |
+| `--start` | avvia l'asta da solo (usa il cookie dell'owner). Ometti se vuoi premere «Avvia» tu dalla regia |
+| `--verbose` | stampa ogni azione e ogni rifiuto |
+| `--url=` | il server a cui parlare, se non è `http://localhost:3000` |
+
+A fine asta stampa un riepilogo con azioni riuscite e rifiutate. **I rifiuti sono normali**: un
+round che si chiude mentre un bot stava per offrire è esattamente ciò che deve succedere.
+
+Per fermarli: `Ctrl-C`.
+
+---
+
+## Chi è chi nell'asta di prova
+
+I posti sono sempre gli stessi fra un seed e l'altro: serve a poter rifare la stessa prova due
+volte e riconoscere le stesse squadre.
+
+| Seat | Utente | Squadra |
+|---|---|---|
+| 0 | Luca Ferrari | Real Fantozzi |
+| 1 | Andrea Russo | Atletico Divano |
+| 2 | Matteo Esposito | Borussia Bar Sport |
+| 3 | Francesco Romano | Inter Nos |
+| 4 | Alessandro Colombo | Sporting Panchina |
+| 5 | Davide Ricci | Deportivo Rigore |
+| 6 | Simone Marino | Bayern Cucina |
+| 7 | **Marco Bianchi** (owner) | AC Rimonta |
+
+**L'owner è l'ultimo posto, ed è deliberato.** I bot prendono i posti a partire da zero, quindi
+con `--count=7` quello che resta libero è il suo: è la configurazione con cui giochi di persona
+restando l'owner, cioè con la regia e il portale nello stesso browser.
+
+Gli altri quattro utenti del seed (Giulia Greco, Chiara Bruno, Sara Gallo, Elena Conti) esistono a
+database ma **non sono seduti**: servono a provare gli inviti e i join.
+
+L'asta di prova nasce con 8 posti, 500 crediti, slot 3/8/8/6 e **timer corti** — 3 secondi per
+offrire, 3 per chiamare, 2 di preparazione spareggio, 2 di rivelazione. Non è una scorciatoia di
+ambiente: sono proprio i parametri con cui l'asta viene creata, il motore è identico a quello di
+produzione.
+
+---
+
+## Le due prove tipiche
+
+### A. Guardare la serata dalla regia (la più frequente)
+
+Tu sei l'owner e conduci; i bot giocano tutti e otto i posti.
+
+```bash
+pnpm db:seed --auction-status=ready
+pnpm dev
+```
+
+1. Entra come **Marco Bianchi**, apri `/auctions/<id>/manage`.
+2. In un'altra scheda apri la **vista TV** col link stampato dal seed (non serve login).
+3. Lancia i bot **senza** `--start`:
+   `pnpm bots --auction=<id> --count=8 --strategy=random`
+4. Aspetta che in lobby tutti risultino collegati, poi premi **Avvia** dalla regia.
+
+Il cancello d'avvio pretende che **tutti** i membri siano LIVE, cioè visti negli ultimi 15 secondi
+e con la pagina in primo piano. I bot battono il proprio heartbeat da soli; la pagina di regia
+batte quello dell'owner quando l'owner è anche un membro, come qui. Se «Avvia» resta rifiutato, è
+quasi sempre un bot non ancora partito o una scheda finita in background.
+
+### B. Giocare tu una squadra, con sette bot attorno
+
+Questa è la prova completa: **sei Marco Bianchi**, quindi owner e partecipante insieme, e non devi
+cambiare account né browser.
+
+```bash
+pnpm db:seed --auction-status=ready
+pnpm dev
+pnpm bots --auction=<id> --count=7 --strategy=random     # niente --start
+```
+
+1. Entra come **Marco Bianchi** e apri `/auctions/<id>/play`: è il tuo portale, seat 7.
+2. I sette bot occupano i seat 0–6. Il tuo resta libero perché **prendono i posti da zero in su**
+   e l'owner è l'ultimo: è il motivo per cui il seed lo fa entrare per ultimo.
+3. Quando in lobby sono tutti collegati, avvia l'asta. Puoi farlo da `/auctions/<id>/manage`, che
+   è tua: la regia e il portale sono dello stesso utente, in due schede.
+
+⚠ **Niente `--start` qui.** Il cancello d'avvio pretende tutti i membri LIVE, e il tuo posto è
+LIVE solo se hai già una tua pagina aperta e in primo piano. Avviando tu dalla regia il problema
+non si pone; con `--start` i bot proverebbero a partire prima che tu sia in piedi.
+
+Per giocare dal telefono invece che dal browser del computer, usa `pnpm dev:lan` e apri sul
+telefono l'URL che stampa — il portale è mobile-first, ed è lì che va provato.
+
+---
+
+## Le varianti
+
+**Un'asta intera senza interfaccia**, per vedere se il motore arriva in fondo:
+
+```bash
+pnpm drive --auction=<id>
+```
+
+⚠ `drive` **avvia uno scheduler tutto suo**: non va lanciato mentre `pnpm dev` è acceso sulla
+stessa asta, o due scheduler farebbero lo sweep sullo stesso lotto. Spegni l'app, oppure usa i
+bot, che invece l'app la richiedono.
+
+**Ricominciare da capo**: rilancia `pnpm db:seed --auction-status=ready`. L'asta di prova viene
+buttata e rifatta; gli utenti restano quelli, quindi resti loggato.
+
+**Buttare via tutto il database** e ripartire dallo schema:
+
+```bash
+docker compose down -v && docker compose up -d
+pnpm db:push && pnpm db:seed --auction-status=ready
+```
+
+---
+
+## Quando qualcosa non torna
+
+**Le fasi sembrano accavallarsi: dal lotto aperto si salta al lotto aperto dopo, la rivelazione
+non si vede mai, i bot non offrono e i lotti si chiudono tutti a 1 con `auto_called`.**
+
+Cerca **un secondo processo dell'applicazione sullo stesso database**:
+
+```bash
+lsof -nP -iTCP -sTCP:LISTEN | grep node      # chi ascolta, e su che porta
+ps -eo pid,ppid,etime,command | grep next-server
+```
+
+Il colpevole tipico è un `next-server` orfano (`ppid 1`) lasciato acceso da un `pnpm build &&
+pnpm start` di ieri, con cwd `.next/standalone`, su una porta qualsiasi. **Ogni processo Next
+esegue `instrumentation.ts`, quindi ha uno scheduler suo**: due processi sono due scheduler sulla
+stessa asta. È lo stesso motivo per cui in produzione `deploy/ecosystem.config.cjs` impone
+`exec_mode: "fork"` e `instances: 1`.
+
+Il guaio non è che l'asta avanzi due volte — il lock a database la protegge, e infatti **lo stato
+resta corretto e ordinato**. Il guaio è che il registro delle connessioni SSE è *in memoria, per
+processo*: quando è l'altro processo a far scadere una fase, il suo broadcast va al suo registro,
+che è vuoto, e chi è attaccato al tuo `pnpm dev` non riceve niente. I bot non vedono
+`WAITING_PICK` né `LOT_REVEAL`, quindi non chiamano e non offrono; le offerte fatte via HTTP
+invece arrivano subito, perché quelle passano dal processo giusto. Il risultato a schermo è
+esattamente «le fasi si accavallano».
+
+Come si riconosce in dieci secondi: nella tabella `lots` una fila di lotti consecutivi con
+`auto_called = true`, una sola offerta e `final_price = 1`.
+
+```sql
+select seq, status, final_price, auto_called from lots
+where auction_id = '<id>' order by seq desc limit 20;
+```
+
+La cura è terminare il processo di troppo (`kill <pid>`), non toccare il codice.
+
+**Il portale resta su «Mi collego all'asta…» e non arriva nessuno snapshot.**
+Prima di indagare, guarda la console del browser: se c'è un **404 su un chunk**
+(`/_next/static/chunks/app/.../page.js`) non è un bug dell'app — è il bundle stantio di `pnpm dev`
+dopo molte modifiche. Riavvia il dev server.
+
+**I bot dicono «L'app non risponde su `http://localhost:3000`».**
+L'app è spenta, o è su un'altra porta. Loro il database lo leggono una volta sola in avvio: tutto
+il resto passa da HTTP, e senza server non esistono.
+
+**I bot dicono «AUTH_SECRET non combacia».**
+Stanno leggendo un `.env` diverso da quello con cui gira l'app — tipicamente perché l'app è stata
+avviata prima di una modifica al `.env`. Riavvia `pnpm dev`.
+
+**L'asta non parte: «Avvia» viene rifiutato.**
+È il cancello di presence: serve che *tutti* i membri siano LIVE. Basta una scheda in background
+per farlo fallire. Controlla la lobby, che dice chi è collegato e chi no.
+
+**L'asta parte da sola appena accendo l'app.**
+Hai seminato `live` o `mid`: quelle aste sono già LIVE e lo scheduler fa il suo mestiere. Usa
+`ready` se la vuoi ferma.
+
+**Ho fatto `pnpm db:seed` e non trovo nessuna asta.**
+Senza `--auction-status` il seed crea solo gli utenti. È voluto.
+
+**Il pulsante «Entra come …» non c'è.**
+Stai girando con `NODE_ENV=production` (per esempio dopo `pnpm build && pnpm start`): il provider
+di sviluppo lì non esiste, per costruzione.

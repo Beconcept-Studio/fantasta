@@ -244,7 +244,16 @@ export async function updateAuctionSettings(
     const touchesStructure = STRUCTURAL_PATCH_FIELDS.some(
       (field) => patch[field] !== undefined,
     );
-    const touchesName = patch.name !== undefined;
+    // ⚠ **Cambiato**, non **inviato**. La configurazione è un `<form>`: a ogni
+    // salvataggio rimanda tutti i campi che non sono dentro un fieldset
+    // disabilitato, nome compreso. Guardare la sola presenza faceva rifiutare
+    // in blocco ogni salvataggio ad asta iniziata — anche quello che toccava
+    // solo un timer — e rendeva impossibile ciò che questa stessa funzione
+    // dichiara di permettere. Un nome identico a quello a database non è una
+    // modifica.
+    const touchesName =
+      patch.name !== undefined &&
+      (typeof patch.name !== "string" || patch.name.trim() !== auction.name);
     const isSetupPhase = auction.status === "DRAFT" || auction.status === "READY";
 
     if ((touchesStructure || touchesName) && !isSetupPhase) {

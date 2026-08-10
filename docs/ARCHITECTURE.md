@@ -454,6 +454,18 @@ non tocca il timestamp: il pulsante premuto due volte non peggiora la posizione 
 puramente presentazionali — servono alla stanza per guardare le buste aperte sulla TV. L'esito è
 già committato: un crash durante il reveal non può perdere un lotto deciso.
 
+**E proprio perché sono presentazionali, la regia può accorciarli.** «Prosegui asta» è un evento
+a sé, `SKIP_REVEAL`, che l'owner emette dal proprio portale o dalla console: chiude il reveal e
+passa il turno senza aspettare la scadenza. È l'unica transizione dell'applicazione che avviene
+perché un umano l'ha chiesta invece che perché il tempo è passato, e per questo sta accanto ad
+`ADVANCE` e non dentro: la guardia `now < phase_deadline` che rende `ADVANCE` idempotente serve ai
+timer e allo sweep, e allentarla per fare spazio a un pulsante l'avrebbe resa inutile per
+entrambi. L'effetto è la stessa funzione che gira alla scadenza, `nextTurn`, così non esistono due
+strade per passare il turno; cambia solo *quando*, e il countdown della fase successiva nasce
+dall'istante del click. Premuto due volte non salta due lotti: al secondo colpo la fase non è più
+`LOT_REVEAL` e la guardia rifiuta, senza che sia servito un flag. `reveal_seconds` resta quello che
+era — configurabile, e scadenza automatica per chi non tocca niente.
+
 **Il caso dell'unico idoneo si chiude subito.** Se all'apertura del lotto l'unico che potrebbe
 offrire è il chiamante stesso — succede a fine ruolo, quando gli altri hanno la casella piena —
 l'esito è già scritto, e il motore salta il countdown: il lotto va dritto al reveal, assegnato
@@ -811,6 +823,12 @@ Che siano due componenti invece di uno non intacca la permanenza: quella chiede 
 lotto ci sia sempre e sia funzione pura dello snapshot, non che sia sempre lo stesso nodo React.
 La scelta fra le due la fa la fase, che è nello snapshot, quindi chi rientra a metà reveal trova la
 card chiusa con il countdown giusto esattamente come chi non si è mai disconnesso.
+
+Nella card chiusa, e solo per l'owner, sotto il countdown compare «Prosegui asta». Che chi guarda
+possieda l'asta non viaggia nello snapshot ma arriva come prop dalla pagina server, per la stessa
+ragione del listone: non è stato di gioco, non cambia per tutta la serata, e nello snapshot
+verrebbe spedito a tutti a ogni transizione. Il pulsante nascosto agli altri non autorizza niente
+— `skipReveal` ricontrolla la proprietà dell'asta lato server, come sempre.
 
 Il **modale** è un overlay sopra la card, e la frase da tenere a mente è che *non è una notifica*:
 è una vista sullo stato corrente. Si apre da sé quando c'è un round aperto e sono fra gli idonei;

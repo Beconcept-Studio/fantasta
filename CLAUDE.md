@@ -189,6 +189,7 @@ scrive il codice**, altrimenti non verrà mai fatta.
 | `docs/DECISIONS.md` | Append-only. Ogni scelta non ovvia, con data e motivazione | Al momento della scelta |
 | `CHANGELOG.md` | Una sezione per versione: cosa è cambiato per chi usa l'app | Al merge su `main` |
 | `docs/REQUESTS.md` | **Il quaderno dell'utente.** Lo scrive lui | Claude lo tocca **solo** per togliere le richieste appena pianificate in una macro |
+| `docs/HOWTO-PROVA-LOCALE.md` | Come si mette in piedi una prova in locale: seed, login di sviluppo, bot | Quando cambiano seed, accesso di sviluppo o script dei bot |
 | `docs/PLAN.md`, `docs/BACKLOG.md` | **Archivio di v1.0.0.** Gli invarianti di `PLAN.md` restano vincolanti | Mai |
 
 `docs/ARCHITECTURE.md` è il documento che l'utente leggerà fra sei mesi per capire il proprio
@@ -219,6 +220,20 @@ un diagramma testuale dove serve. **Aggiornarlo è un criterio di chiusura della
 - **`next build` esegue ESLint**: un errore di lint **fa fallire la build di produzione**, anche
   con `pnpm dev`, `pnpm test` e `pnpm typecheck` verdi. `pnpm build` va dato **prima** di chiudere
   qualunque lavoro con della UI dentro, non la sera del deploy.
+- **Due processi dell'app sullo stesso database**: un `next-server` orfano lasciato acceso da un
+  `pnpm build && pnpm start` (cwd `.next/standalone`, porta qualsiasi) esegue anche lui
+  `instrumentation.ts`, quindi ha **uno scheduler suo**. Lo stato resta corretto — il lock lo
+  protegge — ma il registro SSE è per processo: le fasi fatte scadere dall'altro processo vengono
+  trasmesse al suo registro vuoto, e chi è attaccato al tuo `pnpm dev` non le vede mai. Il sintomo
+  inganna: sembra che «le fasi si accavallino» e che i bot non rispettino le regole, mentre il
+  motore è a posto. Riconoscimento immediato: in `lots` una fila di `auto_called = true` con una
+  sola offerta e `final_price = 1`. Prima di sospettare il motore, `lsof -nP -iTCP -sTCP:LISTEN |
+  grep node`. La procedura è in `docs/HOWTO-PROVA-LOCALE.md`.
+- **`pnpm build` con `pnpm dev` acceso corrompe `.next`**: scrivono nella stessa cartella, e il
+  dev server comincia a rispondere 500 servendo pagine di fallback del pages router. Sembra un
+  bug del codice appena scritto e non lo è: si riavvia `pnpm dev` e passa. Per il gate a dev
+  acceso basta `pnpm lint` (è ciò che la build aggiunge al typecheck); `pnpm build` va dato con
+  il dev server spento.
 - **Chunk client stantio in dev**: dopo molte modifiche con `pnpm dev` acceso, il browser può
   chiedere un bundle che non esiste più — `404 su /_next/static/chunks/app/.../page.js`. Il sintomo
   inganna: la pagina *si carica* ma non idrata, il portale resta su "Mi collego all'asta…" e non

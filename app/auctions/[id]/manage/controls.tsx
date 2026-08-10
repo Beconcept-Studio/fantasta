@@ -148,6 +148,28 @@ export function ControlPanel({
         </div>
       )}
 
+      {/*
+        «Prosegui asta» compare solo mentre le buste sono aperte, quindi per
+        pochi secondi per lotto: sta qui sotto pausa e ripresa e non fra i
+        comandi permanenti, perché non è una leva della serata — è la risposta
+        a «abbiamo visto, andiamo avanti».
+      */}
+      {controls.canSkipReveal && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            size="lg"
+            disabled={pending !== null}
+            onClick={() => void send({ type: "SKIP_REVEAL" }, "Si prosegue.")}
+          >
+            {pending === "SKIP_REVEAL" ? "Proseguo…" : "Prosegui asta"}
+          </Button>
+          <p className="text-muted-foreground max-w-xl text-sm">
+            Chiude subito le buste aperte e passa il turno successivo, senza
+            aspettare che scada il tempo configurato.
+          </p>
+        </div>
+      )}
+
       {feedback !== null && (
         <p
           role="status"

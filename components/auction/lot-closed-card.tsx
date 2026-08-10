@@ -3,6 +3,7 @@
 import { Countdown } from "@/components/auction/countdown";
 import { RevealBids } from "@/components/auction/reveal-panel";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
 import { memberById, memberLabel } from "@/lib/realtime/portal";
 import type { Snapshot } from "@/lib/realtime/types";
@@ -31,15 +32,25 @@ import { cn } from "@/lib/utils";
  * sarebbe una seconda copia della rotazione da tenere allineata a mano. Chi
  * chiama si scopre quando il lotto nuovo si apre (decisione dell'owner,
  * DECISIONS 2026-08-09).
+ *
+ * Per l'owner, e solo per lui, quel piè di pagina porta anche «Prosegui asta»:
+ * il countdown resta e resta la scadenza automatica, il pulsante è la scorciatoia
+ * per quando la stanza ha già finito di guardare le buste. Chi non conduce
+ * vede la card esattamente com'era.
  */
 export function LotClosedCard({
   snapshot,
   myMemberId,
   offset,
+  onSkip = null,
+  skipPending = false,
 }: {
   snapshot: Snapshot;
   myMemberId: string | null;
   offset: number;
+  /** Solo per l'owner: `null` per tutti gli altri, e il pulsante non esiste. */
+  onSkip?: (() => void) | null;
+  skipPending?: boolean;
 }) {
   const lot = snapshot.currentLot;
   if (lot === null || lot.reveal === null) return null;
@@ -98,21 +109,38 @@ export function LotClosedCard({
       </div>
 
       {/* ── Quanto manca alla ripresa: un numero che scorre, non una barra ── */}
-      <footer className="flex items-center justify-between gap-3 border-t px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-muted-foreground text-xs tracking-wide uppercase">
-            Prossimo turno
-          </p>
-          <p className="text-muted-foreground text-sm">
-            Non devi fare niente: riparte da solo.
-          </p>
+      <footer className="space-y-3 border-t px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-muted-foreground text-xs tracking-wide uppercase">
+              Prossimo turno
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {onSkip
+                ? "Riparte da solo, o quando vuoi tu."
+                : "Non devi fare niente: riparte da solo."}
+            </p>
+          </div>
+          <Countdown
+            deadline={snapshot.auction.phaseDeadline}
+            offset={offset}
+            pausedAt={pausedFor}
+            className="shrink-0 text-2xl font-semibold"
+          />
         </div>
-        <Countdown
-          deadline={snapshot.auction.phaseDeadline}
-          offset={offset}
-          pausedAt={pausedFor}
-          className="shrink-0 text-2xl font-semibold"
-        />
+
+        {/* A tutta larghezza: si preme dal telefono, spesso senza guardare. */}
+        {onSkip && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={onSkip}
+            disabled={skipPending}
+          >
+            {skipPending ? "Proseguo…" : "Prosegui asta"}
+          </Button>
+        )}
       </footer>
     </section>
   );

@@ -5,6 +5,7 @@ import {
   pickPlayer,
   placeBid,
   resumeAuction,
+  skipReveal,
   startAuction,
   withdrawBid,
 } from "@/lib/engine/actions";
@@ -97,6 +98,13 @@ export async function POST(
     }
     case "RESUME": {
       result = await resumeAuction(user.id, id);
+      break;
+    }
+    // «Prosegui asta»: l'owner chiude il reveal prima della scadenza. Nessun
+    // payload — cosa saltare lo dice la fase, e quale sia la fase lo sa solo
+    // il server. `skipReveal` verifica da sé la proprietà dell'asta.
+    case "SKIP_REVEAL": {
+      result = await skipReveal(user.id, id);
       break;
     }
     // Gli override del manager (Fase 7). Passano di qui e non da una rotta

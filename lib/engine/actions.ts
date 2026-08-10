@@ -285,6 +285,36 @@ export async function advancePhase(
   return applyEvent(auctionId, () => ok({ type: "ADVANCE" }), now, "system");
 }
 
+/**
+ * «Prosegui asta» (regia): chiude il reveal senza aspettarne la scadenza.
+ *
+ * È l'unica azione che fa avanzare una fase su richiesta di un umano, e per
+ * questo l'autorizzazione conta più che altrove: **solo l'owner**, come per
+ * pausa e ripresa. Il motore da solo non lo saprebbe — non sa chi possiede
+ * l'asta — quindi il cancello è qui, e la UI che nasconde il pulsante agli
+ * altri non c'entra niente con la sicurezza (regola 6).
+ *
+ * Tutto il resto arriva dalla strada normale: `applyEvent` persiste dentro il
+ * lock, `syncTimer` riarma sul `WAITING_PICK` appena nato (e cancella il
+ * timeout del reveal, che ormai punta a un istante che non interessa più) e
+ * l'hook di broadcast manda lo snapshot a tutti. Chi guarda la TV vede il
+ * lotto nuovo, non un salto.
+ */
+export async function skipReveal(
+  actorUserId: string,
+  auctionId: string,
+  now: Millis = Date.now(),
+): Promise<Result<ActionOutcome>> {
+  return applyEvent(
+    auctionId,
+    (loaded) =>
+      requireOwner(loaded, actorUserId, "far proseguire l'asta") ??
+      ok({ type: "SKIP_REVEAL" }),
+    now,
+    actorUserId,
+  );
+}
+
 export async function pauseAuction(
   actorUserId: string,
   auctionId: string,

@@ -13,6 +13,7 @@ import { RosterGrid } from "@/components/auction/roster-grid";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
 import { sendAction } from "@/lib/realtime/action";
+import { managerControls } from "@/lib/realtime/manage";
 import {
   memberById,
   memberLabel,
@@ -47,10 +48,20 @@ import { useAuctionStream, useHeartbeat } from "@/lib/realtime/use-auction-strea
 export function Portal({
   auctionId,
   pool,
+  viewerIsOwner,
 }: {
   auctionId: string;
   /** Il listone dell'asta, letto una volta dal server: non viaggia nello snapshot. */
   pool: PoolPlayer[];
+  /**
+   * Se chi guarda possiede l'asta: abilita «Prosegui asta» sulla card chiusa.
+   *
+   * Arriva come prop e non dallo snapshot, per la stessa ragione del listone:
+   * non è stato di gioco, non cambia durante la serata, e nello snapshot
+   * verrebbe spedito a tutti a ogni transizione per un booleano che nasce col
+   * link. Non autorizza niente — `skipReveal` ricontrolla lato server.
+   */
+  viewerIsOwner: boolean;
 }) {
   const { snapshot, connected, offset } = useAuctionStream(auctionId);
   useHeartbeat(auctionId);
@@ -58,6 +69,16 @@ export function Portal({
   // ⚠ §8bis — vive **solo** qui: non è persistito, non è sincronizzato, e al
   // lotto successivo diventa irrilevante da sé perché l'id cambia.
   const [dismissedLotId, setDismissedLotId] = useState<string | null>(null);
+  const [skipping, setSkipping] = useState(false);
+
+  async function skipReveal() {
+    setSkipping(true);
+    await sendAction(auctionId, { type: "SKIP_REVEAL" });
+    setSkipping(false);
+    // Nessun messaggio di conferma: la conferma è il lotto successivo che si
+    // apre da solo. Se il server rifiuta — reveal già scaduto mentre premevi —
+    // lo snapshot è già andato avanti lo stesso, e non c'è niente da dire.
+  }
 
   if (snapshot === null) {
     return (
@@ -129,6 +150,12 @@ export function Portal({
               snapshot={snapshot}
               myMemberId={myMemberId}
               offset={offset}
+              onSkip={
+                viewerIsOwner && managerControls(snapshot).canSkipReveal
+                  ? skipReveal
+                  : null
+              }
+              skipPending={skipping}
             />
           ) : (
             <LotCard

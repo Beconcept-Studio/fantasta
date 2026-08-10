@@ -23,6 +23,8 @@ export type ActionPayload =
   /** Solo l'owner; il portale manager di Fase 6 le userà da qui. */
   | { type: "PAUSE" }
   | { type: "RESUME" }
+  /** Solo l'owner: chiude il reveal senza aspettarne la scadenza. */
+  | { type: "SKIP_REVEAL" }
   /**
    * Gli override del manager (Fase 7), consentiti solo senza un lotto in
    * contesa. Il server rifiuta comunque: qui si sceglie solo cosa mandare.
