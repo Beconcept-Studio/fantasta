@@ -74,6 +74,10 @@ export const ERROR_CODES = [
   // Presence e protocollo (Fase 4)
   "MEMBERS_NOT_READY",
   "INVALID_REQUEST",
+
+  // Simulazione (M4)
+  "NOT_ADMIN",
+  "NOT_SIMULATED",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

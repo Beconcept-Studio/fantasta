@@ -48,6 +48,10 @@ describe.runIf(dbUp)("il token della vista TV", () => {
     expect(found).toEqual({
       id: game.auctionId,
       name: loaded!.auction.name,
+      // Da M4 la pagina TV marca le aste di prova, quindi il flag esce di qui.
+      // Restano tre campi e non uno di più: il `public_token` non torna
+      // indietro da questa funzione, e nemmeno lo stato dell'asta.
+      isSimulated: false,
     });
   });
 

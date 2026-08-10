@@ -46,10 +46,14 @@ export type Viewer = {
  */
 export async function auctionByPublicToken(
   publicToken: string,
-): Promise<{ id: string; name: string } | null> {
+): Promise<{ id: string; name: string; isSimulated: boolean } | null> {
   if (publicToken === "") return null;
   const [auction] = await db
-    .select({ id: auctions.id, name: auctions.name })
+    .select({
+      id: auctions.id,
+      name: auctions.name,
+      isSimulated: auctions.isSimulated,
+    })
     .from(auctions)
     .where(eq(auctions.publicToken, publicToken));
   return auction ?? null;

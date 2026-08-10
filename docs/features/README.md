@@ -12,16 +12,16 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna. La prossima è **M4**, qui sotto.
+| Macro | Tema | Aperta il |
+|---|---|---|
+| [M4](04-simulazione.md) | Simulazione in-app — un'asta di prova dall'interfaccia, con i bot dentro l'app | 2026-08-10 |
+
+⚠ M4 **tocca lo schema**: dopo il deploy serve `pnpm db:push` a mano sul server. È dichiarato in
+testa al file della macro.
 
 ## Da pianificare
 
-Il raggruppamento delle richieste in `docs/REQUESTS.md`, concordato il 2026-08-09.
-L'ordine è indicativo: si apre quella che serve.
-
-| Macro | Tema |
-|---|---|
-| **M4** | Simulazione in-app — asta simulata dall'interfaccia: l'owner partecipa, gli altri X sono bot |
+Nessuna: `docs/REQUESTS.md` è vuoto, e il quaderno lo scrive l'owner.
 
 ## Chiuse
 

@@ -47,6 +47,7 @@ export default async function AuctionLayout({
       <AuctionNav
         auctionId={id}
         auctionName={overview.auction.name}
+        isSimulated={overview.auction.isSimulated}
         sections={auctionSections(viewer)}
         // Il `public_token` non esce da nessun'altra parte, ed è la chiave
         // della vista pubblica: il link lo vede chi l'asta la possiede.

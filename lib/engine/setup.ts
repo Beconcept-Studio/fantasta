@@ -13,10 +13,19 @@ import {
   players,
   users,
 } from "@/lib/db/schema";
-import { ROLES, type AuctionStatus, type Role } from "@/lib/domain";
+import {
+  ROLES,
+  type AuctionStatus,
+  type BotFill,
+  type BotStrategy,
+  type Role,
+  isAppAdmin,
+  strategyFor,
+} from "@/lib/domain";
 import { countPool, parseListone } from "@/lib/import/parseListone";
 import type { PoolPlayer } from "@/lib/realtime/types";
 
+import { ensureBotUsers } from "./bots";
 import { type Result, fail, ok } from "./errors";
 import { isUuid } from "./ids";
 import {
@@ -175,10 +184,35 @@ function token(bytes: number): string {
   return randomBytes(bytes).toString("base64url");
 }
 
+/**
+ * ⚠ `isSimulated` è un **terzo parametro** e non un campo di
+ * `AuctionConfigInput` di proposito: quel tipo è anche `SettingsPatch`, cioè
+ * ciò che `updateAuctionSettings` sa applicare a un'asta esistente. Se il flag
+ * vivesse lì dentro esisterebbe una strada per accenderlo dopo la creazione, e
+ * l'unica difesa sarebbe ricordarsi di escluderlo. Così la strada non c'è.
+ *
+ * Il permesso si rilegge **dal database** invece di fidarsi di chi chiama:
+ * costa una query e rende la regola vera qualunque sia il chiamante — la
+ * Server Action di oggi, il seed, o qualcosa che scriveremo fra un anno
+ * (regola 6).
+ */
 export async function createAuction(
   ownerUserId: string,
   input: AuctionConfigInput,
+  isSimulated = false,
 ): Promise<Result<{ auctionId: string }>> {
+  if (isSimulated) {
+    const owner = await db.query.users.findFirst({
+      where: eq(users.id, ownerUserId),
+    });
+    if (!isAppAdmin(owner)) {
+      return fail(
+        "NOT_ADMIN",
+        "Solo un amministratore dell'applicazione può creare un'asta simulata.",
+      );
+    }
+  }
+
   const validated = validateAuctionConfig(input);
   if (!validated.ok) return validated;
   const config = validated.value;
@@ -201,6 +235,7 @@ export async function createAuction(
       slotsC: config.slots.C,
       slotsA: config.slots.A,
       roleOrder: config.roleOrder,
+      isSimulated,
     })
     .returning({ id: auctions.id });
 
@@ -568,6 +603,8 @@ async function addMember(
   auction: Auction,
   userId: string,
   teamNameRaw: unknown,
+  /** Valorizzata solo per un bot (M4): è ciò che distingue un membro simulato. */
+  botStrategy: BotStrategy | null = null,
 ): Promise<Result<{ auctionId: string; memberId: string }>> {
   const validName = validateTeamName(teamNameRaw);
   if (!validName.ok) return validName;
@@ -590,6 +627,7 @@ async function addMember(
       teamName: validName.value,
       seatIndex: existing.length,
       budgetInitial: auction.budgetDefault,
+      botStrategy,
     })
     .onConflictDoNothing({ target: [members.auctionId, members.userId] })
     .returning({ id: members.id });
@@ -676,6 +714,106 @@ export async function joinAsOwner(
 }
 
 /**
+ * Riempie di bot i posti liberi di un'asta simulata (M4).
+ *
+ * **Passa da `addMember`**, cioè dalla stessa funzione che serve `joinAuction` e
+ * `joinAsOwner`: è il criterio del seed applicato qui — uno stato prodotto
+ * chiamando le funzioni dell'applicazione è, per costruzione, uno stato che
+ * l'applicazione sa produrre. Vengono gratis il `seat_index` in ordine di
+ * ingresso, il `budget_initial` copiato da `budget_default`, la validazione del
+ * nome squadra e il `recomputeStatus` che porta l'asta a `READY`.
+ *
+ * I quattro rifiuti sono impilati apposta: chi non possiede l'asta, chi non è
+ * amministratore, un'asta **non simulata** — che è la difesa vera, quella che
+ * non si può aggirare nemmeno costruendo la richiesta a mano — e un'asta già
+ * iniziata.
+ */
+export async function fillWithBots(
+  userId: string,
+  auctionId: string,
+  count: number,
+  fill: BotFill,
+): Promise<Result<{ added: number }>> {
+  if (!Number.isInteger(count) || count < 1) {
+    return fail("INVALID_REQUEST", "Quanti bot? Serve un numero intero.");
+  }
+
+  // Fuori dal lock dell'asta: apre una transazione sua, e non c'è ragione di
+  // tenere bloccata la riga dell'asta mentre si creano delle identità.
+  const bots = await ensureBotUsers();
+
+  return withSetupLock(auctionId, async (tx, auction) => {
+    const forbidden = requireOwner<{ added: number }>(auction, userId);
+    if (forbidden) return forbidden;
+
+    const owner = await tx.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+    if (!isAppAdmin(owner)) {
+      return fail<{ added: number }>(
+        "NOT_ADMIN",
+        "Solo un amministratore dell'applicazione può usare i bot.",
+      );
+    }
+
+    if (!auction.isSimulated) {
+      return fail<{ added: number }>(
+        "NOT_SIMULATED",
+        "Questa non è un'asta simulata: i bot si aggiungono solo alle aste di prova.",
+      );
+    }
+
+    const wrongStatus = requireSetupPhase<{ added: number }>(auction);
+    if (wrongStatus) return wrongStatus;
+
+    const taken = await tx
+      .select({ userId: members.userId })
+      .from(members)
+      .where(eq(members.auctionId, auctionId));
+    const takenIds = new Set(taken.map((row) => row.userId));
+
+    const free = auction.seats - taken.length;
+    if (free < count) {
+      return fail<{ added: number }>(
+        "AUCTION_FULL",
+        free === 0
+          ? `L'asta è al completo (${auction.seats} posti).`
+          : `Restano ${free} posti liberi, non ${count}.`,
+      );
+    }
+
+    // I bot già dentro a *questa* asta si saltano: lo stesso bot può giocarne
+    // due insieme, ma non due volte la stessa.
+    const available = bots.filter((bot) => !takenIds.has(bot.id));
+    if (available.length < count) {
+      return fail<{ added: number }>(
+        "INVALID_REQUEST",
+        `Ci sono solo ${available.length} bot liberi.`,
+      );
+    }
+
+    for (let i = 0; i < count; i += 1) {
+      const bot = available[i];
+      const added = await addMember(
+        tx,
+        auction,
+        bot.id,
+        bot.displayName,
+        strategyFor(fill, i),
+      );
+      // Il rifiuto si ricostruisce invece di girarlo con un cast: il tipo del
+      // valore è diverso, e mentire al compilatore per una riga non conviene.
+      if (!added.ok) {
+        return fail<{ added: number }>(added.error.code, added.error.message);
+      }
+    }
+
+    await recomputeStatus(tx, auction);
+    return ok({ added: count });
+  });
+}
+
+/**
  * Uscita di un membro: l'owner può togliere chiunque, ognuno può togliere sé
  * stesso. Solo in DRAFT/READY — «la rimozione di un membro ad asta iniziata non
  * è supportata» (PLAN §17): se serve, si mette in pausa e si usano gli override.
@@ -731,6 +869,59 @@ export async function removeMember(
   });
 }
 
+/**
+ * Cancella un'asta e tutto ciò che le appartiene (M4).
+ *
+ * ⚠ **È l'unica funzione distruttiva dell'applicazione**, e va letta sapendo
+ * cosa porta via: le rose, lo storico, le buste, il ledger e le righe di
+ * `events` se ne vanno con lei, perché ogni tabella ha `onDelete: "cascade"` su
+ * `auction_id`. Su un'asta reale conclusa, questo vuol dire il verbale delle
+ * rose e lo storico che M3 ha costruito.
+ *
+ * **La regola 5 non è in discussione.** Vieta il `DELETE` su `assignments` e
+ * `ledger` *dentro* un'asta: in un'asta viva un fatto accaduto non si riscrive a
+ * mano, si annulla con `voided_at`. Buttare via un'intera partita è un atto
+ * diverso, esplicito e chiesto — non la correzione silenziosa di un numero.
+ *
+ * Due difese. **Mai su un'asta in corso**: `LIVE` o `PAUSED` sono un rifiuto, e
+ * la pausa congela la fase senza azzerare l'asta. E **la riga su stdout**, che è
+ * l'unica traccia che sopravvive: `events` se ne va insieme al resto, quindi
+ * senza questa riga di una cancellazione non resterebbe niente da nessuna parte.
+ * La conferma per digitazione del nome sta nella UI, ed è cortesia verso la mano
+ * che clicca: la difesa vera è chi può chiamare questa funzione.
+ */
+export async function deleteAuction(
+  userId: string,
+  auctionId: string,
+): Promise<Result<{ name: string }>> {
+  return withSetupLock(auctionId, async (tx, auction) => {
+    const forbidden = requireOwner<{ name: string }>(auction, userId);
+    if (forbidden) return forbidden;
+
+    if (auction.status === "LIVE" || auction.status === "PAUSED") {
+      return fail<{ name: string }>(
+        "WRONG_STATUS",
+        "L'asta è in corso: mettila in pausa e falla finire, poi si potrà cancellare.",
+      );
+    }
+
+    console.log(
+      JSON.stringify({
+        auctionId,
+        type: "DELETE_AUCTION",
+        name: auction.name,
+        status: auction.status,
+        isSimulated: auction.isSimulated,
+        actor: userId,
+        ts: new Date().toISOString(),
+      }),
+    );
+
+    await tx.delete(auctions).where(eq(auctions.id, auctionId));
+    return ok({ name: auction.name });
+  });
+}
+
 // ─── Viste di lettura ────────────────────────────────────────────────────────
 
 export type AuctionListItem = {
@@ -742,6 +933,8 @@ export type AuctionListItem = {
   isOwner: boolean;
   isMember: boolean;
   teamName: string | null;
+  /** Un'asta di prova (M4): in dashboard si distingue a colpo d'occhio. */
+  isSimulated: boolean;
 };
 
 /** Le aste di cui l'utente è owner o membro, per la dashboard. */
@@ -779,13 +972,14 @@ export async function listUserAuctions(
       isOwner: auction.ownerUserId === userId,
       isMember: mine !== undefined,
       teamName: mine?.teamName ?? null,
+      isSimulated: auction.isSimulated,
     };
   });
 }
 
 export type MemberView = Pick<
   Member,
-  "id" | "userId" | "teamName" | "seatIndex" | "budgetInitial"
+  "id" | "userId" | "teamName" | "seatIndex" | "budgetInitial" | "botStrategy"
 > & { displayName: string | null };
 
 export type AuctionOverview = {
@@ -836,6 +1030,7 @@ export const getAuctionOverview = cache(async function getAuctionOverview(
       teamName: members.teamName,
       seatIndex: members.seatIndex,
       budgetInitial: members.budgetInitial,
+      botStrategy: members.botStrategy,
       displayName: users.displayName,
     })
     .from(members)

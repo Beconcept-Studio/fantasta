@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { requireUser } from "@/lib/auth";
+import { isAppAdmin } from "@/lib/domain";
 import { DEFAULT_CONFIG } from "@/lib/engine/setup-rules";
 
 import { CreateAuctionForm } from "./create-auction-form";
@@ -8,7 +9,7 @@ import { CreateAuctionForm } from "./create-auction-form";
 export const metadata = { title: "Nuova asta — Asta Fantacalcio" };
 
 export default async function NewAuctionPage() {
-  await requireUser();
+  const user = await requireUser();
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-8 p-6">
@@ -25,7 +26,10 @@ export default async function NewAuctionPage() {
         </p>
       </header>
 
-      <CreateAuctionForm defaults={{ name: "", ...DEFAULT_CONFIG }} />
+      <CreateAuctionForm
+        defaults={{ name: "", ...DEFAULT_CONFIG }}
+        canSimulate={isAppAdmin(user)}
+      />
     </main>
   );
 }

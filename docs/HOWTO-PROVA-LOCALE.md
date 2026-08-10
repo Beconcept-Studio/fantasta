@@ -228,15 +228,28 @@ telefono l'URL che stampa — il portale è mobile-first, ed è lì che va prova
 
 ## Le varianti
 
-**Un'asta intera senza interfaccia**, per vedere se il motore arriva in fondo:
+**Una prova senza terminali: la simulazione in-app** (M4, da v1.5.0). È la via più corta e ormai
+quella normale — niente seed, niente id da copiare, niente `pnpm bots` in una finestra a parte.
+Serve solo l'app accesa.
 
-```bash
-pnpm drive --auction=<id>
-```
+1. Entra come **Marco Bianchi**, che il seed nomina amministratore dell'applicazione (è il primo
+   dei dodici, lo stesso che possiede l'asta di prova).
+2. «Crea un'altra asta», spunta **«Asta simulata»** — la casella la vedi solo tu, e solo perché sei
+   amministratore — e configurala come faresti per una vera.
+3. Importa il listone, e da «Partecipanti» premi **«Partecipa anche tu»** se vuoi giocarla.
+4. Nel pannello **«Partecipanti simulati»**, accanto agli inviti, scegli quanti bot e come offrono,
+   poi «Riempi con i bot». Con «Pareggio» per tutti inneschi lo spareggio a comando.
+5. Vai in regia e premi «Avvia». I bot risultano già collegati: a tenerli vivi è il tick del
+   server, non un browser.
 
-⚠ `drive` **avvia uno scheduler tutto suo**: non va lanciato mentre `pnpm dev` è acceso sulla
-stessa asta, o due scheduler farebbero lo sweep sullo stesso lotto. Spegni l'app, oppure usa i
-bot, che invece l'app la richiedono.
+⚠ **Se i bot non si muovono**, prima di indagare guarda se hai un'**asta reale** in corso: finché
+esiste un'asta non simulata `LIVE` o `PAUSED`, il tick sta fermo apposta, e la pagina della
+configurazione te lo scrive. Le aste create dal seed sono simulate, quindi non fanno scattare la
+regola.
+
+Non è una prova che sostituisce del tutto `pnpm bots`: la simulazione gira dentro il server, quindi
+**non** collauda sessione, rotta HTTP, SSE e nginx. Quando quello che vuoi provare è il canale — o
+quando vuoi giocare un'asta contro il server di produzione — resta lo script.
 
 **Ricominciare da capo**: rilancia `pnpm db:seed --auction-status=ready`. L'asta di prova viene
 buttata e rifatta; gli utenti restano quelli, quindi resti loggato.
