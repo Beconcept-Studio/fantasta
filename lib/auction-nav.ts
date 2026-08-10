@@ -27,6 +27,7 @@ export const AUCTION_SECTION_KEYS = [
   "lobby",
   "manage",
   "play",
+  "log",
 ] as const;
 export type AuctionSectionKey = (typeof AUCTION_SECTION_KEYS)[number];
 
@@ -87,6 +88,20 @@ const SECTIONS: (AuctionSection & { visibleTo: (v: NavViewer) => boolean })[] = 
     label: "Asta live",
     title: "Asta live",
     visibleTo: (v) => v.isMember,
+  },
+  {
+    key: "log",
+    segment: "log",
+    // «Storico» e non «Log»: la pagina la apre chi sta discutendo di un lotto,
+    // non chi cerca un file di sistema.
+    label: "Storico",
+    title: "Storico dell'asta",
+    // Owner **e** membri (M3 §3). Un partecipante che vuole contestare un lotto
+    // deve poterlo guardare da sé; e le buste non si rivedono da nessun'altra
+    // parte dopo i secondi di reveal — tanto meno se è stato premuto «Prosegui
+    // asta», che quei secondi li salta. È I10: una schermata non deve essere
+    // raggiungibile solo da chi era connesso al momento giusto.
+    visibleTo: (v) => v.isOwner || v.isMember,
   },
 ];
 

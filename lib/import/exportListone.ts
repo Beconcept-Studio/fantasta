@@ -104,16 +104,25 @@ export function buildListoneXlsx(players: ExportPlayer[]): Uint8Array {
 }
 
 /**
- * Il nome del file scaricato: «Asta di prova» → `asta-di-prova-rose.xlsx`.
+ * Il nome del file scaricato: «Asta di prova» → `asta-di-prova-listone.xlsx`.
  * Niente accenti né spazi, perché finisce in un header HTTP e poi nel
  * filesystem di chi scarica.
+ *
+ * Il `basename` è il secondo parametro da M3 (§1), da quando gli export sono
+ * due: `"listone.xlsx"` e `"rose.csv"`. Prima era fisso a `-rose.xlsx`, che con
+ * un vero export delle rose accanto mentirebbe — e il nome del file è l'unica
+ * cosa che resta a chi lo ritrova nei download sei mesi dopo.
+ *
+ * Resta qui, e non in un modulo suo, perché è l'unico pezzo che i due export
+ * condividono: una seconda funzione che fa lo slug divergerebbe dalla prima
+ * entro un anno.
  */
-export function exportFileName(auctionName: string): string {
+export function exportFileName(auctionName: string, basename: string): string {
   const slug = auctionName
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `${slug === "" ? "asta" : slug}-rose.xlsx`;
+  return `${slug === "" ? "asta" : slug}-${basename}`;
 }

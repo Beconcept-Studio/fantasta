@@ -74,14 +74,24 @@ export function ManageConsole({
             riconnessione…
           </Badge>
         )}
-        {/* Un link, non un pulsante: è una GET che scarica un file, e il
-            browser sa già farlo (F7-06). */}
-        <a
-          href={`/api/auctions/${auctionId}/export`}
-          className="text-muted-foreground hover:text-foreground ml-auto text-sm"
-        >
-          Scarica le rose (.xlsx) ↓
-        </a>
+        {/* Link e non pulsanti: sono GET che scaricano un file, e il browser sa
+            già farlo (F7-06). Da M3 sono due, e l'etichetta dice a cosa serve
+            ciascuno invece di quale formato esce: il listone si ricarica su
+            Fantacalcio.it, le rose si leggono. */}
+        <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <a
+            href={`/api/auctions/${auctionId}/export/listone`}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Listone per Fantacalcio.it (.xlsx) ↓
+          </a>
+          <a
+            href={`/api/auctions/${auctionId}/export/rose`}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Rose (.csv) ↓
+          </a>
+        </span>
       </header>
 
       <PresenceBanner snapshot={snapshot} />

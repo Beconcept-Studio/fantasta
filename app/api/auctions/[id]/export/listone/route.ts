@@ -3,15 +3,19 @@ import { currentUser } from "@/lib/auth";
 import { exportXlsx } from "@/lib/engine/export";
 
 /**
- * `GET /api/auctions/:id/export` — il listone con le rose dentro (F7-06).
+ * `GET /api/auctions/:id/export/listone` — il listone con le rose dentro, nel
+ * formato che Fantacalcio.it reimporta (F7-06).
  *
- * L'unica azione della Fase 7 che **non** passa dal dispatcher
- * `POST .../action`: un download ha bisogno di un URL da mettere in un link, di
- * un `Content-Type` e di un `Content-Disposition`, e nessuna delle tre cose sta
- * in una risposta JSON. È anche l'unica rotta dell'applicazione che restituisce
- * qualcosa che non sia uno snapshot o un verdetto — ed è innocua per la regola
- * 3, perché non esce nessuno stato dell'asta: escono le rose **finite**, che a
- * quel punto sono pubbliche per definizione.
+ * Stava su `/export` fino a M3. Si è spostata quando gli export sono diventati
+ * due: `/export` accanto a `/export/rose` non dice quale sia quale, e un URL
+ * ambiguo si sbaglia proprio la sera in cui serve. Non è un indirizzo che
+ * qualcuno abbia aperto a mano durante un'asta — lo compone il link in regia.
+ *
+ * Come l'altra, **non** passa dal dispatcher `POST .../action`: un download ha
+ * bisogno di un URL da mettere in un link, di un `Content-Type` e di un
+ * `Content-Disposition`, e nessuna delle tre cose sta in una risposta JSON. È
+ * innocua per la regola 3, perché non esce nessuno stato dell'asta: escono le
+ * rose **finite**, che a quel punto sono pubbliche per definizione.
  *
  * Solo l'owner: lo verifica `exportXlsx`, non questa funzione.
  */

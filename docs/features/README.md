@@ -12,7 +12,9 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna. La prossima è **M3**, qui sotto.
+| Macro | Tema | Aperta il |
+|---|---|---|
+| [M3](03-tracciabilita.md) | Tracciabilità — esportazione delle rose in un CSV unico, pagina di storico dell'asta e dei lotti | 2026-08-10 |
 
 ## Da pianificare
 
@@ -21,7 +23,6 @@ L'ordine è indicativo: si apre quella che serve.
 
 | Macro | Tema |
 |---|---|
-| **M3** | Tracciabilità — esportazione delle rose in un CSV unico, pagina di log dell'asta e dei lotti |
 | **M4** | Simulazione in-app — asta simulata dall'interfaccia: l'owner partecipa, gli altri X sono bot |
 
 ## Chiuse
