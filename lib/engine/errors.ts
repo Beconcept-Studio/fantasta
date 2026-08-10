@@ -78,6 +78,21 @@ export const ERROR_CODES = [
   // Simulazione (M4)
   "NOT_ADMIN",
   "NOT_SIMULATED",
+
+  // Identità (M5)
+  "INVALID_EMAIL",
+  "INVALID_PASSWORD",
+  "EMAIL_TAKEN",
+  /** L'indirizzo esiste ma entra da Google: è la direzione che §2 rifiuta. */
+  "EMAIL_IS_GOOGLE",
+  "ACCOUNT_NOT_FOUND",
+  "CODE_INVALID",
+  "CODE_EXPIRED",
+  /** Cinque tentativi sbagliati: il codice è bruciato, se ne chiede un altro. */
+  "CODE_BURNED",
+  "RESEND_TOO_SOON",
+  "ALREADY_VERIFIED",
+  "RATE_LIMITED",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

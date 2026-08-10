@@ -416,14 +416,23 @@ email · niente UI per cambiare la propria password da dentro l'app: chi la vuol
 - [x] **M5-02** — Schema: `users.password_hash`, `users.email_verified_at`, la tabella `email_codes`,
       il `UNIQUE` parziale su `lower(email)`; i due valori di `purpose` in `lib/domain.ts`;
       `pnpm db:push` in locale
-- [ ] **M5-03** — `lib/engine/password.ts`: scrypt N=2^15/r=8/p=1, salt da 16 byte, formato
+- [x] **M5-03** — `lib/engine/password.ts`: scrypt N=2^15/r=8/p=1, salt da 16 byte, formato
       `scrypt$…`, `timingSafeEqual`, la politica 10–200 caratteri
-- [ ] **M5-04** — `lib/engine/account-rules.ts`: scadenza, tentativi, reinvio — funzioni pure con
+- [x] **M5-04** — `lib/engine/account-rules.ts`: scadenza, tentativi, reinvio — funzioni pure con
       `now` come parametro
-- [ ] **M5-05** — `lib/mail.ts`: `nodemailer` su SMTP, timeout dieci secondi, **stdout fuori
+- [x] **M5-05** — `lib/mail.ts`: `nodemailer` su SMTP, timeout dieci secondi, **stdout fuori
       produzione**; le variabili in `.env.example`
-- [ ] **M5-06** — `lib/rate-limit.ts`: `Map` su `globalThis`, scadenza pigra, tetto sulle chiavi;
+- [x] **M5-06** — `lib/rate-limit.ts`: `Map` su `globalThis`, scadenza pigra, tetto sulle chiavi;
       **verificare che nginx imposti `X-Forwarded-For`** e annotare l'esito
+      → **Verificato: sì.** `deploy/nginx-asta.conf` imposta
+      `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for` in **entrambi** i blocchi —
+      `location /` (riga 61) e la rotta dello stream (riga 48). Il limite per IP è quindi un limite
+      per IP vero e non un limite globale mascherato.
+      ⚠ Con una conseguenza che vale la pena aver scritto: `$proxy_add_x_forwarded_for`
+      **accoda** al valore ricevuto invece di sostituirlo, e quel valore lo scrive il client.
+      `clientIp()` prende quindi l'**ultimo** elemento della lista, l'unico che ha scritto nginx.
+      Prendere il primo — che è la lettura ovvia della specifica dell'header — avrebbe reso il
+      limite aggirabile mandando un `X-Forwarded-For` a mano.
 - [ ] **M5-07** — `lib/engine/accounts.ts`: registrazione (utente prima, invio dopo), emissione del
       codice con consumo del precedente, verifica, reinvio
 - [ ] **M5-08** — `lib/auth.ts`: il provider `email`; l'aggancio Google per email; **il rifiuto se
