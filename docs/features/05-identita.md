@@ -410,10 +410,10 @@ email · niente UI per cambiare la propria password da dentro l'app: chi la vuol
 
 ## Task
 
-- [ ] **M5-01** — Aprire `feature/05-identita` da `dev`; scrivere questo file e
+- [x] **M5-01** — Aprire `feature/05-identita` da `dev`; scrivere questo file e
       `docs/features/06-amministrazione.md`, svuotare `docs/REQUESTS.md`, aggiornare
       `docs/features/README.md`
-- [ ] **M5-02** — Schema: `users.password_hash`, `users.email_verified_at`, la tabella `email_codes`,
+- [x] **M5-02** — Schema: `users.password_hash`, `users.email_verified_at`, la tabella `email_codes`,
       il `UNIQUE` parziale su `lower(email)`; i due valori di `purpose` in `lib/domain.ts`;
       `pnpm db:push` in locale
 - [ ] **M5-03** — `lib/engine/password.ts`: scrypt N=2^15/r=8/p=1, salt da 16 byte, formato
