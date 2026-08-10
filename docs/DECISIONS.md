@@ -1050,3 +1050,26 @@ partecipanti hanno già aperto, e rinominare il codice sarebbe churn senza letto
 tensione, accettata: il titolo «Asta live» è sopra la pagina anche prima che l'asta parta, dove la
 schermata dice «l'asta non è iniziata». I titoli sono fissi per sezione di proposito — è ciò che li
 rende immuni allo stantio — e la direttezza vale più di quel caso di bordo.
+
+## 2026-08-10 — La versione nella navbar
+
+**Viene da `package.json`, importato nel layout radice e passato come stringa.** Il layout è un
+server component, la navbar è `"use client"`: importare `package.json` dalla navbar farebbe
+viaggiare fino al browser l'elenco completo delle dipendenze per mostrare cinque caratteri. Scartate
+due alternative: `process.env.npm_package_version`, che esiste solo quando il processo è avviato da
+uno script pnpm e in produzione pm2 lancia `node server.js`, quindi sarebbe vuota proprio dove
+serve; e una variabile in `next.config.ts`, che aggiunge un posto in cui la versione può divergere
+da quella vera.
+
+**Il numero è quello con cui l'applicazione è stata compilata**, e questo è il punto: il deploy fa
+`pnpm build` sul server dopo il checkout, quindi ciò che si legge nella navbar è la versione del
+codice che sta rispondendo. Non è una dichiarazione d'intenti letta da un file di configurazione —
+è la ragione per cui serve, cioè non dover credere al momento in cui il deploy dice di aver finito.
+
+**Si disegna anche senza sessione.** La richiesta era «prima del bottone Esci», che vive nel blocco
+utente; metterla lì dentro l'avrebbe nascosta sulla pagina di accesso, che è esattamente il posto
+in cui uno guarda quando l'app non lo fa entrare e vuole capire se il rilascio è passato.
+
+**Versione `1.3.1` e non `1.4.0`.** La convenzione del progetto lega il minor alle macro-feature e
+la patch agli hotfix; questa è un'aggiunta minuscola fuori macro, e una patch la racconta meglio
+di un minor.
