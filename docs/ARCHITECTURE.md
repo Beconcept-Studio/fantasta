@@ -805,7 +805,10 @@ lista delle aste, il nome di chi è entrato, l'uscita. Il blocco utente si diseg
 sessione e il nome solo se esiste, il che copre senza casi speciali sia `/signin` (dove non c'è
 sessione) sia `/onboarding` (dove il nome è proprio ciò che si sta scrivendo, ma l'uscita deve
 esserci: è l'unica via di fuga per chi è entrato con l'account sbagliato). Si toglie di mezzo sulla
-sola vista TV, che è pubblica e proiettata.
+sola vista TV, che è pubblica e proiettata — e con lei si toglie anche il banner dell'asta in corso,
+che fino a quel momento si incollava in cima allo schermo proiettato ogni volta che l'owner avesse
+una sessione aperta nello stesso browser: una striscia verde che invita ad andare al proprio
+portale, sopra un tabellone che guarda tutta la stanza.
 
 Dentro un'asta, un layout su `/auctions/[id]` legge una volta chi guarda e che rapporto ha con
 quell'asta, e da due booleani — la possiede, ci gioca — ricava le sezioni. **Dipendono dal ruolo e
@@ -829,8 +832,8 @@ dal portale, dove lo spazio verticale è la risorsa più scarsa dell'applicazion
 speso per una barra di navigazione mentre scorre un countdown di otto secondi; applicarlo ovunque
 non costa nulla, perché le altre pagine sono documenti e non cruscotti, ed evita un incastro a tre
 livelli di `z-index`. Restano incollati i due che devono esserlo: il banner dell'asta in corso, che
-è il richiamo d'emergenza, e l'intestazione del portale, che tiene crediti e offerta massima sempre
-in vista.
+è il richiamo d'emergenza, e l'intestazione dell'asta live, che tiene crediti e offerta massima
+sempre in vista.
 
 Il costo tecnico di tutto questo è una riga: `getAuctionOverview` è avvolta in `cache()` di React,
 perché ora la chiamano sia il layout sia la pagina. La memoizzazione dura quanto la richiesta e non
@@ -1086,7 +1089,10 @@ colpo d'occhio. È questa l'informazione che nessuno in quella stanza può tener
 è per questo che merita lo schermo grande.
 
 Il quarto rimanente è il lotto in corso — giocatore, countdown, buste aperte — che resta il più
-leggibile della colonna ma non più della pagina.
+leggibile della colonna ma non più della pagina. Sopra, una striscia dice nome dell'asta, fase e —
+a destra — lo **stato**: in corso o in pausa. Stato e fase non sono la stessa cosa, e la distinzione
+qui è pratica: la fase cambia ogni pochi secondi, lo stato risponde alla domanda di chi alza gli
+occhi e trova tutti i numeri immobili.
 
 **La forma non cambia mai**, nemmeno nel momento più teatrale. Al reveal le buste si aprono nella
 colonna mentre nel tabellone la card del vincitore si accende, col giocatore appena aggiudicato in

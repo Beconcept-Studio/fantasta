@@ -1024,3 +1024,29 @@ nell'istante in cui si vogliono confrontare i crediti residui.
 **Il limite di leggibilità è scritto nel file.** Sotto gli ~800px di altezza il tabellone non si
 legge più. È una pagina da portatile per scelta, e una scelta dichiarata è diversa da un difetto
 scoperto la sera dell'asta.
+
+## 2026-08-10 — M2, tre correzioni dopo la prima prova
+
+**Il banner dell'asta in corso si nasconde anche sulla vista TV.** Il layout radice gira su ogni
+pagina, TV compresa, quindi finché l'owner aveva una sessione aperta nello stesso browser quel
+banner si incollava in cima allo schermo proiettato: una striscia verde che invita ad andare al
+proprio portale, sopra un tabellone che guarda tutta la stanza. Sottraeva anche altezza a un layout
+che vive di `h-dvh` e non ha scroll. La navbar già si toglieva di mezzo su `/tv/`; il banner no
+perché è più vecchio di quella regola, e nessuno l'aveva mai visto lì — la TV si guarda da un
+browser senza login, e in prova la si apre nello stesso in cui si è loggati. §8bis non è indebolito:
+il banner esiste per far ritrovare la strada a un partecipante, e la TV non è la pagina di nessun
+partecipante.
+
+**Nell'intestazione della TV lo stato al posto dello speso e dell'ordine dei ruoli.** Il totale
+speso era un numero che nessuno guardava — i crediti residui di ciascuno sono già nel tabellone, uno
+per squadra — e l'ordine dei ruoli è un fatto di configurazione che si legge una volta a inizio
+serata. Lo stato dell'asta no: è la risposta alla domanda di chi alza gli occhi e trova tutti i
+numeri immobili, «è finita, è in pausa, o si è piantato?». Sta accanto alla fase e non al posto suo,
+perché le due cose rispondono a domande diverse: la fase cambia ogni pochi secondi, lo stato dura.
+
+**«Portale» diventa «Asta live».** La voce di menù nominava il contenitore invece del contenuto. La
+rotta resta `/play` e il componente resta `Portal`: rinominare l'URL romperebbe i link che i
+partecipanti hanno già aperto, e rinominare il codice sarebbe churn senza lettori. Resta una
+tensione, accettata: il titolo «Asta live» è sopra la pagina anche prima che l'asta parta, dove la
+schermata dice «l'asta non è iniziata». I titoli sono fissi per sezione di proposito — è ciò che li
+rende immuni allo stantio — e la direttezza vale più di quel caso di bordo.

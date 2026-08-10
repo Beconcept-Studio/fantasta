@@ -81,8 +81,11 @@ const SECTIONS: (AuctionSection & { visibleTo: (v: NavViewer) => boolean })[] = 
   {
     key: "play",
     segment: "play",
-    label: "Portale",
-    title: "Il tuo portale",
+    // «Asta live» e non «Portale»: chi legge un menù vuole sapere cosa trova,
+    // non come si chiama il contenitore. La rotta resta `play` — rinominarla
+    // cambierebbe un URL che la gente ha già aperto durante un'asta.
+    label: "Asta live",
+    title: "Asta live",
     visibleTo: (v) => v.isMember,
   },
 ];

@@ -1,8 +1,8 @@
 "use client";
 
 import { Countdown } from "@/components/auction/countdown";
-import { ROLES, ROLE_LABELS, ROLE_LABELS_ONE, type Role } from "@/lib/domain";
-import { spentCredits } from "@/lib/realtime/manage";
+import { statusLabel } from "@/components/setup/status-badge";
+import { ROLES, ROLE_LABELS_ONE, type Role } from "@/lib/domain";
 import {
   memberById,
   memberLabel,
@@ -92,17 +92,20 @@ export function TvView({
           {phaseLabel(snapshot)}
         </p>
         {!connected && <p className="text-sm text-amber-300">riconnessione…</p>}
-        <p className="ml-auto text-sm text-white/45">
-          speso {snapshot.members.reduce((sum, m) => sum + spentCredits(m), 0)}
-        </p>
-        <p className="text-sm text-white/55">
-          {auction.roleOrder
-            .map((role) =>
-              role === auction.currentRole
-                ? ROLE_LABELS[role].toUpperCase()
-                : ROLE_LABELS[role],
-            )
-            .join(" → ")}
+        {/* Lo stato dell'asta, non la fase: la fase è a sinistra e cambia ogni
+            pochi secondi, lo stato dice se la serata sta correndo o è ferma —
+            che è la domanda di chi alza gli occhi e trova i numeri immobili. */}
+        <p
+          className={cn(
+            "ml-auto text-sm font-semibold tracking-wide uppercase",
+            auction.status === "PAUSED"
+              ? "text-amber-300"
+              : auction.status === "LIVE"
+                ? "text-emerald-300"
+                : "text-white/55",
+          )}
+        >
+          {statusLabel(auction.status)}
         </p>
       </header>
 

@@ -82,7 +82,7 @@ describe("la sezione attiva si ricava dal pathname", () => {
     ["setup", "Configurazione dell'asta"],
     ["lobby", "Lobby"],
     ["manage", "Regia dell'asta"],
-    ["play", "Il tuo portale"],
+    ["play", "Asta live"],
   ])("/%s è la sezione con titolo «%s»", (segment, title) => {
     const section = activeSection(`/auctions/${AUCTION}/${segment}`);
     expect(section?.key).toBe(segment);

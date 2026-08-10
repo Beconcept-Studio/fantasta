@@ -101,15 +101,15 @@ il client component che evidenzia la voce attiva — che è esattamente il motiv
 | `setup` | `/setup` | Configurazione | Configurazione dell'asta | proprietario |
 | `lobby` | `/lobby` | Lobby | Lobby | tutti |
 | `manage` | `/manage` | Regia | Regia dell'asta | proprietario |
-| `play` | `/play` | Portale | Il tuo portale | membri |
+| `play` | `/play` | Asta live | Asta live | membri |
 
 **Il titolo e la voce di menù escono dalla stessa riga di questa tabella**, quindi non possono
 divergere. È il rimedio strutturale al bug che oggi fa puntare alla lobby un link etichettato
 «Pannello di configurazione»: non un link corretto a mano, ma un posto solo in cui l'etichetta e la
 destinazione stanno insieme.
 
-Un proprietario che gioca vede tutte e quattro le voci; uno che non ha joinato non vede `Portale`;
-un partecipante vede `Lobby` e `Portale`. **Le voci dipendono dal ruolo e mai dallo stato
+Un proprietario che gioca vede tutte e quattro le voci; uno che non ha joinato non vede `Asta live`;
+un partecipante vede `Lobby` e `Asta live`. **Le voci dipendono dal ruolo e mai dallo stato
 dell'asta**: nessuna voce compare o sparisce durante la serata. Non è solo una scelta di
 prevedibilità — è ciò che rende la sotto-navbar immune allo stantio. Il ruolo non cambia mentre
 guardi la pagina; lo stato sì, e una sotto-navbar renderizzata dal server a inizio pagina
@@ -177,9 +177,10 @@ La schermata si divide in tre:
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-**La striscia in cima**, a tutta larghezza: nome dell'asta, fase, ordine dei ruoli con quello
-corrente in evidenza, e l'avviso di riconnessione. È contesto, e in una colonna da 360px ruberebbe
-righe al lotto.
+**La striscia in cima**, a tutta larghezza: nome dell'asta, fase, l'avviso di riconnessione e, a
+destra, lo **stato dell'asta** — in corso o in pausa. Lo stato e non la fase: la fase è a sinistra e
+cambia ogni pochi secondi, lo stato risponde alla domanda di chi alza gli occhi e trova i numeri
+immobili. È contesto, e in una colonna da 360px ruberebbe righe al lotto.
 
 **Il tabellone, 3/4 di larghezza.** Tutte le squadre su due righe: le colonne sono `ceil(posti / 2)`,
 quindi otto squadre danno quattro colonne larghe e dodici ne danno sei strette. Ogni card ha il
@@ -256,7 +257,7 @@ metà lotto trova la stessa pagina di prima, adesso con sopra una navbar.
    ad asta `LIVE` si arriva alla configurazione dei tempi in un click, che è il caso da cui è nata
    la richiesta.
 3. **Nessuna voce mostra una destinazione che non le compete.** Un partecipante non vede
-   Configurazione, Regia né TV; un proprietario che non ha joinato non vede Portale. Le voci sono le
+   Configurazione, Regia né TV; un proprietario che non ha joinato non vede «Asta live». Le voci sono le
    stesse da `DRAFT` a `COMPLETED`.
 4. **Il titolo dice la pagina, il badge dice l'asta.** Su tutte e quattro le sezioni, regia e
    portale compresi, e su questi due anche mentre lo snapshot sta ancora arrivando.
