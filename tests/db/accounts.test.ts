@@ -1,10 +1,26 @@
 import { eq, sql } from "drizzle-orm";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
+
+/**
+ * L'unico modo di leggere un codice in chiaro è intercettarlo dove esce: da
+ * `sendCode`. Non c'è nessuna via per rileggerlo dal database — a database c'è
+ * uno sha256 — ed è esattamente la proprietà che questo mock conferma invece di
+ * aggirare.
+ */
+const sent: { to: string; code: string; purpose: string }[] = [];
+vi.mock("@/lib/mail", () => ({
+  sendCode: async (mail: { to: string; code: string; purpose: string }) => {
+    sent.push(mail);
+  },
+}));
 
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { emailCodes, users } from "@/lib/db/schema";
 import {
   registerWithPassword,
+  requestPasswordReset,
+  resendVerificationCode,
+  resetPassword,
   upsertGoogleUser,
   verifyEmail,
 } from "@/lib/engine/accounts";
@@ -57,6 +73,15 @@ async function register(email: string, password = "password-lunga-1") {
   if (!result.ok) throw new Error(result.error.message);
   created.push(result.value.userId);
   return result.value;
+}
+
+/** L'ultimo codice partito verso quell'indirizzo, come lo legge chi lo riceve. */
+function lastCodeTo(email: string, purpose: string): string {
+  const found = [...sent]
+    .reverse()
+    .find((m) => m.to === email.toLowerCase() && m.purpose === purpose);
+  if (!found) throw new Error(`Nessun codice ${purpose} mandato a ${email}.`);
+  return found.code;
 }
 
 afterAll(async () => {
@@ -280,6 +305,49 @@ suite("identità — l'email è la chiave (M5 §2)", () => {
 });
 
 suite("identità — il codice di verifica (M5 §4)", () => {
+  it("il codice giusto verifica, e non si può riusare", async () => {
+    const email = freshEmail("verifica");
+    const { userId } = await register(email);
+    const code = lastCodeTo(email, "VERIFY_EMAIL");
+
+    expect((await verifyEmail(userId, code)).ok).toBe(true);
+    const row = (await rowsWithEmail(email))[0];
+    expect(row.emailVerifiedAt).not.toBeNull();
+
+    // Riusarlo non fallisce con «codice non valido»: chi è già verificato ha
+    // già finito, e un doppio invio del form non deve spaventarlo.
+    expect((await verifyEmail(userId, code)).ok).toBe(true);
+  });
+
+  /**
+   * ⚠ Venti reinvii non devono diventare venti chiavi valide, né lasciare la
+   * persona a chiedersi quale delle venti email sia quella giusta: vale
+   * l'ultima, sempre.
+   */
+  it("un codice nuovo consuma il precedente", async () => {
+    const email = freshEmail("reinvio");
+    const { userId } = await register(email);
+    const first = lastCodeTo(email, "VERIFY_EMAIL");
+
+    // Il reinvio è rifiutato prima di sessanta secondi: il limite vive nel
+    // `created_at` della tabella, quindi si sposta `now` invece di aspettare.
+    const now = new Date();
+    const tooSoon = await resendVerificationCode(userId, now);
+    expect(tooSoon.ok).toBe(false);
+    if (!tooSoon.ok) expect(tooSoon.error.code).toBe("RESEND_TOO_SOON");
+
+    const later = new Date(now.getTime() + 61_000);
+    expect((await resendVerificationCode(userId, later)).ok).toBe(true);
+    const second = lastCodeTo(email, "VERIFY_EMAIL");
+    expect(second).not.toBe(first);
+
+    // Il primo non vale più.
+    const stale = await verifyEmail(userId, first, later);
+    expect(stale.ok).toBe(false);
+    // E il secondo sì.
+    expect((await verifyEmail(userId, second, later)).ok).toBe(true);
+  });
+
   it("un codice sbagliato non verifica, e dopo cinque il codice è bruciato", async () => {
     const { userId } = await register(freshEmail("tentativi"));
 
@@ -295,5 +363,107 @@ suite("identità — il codice di verifica (M5 §4)", () => {
       (await db.query.users.findFirst({ where: eq(users.id, userId) }))!.email!,
     );
     expect(row.emailVerifiedAt).toBeNull();
+  });
+});
+
+suite("identità — il recupero della password (M5 §4)", () => {
+  it("il giro completo: codice, password nuova, e la vecchia non entra più", async () => {
+    const email = freshEmail("recupero");
+    const { userId } = await register(email, "vecchia-password-1");
+
+    expect((await requestPasswordReset(email)).ok).toBe(true);
+    const code = lastCodeTo(email, "RESET_PASSWORD");
+
+    const done = await resetPassword({
+      email,
+      code,
+      password: "nuova-password-1",
+    });
+    expect(done.ok).toBe(true);
+
+    const row = (await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    }))!;
+    expect(await verifyPassword("nuova-password-1", row.passwordHash)).toBe(true);
+    expect(await verifyPassword("vecchia-password-1", row.passwordHash)).toBe(
+      false,
+    );
+  });
+
+  /**
+   * Un account di solo Google non se la vede creare dal nulla: sarebbe la
+   * direzione Google → password di §2 per un'altra strada.
+   */
+  it("è rifiutato su un account di solo Google", async () => {
+    const email = freshEmail("solo-google");
+    const hooked = await upsertGoogleUser({
+      googleSub: `google-sub-${crypto.randomUUID()}`,
+      email,
+      emailVerified: true,
+      avatarUrl: null,
+    });
+    if (hooked.ok) created.push(hooked.value.id);
+
+    const asked = await requestPasswordReset(email);
+    expect(asked.ok).toBe(false);
+    if (!asked.ok) {
+      expect(asked.error.code).toBe("EMAIL_IS_GOOGLE");
+      expect(asked.error.message).toMatch(/Google/);
+    }
+
+    const forced = await resetPassword({
+      email,
+      code: "123456",
+      password: "password-lunga-1",
+    });
+    expect(forced.ok).toBe(false);
+  });
+
+  /**
+   * La password si valida **prima** di consumare il codice: chi ne sceglie una
+   * troppo corta non deve perdere il codice appena ricevuto e ricominciare.
+   */
+  it("una password troppo corta non brucia il codice", async () => {
+    const email = freshEmail("cortapass");
+    await register(email);
+    await requestPasswordReset(email);
+    const code = lastCodeTo(email, "RESET_PASSWORD");
+
+    const tooShort = await resetPassword({ email, code, password: "corta" });
+    expect(tooShort.ok).toBe(false);
+    if (!tooShort.ok) expect(tooShort.error.code).toBe("INVALID_PASSWORD");
+
+    // Il codice è ancora buono.
+    const retry = await resetPassword({
+      email,
+      code,
+      password: "abbastanza-lunga-1",
+    });
+    expect(retry.ok).toBe(true);
+  });
+
+  it("il reset non tocca email_verified_at: chi non era verificato passa da /verify", async () => {
+    const email = freshEmail("nonverif");
+    const { userId } = await register(email);
+    await requestPasswordReset(email);
+
+    await resetPassword({
+      email,
+      code: lastCodeTo(email, "RESET_PASSWORD"),
+      password: "nuova-password-1",
+    });
+
+    const row = (await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    }))!;
+    expect(row.emailVerifiedAt).toBeNull();
+    // E il codice di verifica è una macchina a parte: il cooldown del reset
+    // non gli si applica, perché i due `purpose` si contano separatamente.
+    const codes = await db
+      .select()
+      .from(emailCodes)
+      .where(eq(emailCodes.userId, userId));
+    expect(codes.some((c) => c.purpose === "VERIFY_EMAIL")).toBe(true);
+    expect(codes.some((c) => c.purpose === "RESET_PASSWORD")).toBe(true);
   });
 });
