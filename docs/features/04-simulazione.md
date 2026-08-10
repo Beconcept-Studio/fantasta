@@ -292,9 +292,9 @@ sue mosse.
       testo del badge. Nessuna dipendenza, come i suoi gemelli
 - [x] **M4-04** — `ensureBotUsers()` idempotente; `listDevUsers()` esclude i bot; l'`authorize` del
       provider `dev` li rifiuta; il seed chiama `ensureBotUsers()`
-- [ ] **M4-05** — `createAuction` accetta `isSimulated` e lo rifiuta a chi non è amministratore;
+- [x] **M4-05** — `createAuction` accetta `isSimulated` e lo rifiuta a chi non è amministratore;
       la casella nel form di creazione, visibile solo a lui
-- [ ] **M4-06** — `fillWithBots()` in `lib/engine/setup.ts` sopra `addMember`, con i cinque rifiuti
+- [x] **M4-06** — `fillWithBots()` in `lib/engine/setup.ts` sopra `addMember`, con i cinque rifiuti
       tipizzati di §2
 - [ ] **M4-07** — `lib/engine/bot-brain.ts`: `decide()` puro, il ritardo derivato, le quattro
       strategie

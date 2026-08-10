@@ -73,6 +73,31 @@ export const BOT_STRATEGY_LABELS: Record<BotStrategy, string> = {
   tie: "Pareggio",
 };
 
+/**
+ * Come si riempie un'asta: una strategia uguale per tutti, oppure un misto.
+ *
+ * «Tutti in pareggio» non è una curiosità: è l'unico modo di innescare uno
+ * spareggio a comando. Per questo `tie` resta selezionabile per tutti e **non**
+ * entra nel misto — un solo bot in pareggio è solo un bot che offre sempre
+ * dieci.
+ */
+export const BOT_FILL_MIX = "mix";
+export type BotFill = BotStrategy | typeof BOT_FILL_MIX;
+
+/** `random` due volte su quattro: un misto verosimile pende verso il mezzo. */
+const MIXED_STRATEGIES: BotStrategy[] = [
+  "random",
+  "aggressive",
+  "random",
+  "passive",
+];
+
+/** La strategia dell'i-esimo bot aggiunto. */
+export function strategyFor(fill: BotFill, index: number): BotStrategy {
+  if (fill !== BOT_FILL_MIX) return fill;
+  return MIXED_STRATEGIES[index % MIXED_STRATEGIES.length];
+}
+
 /** Il marchio di un'asta di prova, ovunque la si guardi. */
 export const SIMULATION_BADGE = "simulazione";
 

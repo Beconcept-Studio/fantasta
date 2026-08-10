@@ -77,7 +77,13 @@ export async function createAuctionAction(
   form: FormData,
 ): Promise<FormState> {
   const user = await requireUser();
-  const result = await createAuction(user.id, configFrom(form));
+  // La casella esiste solo per un amministratore, e `createAuction` rilegge il
+  // permesso dal database: qui si passa soltanto l'intenzione (regola 6).
+  const result = await createAuction(
+    user.id,
+    configFrom(form),
+    form.get("isSimulated") === "on",
+  );
   if (!result.ok) return { error: result.error.message };
   redirect(`/auctions/${result.value.auctionId}/setup`);
 }
