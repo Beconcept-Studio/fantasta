@@ -302,7 +302,7 @@ sue mosse.
       `lib/engine/actions.ts`, snapshot costruito col memberId del bot
 - [x] **M4-09** — `instrumentation.ts`: il secondo intervallo sotto la sua guardia `globalThis`,
       dentro il ramo `nodejs` e con gli import dinamici lì dentro
-- [ ] **M4-10** — `scripts/bots.ts` riscritto sopra `decide()`; `scripts/drive.ts` rimosso con il
+- [x] **M4-10** — `scripts/bots.ts` riscritto sopra `decide()`; `scripts/drive.ts` rimosso con il
       suo comando in `package.json`
 - [ ] **M4-11** — UI: il pannello «Partecipanti simulati» accanto agli inviti; il badge
       `[simulazione]` in dashboard, nel layout dell'asta e nella vista TV; l'avviso «bot in pausa:
