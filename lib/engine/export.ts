@@ -7,6 +7,7 @@ import {
   buildListoneXlsx,
   exportFileName,
 } from "@/lib/import/exportListone";
+import { buildRoseCsv } from "@/lib/rose-csv";
 
 import { type Result, fail, ok } from "./errors";
 import { isUuid } from "./ids";
@@ -98,8 +99,65 @@ export async function exportXlsx(
   }));
 
   return ok({
-    fileName: exportFileName(auction.name),
+    fileName: exportFileName(auction.name, "listone.xlsx"),
     bytes: buildListoneXlsx(list),
     assigned: list.filter((p) => p.price !== null).length,
+  });
+}
+
+/**
+ * `exportRoseCsv(auctionId)` (M3 §1): il verbale delle rose — chi ha comprato
+ * chi, e a quanto. Tre colonne, solo gli assegnati.
+ *
+ * Convive con `exportXlsx` e non lo sostituisce, perché rispondono a due
+ * domande diverse: quello serve a **rimettere** il risultato su Fantacalcio.it,
+ * questo a **leggerlo**. Il primo parte dai giocatori, perché deve portarsi
+ * dietro anche gli invenduti; questo parte dalle **assegnazioni**, che è la
+ * differenza fra un listone e una rosa.
+ *
+ * Il `voided_at IS NULL` è il secondo posto in cui la regola 5 decide cosa
+ * finisce in un file che qualcuno guarderà altrove: un'assegnazione annullata
+ * che riapparisse qui sarebbe la correzione della sera dell'asta buttata via.
+ *
+ * L'ordinamento **non** è qui: sta in `roseCsvRows`, dove si collauda senza un
+ * Postgres acceso. `seat_index` viaggia fino là per quello.
+ */
+export async function exportRoseCsv(
+  actorUserId: string,
+  auctionId: string,
+): Promise<Result<ExportedFile>> {
+  if (!isUuid(auctionId)) {
+    return fail("NOT_FOUND", "Questa asta non esiste.");
+  }
+
+  const auction = await db.query.auctions.findFirst({
+    where: eq(auctions.id, auctionId),
+  });
+  if (!auction) return fail("NOT_FOUND", "Questa asta non esiste.");
+  if (auction.ownerUserId !== actorUserId) {
+    return fail("FORBIDDEN", "Solo chi ha creato l'asta può esportarla.");
+  }
+
+  const rows = await db
+    .select({
+      seatIndex: members.seatIndex,
+      teamName: members.teamName,
+      extId: players.extId,
+      price: assignments.price,
+    })
+    .from(assignments)
+    .innerJoin(members, eq(members.id, assignments.memberId))
+    .innerJoin(players, eq(players.id, assignments.playerId))
+    .where(
+      and(
+        eq(assignments.auctionId, auctionId),
+        isNull(assignments.voidedAt), // regola 5: le annullate non esistono più
+      ),
+    );
+
+  return ok({
+    fileName: exportFileName(auction.name, "rose.csv"),
+    bytes: new TextEncoder().encode(buildRoseCsv(rows)),
+    assigned: rows.length,
   });
 }

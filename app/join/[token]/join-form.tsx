@@ -20,18 +20,24 @@ export function JoinForm({ token }: { token: string }) {
       <input type="hidden" name="token" value={token} />
       <div className="space-y-2">
         <Label htmlFor="teamName">Nome della tua squadra</Label>
+        {/* `pattern` fa scoprire la regola prima di premere invio; il server
+            rifiuta comunque (regola 6). Le due classi di caratteri sono quelle
+            di `TEAM_NAME_FORBIDDEN` in `lib/engine/setup-rules.ts`: senza di
+            loro il verbale delle rose in .csv non sarebbe più leggibile. */}
         <Input
           id="teamName"
           name="teamName"
           required
           minLength={3}
           maxLength={60}
+          pattern={'[^,"]+'}
+          title="Senza virgole né virgolette"
           autoComplete="off"
           placeholder="Real Fantozzi"
         />
         <p className="text-muted-foreground text-xs">
           Vale solo per quest&apos;asta: in un&apos;altra lega puoi chiamarti
-          diversamente.
+          diversamente. Senza virgole né virgolette.
         </p>
       </div>
       <FormFeedback state={state} />

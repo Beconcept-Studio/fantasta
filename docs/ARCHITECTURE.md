@@ -1232,7 +1232,7 @@ allo scadere del timer il turno **passa** invece di aprire un lotto che quel chi
 vincere. Non è un undo, e non è il manager a muovere la rotazione: il turno va avanti, come sempre,
 e a muoverlo resta soltanto il tempo.
 
-### L'export
+### I due export, che rispondono a due domande diverse
 
 L'ultima cosa che serve, la mattina dopo, è rimettere il risultato su Fantacalcio.it. Il file di
 partenza non c'è più — all'import ne estraiamo i dati e lo buttiamo — quindi l'export **ricostruisce
@@ -1242,15 +1242,37 @@ non importiamo (l'età, le presenze, le due medie) restano celle vuote, non zeri
 dice «non lo so», uno zero dice «zero».
 
 È tutto il listone, non solo le rose: chi non è stato comprato c'è comunque, con le due colonne
-vuote. E un'assegnazione annullata non compare — è l'unico punto in cui il filtro «non annullata»
-decide cosa finisce in un file che qualcuno caricherà altrove, e una riga sbagliata che
-riapparisse lì sarebbe la correzione della sera buttata via. Il modo in cui lo verifichiamo è un
-giro completo: si esporta, si rilegge con **il nostro stesso parser** dell'import e si controlla
-che ritrovi gli stessi giocatori con le squadre e i prezzi giusti.
+vuote. Il modo in cui lo verifichiamo è un giro completo: si esporta, si rilegge con **il nostro
+stesso parser** dell'import e si controlla che ritrovi gli stessi giocatori con le squadre e i
+prezzi giusti.
 
-Il download è l'unica rotta che non passa dal dispatcher delle azioni: una `GET` su
-`/api/auctions/[id]/export`, perché un file da scaricare ha bisogno di un URL, di un tipo MIME e di
-un nome, e nessuna delle tre cose sta in una risposta JSON.
+Accanto a quello, da M3, c'è un secondo file che serve a leggere invece che a ricaricare: un **CSV a
+tre colonne** — nome squadra, id del calciatore, crediti spesi — con dentro **solo gli assegnati.
+Nessun invenduto, nessun attributo del listone**. La differenza fra i due non è di formato ma di
+punto di partenza: quello del listone parte dai giocatori, perché deve portarsi dietro anche chi
+nessuno ha comprato; questo parte dalle assegnazioni, che è esattamente la differenza fra un listone
+e una rosa. Convivono perché rispondono a due domande, e togliere il primo vorrebbe dire perdere la
+reimportazione.
+
+In entrambi un'assegnazione **annullata non compare**. Sono i due punti in cui il filtro «non
+annullata» decide cosa finisce in un file che qualcuno guarderà altrove, e una riga sbagliata che
+riapparisse lì sarebbe la correzione della sera buttata via.
+
+Il CSV usa la **virgola** e non virgoletta niente, perché un verbale deve restare leggibile a
+occhio. Questo però pretende che un nome squadra non contenga il separatore, e la scelta è stata
+impedire il carattere all'ingresso invece di virgolettare all'uscita: da M3 un nome squadra non può
+contenere virgole né virgolette, e il rifiuto arriva dall'unico punto in cui un nome squadra si fissa
+— all'ingresso in un'asta, perché dopo non si rinomina più. Per i nomi salvati *prima* della regola,
+che quindi non si possono aggiustare, il costruttore del CSV ha una rete: il carattere proibito
+diventa uno spazio. Vale la pena sapere che con la virgola come separatore il file, aperto con un
+doppio clic su un Excel italiano, finisce in una colonna sola: l'italiano usa il punto e virgola, ed
+è il prezzo scelto per avere un formato neutro.
+
+I download sono le uniche rotte che non passano dal dispatcher delle azioni — `GET` su
+`/api/auctions/[id]/export/listone` e `/api/auctions/[id]/export/rose` — perché un file da scaricare
+ha bisogno di un URL, di un tipo MIME e di un nome, e nessuna delle tre cose sta in una risposta
+JSON. Sono due rotte gemelle e non una sola con un parametro: dieci righe di autenticazione ripetute
+si leggono senza spiegazioni, uno smistamento no.
 
 ### La tabella `events`
 
@@ -1265,6 +1287,75 @@ ed è per questo che ogni riga viene scritta **nella stessa transazione** della 
 descrive: o ci sono entrambe, o non c'è nessuna delle due. Una traccia che può mentire vale meno di
 nessuna traccia. La stessa riga esce anche su stdout in JSON, ed è quella che si segue in diretta
 con `pm2 logs` mentre l'asta va.
+
+### Lo storico, la pagina che rende leggibile tutto questo
+
+Fino a M3 quella tabella era vera e inutilizzabile: per rispondere a «io avevo offerto 46, non 45»
+bisognava aprire `psql`, che nella stanza dove si sta giocando non è una risposta. Lo storico —
+quinta sezione di ogni asta, su `/auctions/[id]/log` — è la pagina che risponde.
+
+La prima cosa da capire è che **`events` da sola non basta**, e scoprirlo ha cambiato il progetto. Il
+payload di una transizione è minimo: da dove a dove, su quale lotto, per mano di chi. Un `PLACE_BID`
+registra *chi* e *quando*, **mai quanto** — l'importo non entra mai in `events`, ed è coerente col
+resto, perché la fonte di verità di un'offerta è la riga in `bids`. Quindi la pagina si costruisce da
+due sorgenti: i **lotti** dallo stato dell'asta, e `events` solo per gli **eventi notevoli**.
+
+Da qui la forma, che è due blocchi e non una cronologia unica. Il numero che l'ha decisa: un'asta da
+dodici con venticinque slot fa circa trecento lotti e **oltre duemila righe in `events`**, quasi
+tutte rumore di macchina. Una lista piatta in ordine di tempo sarebbe illeggibile proprio la sera in
+cui serve. Così in alto stanno i lotti, dal più recente, una riga compatta ciascuno che si apre sul
+dettaglio delle buste — ogni round col suo minimo, quanti erano gli idonei, ogni offerta con importo
+e orario in cui *quella cifra* è stata fissata, le ritirate, l'esito. Sotto stanno le correzioni e le
+pause: avvio, pausa, ripresa, «prosegui asta», assegnazioni manuali, annullamenti, rettifiche di
+crediti. Fuori resta la routine di un lotto, che il dettaglio del lotto racconta meglio.
+
+Due dettagli valgono più di quanto sembri. **L'esito di ogni round lo scrive la stessa funzione che
+ha deciso l'asta** quella sera: ricopiare quel ragionamento nella pagina vorrebbe dire tenere due
+verità su come si vince un lotto, e in una disputa la seconda non servirebbe a niente. E **un tipo di
+evento sconosciuto viene mostrato comunque**, in forma tecnica, invece di essere ignorato: la lista
+consultata è quella della routine da escludere, non quella dei tipi noti da includere, così un evento
+aggiunto fra un anno comparirà da sé. Un log che nasconde ciò che non sa interpretare è un log di cui
+non ti fidi.
+
+La pagina la vedono **l'owner e i partecipanti**, e non solo l'owner. Chi vuole contestare un lotto
+deve poterlo guardare da sé; e c'è una ragione d'invariante, la I10 — le buste non si rivedono da
+nessun'altra parte dopo i secondi di reveal, tanto meno se è stato premuto «prosegui asta», che quei
+secondi li salta. Chi non partecipa prende un 404 e non un «vietato»: l'esistenza di un'asta a cui
+non partecipi non è una sua informazione.
+
+È **renderizzata dal server a ogni caricamento, senza stream**, e questo non è un risparmio: lo
+storico non è lo stato dell'asta, quindi non passa dall'unico punto di uscita dello stato e non ha
+nulla da ricevere in diretta. Per la stessa ragione in cima c'è l'ora della lettura — in una disputa
+l'età di ciò che stai leggendo è essa stessa un'informazione — con un pulsante per rifare la lettura,
+invece di un aggiornamento automatico che sposterebbe sotto gli occhi la riga che stai guardando. Gli
+orari si leggono in ora italiana, fissata nel codice e non lasciata al fuso del telefono di chi
+guarda: le persone che discutono di un lotto sono nella stessa stanza e devono leggere lo stesso
+numero.
+
+#### Il punto delicato: le buste di un lotto ancora aperto
+
+È il rischio vero della pagina. Mostrare le buste del lotto in contesa violerebbe l'invariante della
+segretezza, e con il rafforzamento di M1 lo violerebbe anche solo dicendo che una busta è stata
+consegnata. Il dato è tutto lì, in memoria, a un passo dall'uscita.
+
+La barriera **riusa il confine del motore invece di inventarne uno**: entrando nella fase di reveal,
+la macchina scrive che il lotto è risolto — nello stesso istante in cui le buste si aprono e
+l'assegnazione viene committata. Quindi «lotto risolto» equivale a «buste già state pubbliche», per
+costruzione e non per attenzione, e un lotto aperto non arriva mai alla pagina, nemmeno come riga
+vuota. Ad asta in pausa vale gratis, perché la pausa congela la fase e non azzera lo stato del lotto.
+Quando l'asta è in corso la pagina **dice** che il lotto corrente non compare, invece di lasciar
+notare un buco.
+
+C'è una coda a questa storia che vale più della storia stessa. Il test che doveva dimostrare tutto
+questo **passava anche togliendo la barriera**: la funzione che compone una riga scarta comunque i
+lotti senza vincitore, e un lotto aperto non ne ha. L'asserzione non stava dimostrando ciò che diceva
+di dimostrare, e l'abbiamo saputo solo perché la barriera è stata rotta di proposito per vedere il
+test diventare rosso. Ne sono uscite due cose: le due protezioni restano **entrambe**, perché si
+coprono a vicenda soltanto per una coincidenza di come il motore è fatto oggi, e affidare un
+invariante a una coincidenza non è affidarlo; e il predicato è stato spostato in un modulo puro, dove
+si può provare su un lotto costruito a mano che sia aperto *e* abbia già un vincitore — uno stato che
+il motore non produce mai, e proprio per questo l'unico capace di distinguere quel controllo da tutti
+gli altri. Un guardiano che non sai se sta guardando non è un guardiano.
 
 ### Un id sbagliato non è un errore del server
 

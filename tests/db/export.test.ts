@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as XLSX from "xlsx";
 
 import { advancePhase, pickPlayer, placeBid, startAuction } from "@/lib/engine/actions";
-import { exportXlsx } from "@/lib/engine/export";
+import { exportRoseCsv, exportXlsx } from "@/lib/engine/export";
 import { setBroadcastHook } from "@/lib/engine/mutate";
 import { manualAssign, voidAssignment } from "@/lib/engine/override";
 import { loadForSnapshot } from "@/lib/engine/snapshot";
@@ -69,9 +69,24 @@ function sheetRows(bytes: Uint8Array): Record<string, unknown>[] {
 
 describe("exportFileName", () => {
   it("fa uno slug adatto a un header HTTP", () => {
-    expect(exportFileName("Asta di prova")).toBe("asta-di-prova-rose.xlsx");
-    expect(exportFileName("Lega Città 2026/27")).toBe("lega-citta-2026-27-rose.xlsx");
-    expect(exportFileName("!!!")).toBe("asta-rose.xlsx");
+    expect(exportFileName("Asta di prova", "listone.xlsx")).toBe(
+      "asta-di-prova-listone.xlsx",
+    );
+    expect(exportFileName("Lega Città 2026/27", "listone.xlsx")).toBe(
+      "lega-citta-2026-27-listone.xlsx",
+    );
+    expect(exportFileName("!!!", "listone.xlsx")).toBe("asta-listone.xlsx");
+  });
+
+  /**
+   * M3 §1 — i due export convivono, quindi il nome del file deve dire quale
+   * dei due hai in mano. Prima di M3 il listone si scaricava come
+   * `<asta>-rose.xlsx`, che con un vero export delle rose accanto mentirebbe.
+   */
+  it("distingue i due export nel nome del file", () => {
+    expect(exportFileName("Asta di prova", "rose.csv")).toBe(
+      "asta-di-prova-rose.csv",
+    );
   });
 });
 
@@ -104,7 +119,8 @@ describe.runIf(dbUp)("F7-06 — exportXlsx", () => {
 
     const file = unwrap(await exportXlsx(game.ownerId, game.auctionId));
     expect(file.assigned).toBe(2);
-    expect(file.fileName).toBe("asta-di-gioco-rose.xlsx");
+    // Da M3 il listone si chiama «listone»: `-rose` è dell'altro export.
+    expect(file.fileName).toBe("asta-di-gioco-listone.xlsx");
 
     const rows = sheetRows(file.bytes);
     expect(rows).toHaveLength(40); // tutto il listone, non solo le rose
@@ -198,6 +214,130 @@ describe.runIf(dbUp)("F7-06 — exportXlsx", () => {
       error: { code: "FORBIDDEN" },
     });
     expect(await exportXlsx(game.ownerId, "undefined")).toMatchObject({
+      ok: false,
+      error: { code: "NOT_FOUND" },
+    });
+  });
+});
+
+/**
+ * M3 §1 — il verbale delle rose.
+ *
+ * L'altro export, quello del listone, dice cosa è successo a **ogni giocatore**
+ * del listone; questo dice cosa c'è **in ogni rosa**, e nient'altro. La forma
+ * del file è già collaudata a parte in `tests/rose-csv.test.ts`, senza
+ * Postgres: qui si prova solo ciò che il database decide — chi entra, chi no, e
+ * in che ordine.
+ */
+describe.runIf(dbUp)("M3 — exportRoseCsv", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+    setBroadcastHook(() => {});
+  });
+
+  /** Il .csv riletto come righe di celle. */
+  function csvRows(bytes: Uint8Array): string[][] {
+    return new TextDecoder()
+      .decode(bytes)
+      .split("\n")
+      .filter((line) => line !== "")
+      .map((line) => line.split(","));
+  }
+
+  it("scrive solo gli assegnati, con le tre colonne della richiesta", async () => {
+    const now = Date.now();
+    const game = await gameAuction();
+    const state = (await loadForSnapshot(game.auctionId))!.state;
+    const [keeper, altroKeeper] = state.players.filter((p) => p.role === "P");
+
+    // Uno comprato all'asta…
+    unwrap(await startAuction(game.ownerId, game.auctionId, 0, now));
+    unwrap(await pickPlayer(game.userIds[0], game.auctionId, keeper.id, now + 500));
+    unwrap(await placeBid(game.userIds[1], game.auctionId, 17, now + 1000));
+    unwrap(await advancePhase(game.auctionId, now + 3500));
+    // …e uno assegnato a mano.
+    unwrap(
+      await manualAssign(
+        game.ownerId,
+        game.auctionId,
+        { memberId: game.memberIds[5], playerId: altroKeeper.id, price: 3 },
+        now + 4000,
+      ),
+    );
+
+    const file = unwrap(await exportRoseCsv(game.ownerId, game.auctionId));
+    expect(file.fileName).toBe("asta-di-gioco-rose.csv");
+    expect(file.assigned).toBe(2);
+
+    const rows = csvRows(file.bytes);
+    expect(rows[0]).toEqual(["nome_squadra", "id_calciatore", "crediti_spesi"]);
+    // Due assegnazioni, quindi due righe oltre all'intestazione: gli altri 38
+    // giocatori del listone qui non esistono.
+    expect(rows).toHaveLength(3);
+    expect(rows).toContainEqual(["Squadra 1", String(keeper.extId), "17"]);
+    expect(rows).toContainEqual(["Squadra 5", String(altroKeeper.extId), "3"]);
+  });
+
+  it("un'assegnazione annullata non compare (regola 5)", async () => {
+    const now = Date.now();
+    const game = await gameAuction();
+    const state = (await loadForSnapshot(game.auctionId))!.state;
+    const striker = state.players.find((p) => p.role === "A")!;
+
+    const { assignmentId } = unwrap(
+      await manualAssign(
+        game.ownerId,
+        game.auctionId,
+        { memberId: game.memberIds[2], playerId: striker.id, price: 40 },
+        now,
+      ),
+    );
+    expect(unwrap(await exportRoseCsv(game.ownerId, game.auctionId)).assigned).toBe(1);
+
+    unwrap(
+      await voidAssignment(game.ownerId, game.auctionId, assignmentId, now + 10),
+    );
+
+    const dopo = unwrap(await exportRoseCsv(game.ownerId, game.auctionId));
+    expect(dopo.assigned).toBe(0);
+    expect(csvRows(dopo.bytes)).toHaveLength(1); // la sola intestazione
+  });
+
+  it("ordina le righe per posto in tavolo, così le rose si leggono a blocchi", async () => {
+    const now = Date.now();
+    const game = await gameAuction();
+    const state = (await loadForSnapshot(game.auctionId))!.state;
+    const [primo, secondo] = state.players.filter((p) => p.role === "D");
+
+    // Assegnati in ordine inverso di posto: il file deve rimetterli in ordine.
+    unwrap(
+      await manualAssign(
+        game.ownerId,
+        game.auctionId,
+        { memberId: game.memberIds[6], playerId: primo.id, price: 10 },
+        now,
+      ),
+    );
+    unwrap(
+      await manualAssign(
+        game.ownerId,
+        game.auctionId,
+        { memberId: game.memberIds[3], playerId: secondo.id, price: 20 },
+        now + 10,
+      ),
+    );
+
+    const rows = csvRows(unwrap(await exportRoseCsv(game.ownerId, game.auctionId)).bytes);
+    expect(rows.slice(1).map((r) => r[0])).toEqual(["Squadra 3", "Squadra 6"]);
+  });
+
+  it("solo l'owner, e un'asta inesistente è un 404", async () => {
+    const game = await gameAuction();
+    expect(await exportRoseCsv(game.userIds[3], game.auctionId)).toMatchObject({
+      ok: false,
+      error: { code: "FORBIDDEN" },
+    });
+    expect(await exportRoseCsv(game.ownerId, "undefined")).toMatchObject({
       ok: false,
       error: { code: "NOT_FOUND" },
     });

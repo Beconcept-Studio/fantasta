@@ -20,8 +20,17 @@ import { listUserAuctions } from "@/lib/engine/setup";
  * deploy fa `pnpm build` sul server dopo il checkout, quindi ciò che si legge
  * nella navbar è la versione del codice che sta rispondendo — non quella che
  * qualcuno ha scritto in un file di configurazione.
+ *
+ * ⚠ **Import del default, non del campo.** `import { version } from` faceva
+ * emettere a `next build` l'avviso «only default export is available soon»: un
+ * modulo JSON esporrà solo il default, e quel giorno la named import non
+ * compilerebbe più. Il default si destruttura qui sotto, e non cambia niente per
+ * il browser — questo file è un server component, quindi l'oggetto intero non
+ * lascia il server e alla navbar arriva sempre e solo la stringa.
  */
-import { version as appVersion } from "../package.json";
+import packageJson from "../package.json";
+
+const appVersion = packageJson.version;
 
 import "./globals.css";
 
