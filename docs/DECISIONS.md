@@ -1217,3 +1217,69 @@ navbar arriva sempre e solo la stringa. Le due alternative scartate allora resta
 abitudine: `process.env.npm_package_version` è vuota quando il processo non è avviato da pnpm, cioè
 sotto pm2, cioè in produzione; una variabile in `next.config.ts` aggiunge un posto da cui la versione
 può divergere da quella vera.
+
+## 2026-08-10 — M4, la simulazione in-app
+
+**Il meccanismo di B con il cancello di A.** Il quaderno proponeva due strade: un flusso di
+creazione dedicato all'asta simulata (A), oppure un pannello sotto gli inviti che riempie di bot
+un'asta qualunque (B). Si è preso il pannello di B con il flag `is_simulated` deciso alla creazione
+come in A. A da sola avrebbe duplicato la schermata di configurazione — che è esattamente ciò che
+la richiesta chiede di riusare, «configurarla come se fosse vera» — e la copia sarebbe divergente
+al primo cambio. B da sola avrebbe lasciato per sempre un pulsante «riempi di bot» a due centimetri
+dagli inviti dell'asta vera. Il flag alla creazione, che nessuna schermata può più cambiare, rende
+la cosa **strutturalmente** impossibile invece che sorvegliata.
+
+**I bot si muovono da un `setInterval` in-process, separato dallo sweep.** Le alternative erano
+agganciarli alla coda di ogni transizione o lasciarli fuori processo. La coda della transizione non
+funziona: l'apertura di un lotto è un istante, e dei bot che offrono tutti in quell'istante chiudono
+ogni round in cinquanta millisecondi — l'asta simulata diventa una lista di risultati invece della
+dinamica che si vuole guardare mentre si offre dal telefono. Fuori processo non risolve la richiesta,
+che è precisamente «senza lanciare script».
+
+Separato dallo sweep e non dentro, perché lo sweep chiude i round ed è sequenziale: undici bot che
+scrivono sotto lock ritarderebbero la chiusura di un round dell'asta vera che gira accanto. Non
+viola il divieto su code, worker e servizi di scheduling: è un `setInterval` nell'unico processo
+Node, la stessa forma dello sweep, e `exec_mode: fork` con `instances: 1` è la ragione per cui è
+sicuro. **Acceso sempre**, anche senza simulazioni: è una `SELECT` al secondo che non trova nulla,
+e in cambio non esiste lo stato «il loop non è ripartito dopo un riavvio».
+
+**Lo stand-down: i bot si fermano se esiste un'asta reale `LIVE` o `PAUSED`.** La sezione gira sulla
+stessa macchina dell'asta vera, ed è una funzione a runtime: «la sera dell'asta non si pusha su
+`main`» non la copre. Il costo dichiarato è che una simulazione dimenticata accesa si congela — per
+questo la pagina lo scrive, altrimenti fra tre mesi sembra un guasto.
+
+**`is_admin` e `is_bot` sono due booleani, non una colonna a tre valori.** L'alternativa era
+`users.role ∈ {USER, ADMIN, BOT}`, che avrebbe reso impossibile per costruzione la combinazione
+assurda. Scartata su indicazione dell'owner, con la ragione giusta: l'amministratore è un **permesso
+su una persona**, non un tipo di creatura — gioca le aste come tutti — e l'enum lo avrebbe modellato
+come una specie. La combinazione impossibile la vieta un `CHECK`, che è la stessa logica degli
+indici parziali di I1 e I2. Effetto collaterale gradito: `is_admin` resta dov'era e lo schema cambia
+in modo puramente additivo, quindi nessun `pg_dump` preventivo.
+
+**Un cervello solo, puro, che mangia lo snapshot redatto.** Prima di M4 i bot erano due
+implementazioni: `scripts/bots.ts` decideva sullo snapshot (cieco), `scripts/drive.ts` su
+`AuctionState` grezzo (onnisciente). Finché giocavano fra loro era indifferente; in una simulazione
+in cui l'owner gioca contro di loro, un bot che vede le buste è un bot che batte sempre di uno. Il
+cervello unico prende uno `Snapshot` e nient'altro: I8 diventa la firma di una funzione invece di
+una promessa. `drive.ts` è stato ritirato — faceva una cosa che la simulazione fa meglio, e portava
+con sé uno scheduler parallelo, che è una delle trappole documentate in `CLAUDE.md`. `bots.ts`
+resta perché collauda l'applicazione *da fuori*: sessione, rotta, SSE, nginx.
+
+**Niente memoria nei bot: il ritardo è derivato.** Dove c'era `Math.random()` c'è un hash di
+`(membro, lotto, round)`. Stessa situazione, stesso ritardo, anche dopo un riavvio del processo — e
+i test non diventano intermittenti, che è il modo peggiore di fallire perché un rosso che va e
+viene si finisce per ignorare. «Ho già offerto?» non è uno stato del bot: glielo dice `myBid`.
+
+**Le aste del seed nascono simulate, e il primo utente del seed è amministratore.** Un'asta prodotta
+da `pnpm db:seed` non è mai un'asta vera; senza il flag, tenerne una aperta in locale terrebbe fermi
+i bot di ogni simulazione per via dello stand-down. E dover aprire `psql` per nominarsi
+amministratore, allo scopo di provare la funzione che esiste per non aprire più `psql`, sarebbe una
+barzelletta. In produzione ci si diventa con un `UPDATE` a mano, una volta.
+
+**Si può cancellare qualunque asta, non solo le simulate.** Proposto di limitarlo alle simulate;
+l'owner ha chiesto che valga per tutte. Non contraddice la regola 5, che vieta il `DELETE` *dentro*
+un'asta — dove un fatto accaduto si annulla lasciando traccia — mentre buttare via una partita
+intera è un atto dichiarato. Rifiutata su `LIVE` e `PAUSED`, solo all'owner, e la conferma è **il
+nome digitato** e non un `confirm()`: per un gesto irreversibile un riflesso non è un consenso. Su
+un'asta vera conclusa se ne vanno verbale e storico; l'unica traccia che sopravvive è una riga su
+stdout, perché `events` va via nel cascade.

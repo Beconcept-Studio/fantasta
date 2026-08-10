@@ -587,15 +587,17 @@ downtime era più corto del tempo residuo il round prosegue normalmente, altrime
 chiude con le buste già consegnate — che è il comportamento giusto, perché le offerte stanno a
 database, non in memoria.
 
-### Il driver: l'asta che si gioca da sola
+### L'asta che si gioca da sola
 
-`pnpm drive --auction=<id>` è il collaudo di tutto il capitolo: prende un'asta pronta e la porta
-a COMPLETED senza UI. Avvia lo scheduler in-process — è lui a chiudere i round, il driver non
-chiama mai `advancePhase` — e impersona i partecipanti: chi è di turno chiama un giocatore, gli
-idonei offrono importi casuali validi, qualcuno ogni tanto ritira o si lascia scadere il pick per
-esercitare l'auto-pick. Se l'asta arriva in fondo è perché timer, sweep, lock e persistenza
-funzionano insieme. Con i timer corti del seed (3 secondi per offrire) un'asta piccola si chiude
-in un paio di minuti; quella vera da duecento lotti in un quarto d'ora.
+Il collaudo di tutto il capitolo è un'asta che parte pronta e arriva a `COMPLETED` senza che
+nessuno tocchi niente: se ci arriva, è perché timer, sweep, lock e persistenza funzionano insieme.
+Con i timer corti del seed (3 secondi per offrire) un'asta piccola si chiude in un paio di minuti;
+quella vera da duecento lotti in un quarto d'ora.
+
+Fino a v1.4.0 lo faceva `pnpm drive`, uno script che avviava **uno scheduler suo**. È stato
+ritirato in M4: la simulazione in-app fa la stessa cosa meglio — dodici bot, nessun umano, e una UI
+da guardare mentre succede — e senza il secondo scheduler sullo stesso database, che è una delle
+trappole ricorrenti di questo progetto.
 
 Lo stesso motore, girato su un **orologio virtuale**, è il modo in cui il seed fabbrica gli stati
 avanzati: `--auction-status=mid` gioca metà asta in memoria saltando di deadline in deadline
@@ -763,19 +765,132 @@ anche i telefoni accesi, invece di avere una scorciatoia per saltare il cancello
 
 ### I bot
 
-`pnpm bots --auction=<id> --count=7 --strategy=random` sostituisce il driver come fonte di
-partecipanti finti, ma è una cosa diversa: sono **client veri**. Si autenticano col provider `dev`
-come farebbe un browser, aprono lo stream SSE, e reagiscono agli snapshot — se è il loro turno
-chiamano un giocatore, se sono idonei offrono, e rispettano `min_amount` negli spareggi. Le loro
-azioni passano da `POST …/action`, cioè dal server: se scrivessero sul database dal proprio
-processo, il broadcast partirebbe da lì e il browser aperto accanto non vedrebbe muoversi niente —
-e guardare il proprio portale dentro un'asta viva è tutto il motivo per cui i bot esistono.
+`pnpm bots --auction=<id> --count=7 --strategy=random` è la fonte di partecipanti finti **da
+fuori**: sono **client veri**. Si firmano un cookie di sessione — il capitolo sul server racconta
+perché, e perché non passano dal provider `dev` — aprono lo stream SSE, e reagiscono agli snapshot
+esattamente come un telefono. Le loro azioni passano da `POST …/action`, cioè dal server: se
+scrivessero sul database dal proprio processo, il broadcast partirebbe da lì e il browser aperto
+accanto non vedrebbe muoversi niente.
 
 Le strategie servono a fabbricare situazioni: `aggressive` offre sempre il massimo, `passive`
 sempre il minimo, `random` importi verosimili, e `tie` fa convergere tutti sulla stessa cifra —
 è il modo di innescare a comando lo spareggio, che a mano è quasi impossibile da riprodurre. Con
 sette bot più un browser reale si collauda il proprio portale in mezzo a un'asta che va avanti da
 sola.
+
+Da M4 questo script **non decide più niente**: come si comporta un bot lo stabilisce un modulo
+condiviso, e qui resta il trasporto — sessione, stream, POST. Ed è per il trasporto che sopravvive
+alla simulazione in-app, che di quei pezzi non ne tocca nessuno: il giorno in cui si romperà il
+buffering SSE dietro nginx, sarà questo script a dirlo. Il capitolo che segue racconta l'altra metà.
+
+---
+
+## La simulazione, e chi fa muovere i bot
+
+Fino a M4, provare le dinamiche dell'asta voleva dire tre terminali: il database, il seed con l'id
+copiato da una riga di output, lo script dei bot. Funzionava — è ciò che ha permesso di collaudare
+tutto — ma era una procedura, e una procedura è qualcosa che si sbaglia quando serve in fretta.
+La simulazione in-app la sposta dentro l'applicazione: si crea un'asta simulata come se ne crea una
+vera, le si dice «riempi i posti liberi con i bot», e si gioca.
+
+### Un'asta simulata è un'asta, non una modalità
+
+`auctions.is_simulated` si decide alla creazione e non cambia più: `updateAuctionSettings` non la
+conosce, e non esiste nessuna schermata che la tocchi. Non è prudenza — è ciò che rende
+*strutturalmente* impossibile che dei bot finiscano in un'asta vera. Non c'è nessun ramo «se
+simulata allora» dentro il motore, e non deve nascerne: la simulazione non è un modo di giocare
+diverso, è un'asta con dei partecipanti che non hanno un telefono.
+
+Le due strade possibili erano un flusso di creazione dedicato («crea un'asta simulata») oppure un
+pannello che riempie di bot un'asta qualunque. Si è scelto **il pannello, con il flag alla
+creazione come cancello**. La prima strada avrebbe duplicato la schermata di configurazione, che è
+precisamente ciò che serve — «configurarla come se fosse vera» — e la copia sarebbe divergente al
+primo cambio. La seconda, da sola, avrebbe lasciato per sempre un pulsante «riempi di bot» a due
+centimetri dagli inviti dell'asta vera.
+
+I bot sono un **pool fisso di dodici utenti** con `is_bot = true`, creati se mancano al primo
+riempimento (e dal seed, così in locale ci sono da subito). Dodici perché è il taglio massimo, e
+perché l'owner può condurre senza giocare. Lo stesso bot sta in più aste insieme —
+`members_auction_user_unique` è su *(asta, utente)* — quindi due simulazioni in parallelo non
+collidono. Sono esclusi da `listDevUsers()` e rifiutati dal provider `dev`: una lista di identità
+di comodo che si sporca da sola smette di essere utile.
+
+### Il cervello, e perché è puro
+
+Come si comporta un bot sta in `lib/engine/bot-brain.ts`: una funzione che prende uno **snapshot**,
+una strategia e un istante, e restituisce la mossa o `null`. Nessun database, nessun `Date.now()`
+dentro — il tempo è un parametro, per la stessa ragione per cui lo è nel motore.
+
+Il tipo di quel primo argomento è la cosa importante. Uno `Snapshot` è l'uscita di
+`serializeSnapshot` **costruita col `memberId` del bot**: le buste altrui non ci sono. Prima di M4 i
+cervelli erano due e già divergevano — quello dello script leggeva lo snapshot redatto, quello del
+driver leggeva `AuctionState` grezzo, cioè vedeva le offerte di tutti. Finché i bot giocavano fra
+loro era indifferente; nel momento in cui *tu* giochi contro di loro, un bot onnisciente è un bot
+che ti batte sempre di uno. Ridotti a uno, e quello che resta è il cieco: I8 smette di essere una
+promessa e diventa la firma di una funzione.
+
+Non c'è nessuna memoria da nessuna parte, e non per eleganza. «Ho già offerto in questo round?» lo
+dice lo snapshot (`myBid`). E il ritardo con cui un bot agisce dentro un round — che serve, perché
+bot che offrono tutti nell'istante dell'apertura trasformano l'asta in una lista di risultati — non
+è una variabile: si **deriva** da chi è, su quale lotto, in quale round. Stessa situazione, stesso
+ritardo, anche dopo un riavvio del processo, che qualunque memoria l'avrebbe azzerata. È anche ciò
+che rende i test non intermittenti: dove c'era `Math.random()` adesso c'è un hash.
+
+### Il tick, e perché non è lo sweep
+
+A far muovere i bot dentro l'applicazione è un `setInterval` da un secondo, registrato in
+`instrumentation.ts` sotto la sua guardia su `globalThis`. Tre domande, in ordine.
+
+**Perché in-process, quando lo script dei bot è nato apposta per non esserlo.** La ragione storica
+— dei bot che chiamano il motore nel *proprio* processo scrivono senza che il server se ne accorga,
+e nessun browser vede muoversi niente — vale per uno script. Codice che gira **dentro** il server
+Next ha già l'hook di broadcast impostato: scrive nel processo giusto, e lo stream parte da solo.
+
+**Perché un intervallo separato dallo sweep dello scheduler.** Lo sweep chiude i round ed è
+sequenziale. Mettendoci dentro le mosse dei bot, una simulazione con undici bot che scrivono sotto
+lock ritarderebbe la chiusura di un round dell'asta vera che gira accanto sulla stessa macchina.
+Sono due lavori con priorità diverse, e restano due cicli. Non è un servizio di scheduling né un
+worker: è un `setInterval` nell'unico processo Node, la stessa forma dello sweep, e `exec_mode:
+fork` con `instances: 1` resta la ragione per cui è sicuro.
+
+**Cosa fa un giro.** Prima lo stand-down (sotto). Poi, per ogni asta simulata `READY` o `LIVE`,
+l'heartbeat dei bot — fuori dal lock, perché la presence è telemetria: serve perché il cancello di
+avvio pretende tutti i membri `LIVE`, e un bot deve superarlo come lo supererebbe un telefono
+acceso, non con una deroga nel motore. Infine, per le aste `LIVE`, la mossa di ogni bot: si
+costruisce il *suo* snapshot, lo si dà al cervello, e se decide di agire si chiamano `pickPlayer` o
+`placeBid` — **le stesse funzioni che chiama la rotta HTTP**. Stesso lock, stesse regole, stesso
+broadcast. Rispetto a un telefono, un bot salta soltanto la sessione, che è ciò che distingue «sono
+il server» da «sono un browser».
+
+E i bot **non chiudono mai niente**: offrono e chiamano, come un partecipante. A chiudere un round
+resta soltanto lo scheduler.
+
+### Lo stand-down, che è la difesa vera
+
+Questa funzione gira sulla stessa macchina dell'asta vera, e «la sera dell'asta non si pusha su
+`main`» non la copre: è roba di runtime, non di deploy. Quindi il tick, prima di muovere qualsiasi
+bot, si chiede se esista un'asta **non simulata** in `LIVE` o `PAUSED` — e se c'è, non fa niente.
+È il gemello a runtime della regola che il deploy applica già, quella per cui `deploy.sh` si
+rifiuta di partire con un'asta in corso: durante l'asta vera nessuno può, nemmeno volendo, mettere
+undici bot a scrivere sotto lock accanto ai dodici telefoni.
+
+Il costo è che una simulazione dimenticata accesa **si congela**. Per questo la pagina della
+configurazione fa la stessa domanda e lo scrive: senza quella riga, fra tre mesi sembrerà un guasto
+e ci si passerà una serata.
+
+Le altre difese sono più semplici e stanno tutte nello stesso punto: solo un **amministratore
+dell'applicazione** (`users.is_admin`, una colonna che esisteva dall'inizio del progetto e che
+questa macro usa per la prima volta) vede la casella «asta simulata» e può riempire di bot, e
+`fillWithBots` rifiuta comunque un'asta che non sia simulata. L'amministratore è un permesso su una
+persona e non un tipo di utente — un amministratore gioca le aste come tutti — ed è per questo che
+`is_admin` e `is_bot` sono due booleani indipendenti invece di una colonna a tre valori. L'unica
+combinazione che non deve esistere, `is_admin AND is_bot`, la vieta un `CHECK`: la stessa logica
+degli indici parziali di I1 e I2, per cui una regola che si può rendere impossibile non si
+sorveglia.
+
+Infine il badge **[simulazione]**, che compare in dashboard, nell'intestazione di ogni sezione
+dell'asta e sulla TV. Sembra decorazione e non lo è: chi lavora a questa applicazione tiene aperte
+due schede, e le due schermate sono identiche in tutto il resto — è lo stesso codice, di proposito.
 
 ---
 
@@ -1181,6 +1296,28 @@ crediti per completare la rosa.
 
 Il risultato è che dopo la serata non si può ricostruire solo *quanto* aveva ciascuno, ma
 **perché**. È la differenza fra un archivio e un saldo.
+
+### L'unica eccezione: buttare via l'asta intera
+
+Da M4 un'asta si può **cancellare**, e vale la pena dire perché non contraddice quanto sopra. La
+regola vieta il `DELETE` su `assignments` e `ledger` *dentro* un'asta: in un'asta viva un fatto
+accaduto non si riscrive a mano, si annulla lasciandone traccia. Buttare via un'intera partita è un
+atto diverso — esplicito, chiesto, e senza nessuna pretesa di correggere un numero.
+
+Nasce da un bisogno concreto: con la simulazione, le aste di prova si moltiplicano a ogni sessione
+di lavoro, e dopo dieci prove la dashboard è un elenco in cui l'asta vera sta in mezzo alle altre.
+Un elenco così è il modo in cui, fra sei mesi, si clicca sulla cosa sbagliata.
+
+Le difese sono tre. La cancellazione è **rifiutata su un'asta `LIVE` o `PAUSED`** — la pausa
+congela la fase, non azzera l'asta, e non si butta via qualcosa mentre dodici persone ci stanno
+dentro. Solo l'owner può chiederla. E la conferma non è un `confirm()`, che si clicca per riflesso:
+**si scrive il nome dell'asta**, così chi sta cancellando la cosa sbagliata se ne accorge mentre
+scrive il nome sbagliato.
+
+Resta un fatto da guardare in faccia: su un'asta vera conclusa se ne vanno il verbale delle rose e
+lo storico, perché ogni tabella ha `cascade` su `auction_id` — `events` compresa. L'unica cosa che
+sopravvive è una riga su stdout, quella che si rilegge con `pm2 logs`. È scritto qui perché
+quella riga è tutto ciò che resterà da leggere.
 
 ### Le tre azioni
 
