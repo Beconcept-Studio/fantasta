@@ -1073,3 +1073,124 @@ in cui uno guarda quando l'app non lo fa entrare e vuole capire se il rilascio �
 **Versione `1.3.1` e non `1.4.0`.** La convenzione del progetto lega il minor alle macro-feature e
 la patch agli hotfix; questa è un'aggiunta minuscola fuori macro, e una patch la racconta meglio
 di un minor.
+
+## 2026-08-10 — M3, tracciabilità
+
+**I due export convivono, e la decisione è arrivata da un fatto e non da una preferenza.** Chiesto
+se l'export nuovo dovesse sostituire quello esistente, l'owner ha scelto la sostituzione; la domanda
+successiva — «la reimportazione su Fantacalcio.it la usi?» — ha ribaltato la scelta, perché la
+risposta era sì. Vale la pena annotare il metodo e non solo l'esito: la domanda utile non era quale
+export preferire, era quale dei due file viene aperto davvero.
+
+**Il file del listone si chiama `-listone.xlsx`, e prima si chiamava `-rose.xlsx`.** Cambia il nome
+di un download, non il contenuto. Con un vero export delle rose accanto, un file chiamato «rose» che
+contiene tutto il listone mente proprio a chi lo ritrova nei download sei mesi dopo.
+
+**Le rotte diventano due gemelle** (`export/listone`, `export/rose`) invece di una con un segmento
+parametrico. Dieci righe di autenticazione ripetute due volte si leggono senza spiegazioni; uno
+smistamento su un enum da due valori è un'astrazione prima del secondo chiamante (regola 8). Anche
+quella esistente si è spostata: `/export` accanto a `/export/rose` non dice quale sia quale, e lo
+compone solo il link in regia — nessuno l'ha mai aperto a mano.
+
+**Il CSV usa la virgola, con la trappola dichiarata.** Excel in italiano usa il punto e virgola come
+separatore di elenco, quindi il file aperto con un doppio clic finisce in una colonna sola. Proposto
+il punto e virgola, l'owner ha scelto la virgola: è il formato della richiesta ed è il più neutro per
+chi lo legge da script o a mano. Annotato perché è una cosa che si riscopre con fastidio, non un
+difetto da correggere.
+
+**Il nome squadra non può contenere virgole né virgolette, e la regola nasce da qui.** Proposto di
+virgolettare i valori in uscita, l'owner ha chiesto l'opposto: nomi puliti nel file e un vincolo
+all'ingresso. È la scelta migliore per il file — un verbale deve restare leggibile a occhio — e ha
+un punto di applicazione unico, perché `validateTeamName` è chiamata da un solo posto e un nome
+squadra non si rinomina mai. Il punto e virgola passa: con la virgola come separatore è innocuo, e
+togliere caratteri legittimi a un nome di fantasia si paga in fastidio a ogni ingresso. La regola sta
+in `validateTeamName` e **non** in `normalizeName`, che il nome dell'asta condivide e che finisce solo
+in uno slug.
+
+**Resta una rete nel costruttore del CSV** che trasforma un carattere proibito in uno spazio. Non
+sostituisce la regola: copre i nomi salvati *prima* che esistesse, che senza rinomina non si possono
+aggiustare — ad asta iniziata nemmeno togliendo e riaggiungendo il membro. Un file leggermente
+diverso dal nome digitato è meglio di un file rotto senza rimedio.
+
+**L'ordinamento delle righe del CSV sta nella funzione pura e non in un `ORDER BY`.** L'ordine delle
+righe è una proprietà del file, non della query; tenerlo dove si collauda senza Postgres lo rende
+verificabile in millisecondi, e in un posto solo non può divergere.
+
+**Lo storico è la quinta sezione dell'asta, non un link nella lobby.** La richiesta diceva «dalla
+lobby», e una sezione ci arriva comunque, perché la sotto-navbar è su tutte le pagine dell'asta —
+mentre il contrario no: durante una disputa si è in regia o nel portale, e tornare in lobby per
+leggere lo storico è un passaggio in più. È anche il caso per cui `lib/auction-nav.ts` esiste, ed è
+compatibile con la sua regola: la voce dipende dal ruolo e non dallo stato dell'asta.
+
+**Lo vedono owner e partecipanti.** Un partecipante che contesta un lotto deve poter guardare da sé,
+e c'è la I10: le buste non si rivedono da nessun'altra parte dopo i secondi di reveal — tanto meno
+se è stato premuto «Prosegui asta», che quei secondi li salta. Chi non partecipa prende `NOT_FOUND`
+e non `FORBIDDEN`: l'esistenza di un'asta a cui non partecipi non è una sua informazione.
+
+**Due blocchi e non una cronologia unica, e il numero che l'ha deciso.** Un'asta da dodici con
+venticinque slot fa ~300 lotti e **oltre duemila righe in `events`**, quasi tutte `ADVANCE` e
+`PLACE_BID`. Una lista piatta in ordine di tempo sarebbe illeggibile la sera in cui serve. I lotti
+pieghevoli la riducono a trecento righe; le correzioni sono poche e stanno sotto.
+
+**`events` da sola non basta per una disputa**, e verificarlo prima di progettare ha cambiato la
+forma della pagina. Il payload di un `PLACE_BID` è `{from, to, lotId, actor}`: registra chi e quando,
+**mai quanto**. I lotti si leggono quindi dallo stato dell'asta, ed `events` serve solo agli eventi
+notevoli.
+
+**Un tipo di evento sconosciuto viene mostrato, non ignorato.** La lista consultata è quella della
+routine da escludere (`PICK`, `PLACE_BID`, `WITHDRAW_BID`, `ADVANCE`), non quella dei tipi noti da
+includere: un evento aggiunto fra un anno comparirà da sé, senza che nessuno debba ricordarsi di
+registrarlo. Un log che nasconde ciò che non sa interpretare è un log di cui non ti fidi.
+
+**Gli eventi si leggono con due query e non con un join, e questa avrebbe rotto la pagina in
+produzione.** In `payload.actor` non c'è sempre un id utente: le transizioni decise dal tempo
+scrivono `"system"`, il seed scrive `"seed"`, e un `->>'actor'` castato a `uuid` **solleva** su quelle
+righe. La pagina sarebbe andata in 500 esattamente sulle aste in cui una fase è scaduta, cioè su
+tutte quelle vere.
+
+**L'esito di ogni round lo scrive `resolveRound`**, la stessa funzione che ha deciso l'asta. Il
+conteggio dei pari merito serve alle parole («stallo») e non alla decisione: contare non è
+ridecidere. Ricalcolare il verdetto a mano darebbe due verità su come si vince un lotto, e in una
+disputa la seconda non serve a niente.
+
+**Nessuno stream sulla pagina, e un pulsante invece di un aggiornamento automatico.** Lo storico non
+è lo stato dell'asta: non passa da `serializeSnapshot` (regola 3) e non ha nulla da ricevere in
+diretta. L'ora della lettura è scritta in cima perché in una disputa l'età di ciò che leggi è essa
+stessa un'informazione; un aggiornamento automatico sposterebbe sotto gli occhi la riga che stai
+guardando.
+
+**Gli orari sono fissati a `Europe/Rome` nel codice, non lasciati al fuso del browser.** Le persone
+che discutono di un lotto sono nella stessa stanza e devono leggere lo stesso numero, anche se una ha
+il telefono su un altro fuso; ed è la stessa ora che l'owner legge nei log del server. `Intl` copre
+l'ora legale, che sommare due ore fisse no.
+
+### La barriera I8, e perché il predicato non è dove doveva essere
+
+In fase di spec il filtro era una riga dentro `lib/engine/log.ts`. È stato spostato in
+`lib/auction-log.ts` per una cosa scoperta **rompendolo di proposito**: togliendo il filtro, il test
+con Postgres continuava a passare. `serializeLot` scarta comunque i lotti senza vincitore e senza
+prezzo, e un lotto aperto non ne ha — quindi era *quel* controllo a escludere il lotto in contesa, e
+l'asserzione non stava dimostrando ciò che diceva di dimostrare.
+
+Le conseguenze, entrambe volute:
+
+- **Le due protezioni restano.** Si coprono a vicenda soltanto perché il motore non produce mai un
+  lotto `OPEN` con un vincitore; contare su quella coincidenza vorrebbe dire affidare I8 a un
+  dettaglio di implementazione di `enterReveal` invece che a una regola dichiarata. Un commento in
+  `serializeLot` lo dice a chi passerà da lì e sarà tentato di semplificare.
+- **Il predicato sta in un modulo puro**, dove si prova da solo — su un lotto costruito a mano che è
+  `OPEN` *e* ha un vincitore. Quello stato il motore non lo genera mai, ed è esattamente per questo
+  l'unico che separa quel controllo da tutti gli altri. Un guardiano che non sai se sta guardando non
+  è un guardiano.
+
+**L'asserzione I8 toglie dal payload i numeri che non sono importi** prima di cercare le cifre: gli
+istanti ISO, gli uuid (che finiscono anche nei nomi utente costruiti dai test) e gli `id` di `events`,
+che sono un `bigserial` globale al database. Senza quelle esclusioni il test falliva **a caso**,
+secondo i byte prodotti dal generatore di uuid — ed è il modo peggiore, perché un rosso che va e
+viene si finisce per ignorare.
+
+**La lobby non verifica l'appartenenza, e M3 non l'ha cambiato.** `getAuctionOverview` torna `null`
+solo se l'asta non esiste, quindi qualunque utente autenticato può vedere la lobby di qualunque asta.
+Lo storico si protegge da sé; allineare la lobby è una decisione dell'owner e non un effetto
+collaterale di questa macro. Annotato qui perché è il genere di cosa che, non scritta, si riscopre
+per caso.

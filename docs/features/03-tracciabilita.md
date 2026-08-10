@@ -353,7 +353,7 @@ generico. Due export sono due funzioni, non un export parametrico.
       visibile e marcato; `tests/db/export.test.ts` esteso con l'annullata che non compare e la
       manuale che sì
 - [x] **M3-11** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi
-- [ ] **M3-12** — `docs/ARCHITECTURE.md` con la tracciabilità: i due export e lo storico, con il
+- [x] **M3-12** — `docs/ARCHITECTURE.md` con la tracciabilità: i due export e lo storico, con il
       perché della barriera; `docs/DECISIONS.md` con le scelte non ovvie di questa macro
 - [ ] **M3-13** — Chiusura: merge `--no-ff` su `dev`, prova con Docker + seed + `pnpm bots` e dal
       telefono con `pnpm dev:lan`, poi — **solo su richiesta dell'owner** — `CHANGELOG.md`,
