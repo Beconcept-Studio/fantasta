@@ -4,6 +4,49 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.4.0] — 2026-08-10
+
+**M3 — Tracciabilità.** Una macro sola, e risponde a due domande: cosa è successo durante l'asta, e
+come lo dimostro se qualcuno non è d'accordo.
+
+### Aggiunto
+
+- **Lo storico dell'asta**, nuova voce «Storico» nel menù dell'asta, per chi l'ha creata **e** per
+  chi ci gioca. In alto tutti i lotti conclusi, dal più recente: una riga per lotto che si apre sul
+  dettaglio delle buste — ogni round col suo minimo, quanti potevano offrire, ogni offerta con la
+  cifra e l'ora in cui è stata fissata, le offerte ritirate, e com'è finito il round. Sotto, le
+  pause e le correzioni: chi ha messo in pausa e quando, cosa è stato assegnato a mano, cosa
+  annullato, quali crediti sono stati rettificati e con che motivo. Prima tutto questo esisteva solo
+  nel database, e per leggerlo bisognava aprirlo.
+- **Un campo di ricerca sopra i lotti**: si scrive il nome di un giocatore, una squadra o un numero
+  di lotto e l'elenco si restringe mentre digiti. In una disputa la domanda è sempre un nome.
+- **L'esportazione delle rose in `.csv`**, dalla regia, accanto a quella che c'era già: tre colonne
+  — nome squadra, id del calciatore, crediti spesi — e soltanto i giocatori assegnati.
+
+### Cambiato
+
+- **In regia i download sono due, con etichette che dicono a cosa servono**: «Listone per
+  Fantacalcio.it (.xlsx)», che è il file di prima e serve a ricaricare le rose là dove si gioca, e
+  «Rose (.csv)», il verbale da leggere. Il primo si scarica ora come `<asta>-listone.xlsx`: si
+  chiamava `<asta>-rose.xlsx`, che con un vero export delle rose accanto sarebbe stato fuorviante.
+- **Un nome squadra non può più contenere virgole né virgolette.** Lo richiede il formato del nuovo
+  file, che per restare leggibile a occhio non usa virgolette. Il vincolo vale per chi entra da qui
+  in avanti; i nomi già salvati restano come sono, e nel file il carattere diventa uno spazio.
+
+### Da sapere
+
+- **Le buste di un lotto ancora in corso non compaiono nello storico**, per nessuno — né per chi
+  conduce, né per chi sta offrendo su quel lotto, né ad asta in pausa. Compaiono nel momento in cui
+  le buste si aprono, e da quel momento restano leggibili per sempre: è la risposta al caso in cui i
+  secondi delle buste aperte siano passati mentre guardavi altrove, o sia stato premuto «Prosegui
+  asta».
+- **I lotti annullati non spariscono dallo storico**: restano, marcati «annullato», e l'annullamento
+  con la sua riassegnazione si leggono fra le correzioni. Uno storico che nasconde le correzioni non
+  serve a chiudere una discussione.
+- Il `.csv` usa la virgola come separatore. Aperto con un doppio clic su un Excel in italiano finisce
+  in una sola colonna, perché l'italiano si aspetta il punto e virgola: va importato dalla procedura
+  guidata, oppure aperto con un editor di testo.
+
 ## [1.3.1] — 2026-08-10
 
 ### Aggiunto

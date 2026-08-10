@@ -1,6 +1,6 @@
 # M3 — Tracciabilità
 
-> **Stato:** in corso · **Aperta il** 2026-08-10
+> **Stato:** chiusa · **Aperta il** 2026-08-10 · **Uscita con** v1.4.0, il 2026-08-10
 > **Tocca lo schema del database?** **No.** Nessun `pnpm db:push` dopo il deploy. È stato
 > verificato in fase di spec: tutto ciò che serve allo storico è già in tabella — `events` esiste
 > dall'inizio del progetto con il suo indice su `(auction_id, id)`, e lotti, round, buste,
@@ -361,7 +361,7 @@ generico. Due export sono due funzioni, non un export parametrico.
       warning di `next build` su `app/layout.tsx`, preesistente da v1.3.1. `import { version }` da un
       modulo JSON diventa import del default più una costante — la named import smetterebbe di
       compilare quando i moduli JSON esporranno solo il default, e si romperebbe durante un deploy
-- [ ] **M3-13** — Chiusura: merge `--no-ff` su `dev`, prova con Docker + seed + `pnpm bots` e dal
+- [x] **M3-13** — Chiusura: merge `--no-ff` su `dev`, prova con Docker + seed + `pnpm bots` e dal
       telefono con `pnpm dev:lan`, poi — **solo su richiesta dell'owner** — `CHANGELOG.md`,
       `package.json` a `1.4.0`, merge `--no-ff` su `main`, tag `v1.4.0`, push
       → Merge su `dev` il 2026-08-10. **Prova confermata dall'owner** lo stesso giorno: I8 a video

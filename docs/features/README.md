@@ -12,9 +12,7 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-| Macro | Tema | Aperta il |
-|---|---|---|
-| [M3](03-tracciabilita.md) | Tracciabilità — esportazione delle rose in un CSV unico, pagina di storico dell'asta e dei lotti | 2026-08-10 |
+Nessuna. La prossima è **M4**, qui sotto.
 
 ## Da pianificare
 
@@ -29,6 +27,7 @@ L'ordine è indicativo: si apre quella che serve.
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M3](03-tracciabilita.md) | Tracciabilità — il verbale delle rose e lo storico dell'asta | v1.4.0 — 2026-08-10 |
 | [M2](02-navigazione.md) | Navigazione e identità delle pagine | v1.3.0 — 2026-08-10 |
 | [M1](01-segretezza-offerte.md) | Segretezza e rivelazione delle offerte | v1.2.0 — 2026-08-10 |
 | [M0](00-nuova-linea-di-sviluppo.md) | La nuova linea di sviluppo: tre branch, versioni, documenti | v1.1.0 — 2026-08-09 |
