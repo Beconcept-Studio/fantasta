@@ -1,6 +1,6 @@
 # M5 — Identità: registrazione con email e password
 
-> **Stato:** in corso · **Aperta il** 2026-08-10
+> **Stato:** chiusa in **v1.6.0** · **Aperta il** 2026-08-10 · **Chiusa il** 2026-08-10
 > **Tocca lo schema del database?** **Sì**, e non solo in modo additivo: due colonne nuove con
 > default, una tabella nuova, **un `UNIQUE` parziale** e — la parte che non si vede — **un backfill**
 > senza il quale il giorno del deploy tutti gli utenti esistenti finiscono davanti a una schermata
@@ -487,9 +487,18 @@ email · niente UI per cambiare la propria password da dentro l'app: chi la vuol
       asimmetrico e il perché, la scala di `requireUser()`. `docs/DECISIONS.md`: lo scostamento da
       PLAN §2, SMTP e `nodemailer`, scrypt invece di bcrypt, l'enumerazione non difesa, le sessioni
       non revocate al reset. `docs/HOWTO-PROVA-LOCALE.md`: il codice su stdout e la password del seed
-- [ ] **M5-18** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
+- [x] **M5-18** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       dell'owner** — `CHANGELOG.md`, `package.json` a `1.6.0`, merge `--no-ff` su `main`, tag
       `v1.6.0`, push, e **`pnpm db:push` + il backfill a mano sul server** a deploy finito
+      → Prova in locale svolta, **punto 12 compreso**: un'asta simulata a 8 con slot 1/1/1/1 e i
+      tempi al minimo (bid 3s, pick 3s, spareggio 2s, buste 1s) è arrivata a `COMPLETED` in circa
+      quattro minuti. 32 lotti su 32, otto rose da quattro, otto assegnazioni per ruolo (I2),
+      crediti mai negativi, tre spareggi veri e **zero `auto_called`**. Il motore non si è accorto
+      di questa macro, che è il modo di dimostrarlo.
+      ⚠ Merge su `main` e tag `v1.6.0` fatti **in locale, senza push**: il push è il grilletto del
+      deploy, e il deploy senza `pnpm db:push` lascia l'applicazione a cercare colonne che a
+      database non esistono. Va dato quando si è davanti al terminale del server, pronti a fare
+      subito i due comandi di §10.
 
 ## Verifica
 

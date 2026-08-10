@@ -12,14 +12,15 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-**[M5 — Identità](05-identita.md)**, su `feature/05-identita`: registrazione con email e password,
-verifica dell'indirizzo con un codice, recupero della password. **Tocca lo schema**, backfill compreso.
+Nessuna. La prossima si apre su richiesta esplicita.
 
 ## Da pianificare
 
 **[M6 — Amministrazione](06-amministrazione.md)**: il pannello, con la lista degli utenti e quella
-delle aste. Spec concordata e scritta, **non aperta**: dipende da M5 e si apre su richiesta esplicita.
-Non tocca lo schema.
+delle aste. Spec concordata e scritta, **non aperta**: si apre su richiesta esplicita. Non tocca lo
+schema. La dipendenza da M5 è soddisfatta — M5 è in v1.6.0 — e M6 porta con sé il pulsante che
+sostituisce l'unica cosa che M5 ha lasciato scoperta: la verifica a mano di un indirizzo, che oggi
+è una `UPDATE` sul server.
 
 Le due sono nate da una sessione di spec sola, il 2026-08-10, e sono state **tagliate in due di
 proposito**. M5 tocca la strada del login — l'unica cosa che, se si rompe, chiude fuori tutti — e
@@ -32,6 +33,7 @@ da amministrare.
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M5](05-identita.md) | Identità — registrazione con email e password, verifica dell'indirizzo, recupero | v1.6.0 — 2026-08-10 |
 | [M4](04-simulazione.md) | Simulazione in-app — l'asta di prova dall'interfaccia, con i bot dentro l'app | v1.5.0 — 2026-08-10 |
 | [M3](03-tracciabilita.md) | Tracciabilità — il verbale delle rose e lo storico dell'asta | v1.4.0 — 2026-08-10 |
 | [M2](02-navigazione.md) | Navigazione e identità delle pagine | v1.3.0 — 2026-08-10 |
