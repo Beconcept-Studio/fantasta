@@ -316,7 +316,7 @@ sue mosse.
       un'asta reale in corso**; il bot riceve uno snapshot costruito col **proprio** memberId),
       `deleteAuction` (rifiuta `LIVE`/`PAUSED`, rifiuta chi non è owner, il cascade porta via
       tutto), il `CHECK` `is_admin AND is_bot`
-- [ ] **M4-15** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi
+- [x] **M4-15** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi
 - [x] **M4-16** — `docs/ARCHITECTURE.md`: il capitolo sulla simulazione, e la **correzione della
       riga che dice ancora che i bot si autenticano col provider `dev`** (non è più vero da quando
       si firmano il JWT da sé); `docs/DECISIONS.md`: il tick separato, i due booleani, lo
