@@ -10,8 +10,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
+import { isAppAdmin } from "@/lib/domain";
+import { realAuctionRunning } from "@/lib/engine/bots";
 import { getAuctionOverview } from "@/lib/engine/setup";
 
+import { BotsPanel } from "./bots-panel";
+import { DeletePanel } from "./delete-panel";
 import { InvitesPanel } from "./invites-panel";
 import { ListonePanel } from "./listone-panel";
 import { MembersPanel } from "./members-panel";
@@ -41,6 +45,11 @@ export default async function SetupPage({
 
   const { auction } = overview;
   const editable = auction.status === "DRAFT" || auction.status === "READY";
+
+  // Solo per spiegare i bot fermi: la domanda si fa una volta sola, e solo
+  // dove serve dirlo.
+  const realAuctionRunningNow =
+    auction.isSimulated && isAppAdmin(user) ? await realAuctionRunning() : false;
 
   const requestHeaders = await headers();
   const host = requestHeaders.get("host") ?? "localhost:3000";
@@ -98,6 +107,41 @@ export default async function SetupPage({
           />
         </CardContent>
       </Card>
+
+      {/*
+        Il pannello dei bot esiste **solo su un'asta simulata**, e solo per un
+        amministratore dell'applicazione. Non è la difesa — `fillWithBots`
+        rifiuta comunque un'asta reale (regola 6) — è il motivo per cui, nella
+        configurazione dell'asta vera, la domanda non ti viene in mente.
+      */}
+      {auction.isSimulated && isAppAdmin(user) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Partecipanti simulati</CardTitle>
+            <CardDescription>
+              I bot giocano dal server: niente terminali, niente script.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {realAuctionRunningNow && (
+              <p
+                role="status"
+                className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm"
+              >
+                <strong>I bot sono fermi.</strong> È in corso un&apos;asta reale
+                su questa macchina, e finché non finisce la simulazione resta
+                congelata. Non è un guasto: è la regola che tiene i bot lontani
+                dalla sera dell&apos;asta.
+              </p>
+            )}
+            <BotsPanel
+              auctionId={auction.id}
+              freeSeats={auction.seats - overview.members.length}
+              editable={editable}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -165,6 +209,23 @@ export default async function SetupPage({
               slots: overview.slots,
               roleOrder: auction.roleOrder,
             }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* In fondo e staccata: si arriva qui scorrendo apposta, non passandoci. */}
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle>Cancella l&apos;asta</CardTitle>
+          <CardDescription>
+            L&apos;unica azione di questa applicazione che non si può annullare.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DeletePanel
+            auctionId={auction.id}
+            name={auction.name}
+            deletable={auction.status !== "LIVE" && auction.status !== "PAUSED"}
           />
         </CardContent>
       </Card>

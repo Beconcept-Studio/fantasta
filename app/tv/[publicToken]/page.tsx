@@ -53,6 +53,7 @@ export default async function TvPage({
       auctionId={auction.id}
       publicToken={publicToken}
       auctionName={auction.name}
+      isSimulated={auction.isSimulated}
     />
   );
 }

@@ -25,11 +25,27 @@ export async function register(): Promise<void> {
     const { startScheduler } = await import("@/lib/engine/scheduler");
     const { advancePhase } = await import("@/lib/engine/actions");
     const { setBroadcastHook } = await import("@/lib/engine/mutate");
-    const { scheduleSnapshot } = await import("@/lib/realtime/broadcast");
+    const { startBotLoop } = await import("@/lib/engine/bots");
+    const { scheduleSnapshot, schedulePresenceSnapshot } = await import(
+      "@/lib/realtime/broadcast"
+    );
 
-    const g = globalThis as typeof globalThis & { __scheduler?: unknown };
+    const g = globalThis as typeof globalThis & {
+      __scheduler?: unknown;
+      __botLoop?: unknown;
+    };
     if (g.__scheduler) return;
     setBroadcastHook(scheduleSnapshot);
     g.__scheduler = startScheduler(advancePhase);
+
+    // Il tick dei bot (M4). **Un intervallo suo, non lo sweep**: lo sweep chiude
+    // i round ed è sequenziale, e una simulazione con undici bot che scrivono
+    // sotto lock ritarderebbe la chiusura di un round dell'asta vera che gira
+    // accanto. Il ciclo si ferma da sé quando esiste un'asta reale in corso.
+    //
+    // Anche questo su `globalThis`, per la stessa ragione dello scheduler: Next
+    // compila questo file e i route handler in bundle separati, e una variabile
+    // di modulo esisterebbe in due copie.
+    g.__botLoop = startBotLoop(schedulePresenceSnapshot);
   }
 }

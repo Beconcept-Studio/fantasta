@@ -17,25 +17,33 @@
  * Richiede l'app accesa (`pnpm dev`): è quel processo ad avere lo scheduler,
  * ed è lui a chiudere i round. In produzione è lo stesso script, con
  * `--url=https://…`: è così che si gioca l'asta di prova di F8-06.
+ *
+ * ## Da M4: le decisioni non sono più qui
+ *
+ * Come si comporta un bot lo decide `lib/engine/bot-brain.ts`, condiviso con la
+ * simulazione in-app. Prima i cervelli erano due — questo e quello di
+ * `scripts/drive.ts`, che è stato ritirato — e divergevano già: quello del
+ * driver leggeva `AuctionState` grezzo, cioè vedeva le buste di tutti. Qui
+ * resta il **trasporto**: la sessione, lo stream, la POST.
+ *
+ * Ed è per il trasporto che questo script sopravvive alla simulazione in-app:
+ * è l'unica cosa che collauda l'applicazione *da fuori* — cookie, rotta, SSE,
+ * nginx. Il giorno in cui si romperà il buffering SSE dietro nginx, sarà questo
+ * a dirlo.
  */
 import { asc, eq } from "drizzle-orm";
 import { encode } from "next-auth/jwt";
 
 import { db, pool } from "../lib/db";
 import { auctions, members, players, users } from "../lib/db/schema";
+import { BOT_STRATEGIES, type BotStrategy } from "../lib/domain";
+import { type BotPoolPlayer, decide } from "../lib/engine/bot-brain";
 import type { Snapshot } from "../lib/realtime/types";
-
-type Strategy = "random" | "aggressive" | "passive" | "tie";
-
-const STRATEGIES: Strategy[] = ["random", "aggressive", "passive", "tie"];
-
-/** L'importo su cui convergono i bot `tie`: uguale per tutti, quindi pareggio. */
-const TIE_AMOUNT = 10;
 
 type Options = {
   auctionId: string;
   count: number | null;
-  strategy: Strategy;
+  strategy: BotStrategy;
   baseUrl: string;
   start: boolean;
   verbose: boolean;
@@ -67,10 +75,12 @@ function parseArgs(argv: string[]): Options {
     else if (key === "count") options.count = Number(value);
     else if (key === "url") options.baseUrl = value.replace(/\/$/, "");
     else if (key === "strategy") {
-      if (!STRATEGIES.includes(value as Strategy)) {
-        throw new Error(`Strategia sconosciuta: ${value}. Usa ${STRATEGIES.join("|")}.`);
+      if (!(BOT_STRATEGIES as readonly string[]).includes(value)) {
+        throw new Error(
+          `Strategia sconosciuta: ${value}. Usa ${BOT_STRATEGIES.join("|")}.`,
+        );
       }
-      options.strategy = value as Strategy;
+      options.strategy = value as BotStrategy;
     } else throw new Error(`Opzione sconosciuta: --${key}`);
   }
   if (!options.auctionId) {
@@ -82,8 +92,6 @@ function parseArgs(argv: string[]): Options {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const pickOne = <T,>(items: T[]): T =>
-  items[Math.floor(Math.random() * items.length)];
 
 // ─── Il cookie di sessione ───────────────────────────────────────────────────
 
@@ -163,12 +171,13 @@ type Bot = {
   memberId: string;
   seatIndex: number;
   cookie: string;
-  /** L'ultima situazione su cui ha già agito: `lotId:roundNo` o `pick:seq`. */
-  actedOn: string | null;
+  /** L'ultimo snapshot ricevuto: è tutto ciò che questo bot sa del mondo. */
+  snapshot: Snapshot | null;
+  /** L'orologio locale al momento in cui è arrivato, per correggere lo scarto. */
+  receivedAt: number;
+  /** Una richiesta già in volo. Non è memoria di gioco: è antirimbalzo. */
   busy: boolean;
 };
-
-type Listone = { id: string; role: string }[];
 
 let completed = false;
 let verbose = false;
@@ -212,83 +221,47 @@ async function heartbeat(options: Options, bot: Bot): Promise<void> {
   }).catch(() => {});
 }
 
-/** Quanto offre questo bot in questo round, o `null` per stare fermo. */
-function amountFor(
-  strategy: Strategy,
-  minAmount: number,
-  cap: number,
-): number | null {
-  if (cap < minAmount) return null;
-  switch (strategy) {
-    case "passive":
-      return minAmount;
-    case "aggressive":
-      return cap;
-    case "tie":
-      return Math.min(cap, Math.max(minAmount, TIE_AMOUNT));
-    case "random": {
-      const spread = Math.min(cap - minAmount, 20);
-      return minAmount + Math.floor(Math.random() * Math.random() * (spread + 1));
-    }
-  }
-}
-
-async function onSnapshot(
+/**
+ * Un battito: si guarda l'ultimo snapshot ricevuto e si chiede al cervello cosa
+ * fare adesso.
+ *
+ * **Perché un battito e non una reazione allo snapshot.** `decide` decide anche
+ * *quando* — restituisce `null` finché il ritardo di questo bot dentro il round
+ * non è passato. Agendo solo alla ricezione di uno snapshot, un bot che riceve
+ * l'apertura del lotto e poi più niente (perché nessun altro si muove) non
+ * offrirebbe mai: il momento giusto arriverebbe senza che nessuno lo guardi.
+ * Il tick in-process ha lo stesso problema e la stessa soluzione.
+ */
+async function pulse(
   options: Options,
   bot: Bot,
-  listone: Listone,
-  snapshot: Snapshot,
+  listone: BotPoolPlayer[],
 ): Promise<void> {
+  const snapshot = bot.snapshot;
+  if (!snapshot || bot.busy) return;
   if (snapshot.auction.status === "COMPLETED") {
     completed = true;
     return;
   }
-  if (snapshot.auction.status !== "LIVE" || bot.busy) return;
 
-  const me = snapshot.members.find((m) => m.id === bot.memberId);
-  if (!me) return;
+  // L'orologio del server, non il proprio: `decide` confronta il tempo con
+  // `endsAt`, che è una scadenza decisa dal server. È la stessa correzione che
+  // fa il browser per i countdown (`lib/realtime/types.ts`), e serve davvero
+  // quando lo script gira su un portatile contro l'app in produzione.
+  const now =
+    Date.parse(snapshot.serverNow) + (Date.now() - bot.receivedAt);
 
-  // Il turno di chiamata: un giocatore a caso fra quelli ancora liberi del
-  // ruolo corrente. I presi si ricavano dalle rose, che lo snapshot contiene.
-  if (
-    snapshot.auction.phase === "WAITING_PICK" &&
-    snapshot.auction.currentMemberId === bot.memberId
-  ) {
-    const key = `pick:${snapshot.auction.phaseDeadline}`;
-    if (bot.actedOn === key) return;
-    bot.actedOn = key;
-    const taken = new Set(
-      snapshot.members.flatMap((m) => m.roster.map((r) => r.playerId)),
-    );
-    const free = listone.filter(
-      (p) => p.role === snapshot.auction.currentRole && !taken.has(p.id),
-    );
-    if (free.length === 0) return;
-    bot.busy = true;
-    await sleep(200 + Math.random() * 400);
-    await act(options, bot, { type: "PICK", playerId: pickOne(free).id });
-    bot.busy = false;
-    return;
-  }
-
-  if (snapshot.auction.phase !== "LOT_OPEN" || !snapshot.currentLot) return;
-  const lot = snapshot.currentLot;
-  if (!lot.eligibleMemberIds.includes(bot.memberId)) return;
-  // Un round, un'offerta: i bot non fanno guerre di rilanci contro sé stessi.
-  const key = `${lot.id}:${lot.roundNo}`;
-  if (bot.actedOn === key) return;
-  bot.actedOn = key;
-
-  const amount = amountFor(options.strategy, lot.minAmount, me.maxBid);
-  if (amount === null) return;
-  if (snapshot.myBid && snapshot.myBid.amount === amount) return;
+  const move = decide(snapshot, bot.memberId, options.strategy, listone, now);
+  if (!move) return;
 
   bot.busy = true;
-  // Un po' di ritardo: un'asta non è una coda, e serve a lasciare spazio a chi
-  // sta guardando la pagina da un browser vero.
-  const jitter = snapshot.auction.timers.bidSeconds * 1000 * 0.3;
-  await sleep(100 + Math.random() * jitter);
-  await act(options, bot, { type: "BID", amount });
+  await act(
+    options,
+    bot,
+    move.type === "PICK"
+      ? { type: "PICK", playerId: move.playerId }
+      : { type: "BID", amount: move.amount },
+  );
   bot.busy = false;
 }
 
@@ -296,11 +269,7 @@ async function onSnapshot(
  * Lo stream SSE letto a mano su `fetch`: serve il cookie di sessione fra gli
  * header, e `EventSource` in Node non lo permette.
  */
-async function follow(
-  options: Options,
-  bot: Bot,
-  listone: Listone,
-): Promise<void> {
+async function follow(options: Options, bot: Bot): Promise<void> {
   while (!completed) {
     try {
       const response = await fetch(
@@ -331,7 +300,8 @@ async function follow(
           const snapshot = JSON.parse(data.slice(6)) as Snapshot;
           if (snapshot.stateVersion < lastVersion) continue;
           lastVersion = snapshot.stateVersion;
-          void onSnapshot(options, bot, listone, snapshot);
+          bot.snapshot = snapshot;
+          bot.receivedAt = Date.now();
         }
       }
       await reader.cancel().catch(() => {});
@@ -368,12 +338,16 @@ async function main(): Promise<void> {
     .where(eq(members.auctionId, options.auctionId))
     .orderBy(asc(members.seatIndex));
 
-  const listone: Listone = (
+  // ⚠ P7 — i fuori lista entrano solo se questa asta li ammette. Il cervello
+  // non lo sa e non deve saperlo: gli si passa il pool già filtrato.
+  const listone: BotPoolPlayer[] = (
     await db
       .select({ id: players.id, role: players.role, outOfList: players.outOfList })
       .from(players)
       .where(eq(players.auctionId, options.auctionId))
-  ).filter((p) => auction.includeOutOfList || !p.outOfList);
+  )
+    .filter((p) => auction.includeOutOfList || !p.outOfList)
+    .map(({ id, role }) => ({ id, role }));
 
   const chosen = memberRows.slice(0, options.count ?? memberRows.length);
   console.log(
@@ -389,7 +363,8 @@ async function main(): Promise<void> {
       memberId: row.id,
       seatIndex: row.seatIndex,
       cookie,
-      actedOn: null,
+      snapshot: null,
+      receivedAt: 0,
       busy: false,
     });
   }
@@ -400,7 +375,13 @@ async function main(): Promise<void> {
     for (const bot of bots) void heartbeat(options, bot);
   }, 10_000);
 
-  const streams = bots.map((bot) => follow(options, bot, listone));
+  const streams = bots.map((bot) => follow(options, bot));
+
+  // Il battito: quattro volte al secondo, perché `decide` decide anche *quando*
+  // e nessuno snapshot arriverà a ricordarglielo.
+  const pulses = setInterval(() => {
+    for (const bot of bots) void pulse(options, bot, listone);
+  }, 250);
 
   if (options.start && auction.status === "READY") {
     const owner = await db.query.users.findFirst({
@@ -427,6 +408,7 @@ async function main(): Promise<void> {
   const startedAt = Date.now();
   while (!completed) await sleep(500);
   clearInterval(beats);
+  clearInterval(pulses);
   await Promise.allSettled(streams);
 
   const minutes = ((Date.now() - startedAt) / 60_000).toFixed(1);

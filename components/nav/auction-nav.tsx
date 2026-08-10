@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { SimulationBadge } from "@/components/auction/simulation-badge";
 import { Badge } from "@/components/ui/badge";
 import {
   type AuctionSection,
@@ -32,11 +33,14 @@ import { cn } from "@/lib/utils";
 export function AuctionNav({
   auctionId,
   auctionName,
+  isSimulated,
   sections,
   tvHref,
 }: {
   auctionId: string;
   auctionName: string;
+  /** Un'asta di prova (M4): il badge accompagna il nome in ogni sezione. */
+  isSimulated: boolean;
   sections: AuctionSection[];
   /**
    * Il link alla vista proiettata, o `null`. Non è una sezione dell'asta: è una
@@ -51,9 +55,12 @@ export function AuctionNav({
   return (
     <div className="bg-muted/40 border-b">
       <div className="mx-auto w-full max-w-6xl space-y-2 px-4 py-4">
-        <Badge variant="secondary" className="max-w-full truncate">
-          {auctionName}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary" className="max-w-full truncate">
+            {auctionName}
+          </Badge>
+          {isSimulated && <SimulationBadge />}
+        </div>
 
         <h1 className="text-2xl font-semibold tracking-tight">
           {active?.title ?? auctionName}

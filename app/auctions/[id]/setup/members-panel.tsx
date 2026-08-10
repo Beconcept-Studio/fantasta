@@ -8,6 +8,7 @@ import { FormFeedback } from "@/components/setup/form-feedback";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BOT_STRATEGY_LABELS } from "@/lib/domain";
 import type { MemberView } from "@/lib/engine/setup";
 
 /**
@@ -63,7 +64,12 @@ export function MembersPanel({
                   {member.teamName}
                 </p>
                 <p className="text-muted-foreground truncate text-xs">
-                  {member.displayName ?? "—"}
+                  {/* Per un bot il nome della persona non esiste: al suo posto
+                      la strategia, che è l'unica cosa che lo distingue dagli
+                      altri undici (M4). */}
+                  {member.botStrategy
+                    ? `bot · ${BOT_STRATEGY_LABELS[member.botStrategy].toLowerCase()}`
+                    : (member.displayName ?? "—")}
                 </p>
               </div>
               {editable && (

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { SimulationBadge } from "@/components/auction/simulation-badge";
 import { StatusBadge } from "@/components/setup/status-badge";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
@@ -47,7 +48,12 @@ export default async function DashboardPage() {
                   className="hover:bg-accent flex items-center gap-4 rounded-lg border p-4 transition"
                 >
                   <div className="min-w-0 flex-1 space-y-1">
-                    <p className="truncate font-medium">{auction.name}</p>
+                    <p className="flex items-center gap-2">
+                      <span className="truncate font-medium">
+                        {auction.name}
+                      </span>
+                      {auction.isSimulated && <SimulationBadge />}
+                    </p>
                     <p className="text-muted-foreground text-sm">
                       {auction.memberCount}/{auction.seats} partecipanti
                       {auction.isOwner ? " · la gestisci tu" : ""}

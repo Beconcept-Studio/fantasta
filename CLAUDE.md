@@ -39,7 +39,8 @@ copie della stessa richiesta divergono sempre.
 2. Si lavora e si committa liberamente: è il branch a essere macro, non il commit.
 3. **Gate**: `pnpm test`, `pnpm typecheck` e `pnpm build` verdi, task del file feature spuntati.
    Poi `git merge --no-ff` su `dev`.
-4. **Prova su `dev`**: Docker + seed, `pnpm bots`/`pnpm drive`, `pnpm dev:lan` dal telefono.
+4. **Prova su `dev`**: Docker + seed, la simulazione in-app o `pnpm bots`, `pnpm dev:lan` dal
+   telefono.
 5. Ancora **su `dev`**: `CHANGELOG.md` datato e `package.json` alla nuova versione. Poi
    `git merge --no-ff` su `main`, `git tag`, push. Il deploy parte da solo.
 
@@ -157,12 +158,18 @@ pnpm db:push              # applica lo schema drizzle
 pnpm db:seed              # solo i 12 utenti di prova
 pnpm db:seed --auction-status=ready    # + asta a 8 pronta, listone importato
 pnpm db:seed --auction-status=mid      # asta LIVE già a metà (attenzione: con l'app accesa prosegue da sola)
-pnpm drive --auction=<id>              # gioca un'asta READY/LIVE fino a COMPLETED, senza UI
 pnpm test                 # vitest, fake timers obbligatori; i test in tests/db/ vogliono Postgres
 pnpm typecheck            # tsc --noEmit
 pnpm build                # next build — esegue ESLint: fa parte del gate, non del deploy
 pnpm bots --auction=<id> --count=7 --strategy=random|tie|aggressive|passive
 ```
+
+**Un'asta di prova si fa dall'applicazione** (M4, v1.5.0): la si crea spuntando «Asta simulata» —
+la casella la vede solo un amministratore, `users.is_admin` — e si riempiono i posti di bot dal
+pannello accanto agli inviti. I bot li muove un tick nel processo dell'app, che **sta fermo finché
+esiste un'asta reale `LIVE` o `PAUSED`**. `pnpm bots` resta, e serve a una cosa che la simulazione
+non fa: collaudare l'app *da fuori* — sessione, rotta HTTP, SSE, nginx — o giocare contro il server
+di produzione.
 
 Il ciclo git:
 

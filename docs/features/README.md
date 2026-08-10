@@ -12,21 +12,17 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna. La prossima è **M4**, qui sotto.
+Nessuna.
 
 ## Da pianificare
 
-Il raggruppamento delle richieste in `docs/REQUESTS.md`, concordato il 2026-08-09.
-L'ordine è indicativo: si apre quella che serve.
-
-| Macro | Tema |
-|---|---|
-| **M4** | Simulazione in-app — asta simulata dall'interfaccia: l'owner partecipa, gli altri X sono bot |
+Nessuna: `docs/REQUESTS.md` è vuoto, e il quaderno lo scrive l'owner.
 
 ## Chiuse
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M4](04-simulazione.md) | Simulazione in-app — l'asta di prova dall'interfaccia, con i bot dentro l'app | v1.5.0 — 2026-08-10 |
 | [M3](03-tracciabilita.md) | Tracciabilità — il verbale delle rose e lo storico dell'asta | v1.4.0 — 2026-08-10 |
 | [M2](02-navigazione.md) | Navigazione e identità delle pagine | v1.3.0 — 2026-08-10 |
 | [M1](01-segretezza-offerte.md) | Segretezza e rivelazione delle offerte | v1.2.0 — 2026-08-10 |
