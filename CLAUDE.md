@@ -172,6 +172,7 @@ pnpm test                 # vitest, fake timers obbligatori; i test in tests/db/
 pnpm typecheck            # tsc --noEmit
 pnpm build                # next build — esegue ESLint: fa parte del gate, non del deploy
 pnpm bots --auction=<id> --count=7 --strategy=random|tie|aggressive|passive
+pnpm mail:check           # l'SMTP risponde? (--to=<indirizzo> manda anche una prova vera)
 ```
 
 **Un'asta di prova si fa dall'applicazione** (M4, v1.5.0): la si crea spuntando «Asta simulata» —

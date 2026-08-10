@@ -1283,3 +1283,119 @@ intera è un atto dichiarato. Rifiutata su `LIVE` e `PAUSED`, solo all'owner, e 
 nome digitato** e non un `confirm()`: per un gesto irreversibile un riflesso non è un consenso. Su
 un'asta vera conclusa se ne vanno verbale e storico; l'unica traccia che sopravvive è una riga su
 stdout, perché `events` va via nel cascade.
+
+## 2026-08-10 — M5, Identità: registrazione con email e password
+
+**Ci si discosta da `PLAN.md` §2, e lo si scrive.** Quella riga dice testualmente: «Login unicamente
+con **Google OAuth**. Nessuna password, nessun invio email». M5 fa esattamente le tre cose che
+esclude. È legittimo — `PLAN.md` è archivio, e ciò che resta vincolante per sempre sono i suoi
+invarianti I1–I10, **nessuno dei quali viene sfiorato qui** — ma non è indolore, e va scritto perché
+fra sei mesi la differenza fra «ci siamo discostati con cognizione» e «qualcuno non aveva letto» non
+si ricostruisce. Ciò che §2 aveva ragione a temere resta vero e resta trattato: una password è un
+segreto da custodire (scrypt, e non la si vede mai in chiaro fuori dalla richiesta che la porta), e
+un invio email è una dipendenza esterna (SMTP e nulla più, sostituibile con quattro variabili).
+
+**L'email è la chiave d'identità, e il vincolo sta a database.** `UNIQUE` su `lower(email)`,
+parziale su `email IS NOT NULL` così le righe senza indirizzo (i bot) restano legali. Stessa logica
+degli indici parziali di I1 e I2: se una regola si può rendere *impossibile* invece che sorvegliata,
+si rende impossibile. Normalizzazione `trim` + `lower` e nient'altro — niente punti di Gmail, niente
+`+tag`: sono convenzioni di un provider, e indovinarle vorrebbe dire trattare due indirizzi diversi
+come lo stesso.
+
+**L'aggancio è asimmetrico.** email+password → Google **sì** (si scrive il `google_sub` sulla riga
+che c'è già); Google → email+password **no**. Il rifiuto nella seconda direzione tiene vera una frase
+semplice — un account nato da Google entra da Google — e risparmia per sempre la domanda «cosa
+succede se cambio la password di un account Google»: sarebbe un reset travestito, e se un giorno lo
+vorremo lo vorremo dichiarato.
+
+**⚠ Un aggancio Google su una riga non verificata azzera `password_hash`.** È la decisione meno
+ovvia della macro e chiude un furto d'account: un malintenzionato registra *il tuo* indirizzo con
+una password sua, non verifica (non gli serve), e quando tu entri da Google noi ti agganciamo a
+quella riga — regalandogli la tua password. Chi entra da Google ha dimostrato di avere la casella;
+quella password l'ha scritta qualcuno che non ha dimostrato niente. Se la riga **era già
+verificata** la password resta: le due prove ci sono entrambe. Ha un test suo scritto **prima** del
+codice dell'aggancio, e nel codice ha accanto l'attacco per esteso — non la regola, l'attacco: una
+regola senza il suo attacco accanto è una riga che il prossimo semplifica.
+
+**`crypto.scrypt`, non `bcryptjs`.** Non è una preferenza crittografica, è il processo unico:
+`bcryptjs` è JavaScript puro e mangia l'event loop a fette per mezzo secondo per hash, mentre
+`scrypt` è nativo e asincrono sul threadpool di libuv. Con dodici stream SSE aperti durante un
+countdown, mezzo secondo di loop bloccato è mezzo secondo in cui nessuno riceve uno snapshot.
+N=2^15/r=8/p=1 (~32 MB, un decimo di secondo su una CX22): N=2^16 costerebbe il doppio di memoria
+per hash concorrente, e col rate limit davanti non lo giustifica. Formato `scrypt$N$r$p$salt$hash`,
+così alzarli domani non invalida gli hash di ieri.
+
+**SMTP generico con `nodemailer`, non l'SDK di MailerSend.** Cambiare fornitore dev'essere cambiare
+quattro variabili in `.env`. È comunque una **dipendenza esterna nuova** — la prima del progetto — e
+per questo è qui. Timeout di dieci secondi, perché è una chiamata di rete dentro una richiesta in un
+processo solo. Fuori produzione non si configura nessun trasporto: **il codice va su stdout**, come
+il provider `dev`, così l'intero flusso si collauda in locale senza credenziali.
+
+**La verifica è un gradino di `requireUser()`, in mezzo agli altri due.** Non un flusso a parte con
+un token suo. Tre ragioni: una sessione esiste già, quindi il reinvio è una server action
+autenticata invece di una rotta pubblica da proteggere a mano; è la forma che l'app ha già; e la
+verifica viene **prima** dell'onboarding perché non si raccoglie il nome di qualcuno per un
+indirizzo che potrebbe non esistere. Accesso rigido: non verificato non fa niente. Prezzo dichiarato
+— fra M5 e M6 il solo rimedio a un'email non arrivata è una `UPDATE` sul server.
+
+**«Password dimenticata» entra nello scope**, benché il quaderno non la chiedesse. La macchina dei
+codici la costruiamo comunque per la verifica: il recupero costa una colonna, una rotta e un form,
+mentre non averlo costa una sessione SSH nel momento peggiore. Effetto collaterale gradito: `purpose`
+nasce con **due** valori invece di uno, quindi non è un'astrazione prima del secondo chiamante.
+
+**Un codice, non un link.** Niente token negli URL da farsi inoltrare per sbaglio, e una schermata in
+meno. Ed è anche l'unico modo di *cambiare* la propria password: nessuna schermata «cambia password»
+dentro l'app, perché sarebbe una seconda macchina per fare ciò che questa già fa.
+
+**Il reset non tocca `email_verified_at`.** Sarebbe difendibile — la prova è la stessa che darebbe il
+codice di verifica — ma non è un dead-end lasciarlo così (chi non era verificato entra e trova
+`/verify`, che il codice glielo rimanda), e le regole dell'identità si contano. In caso serva, è un
+cambio di una riga.
+
+**Il reset non invalida le sessioni già aperte altrove.** Le sessioni sono JWT e non righe a
+database (P17); revocarle vorrebbe dire una colonna `sessions_valid_from` più un controllo nel
+callback `jwt`. Complessità reale per una minaccia che, con dodici amici e il dato «chi ha pagato
+Lautaro 180», non la giustifica. Scritto qui perché sia un limite noto e non una scoperta.
+
+**Dall'enumerazione degli account non ci si difende.** Diciamo «questo indirizzo è già registrato con
+Google», che è utile, e non aggiungiamo ritardi finti per pareggiare i tempi di risposta. Ciò che
+protegge un account non è il silenzio, è la password. Sta qui perché fra sei mesi non sembri una
+dimenticanza.
+
+**Il rate limit è una `Map` in memoria, e non è un compromesso.** Con `exec_mode: "fork"` e
+`instances: 1` esiste un processo solo, quindi il contatore è **globale ed esatto**, non
+un'approssimazione per nodo. Niente Redis — non per divieto: perché non servirebbe a nulla. Copre
+login e registrazione; verifica e reinvio no, perché cinque tentativi e sessanta secondi sono già
+righe nella tabella `email_codes`, e un limite scritto a database sopravvive a un riavvio.
+
+**`clientIp()` legge l'ultimo elemento di `X-Forwarded-For`, non il primo.** Verificato che
+`deploy/nginx-asta.conf` imposti l'header in entrambi i blocchi — senza, il limite per IP sarebbe un
+limite su `127.0.0.1`, cioè un limite globale mascherato. Ma `$proxy_add_x_forwarded_for` **accoda**
+al valore ricevuto invece di sostituirlo, e quel valore lo scrive il client: prendere il primo — la
+lettura ovvia della specifica dell'header — renderebbe il limite aggirabile mandandosi un header a
+mano. L'ultimo è l'unico che ha scritto nginx.
+
+**Fuori produzione decide la presenza di `SMTP_HOST`, non `NODE_ENV`.** La spec (§7) diceva «fuori
+produzione il codice va su stdout, punto»; alla prima prova del flusso è emerso il buco pratico che
+quella regola lascia: **le credenziali del provider non si possono collaudare finché non sono in
+produzione**, cioè si scoprono la sera dell'asta, che è l'unico momento in cui non si vuole
+scoprirle. Da qui la regola nuova, scelta dall'owner: senza `SMTP_HOST` si stampa sullo stdout (il
+default della spec, invariato per chi clona il progetto), con `SMTP_HOST` si manda davvero anche in
+locale.
+
+Due limiti su cui la regola **non** si applica, e sono deliberati. **In produzione si manda sempre**,
+e se l'SMTP è mal configurato l'invio fallisce invece di ripiegare sullo stdout: altrimenti un `.env`
+sbagliato scriverebbe i codici nei log del server, e §7 dice l'opposto — in produzione l'unico modo
+di leggere un codice dev'essere la casella di posta. **Sotto test non si manda mai**, qualunque cosa
+dica il `.env`: `vitest` carica lo stesso `.env` dell'applicazione, quindi senza quel blocco un test
+che chiamasse `sendCode` senza mockare `lib/mail` spedirebbe email vere a indirizzi `@test.invalid`
+a ogni `pnpm test`.
+
+Il prezzo dichiarato della regola: **un `.env` di produzione copiato in locale manda email vere**. È
+stato sollevato in fase di scelta e accettato; si torna allo stdout svuotando `SMTP_HOST`.
+
+**Le SMTP mancanti avvisano, non fermano il boot.** `deploy/ecosystem.config.cjs` fa fallire l'avvio
+se manca una delle cinque variabili storiche; per le cinque dell'SMTP stampa un avviso. Farne un
+errore fatale vorrebbe dire che il giorno del deploy di M5 l'applicazione non si avvia affatto —
+molto peggio del problema che eviterebbe, visto che senza SMTP il login Google continua a funzionare
+per tutti.

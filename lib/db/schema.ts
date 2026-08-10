@@ -19,6 +19,7 @@ import {
   type AuctionPhase,
   type AuctionStatus,
   type BotStrategy,
+  type CodePurpose,
   ROLES,
   type Role,
 } from "@/lib/domain";
@@ -65,6 +66,22 @@ export const users = pgTable(
     email: text("email"),
     displayName: text("display_name"),
     avatarUrl: text("avatar_url"),
+    /**
+     * `scrypt$N$r$p$salt$hash` (M5 §5), oppure NULL per chi entra solo da
+     * Google e per le righe senza persona dietro (bot, utenti del seed).
+     */
+    passwordHash: text("password_hash"),
+    /**
+     * Quando l'indirizzo è stato dimostrato: col codice a sei cifre, oppure
+     * dall'asserzione `email_verified` di Google.
+     *
+     * ⚠ NULL significa **non verificato**, e un utente non verificato non fa
+     * nulla (M5 §3): `requireUser()` lo manda a `/verify` prima di ogni altra
+     * cosa. È per questo che il deploy di M5 pretende il backfill delle righe
+     * già esistenti — nate tutte da Google, quindi verificate di fatto ma senza
+     * nessuno che l'abbia mai scritto (M5 §10).
+     */
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     isAdmin: boolean("is_admin").notNull().default(false),
     /** Un partecipante simulato. Le sue mosse le decide il tick di `lib/engine/bots.ts`. */
     isBot: boolean("is_bot").notNull().default(false),
@@ -74,6 +91,61 @@ export const users = pgTable(
   },
   (t) => [
     check("users_admin_not_bot_check", sql`NOT (${t.isAdmin} AND ${t.isBot})`),
+    /**
+     * **L'email è la chiave d'identità** (M5 §2): una persona, una riga.
+     *
+     * Parziale su `email IS NOT NULL` perché le righe senza indirizzo — i bot,
+     * gli utenti del seed prima che il seed gliene desse uno — restano legali e
+     * non devono collidere fra loro.
+     *
+     * ⚠ Il vincolo è **qui e non nel codice**, come gli indici parziali di I1 e
+     * I2: il giorno in cui sbaglio una `if`, Postgres rifiuta comunque. È ciò
+     * che rende impossibile — non sorvegliato — il caso in cui la stessa persona
+     * si presenta dalle due porte e si ritrova due dashboard.
+     */
+    uniqueIndex("users_email_lower_unique")
+      .on(sql`lower(${t.email})`)
+      .where(sql`${t.email} IS NOT NULL`),
+  ],
+);
+
+/**
+ * I codici a sei cifre mandati per email: verifica dell'indirizzo e recupero
+ * della password, **una tabella sola** (M5 §4).
+ *
+ * ⚠ `code_hash` è uno sha256, e va detto cosa non è: con sei cifre l'entropia è
+ * un milione, quindi chi ha il database rompe l'hash in un secondo. Non serve a
+ * quello. Serve a **non lasciare credenziali vive dentro un `pg_dump`**, in una
+ * riga di log, in uno screenshot di una tabella. Le difese vere sono le altre
+ * colonne: `expires_at` (quindici minuti), `attempts` (cinque, poi il codice è
+ * bruciato) e `consumed_at`, più la regola che un codice nuovo consuma il
+ * precedente — venti reinvii non devono diventare venti chiavi valide.
+ */
+export const emailCodes = pgTable(
+  "email_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose").$type<CodePurpose>().notNull(),
+    codeHash: text("code_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Le due query che esistono: «il codice vivo di questo utente per questo
+    // scopo» e «quando gliene ho mandato uno l'ultima volta» (il rate limit sul
+    // reinvio, che vive nel database e sopravvive a un riavvio del processo).
+    index("email_codes_user_purpose_idx").on(
+      t.userId,
+      t.purpose,
+      t.createdAt.desc(),
+    ),
   ],
 );
 
@@ -429,6 +501,7 @@ export const events = pgTable(
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type EmailCode = typeof emailCodes.$inferSelect;
 export type Auction = typeof auctions.$inferSelect;
 export type NewAuction = typeof auctions.$inferInsert;
 export type Member = typeof members.$inferSelect;

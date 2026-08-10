@@ -101,6 +101,47 @@ export function strategyFor(fill: BotFill, index: number): BotStrategy {
 /** Il marchio di un'asta di prova, ovunque la si guardi. */
 export const SIMULATION_BADGE = "simulazione";
 
+// ─── Identità (M5) ───────────────────────────────────────────────────────────
+
+/**
+ * A cosa serve un codice a sei cifre mandato per email.
+ *
+ * Sta qui e **non** nello schema per la stessa ragione di tutto il resto del
+ * vocabolario: una pagina che deve dire «ti ho mandato un codice per entrare»
+ * non può importare `lib/db/schema.ts`.
+ *
+ * I due valori nascono insieme (M5 §4): la verifica dell'indirizzo e il
+ * recupero della password usano la stessa macchina — stessa tabella, stessa
+ * scadenza, stessi cinque tentativi — e sono quindi due chiamanti veri, non
+ * un'astrazione preparata per un chiamante che forse arriverà (regola 8).
+ */
+export const CODE_PURPOSES = ["VERIFY_EMAIL", "RESET_PASSWORD"] as const;
+export type CodePurpose = (typeof CODE_PURPOSES)[number];
+
+/**
+ * L'indirizzo email, normalizzato: `trim` e `lower`, **e nient'altro**.
+ *
+ * Niente punti tolti a Gmail, niente `+tag` scartato: sono convenzioni di un
+ * provider, non regole dell'email, e indovinarle vorrebbe dire trattare due
+ * indirizzi diversi come lo stesso. Questa funzione è la definizione
+ * applicativa di ciò che a database è l'indice `UNIQUE` su `lower(email)`: le
+ * due devono restare d'accordo.
+ */
+export function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+/**
+ * Una forma di indirizzo plausibile — qualcosa@qualcosa.qualcosa, senza spazi.
+ *
+ * Non è una validazione forte e non prova a esserlo: **l'unica prova che un
+ * indirizzo esiste è il codice che ci arriva sopra**. Serve a fermare gli
+ * errori di battitura prima di spendere un invio, non a decidere chi è valido.
+ */
+export function isPlausibleEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(value) && value.length <= 254;
+}
+
 /**
  * L'amministratore **dell'applicazione**, che non è l'owner di un'asta.
  *

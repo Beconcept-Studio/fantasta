@@ -36,8 +36,21 @@ describe("provider di autenticazione", () => {
     vi.unstubAllEnvs();
   });
 
-  it("in produzione pubblica solo Google", async () => {
-    expect(await publishedProviderIds("production")).toEqual(["google"]);
+  /**
+   * ⚠ Il valore atteso è cambiato in M5 — da `["google"]` a
+   * `["google", "email"]` — e il modo in cui è cambiato conta quanto il valore.
+   *
+   * **Resta un'uguaglianza esatta.** Non è diventata un `toContain`, non è
+   * diventata un «almeno questi»: un provider aggiunto per sbaglio domani fa
+   * fallire questo test esattamente come lo faceva ieri. Ciò che il file
+   * proteggeva è protetto come prima; è cambiato quanti provider legittimi
+   * esistono, non quanto stretta è l'asserzione.
+   */
+  it("in produzione pubblica Google e email, e nient'altro", async () => {
+    expect(await publishedProviderIds("production")).toEqual([
+      "google",
+      "email",
+    ]);
   });
 
   it("in produzione NON pubblica il provider dev", async () => {

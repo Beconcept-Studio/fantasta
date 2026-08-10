@@ -125,43 +125,259 @@ database. Costa una query per richiesta — con dodici utenti è irrilevante —
 cose che valgono molto: lo stesso account aperto su due dispositivi vede sempre le stesse
 informazioni, e una modifica al profilo ha effetto immediato senza dover rifare il login.
 
-### Il primo accesso
+### Due strade, e una riga sola
+
+Fino a v1.5.0 si entrava soltanto con Google, ed era stata la scelta giusta per arrivare in
+produzione: nessuna password da custodire, nessuna email da mandare, nessun recupero da progettare.
+Ma pretendeva che ogni partecipante avesse un account Google e fosse disposto a usarlo qui — e la
+sera dell'asta la persona che non ce l'ha non è un caso di studio: è un amico in piedi accanto alla
+TV che non riesce a entrare. Da M5 esiste la seconda strada, **email e password**, con l'indirizzo
+confermato da un codice a sei cifre.
+
+Il grosso del lavoro, però, non è stata la registrazione. È stato **tenere una persona su una riga
+sola**. Nel momento in cui esistono due porte, la stessa persona può presentarsi a entrambe con lo
+stesso indirizzo, e un'applicazione che glielo consente si ritrova due utenti, due dashboard, e
+un'asta appesa a quello sbagliato — cioè, dal punto di vista di chi la sta usando, un'asta sparita.
+
+La soluzione è che **l'email è la chiave d'identità**, e che il vincolo non sta nel codice: sta nel
+database, come un indice `UNIQUE` su `lower(email)`, parziale su `email IS NOT NULL` perché le
+righe senza indirizzo — i bot — restano legali. È la stessa logica degli indici parziali di I1 e I2:
+se una regola si può rendere *impossibile* invece che sorvegliata, si rende impossibile. Il giorno
+in cui un `if` è sbagliato, Postgres rifiuta comunque. La normalizzazione è `trim` e `lower` e
+nient'altro: niente punti tolti a Gmail, niente `+tag` scartato, perché sono convenzioni di un
+provider e indovinarle vorrebbe dire trattare due indirizzi diversi come lo stesso.
+
+Il login Google cerca quindi prima per `google_sub`, poi per email, e **si aggancia**: se trova una
+riga con quell'indirizzo le scrive dentro il `google_sub` invece di crearne una seconda. L'aggancio
+è lecito perché Google asserisce `email_verified` — e se quella asserzione manca, il login viene
+rifiutato del tutto, perché agganciare su una prova debole vale meno che chiudere la porta.
+
+C'è un dettaglio che sembra un cavillo e non lo è: **l'email non si riscrive più a ogni login**.
+Prima di M5 veniva aggiornata ogni volta dal profilo Google. Con il `UNIQUE` addosso, il giorno in
+cui un account Google cambia indirizzo verso uno già preso da un'altra riga quell'`UPDATE`
+fallirebbe, e il login diventerebbe un 500 senza spiegazione. Si scrive alla creazione e
+all'aggancio, poi si lascia stare.
+
+### L'aggancio è asimmetrico, e la direzione conta
+
+Da email+password verso Google **sì**: si aggancia il `google_sub` alla riga che c'è già, e da quel
+momento due strade portano allo stesso account. Da Google verso email+password **no**: chi prova a
+registrarsi su un indirizzo che ha già un `google_sub` viene rifiutato con un messaggio che gli dice
+di entrare da dove è sempre entrato.
+
+Il rifiuto nella seconda direzione tiene vera una frase semplice — *un account nato da Google entra
+da Google* — e risparmia per sempre la domanda «cosa succede se cambio la password di un account
+Google». Aggiungere una password a un account Google esistente sarebbe un reset travestito; se un
+giorno lo si vorrà, lo si vorrà dichiarato.
+
+### La regola che chiude un furto d'account
+
+Questa è la parte meno ovvia di tutta l'autenticazione, e va letta due volte. Aprire la prima
+direzione **da sola** aprirebbe un attacco:
+
+1. Un malintenzionato scrive **il tuo** indirizzo su `/signup`, con una password sua.
+2. Non inserisce il codice: non gli arriva, e non gli serve. La riga esiste, non verificata, col suo
+   hash dentro.
+3. Tu entri da Google con quell'indirizzo. L'applicazione ti aggancia a quella riga — che è
+   esattamente ciò che deve fare.
+4. Da quel momento **lui ha la tua password**. Ha fatto la parte facile e ha lasciato a te quella
+   difficile.
+
+La regola che lo chiude sta in `hookGoogleTo`, in `lib/engine/accounts.ts`: **un aggancio su una
+riga non verificata azzera `password_hash`**, e consuma i codici ancora vivi. Chi entra da Google ha
+dimostrato di controllare quella casella; quella password l'ha scritta qualcuno che non ha
+dimostrato niente, e non ha nessuna pretesa. Se l'avevi messa tu non perdi nulla che non puoi
+rifare: da quel momento entri da Google, e la rimetti da «Password dimenticata». Se invece la riga
+**era già verificata**, la password resta — le due prove ci sono entrambe, e restano entrambe le
+strade.
+
+Nel codice l'attacco è scritto per esteso accanto alla regola, e nei test ha due casi suoi (riga non
+verificata, riga verificata) in `tests/db/accounts.test.ts`. Non è zelo documentale: una regola
+senza il suo attacco accanto è una riga che il prossimo semplifica, e semplificarla riaprirebbe il
+furto senza che nessun test verde se ne accorga — perché i test verdi resterebbero verdi solo se
+qualcuno li ha scritti prima.
+
+### La scala di `requireUser()`
+
+La guardia che ogni pagina autenticata chiama fa tre gradini, in quest'ordine:
+
+```
+sessione?   no → /signin
+verificato? no → /verify
+ha un nome? no → /onboarding
+                → la pagina
+```
+
+Il gradino di mezzo è di M5, e la sua posizione è deliberata: **la verifica viene prima
+dell'onboarding** perché non si raccoglie il nome di qualcuno per un indirizzo che potrebbe non
+esistere. Tenerla dentro la scala, invece di farne un flusso a parte con un token suo, ha una
+conseguenza pratica che vale da sola la scelta: a quel punto **una sessione esiste già**, quindi il
+reinvio del codice è una server action autenticata invece di una rotta pubblica da proteggere a
+mano, e i limiti sono per persona perché *c'è* una persona.
+
+L'accesso è **rigido**: chi non è verificato non fa nulla. Non crea aste, non entra su invito, non
+gioca. Ha un prezzo dichiarato, e finché non arriva il pannello di M6 il prezzo è questo: se a un
+amico l'email non arriva, l'unico rimedio è una `UPDATE` sul server, che sta scritta per esteso in
+`docs/features/05-identita.md` §9 perché alle nove di sera si copia invece di comporla.
 
 Chi entra con Google non ha ancora un nome nell'applicazione. Questo è deliberato: il profilo
 Google avrebbe un `name`, ma l'app **non lo copia**. Al primo login la riga `users` nasce con
-`display_name` vuoto, e la guardia `requireUser()` — chiamata da ogni pagina autenticata — manda
-l'utente su `/onboarding` e non lo lascia andare altrove finché non ha scritto nome e cognome. Il
-nome Google serve solo a precompilare il campo, per risparmiargli la digitazione.
+`display_name` vuoto, e la guardia manda l'utente su `/onboarding` e non lo lascia andare altrove
+finché non ha scritto nome e cognome. Il nome Google serve solo a precompilare il campo. Perché non
+prenderlo e basta? Perché il requisito è che l'utente lo *confermi*: in un gruppo di amici il
+profilo Google si chiama spesso "Ale" o "iPhone di Marco", e sul tabellone proiettato in TV serve un
+nome riconoscibile. Il nome della **squadra** è un'altra cosa ancora, e si sceglie quando si entra
+in una specifica asta.
 
-Perché non prendere semplicemente il nome da Google? Perché il requisito è che l'utente lo
-*confermi*: in un gruppo di amici il profilo Google si chiama spesso "Ale" o "iPhone di Marco", e
-sul tabellone proiettato in TV serve un nome riconoscibile. Il nome della **squadra** è un'altra
-cosa ancora, si sceglie quando si entra in una specifica asta, e arriva in Fase 1.
+Il form di registrazione, di conseguenza, chiede **solo email e password**. Il nome continua a
+scriversi nell'unico posto in cui si è sempre scritto: due schermate che chiedono la stessa cosa
+sono due schermate che prima o poi dicono cose diverse.
 
 Il controllo è una guardia server-side nelle pagine, non un middleware. Un middleware Next girerebbe
 su runtime edge, dove il driver Postgres non esiste, e per farlo funzionare bisognerebbe spezzare
 la configurazione di Auth.js in due file. La guardia nelle pagine ottiene lo stesso risultato
-osservabile senza quella complicazione.
+osservabile senza quella complicazione. Il prezzo è che la scala vale **solo per chi ci passa**:
+tre pagine usano `currentUser()` invece di `requireUser()` perché la scala la stanno
+*implementando* — `/signin`, `/verify`, `/onboarding` — più la radice, che smista, e la navbar, che
+disegna. Le rotte API usano anch'esse `currentUser()`, e lì è giusto: a una richiesta `fetch` non si
+risponde con un redirect.
 
-### Il secondo provider, quello che non deve esistere in produzione
+### Il codice a sei cifre, e il recupero della password
+
+Una tabella sola, `email_codes`, per due scopi: confermare un indirizzo e cambiare una password. I
+due `purpose` — `VERIFY_EMAIL` e `RESET_PASSWORD` — stanno in `lib/domain.ts` col resto del
+vocabolario, non nello schema.
+
+Il codice a database è uno sha256, e va detto subito **cosa non è**: con sei cifre l'entropia è un
+milione, quindi chi ha in mano il database rompe l'hash in un secondo. Non serve a difendere il
+codice. Serve a non lasciare credenziali vive dentro un `pg_dump`, in una riga di log, nello
+screenshot di una tabella aperta per guardare altro. Le difese vere sono quattro, e sono tutte
+banali:
+
+| Difesa | Valore | Perché |
+|---|---|---|
+| Scadenza | 15 minuti | Dieci sono tirati se la posta arriva lenta, trenta sono generosi per sei cifre |
+| Tentativi | 5, poi il codice è bruciato | È **questa** la sicurezza dello schema: con cinque prove, indovinarne uno su un milione non si fa |
+| Un solo codice vivo per `(utente, scopo)` | chiederne uno nuovo consuma il precedente | Venti reinvii non devono diventare venti chiavi valide |
+| Reinvio | 60 secondi fra due invii | Non trasformare il server in un cannone di posta puntato sull'indirizzo di qualcuno |
+
+L'ultima difesa è la più economica di tutte: **si legge dal `created_at` dell'ultima riga**, quindi
+è un rate limit che vive nel database e sopravvive a un riavvio del processo. Alcuni limiti sono
+gratis perché il fatto è già registrato.
+
+Le **decisioni** — scaduto? bruciato? può reinviare? — non stanno insieme alle query. Stanno in
+`lib/engine/account-rules.ts`, che non importa niente e riceve `now` come parametro, esattamente
+come il motore dell'asta. È la regola 2 applicata per analogia, e serve a una cosa sola: «il codice
+scade dopo quindici minuti» costa una riga di test coi fake timer, invece di quindici minuti di
+attesa vera a ogni `pnpm test`.
+
+Nessun rifiuto è un vicolo cieco. Scaduto, sbagliato, bruciato: qualunque cosa dica il messaggio, il
+pulsante «mandamene un altro» è nella stessa schermata, e l'account non verificato resta dov'è —
+non si perde niente, e chi aveva già scritto la password non la riscrive.
+
+Il recupero usa la stessa macchina con l'altro `purpose`, e **un codice, non un link**: niente token
+negli URL da farsi inoltrare per sbaglio, e una schermata in meno da scrivere. `/forgot` chiede
+l'indirizzo, `/reset` chiede codice e password nuova. Funziona solo se una password esiste già: un
+account di solo Google che chiede «password dimenticata» non se la vede creare dal nulla, perché
+sarebbe la direzione Google → password per un'altra strada. Ed è anche l'unico modo di *cambiare* la
+propria password: non esiste una schermata «cambia password» dentro l'applicazione, perché sarebbe
+una seconda macchina per fare ciò che questa già fa.
+
+Due limiti noti, scritti invece che scoperti. Il primo: un reset **non invalida le sessioni già
+aperte altrove**, perché le sessioni sono JWT e non righe a database — revocarle vorrebbe dire una
+colonna `sessions_valid_from` e un controllo nel callback `jwt`, complessità reale per una minaccia
+che, con dodici amici e il dato «chi ha pagato Lautaro 180», non la giustifica. Il secondo:
+**dall'enumerazione degli account non ci si difende**. «Questo indirizzo è già registrato con
+Google» è una frase utile a chi la legge, e ciò che protegge un account non è il silenzio: è la
+password.
+
+### La password, e perché scrypt e non bcrypt
+
+`lib/engine/password.ts`, senza nessuna dipendenza nuova: `crypto.scrypt` sta nella libreria
+standard di Node. La ragione per cui non è `bcryptjs` è **il processo unico**. `bcryptjs` è
+JavaScript puro: mezzo secondo di CPU per hash, che l'event loop si mangia a fette. `crypto.scrypt`
+è nativo e asincrono, gira sul threadpool di libuv, e non blocca il loop. In un'applicazione che
+tiene aperti dodici stream SSE mentre scorre un countdown, mezzo secondo di loop bloccato è mezzo
+secondo in cui nessuno riceve uno snapshot — cioè, in diretta, mezzo secondo in cui l'asta sembra
+rotta.
+
+I parametri sono N=2^15, r=8, p=1: circa 32 MB e un decimo di secondo per hash su una CX22. N=2^16
+sarebbe più robusto e costerebbe il doppio di memoria per hash concorrente; col rate limit davanti
+al login, 2^15 è la misura giusta per una macchina da 2 vCPU. Il valore memorizzato ha la forma
+`scrypt$N$r$p$salt$hash`, cioè **i parametri viaggiano col valore**: alzarli domani non invalida gli
+hash di ieri, perché ogni hash sa con cosa è stato prodotto. Il confronto è con `timingSafeEqual`,
+mai con `===`.
+
+La politica è lunghezza e basta, fra 10 e 200 caratteri, nessuna regola di composizione. È la
+raccomandazione corrente — la lunghezza vale più dei simboli obbligatori — ed è una cosa in meno
+contro cui combattere alle nove di sera dal telefono di qualcun altro.
+
+### L'invio delle email, e il rate limit
+
+`lib/mail.ts` è `nodemailer` sopra un SMTP generico, oggi quello di MailerSend. Generico e non
+l'SDK del provider: cambiare fornitore deve essere cambiare quattro variabili in `.env`. È l'unica
+dipendenza esterna che questo progetto abbia mai preso, e ha un timeout di dieci secondi, perché è
+una chiamata di rete dentro una richiesta HTTP in un processo solo.
+
+**A decidere se si manda o si stampa è la presenza di `SMTP_HOST`.** Senza, il codice va sullo
+stdout del dev server: è la stessa forma del provider `dev`, e ha lo stesso effetto — chi clona il
+progetto collauda l'intero flusso di registrazione senza avere nessuna credenziale. Con `SMTP_HOST`
+si manda davvero anche in locale, e serve a una cosa che la regola originale rendeva impossibile:
+**verificare le credenziali del provider prima del deploy**, invece di scoprire la sera dell'asta
+che il mittente non sta sul dominio verificato.
+
+Su due punti la presenza della variabile non conta. **In produzione si manda sempre**, e un `.env`
+mal configurato fa fallire l'invio invece di ripiegare sullo stdout — altrimenti i codici finirebbero
+nei log del server, e in produzione l'unico modo di leggere un codice dev'essere la casella di posta.
+**Sotto test non si manda mai**: `vitest` carica lo stesso `.env` dell'applicazione, e senza quel
+blocco un test scritto senza mock spedirebbe email vere a ogni `pnpm test`. Il codice non compare
+mai in una risposta HTTP, in nessun ambiente.
+
+L'ordine, in registrazione, è **prima l'utente e poi l'invio**. Un invio fallito lascia un account
+esistente e non verificato, e la schermata successiva è quella di sempre. Un errore di rete non deve
+mai perdere una registrazione, né bruciare un indirizzo, né far riscrivere la password a chi
+l'aveva già scritta.
+
+Il rate limit, in `lib/rate-limit.ts`, è una `Map` su `globalThis`. Ed è qui che il vincolo che
+rende semplice tutto il resto di questa applicazione rende *esatto* anche questo: con un processo
+solo, una `Map` in memoria è un contatore globale e corretto, non un'approssimazione per nodo.
+Niente Redis, e non per divieto — perché non servirebbe a nulla. Copre due cose sole, il login e la
+registrazione; la verifica del codice e il reinvio non passano da qui, perché cinque tentativi e
+sessanta secondi sono già righe nella tabella.
+
+Due dettagli che mordono se saltati. Dietro nginx l'IP della connessione è `127.0.0.1`, quindi
+l'IP vero si legge da `X-Forwarded-For` — e `deploy/nginx-asta.conf` lo imposta, verificato. Ma
+`$proxy_add_x_forwarded_for` **accoda** al valore ricevuto invece di sostituirlo, e quel valore lo
+scrive il client: si prende quindi l'**ultimo** elemento della lista, l'unico che ha scritto nginx.
+Prendere il primo, che è la lettura ovvia della specifica dell'header, renderebbe il limite
+aggirabile mandando un header a mano. E una `Map` che non sfratta nessuno è una perdita lenta in un
+processo che gira per mesi: la scadenza si applica al tocco, e sopra c'è un tetto sul numero di
+chiavi. Nessun timer, niente da schedulare.
+
+### Il terzo provider, quello che non deve esistere in produzione
 
 Collaudare un'asta a otto partecipanti richiederebbe otto account Google veri. È impraticabile, e
 un'app che non si può collaudare a otto è un'app che si collauderà per la prima volta la sera
 dell'asta.
 
-Per questo esiste un secondo modo di entrare: un provider `dev` che apre una sessione per un
-utente già presente a database, senza passare da Google. La pagina di login, fuori produzione,
-mostra un elenco di pulsanti "Entra come Marco Bianchi", "Entra come Luca Ferrari" — i dodici
-utenti creati da `pnpm db:seed`. Un click, sessione pronta. Quattro finestre di browser, quattro
-partecipanti.
+Per questo esiste un terzo modo di entrare: un provider `dev` che apre una sessione per un
+utente già presente a database, senza passare da Google e senza password. La pagina di login, fuori
+produzione, mostra un elenco di pulsanti "Entra come Marco Bianchi", "Entra come Luca Ferrari" — i
+dodici utenti creati da `pnpm db:seed`. Un click, sessione pronta. Quattro finestre di browser,
+quattro partecipanti.
 
 Un provider che salta l'autenticazione è però esattamente il genere di cosa che non deve
 sopravvivere a un deploy. Due difese. La prima: la lista dei provider si costruisce in funzione di
 `NODE_ENV`, e in produzione quello `dev` non viene nemmeno costruito. La seconda: c'è un test
 automatico che **interroga l'endpoint `/api/auth/providers` con `NODE_ENV=production`** e verifica
-che la risposta contenga solo Google. Non ispeziona una variabile: chiede all'applicazione la
-stessa lista che vedrebbe un client, e se il provider non è pubblicato lì non c'è modo di
-invocarlo.
+che la lista sia **esattamente** `["google", "email"]`. Non ispeziona una variabile: chiede
+all'applicazione la stessa lista che vedrebbe un client, e se il provider non è pubblicato lì non
+c'è modo di invocarlo.
+
+Quel test è cambiato in M5 — prima si aspettava `["google"]` — e *come* è cambiato conta quanto il
+valore: è rimasta un'**uguaglianza esatta**. Non è diventata un «almeno questi», quindi un provider
+aggiunto per sbaglio domani lo fa fallire esattamente come lo faceva ieri. È cambiato quanti
+provider legittimi esistono, non quanto stretta è l'asserzione.
 
 C'è anche un terzo argine, più discreto: il provider `dev` accetta solo utenti **senza**
 `google_sub`, cioè solo quelli nati dal seed. Un account Google vero non è impersonabile nemmeno
@@ -192,6 +408,13 @@ passaggio che la derivazione DRAFT ↔ READY funzioni davvero.
 L'asta di prova viene ricreata da zero a ogni esecuzione. Ripartire da uno stato noto vale più di
 conservare quello vecchio: uno stato ereditato da un seed precedente è la cosa più fastidiosa da
 diagnosticare.
+
+Da M5 il seed scrive ai dodici utenti anche due colonne nuove, e non sono un dettaglio.
+**`email_verified_at`**: senza, la scala di `requireUser()` li lascerebbe tutti fermi su `/verify`, a
+chiedere un codice che nessuno può leggere, perché dietro `@example.test` non c'è nessuna casella di
+posta — la prova in locale si romperebbe al primo login. E **una password nota**, stampata a fine
+seed, perché il provider `dev` è comodo ma salta esattamente ciò che M5 ha aggiunto: con quella
+password si collauda `/signin` con email e password come farà un partecipante vero.
 
 ---
 

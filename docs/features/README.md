@@ -12,11 +12,21 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna.
+**[M5 — Identità](05-identita.md)**, su `feature/05-identita`: registrazione con email e password,
+verifica dell'indirizzo con un codice, recupero della password. **Tocca lo schema**, backfill compreso.
 
 ## Da pianificare
 
-Nessuna: `docs/REQUESTS.md` è vuoto, e il quaderno lo scrive l'owner.
+**[M6 — Amministrazione](06-amministrazione.md)**: il pannello, con la lista degli utenti e quella
+delle aste. Spec concordata e scritta, **non aperta**: dipende da M5 e si apre su richiesta esplicita.
+Non tocca lo schema.
+
+Le due sono nate da una sessione di spec sola, il 2026-08-10, e sono state **tagliate in due di
+proposito**. M5 tocca la strada del login — l'unica cosa che, se si rompe, chiude fuori tutti — e
+introduce l'unica dipendenza esterna del progetto; M6 è un pannello. Due profili di rischio così
+diversi vogliono due tag e due punti di rollback: un rollback del pannello non deve portarsi via la
+registrazione. E la dipendenza è a senso unico — la lista utenti di M6, senza M5, non avrebbe niente
+da amministrare.
 
 ## Chiuse
 
