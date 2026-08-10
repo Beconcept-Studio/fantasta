@@ -1375,6 +1375,25 @@ al valore ricevuto invece di sostituirlo, e quel valore lo scrive il client: pre
 lettura ovvia della specifica dell'header — renderebbe il limite aggirabile mandandosi un header a
 mano. L'ultimo è l'unico che ha scritto nginx.
 
+**Fuori produzione decide la presenza di `SMTP_HOST`, non `NODE_ENV`.** La spec (§7) diceva «fuori
+produzione il codice va su stdout, punto»; alla prima prova del flusso è emerso il buco pratico che
+quella regola lascia: **le credenziali del provider non si possono collaudare finché non sono in
+produzione**, cioè si scoprono la sera dell'asta, che è l'unico momento in cui non si vuole
+scoprirle. Da qui la regola nuova, scelta dall'owner: senza `SMTP_HOST` si stampa sullo stdout (il
+default della spec, invariato per chi clona il progetto), con `SMTP_HOST` si manda davvero anche in
+locale.
+
+Due limiti su cui la regola **non** si applica, e sono deliberati. **In produzione si manda sempre**,
+e se l'SMTP è mal configurato l'invio fallisce invece di ripiegare sullo stdout: altrimenti un `.env`
+sbagliato scriverebbe i codici nei log del server, e §7 dice l'opposto — in produzione l'unico modo
+di leggere un codice dev'essere la casella di posta. **Sotto test non si manda mai**, qualunque cosa
+dica il `.env`: `vitest` carica lo stesso `.env` dell'applicazione, quindi senza quel blocco un test
+che chiamasse `sendCode` senza mockare `lib/mail` spedirebbe email vere a indirizzi `@test.invalid`
+a ogni `pnpm test`.
+
+Il prezzo dichiarato della regola: **un `.env` di produzione copiato in locale manda email vere**. È
+stato sollevato in fase di scelta e accettato; si torna allo stdout svuotando `SMTP_HOST`.
+
 **Le SMTP mancanti avvisano, non fermano il boot.** `deploy/ecosystem.config.cjs` fa fallire l'avvio
 se manca una delle cinque variabili storiche; per le cinque dell'SMTP stampa un avviso. Farne un
 errore fatale vorrebbe dire che il giorno del deploy di M5 l'applicazione non si avvia affatto —

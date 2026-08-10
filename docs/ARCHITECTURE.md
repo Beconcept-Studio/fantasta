@@ -319,11 +319,19 @@ l'SDK del provider: cambiare fornitore deve essere cambiare quattro variabili in
 dipendenza esterna che questo progetto abbia mai preso, e ha un timeout di dieci secondi, perché è
 una chiamata di rete dentro una richiesta HTTP in un processo solo.
 
-**Fuori produzione non si configura nessun trasporto: il codice va sullo stdout del dev server.** È
-la stessa forma del provider `dev`, e ha lo stesso effetto — l'intero flusso di registrazione si
-collauda in locale senza avere nessuna credenziale SMTP, e in produzione non esiste nessun modo di
-leggere un codice che non sia la casella di posta. Il codice non compare mai in una risposta HTTP,
-in nessun ambiente.
+**A decidere se si manda o si stampa è la presenza di `SMTP_HOST`.** Senza, il codice va sullo
+stdout del dev server: è la stessa forma del provider `dev`, e ha lo stesso effetto — chi clona il
+progetto collauda l'intero flusso di registrazione senza avere nessuna credenziale. Con `SMTP_HOST`
+si manda davvero anche in locale, e serve a una cosa che la regola originale rendeva impossibile:
+**verificare le credenziali del provider prima del deploy**, invece di scoprire la sera dell'asta
+che il mittente non sta sul dominio verificato.
+
+Su due punti la presenza della variabile non conta. **In produzione si manda sempre**, e un `.env`
+mal configurato fa fallire l'invio invece di ripiegare sullo stdout — altrimenti i codici finirebbero
+nei log del server, e in produzione l'unico modo di leggere un codice dev'essere la casella di posta.
+**Sotto test non si manda mai**: `vitest` carica lo stesso `.env` dell'applicazione, e senza quel
+blocco un test scritto senza mock spedirebbe email vere a ogni `pnpm test`. Il codice non compare
+mai in una risposta HTTP, in nessun ambiente.
 
 L'ordine, in registrazione, è **prima l'utente e poi l'invio**. Un invio fallito lascia un account
 esistente e non verificato, e la schermata successiva è quella di sempre. Un errore di rete non deve

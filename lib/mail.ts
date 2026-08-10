@@ -12,18 +12,48 @@ import { CODE_TTL_MINUTES } from "@/lib/engine/account-rules";
  * scheduling — ma è comunque una dipendenza esterna nuova, ed è annotata in
  * `docs/DECISIONS.md`.
  *
- * ⚠ **Fuori produzione non si configura nessun trasporto: il codice va su
- * stdout.** È la stessa forma del provider `dev` e della riga di
- * `DELETE_AUCTION`: l'intero flusso si collauda in locale senza credenziali
- * SMTP, e in produzione non esiste nessun modo di leggere un codice che non sia
- * la casella di posta.
+ * ⚠ **In produzione si manda, sempre e comunque.** Non esiste nessun ripiego
+ * sullo stdout: un `.env` mal configurato deve far *fallire* l'invio, non
+ * scrivere i codici nei log del server. È il punto fermo di §7 — in produzione
+ * l'unico modo di leggere un codice dev'essere la casella di posta — e non
+ * dipende da nessuna variabile.
+ *
+ * ⚠ **Fuori produzione decide la presenza di `SMTP_HOST`**: se c'è si manda
+ * davvero, se manca il codice va sullo stdout. Il default resta quindi quello
+ * della spec — chi clona il progetto collauda l'intero flusso senza avere
+ * nessuna credenziale — ma chi le credenziali ce le ha può **verificarle prima
+ * del deploy**, invece di scoprire la sera dell'asta che il mittente non sta sul
+ * dominio verificato presso il provider (DECISIONS 2026-08-10).
+ *
+ * ⚠ Il prezzo, dichiarato perché è una conseguenza voluta e non una svista: un
+ * `.env` di produzione copiato in locale **manda email vere**, a indirizzi di
+ * prova e a spese della quota MailerSend.
  *
  * Questo file **non importa `lib/db`**, quindi non ha bisogno di stare in
  * `lib/engine`.
  */
 
-/** In produzione si manda davvero; altrove si stampa. */
-const isProduction = process.env.NODE_ENV === "production";
+/**
+ * Si manda davvero, o si stampa?
+ *
+ * Letta a ogni chiamata e non una volta all'import: in sviluppo si cambia il
+ * `.env` e si riavvia, e una costante di modulo lascerebbe il processo convinto
+ * di ciò che era vero al primo caricamento del bundle.
+ *
+ * ⚠ **Sotto test non si manda mai, qualunque cosa dica il `.env`.** `vitest`
+ * carica lo stesso `.env` dell'applicazione (`vitest.setup.ts`), quindi da
+ * quando «basta la presenza di `SMTP_HOST`» un test che chiamasse `sendCode`
+ * senza mockare questo modulo spedirebbe email vere — a indirizzi
+ * `@test.invalid`, in un ciclo di `pnpm test`, a spese della quota del
+ * provider. Oggi l'unico test che passa di qui mocka `lib/mail`; questa riga
+ * serve perché resti vero anche quando lo scriverà qualcun altro.
+ */
+function shouldSend(): boolean {
+  if (process.env.NODE_ENV === "test" || process.env.VITEST) return false;
+  return (
+    process.env.NODE_ENV === "production" || Boolean(process.env.SMTP_HOST)
+  );
+}
 
 /**
  * Una chiamata di rete dentro una richiesta HTTP, in un processo solo: se
@@ -94,21 +124,22 @@ function body({ code, purpose }: CodeMail): string {
  * Manda un codice, o lo stampa.
  *
  * ⚠ **Il codice non compare mai nella risposta HTTP**, in nessun ambiente:
- * esce da qui e da nessun'altra parte. In locale «da qui» è lo stdout del dev
- * server, che è esattamente dove chi sta collaudando sta già guardando.
+ * esce da qui e da nessun'altra parte. Senza `SMTP_HOST` «da qui» è lo stdout
+ * del dev server, che è esattamente dove chi sta collaudando sta già guardando;
+ * con `SMTP_HOST` è la casella di posta, in locale come in produzione.
  *
  * Lancia se l'invio fallisce. Chi chiama **non deve** disfare niente: a quel
  * punto l'account esiste già, non verificato, e la schermata successiva è
  * quella di sempre — «inserisci il codice», col pulsante per rimandarlo.
  */
 export async function sendCode(mail: CodeMail): Promise<void> {
-  if (!isProduction) {
+  if (!shouldSend()) {
     console.log(
-      `\n──── EMAIL (non inviata: siamo fuori produzione) ────\n` +
+      `\n──── EMAIL (non inviata: nessun SMTP_HOST nel .env) ────\n` +
         `A:       ${mail.to}\n` +
         `Oggetto: ${SUBJECTS[mail.purpose]}\n` +
         `CODICE:  ${mail.code}\n` +
-        `────────────────────────────────────────────────────\n`,
+        `───────────────────────────────────────────────────────\n`,
     );
     return;
   }

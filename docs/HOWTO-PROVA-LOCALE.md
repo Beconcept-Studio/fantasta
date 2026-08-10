@@ -134,20 +134,37 @@ c'è nessuna casella di posta.
 
 ### Provare il giro completo della registrazione
 
-⚠ **In locale non serve nessuna credenziale SMTP: il codice esce sullo stdout del dev server.**
-Tienilo sott'occhio nel terminale di `pnpm dev`, dove compare così:
+⚠ **Senza `SMTP_HOST` nel `.env` non serve nessuna credenziale: il codice esce sullo stdout del dev
+server.** Tienilo sott'occhio nel terminale di `pnpm dev`, dove compare così:
 
 ```text
-──── EMAIL (non inviata: siamo fuori produzione) ────
+──── EMAIL (non inviata: nessun SMTP_HOST nel .env) ────
 A:       mario@example.com
 Oggetto: Il tuo codice di verifica
 CODICE:  418302
-────────────────────────────────────────────────────
+───────────────────────────────────────────────────────
 ```
 
 1. `/signup`, un indirizzo qualsiasi e una password di almeno 10 caratteri.
 2. Copia il codice dal terminale e incollalo su `/verify`.
 3. Poi `/onboarding` per il nome, e sei nella dashboard.
+
+⚠ **Se invece `SMTP_HOST` è impostata, in locale le email partono per davvero** e nel terminale non
+compare nessun blocco: il codice è nella casella di posta, spam compreso. È il modo di verificare le
+credenziali del provider *prima* del deploy. Per tornare allo stdout basta svuotare `SMTP_HOST` e
+riavviare `pnpm dev`.
+
+**Se non arriva niente e nel terminale non c'è nemmeno il blocco**, in ordine:
+
+1. Il dev server ha davvero letto il `.env`? Se hai aggiunto le variabili **dopo** averlo avviato,
+   riavvia `pnpm dev`.
+2. Le credenziali funzionano? Si controlla senza spedire niente, con `verify()` di nodemailer: apre
+   la connessione, si autentica e chiude. Un errore qui è credenziali o porta sbagliate (587 in
+   STARTTLS, 465 in TLS implicito).
+3. Il server SMTP ha accettato il messaggio ma non arriva? Guarda il pannello del provider: con
+   MailerSend gli account in prova accettano solo destinatari del dominio amministratore, e il
+   `MAIL_FROM` deve stare **sul dominio verificato** — altrimenti l'invio viene rifiutato, e
+   l'errore si vede solo al primo tentativo vero.
 
 Le cose che vale la pena provare a mano, perché i test le coprono ma vederle è un'altra cosa:
 
