@@ -249,6 +249,11 @@ metà lotto trova la stessa pagina di prima, adesso con sopra una navbar.
 - [ ] **M2-11** — Chiusura: merge `--no-ff` su `dev`, prova con Docker + seed + `pnpm bots` e dal
       telefono con `pnpm dev:lan`, poi — **solo su richiesta dell'owner** — `CHANGELOG.md`,
       `package.json` a `1.3.0`, merge `--no-ff` su `main`, tag `v1.3.0`, push
+      → Merge su `dev` fatto il 2026-08-10. La prova con dev server e bot l'ha fatta l'owner in due
+      passaggi: prima navigazione e tabellone («funziona tutto»), poi le tre correzioni successive —
+      banner via dalla TV, stato nell'intestazione, «Asta live» — confermate a parte. La prova **dal
+      telefono** con `pnpm dev:lan` **non è stata fatta**: resta l'unico punto aperto della
+      «Verifica» qui sotto (il punto 5), e riguarda il portale, che è la pagina mobile-first.
 
 ## Verifica
 
