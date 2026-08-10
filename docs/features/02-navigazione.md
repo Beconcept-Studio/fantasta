@@ -1,6 +1,6 @@
 # M2 — Navigazione e identità delle pagine
 
-> **Stato:** aperta · **Aperta il** 2026-08-10
+> **Stato:** chiusa · **Aperta il** 2026-08-10 · **Uscita con** v1.3.0, il 2026-08-10
 > **Tocca lo schema del database?** No. Nessun `pnpm db:push` dopo il deploy.
 > **Invarianti coinvolti:** I8 e I10 (nessuno dei due cambia: la macro non tocca né
 > `serializeSnapshot` né il motore), regole 3, 7 e 8.
@@ -246,14 +246,13 @@ metà lotto trova la stessa pagina di prima, adesso con sopra una navbar.
 - [x] **M2-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi
 - [x] **M2-10** — `docs/ARCHITECTURE.md` con la navigazione e la nuova TV; `docs/DECISIONS.md` con
       le scelte non ovvie di questa macro
-- [ ] **M2-11** — Chiusura: merge `--no-ff` su `dev`, prova con Docker + seed + `pnpm bots` e dal
+- [x] **M2-11** — Chiusura: merge `--no-ff` su `dev`, prova con Docker + seed + `pnpm bots` e dal
       telefono con `pnpm dev:lan`, poi — **solo su richiesta dell'owner** — `CHANGELOG.md`,
       `package.json` a `1.3.0`, merge `--no-ff` su `main`, tag `v1.3.0`, push
-      → Merge su `dev` fatto il 2026-08-10. La prova con dev server e bot l'ha fatta l'owner in due
-      passaggi: prima navigazione e tabellone («funziona tutto»), poi le tre correzioni successive —
-      banner via dalla TV, stato nell'intestazione, «Asta live» — confermate a parte. La prova **dal
-      telefono** con `pnpm dev:lan` **non è stata fatta**: resta l'unico punto aperto della
-      «Verifica» qui sotto (il punto 5), e riguarda il portale, che è la pagina mobile-first.
+      → Merge su `dev` il 2026-08-10. La prova l'ha fatta l'owner in tre passaggi: navigazione e
+      tabellone, poi le tre correzioni successive (banner via dalla TV, stato nell'intestazione,
+      «Asta live»), poi la prova dal telefono con `pnpm dev:lan` — tutti e tre confermati. Rilasciata
+      con **v1.3.0** lo stesso giorno, su richiesta esplicita dell'owner.
 
 ## Verifica
 
