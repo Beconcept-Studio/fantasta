@@ -133,6 +133,32 @@ export type BotTickOutcome = {
   moves: number;
 };
 
+/**
+ * C'è un'asta **vera** in corso su questa macchina?
+ *
+ * È lo stand-down: il gemello a runtime della regola che il deploy applica già
+ * (`deploy.sh` si rifiuta di partire con un'asta `LIVE` o `PAUSED`). Durante
+ * l'asta vera nessuno può, nemmeno volendo, mettere undici bot a scrivere sotto
+ * lock accanto ai dodici telefoni.
+ *
+ * Il costo è che una simulazione dimenticata accesa si **congela**. Per questo
+ * la stessa domanda la fa anche la pagina della configurazione, e lo scrive:
+ * senza quella riga, fra tre mesi sembrerà un guasto e ci si passerà una serata.
+ */
+export async function realAuctionRunning(): Promise<boolean> {
+  const [row] = await db
+    .select({ id: auctions.id })
+    .from(auctions)
+    .where(
+      and(
+        eq(auctions.isSimulated, false),
+        inArray(auctions.status, ["LIVE", "PAUSED"]),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
 export type BotTickOptions = {
   now?: Millis;
   /**
@@ -153,23 +179,10 @@ export async function runBotTick(
 ): Promise<BotTickOutcome> {
   const now = options.now ?? Date.now();
 
-  // ① Lo stand-down. È il gemello a runtime della regola che il deploy applica
-  // già (`deploy.sh` si rifiuta di partire con un'asta in corso): durante
-  // l'asta vera nessuno può, nemmeno volendo, mettere undici bot a scrivere
-  // sotto lock accanto ai dodici telefoni. Il costo è che una simulazione
-  // dimenticata accesa si **congela** — ed è per questo che la pagina lo
-  // dichiara, invece di lasciarlo scoprire come se fosse un bug.
-  const [real] = await db
-    .select({ id: auctions.id })
-    .from(auctions)
-    .where(
-      and(
-        eq(auctions.isSimulated, false),
-        inArray(auctions.status, ["LIVE", "PAUSED"]),
-      ),
-    )
-    .limit(1);
-  if (real) return { standBy: true, auctions: 0, moves: 0 };
+  // ① Lo stand-down.
+  if (await realAuctionRunning()) {
+    return { standBy: true, auctions: 0, moves: 0 };
+  }
 
   const simulated = await db
     .select({ id: auctions.id, status: auctions.status })
@@ -195,11 +208,21 @@ export async function runBotTick(
   return { standBy: false, auctions: simulated.length, moves };
 }
 
-async function tickAuction(
+/**
+ * Un giro su **una** asta simulata: heartbeat dei suoi bot e, se è `LIVE`, le
+ * loro mosse. Restituisce quante ne sono state accettate.
+ *
+ * ⚠ Non controlla lo stand-down né che l'asta sia davvero simulata: quelle sono
+ * decisioni di `runBotTick`, che è l'unico chiamante in produzione. È esportata
+ * perché i test possano verificare il comportamento dei bot **senza dipendere
+ * dall'assenza di aste reali nel database** — che in un test che gira in
+ * parallelo ad altri non è una condizione controllabile.
+ */
+export async function tickAuction(
   auctionId: string,
   isLive: boolean,
   now: Millis,
-  options: BotTickOptions,
+  options: BotTickOptions = {},
 ): Promise<number> {
   const bots = await db
     .select({

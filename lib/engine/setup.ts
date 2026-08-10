@@ -869,6 +869,59 @@ export async function removeMember(
   });
 }
 
+/**
+ * Cancella un'asta e tutto ciò che le appartiene (M4).
+ *
+ * ⚠ **È l'unica funzione distruttiva dell'applicazione**, e va letta sapendo
+ * cosa porta via: le rose, lo storico, le buste, il ledger e le righe di
+ * `events` se ne vanno con lei, perché ogni tabella ha `onDelete: "cascade"` su
+ * `auction_id`. Su un'asta reale conclusa, questo vuol dire il verbale delle
+ * rose e lo storico che M3 ha costruito.
+ *
+ * **La regola 5 non è in discussione.** Vieta il `DELETE` su `assignments` e
+ * `ledger` *dentro* un'asta: in un'asta viva un fatto accaduto non si riscrive a
+ * mano, si annulla con `voided_at`. Buttare via un'intera partita è un atto
+ * diverso, esplicito e chiesto — non la correzione silenziosa di un numero.
+ *
+ * Due difese. **Mai su un'asta in corso**: `LIVE` o `PAUSED` sono un rifiuto, e
+ * la pausa congela la fase senza azzerare l'asta. E **la riga su stdout**, che è
+ * l'unica traccia che sopravvive: `events` se ne va insieme al resto, quindi
+ * senza questa riga di una cancellazione non resterebbe niente da nessuna parte.
+ * La conferma per digitazione del nome sta nella UI, ed è cortesia verso la mano
+ * che clicca: la difesa vera è chi può chiamare questa funzione.
+ */
+export async function deleteAuction(
+  userId: string,
+  auctionId: string,
+): Promise<Result<{ name: string }>> {
+  return withSetupLock(auctionId, async (tx, auction) => {
+    const forbidden = requireOwner<{ name: string }>(auction, userId);
+    if (forbidden) return forbidden;
+
+    if (auction.status === "LIVE" || auction.status === "PAUSED") {
+      return fail<{ name: string }>(
+        "WRONG_STATUS",
+        "L'asta è in corso: mettila in pausa e falla finire, poi si potrà cancellare.",
+      );
+    }
+
+    console.log(
+      JSON.stringify({
+        auctionId,
+        type: "DELETE_AUCTION",
+        name: auction.name,
+        status: auction.status,
+        isSimulated: auction.isSimulated,
+        actor: userId,
+        ts: new Date().toISOString(),
+      }),
+    );
+
+    await tx.delete(auctions).where(eq(auctions.id, auctionId));
+    return ok({ name: auction.name });
+  });
+}
+
 // ─── Viste di lettura ────────────────────────────────────────────────────────
 
 export type AuctionListItem = {
@@ -880,6 +933,8 @@ export type AuctionListItem = {
   isOwner: boolean;
   isMember: boolean;
   teamName: string | null;
+  /** Un'asta di prova (M4): in dashboard si distingue a colpo d'occhio. */
+  isSimulated: boolean;
 };
 
 /** Le aste di cui l'utente è owner o membro, per la dashboard. */
@@ -917,13 +972,14 @@ export async function listUserAuctions(
       isOwner: auction.ownerUserId === userId,
       isMember: mine !== undefined,
       teamName: mine?.teamName ?? null,
+      isSimulated: auction.isSimulated,
     };
   });
 }
 
 export type MemberView = Pick<
   Member,
-  "id" | "userId" | "teamName" | "seatIndex" | "budgetInitial"
+  "id" | "userId" | "teamName" | "seatIndex" | "budgetInitial" | "botStrategy"
 > & { displayName: string | null };
 
 export type AuctionOverview = {
@@ -974,6 +1030,7 @@ export const getAuctionOverview = cache(async function getAuctionOverview(
       teamName: members.teamName,
       seatIndex: members.seatIndex,
       budgetInitial: members.budgetInitial,
+      botStrategy: members.botStrategy,
       displayName: users.displayName,
     })
     .from(members)

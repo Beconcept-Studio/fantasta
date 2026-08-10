@@ -2,7 +2,12 @@
 
 import { Countdown } from "@/components/auction/countdown";
 import { statusLabel } from "@/components/setup/status-badge";
-import { ROLES, ROLE_LABELS_ONE, type Role } from "@/lib/domain";
+import {
+  ROLES,
+  ROLE_LABELS_ONE,
+  type Role,
+  SIMULATION_BADGE,
+} from "@/lib/domain";
 import {
   memberById,
   memberLabel,
@@ -57,10 +62,17 @@ export function TvView({
   auctionId,
   publicToken,
   auctionName,
+  isSimulated,
 }: {
   auctionId: string;
   publicToken: string;
   auctionName: string;
+  /**
+   * Un'asta di prova (M4). Qui il badge non è il componente condiviso: su uno
+   * schermo nero a tutta pagina i colori del tema non si leggono, e questa
+   * scritta deve essere visibile dall'altra parte della stanza.
+   */
+  isSimulated: boolean;
 }) {
   const { snapshot, connected, offset } = useAuctionStream(
     auctionId,
@@ -72,6 +84,7 @@ export function TvView({
       <Screen>
         <div className="flex flex-1 flex-col items-center justify-center gap-3">
           <h1 className="text-3xl font-semibold">{auctionName}</h1>
+          {isSimulated && <SimulationTag />}
           <p className="text-lg text-white/60">
             {connected ? "Carico l'asta…" : "Mi collego all'asta…"}
           </p>
@@ -88,6 +101,7 @@ export function TvView({
     <Screen>
       <header className="flex shrink-0 items-baseline gap-4 border-b border-white/15 px-4 py-2">
         <h1 className="truncate text-base font-semibold">{auction.name}</h1>
+        {isSimulated && <SimulationTag />}
         <p className="text-sm tracking-wide text-white/70 uppercase">
           {phaseLabel(snapshot)}
         </p>
@@ -559,5 +573,20 @@ function BigCountdown({
       pausedAt={pausedAt}
       className="block text-center text-[clamp(2rem,4vw,3.5rem)] leading-none font-semibold"
     />
+  );
+}
+
+/**
+ * Il marchio dell'asta di prova, in versione da proiettore (M4).
+ *
+ * Non riusa `SimulationBadge` di proposito: quello prende i colori dal tema, e
+ * qui il fondo è nero fisso. Chi guarda è dall'altra parte della stanza — se
+ * questa scritta non si legge non serve a niente.
+ */
+function SimulationTag() {
+  return (
+    <span className="rounded border border-amber-300/60 px-2 py-0.5 text-sm font-semibold tracking-wide text-amber-300 uppercase">
+      {SIMULATION_BADGE}
+    </span>
   );
 }

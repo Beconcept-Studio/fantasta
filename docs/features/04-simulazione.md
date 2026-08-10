@@ -304,10 +304,10 @@ sue mosse.
       dentro il ramo `nodejs` e con gli import dinamici lì dentro
 - [x] **M4-10** — `scripts/bots.ts` riscritto sopra `decide()`; `scripts/drive.ts` rimosso con il
       suo comando in `package.json`
-- [ ] **M4-11** — UI: il pannello «Partecipanti simulati» accanto agli inviti; il badge
+- [x] **M4-11** — UI: il pannello «Partecipanti simulati» accanto agli inviti; il badge
       `[simulazione]` in dashboard, nel layout dell'asta e nella vista TV; l'avviso «bot in pausa:
       è in corso un'asta reale»
-- [ ] **M4-12** — `deleteAuction()` e il pannello in fondo alla configurazione, con il nome da
+- [x] **M4-12** — `deleteAuction()` e il pannello in fondo alla configurazione, con il nome da
       digitare e la riga su stdout
 - [ ] **M4-13** — Test puri: `bot-brain` (non ri-offre se ha già `myBid`, rispetta `minAmount` e
       `maxBid`, `tie` converge, il ritardo è deterministico e stabile fra due processi), `domain`

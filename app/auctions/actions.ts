@@ -9,6 +9,8 @@ import type { FormState } from "./form-state";
 import {
   createAuction,
   createInvite,
+  deleteAuction,
+  fillWithBots,
   importPlayers,
   joinAsOwner,
   joinAuction,
@@ -16,7 +18,13 @@ import {
   setIncludeOutOfList,
   updateAuctionSettings,
 } from "@/lib/engine/setup";
-import { ROLES, type Role } from "@/lib/domain";
+import {
+  BOT_FILL_MIX,
+  BOT_STRATEGIES,
+  type BotFill,
+  ROLES,
+  type Role,
+} from "@/lib/domain";
 
 /**
  * Le Server Action del setup.
@@ -191,6 +199,67 @@ export async function joinAsOwnerAction(
 
   revalidatePath(`/auctions/${auctionId}/setup`);
   return { error: null, ok: "Sei dentro." };
+}
+
+/** I bot che riempiono i posti liberi di un'asta simulata (M4). */
+export async function fillWithBotsAction(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  const auctionId = text(form, "auctionId");
+  if (!auctionId) return { error: "Asta non indicata." };
+
+  const fill = text(form, "fill");
+  if (!isBotFill(fill)) return { error: "Strategia non riconosciuta." };
+
+  const result = await fillWithBots(
+    user.id,
+    auctionId,
+    number(form, "count") ?? Number.NaN,
+    fill,
+  );
+  if (!result.ok) return { error: result.error.message };
+
+  revalidatePath(`/auctions/${auctionId}/setup`);
+  const { added } = result.value;
+  return {
+    error: null,
+    ok: `${added} ${added === 1 ? "bot aggiunto" : "bot aggiunti"}.`,
+  };
+}
+
+function isBotFill(value: string | undefined): value is BotFill {
+  return (
+    value === BOT_FILL_MIX ||
+    (BOT_STRATEGIES as readonly string[]).includes(value ?? "")
+  );
+}
+
+/**
+ * La cancellazione di un'asta (M4).
+ *
+ * Il nome digitato si confronta **qui**, e non dentro `deleteAuction`: è una
+ * difesa contro la mano, non contro il chiamante, e nel motore diventerebbe un
+ * parametro che qualsiasi altro chiamante dovrebbe ricordarsi di riempire. La
+ * difesa vera — solo l'owner, mai su un'asta in corso — sta nel motore.
+ */
+export async function deleteAuctionAction(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  const auctionId = text(form, "auctionId");
+  if (!auctionId) return { error: "Asta non indicata." };
+
+  if (text(form, "confirmName")?.trim() !== text(form, "name")?.trim()) {
+    return { error: "Il nome non coincide: l'asta non è stata cancellata." };
+  }
+
+  const result = await deleteAuction(user.id, auctionId);
+  if (!result.ok) return { error: result.error.message };
+
+  redirect("/dashboard");
 }
 
 export async function removeMemberAction(

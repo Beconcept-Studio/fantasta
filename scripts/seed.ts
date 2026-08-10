@@ -192,6 +192,15 @@ async function seedUsers(): Promise<{ created: number; ids: string[] }> {
     .where(and(isNull(users.googleSub), eq(users.isBot, false)))
     .orderBy(asc(users.createdAt));
 
+  // Il primo utente di prova è **amministratore dell'applicazione** (M4).
+  // In produzione ci si diventa con un UPDATE a mano, una volta; in locale
+  // dover aprire `psql` per provare una funzione che esiste per non aprire
+  // più `psql` sarebbe una barzelletta.
+  const first = rows.find((row) => row.displayName === DEV_USERS[0]);
+  if (first) {
+    await db.update(users).set({ isAdmin: true }).where(eq(users.id, first.id));
+  }
+
   // L'ordine è quello di DEV_USERS, non quello alfabetico: i posti dell'asta
   // devono essere sempre gli stessi fra un seed e l'altro.
   const byName = new Map(rows.map((row) => [row.displayName, row.id]));
@@ -251,14 +260,23 @@ async function seedAuction(
     );
 
   const { auctionId } = unwrap(
-    await createAuction(ownerId, {
-      name: SEED_AUCTION_NAME,
-      seats: SEED_SEATS,
-      budgetDefault: 500,
-      slots: { P: 3, D: 8, C: 8, A: 6 },
-      roleOrder: ["P", "D", "C", "A"],
-      ...DEV_TIMERS,
-    }),
+    await createAuction(
+      ownerId,
+      {
+        name: SEED_AUCTION_NAME,
+        seats: SEED_SEATS,
+        budgetDefault: 500,
+        slots: { P: 3, D: 8, C: 8, A: 6 },
+        roleOrder: ["P", "D", "C", "A"],
+        ...DEV_TIMERS,
+      },
+      // **Simulata** (M4). Un'asta prodotta da `pnpm db:seed` non è mai
+      // un'asta vera, e dirlo ha due effetti concreti: ci si possono
+      // aggiungere i bot dall'interfaccia, e — soprattutto — non fa scattare
+      // lo stand-down, che altrimenti terrebbe fermi i bot di **ogni**
+      // simulazione per tutto il tempo in cui la si tiene aperta in locale.
+      true,
+    ),
   );
 
   unwrap(await importPlayers(ownerId, auctionId, readFileSync(LISTONE)));
