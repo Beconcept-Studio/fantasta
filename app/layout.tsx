@@ -6,6 +6,23 @@ import { Navbar } from "@/components/nav/navbar";
 import { currentUser } from "@/lib/auth";
 import { listUserAuctions } from "@/lib/engine/setup";
 
+/**
+ * La versione mostrata nella navbar viene da `package.json`, letta **qui** e
+ * passata alla navbar come stringa.
+ *
+ * L'import sta in questo file, che è un server component, e non dentro la
+ * navbar, che è `"use client"`: importare `package.json` da un componente client
+ * farebbe viaggiare fino al browser l'elenco completo delle dipendenze per
+ * mostrare cinque caratteri. Così esce solo la stringa.
+ *
+ * Il numero è quello del `package.json` con cui l'applicazione è stata
+ * **compilata**, che è esattamente ciò che serve per un controllo a vista: il
+ * deploy fa `pnpm build` sul server dopo il checkout, quindi ciò che si legge
+ * nella navbar è la versione del codice che sta rispondendo — non quella che
+ * qualcuno ha scritto in un file di configurazione.
+ */
+import { version as appVersion } from "../package.json";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -70,7 +87,10 @@ export default async function RootLayout({
     <html lang="it" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased">
         <LiveBanner auctions={live} />
-        <Navbar user={user === null ? null : { name: user.displayName }} />
+        <Navbar
+          user={user === null ? null : { name: user.displayName }}
+          version={appVersion}
+        />
         {children}
       </body>
     </html>

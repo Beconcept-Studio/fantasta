@@ -32,8 +32,19 @@ import { Button } from "@/components/ui/button";
  */
 export function Navbar({
   user,
+  version,
 }: {
   user: { name: string | null } | null;
+  /**
+   * La versione compilata, da `package.json`. Serve a un controllo a vista:
+   * aprire il sito e sapere **quale** codice sta rispondendo, senza fidarsi di
+   * quando il deploy dice di essere finito.
+   *
+   * Si disegna anche senza sessione, quindi si legge pure dalla pagina di
+   * accesso — che è il posto in cui uno guarda quando l'app non lo fa entrare e
+   * vuole capire se il deploy è passato.
+   */
+  version: string;
 }) {
   const pathname = usePathname();
 
@@ -54,20 +65,23 @@ export function Navbar({
           Fantasta
         </Link>
 
-        {user !== null && (
-          <div className="ml-auto flex min-w-0 items-center gap-3">
-            {user.name !== null && (
-              <span className="text-muted-foreground min-w-0 truncate text-sm">
-                {user.name}
-              </span>
-            )}
+        <div className="ml-auto flex min-w-0 items-center gap-3">
+          {user?.name != null && (
+            <span className="text-muted-foreground min-w-0 truncate text-sm">
+              {user.name}
+            </span>
+          )}
+          <span className="text-muted-foreground/70 shrink-0 font-mono text-xs tabular-nums">
+            v{version}
+          </span>
+          {user !== null && (
             <form action={signOutAction} className="shrink-0">
               <Button type="submit" variant="outline" size="sm">
                 Esci
               </Button>
             </form>
-          </div>
-        )}
+          )}
+        </div>
       </nav>
     </header>
   );

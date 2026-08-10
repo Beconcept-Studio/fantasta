@@ -4,6 +4,16 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.3.1] — 2026-08-10
+
+### Aggiunto
+
+- **La versione dell'applicazione nella navbar**, accanto al pulsante per uscire. Serve a un
+  controllo a vista: si apre il sito e si sa quale codice sta rispondendo, senza dover credere al
+  momento in cui il deploy dichiara di aver finito. Il numero è quello con cui l'applicazione è
+  stata compilata, e si legge anche dalla pagina di accesso — che è il posto in cui si guarda
+  quando l'app non fa entrare e si vuole capire se il rilascio è passato.
+
 ## [1.3.0] — 2026-08-10
 
 **M2 — Navigazione e identità delle pagine.** Una macro sola, e riguarda il muoversi dentro l'app.

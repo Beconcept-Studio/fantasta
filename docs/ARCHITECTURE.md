@@ -801,7 +801,12 @@ client che evidenzia la voce attiva, e importare l'ORM per quattro stringhe mand
 telefono.
 
 Sopra tutto c'è una **navbar globale** nel layout radice: la scritta *Fantasta* che riporta alla
-lista delle aste, il nome di chi è entrato, l'uscita. Il blocco utente si disegna solo se c'è una
+lista delle aste, il nome di chi è entrato, la versione compilata e l'uscita. La versione è lì per
+un controllo a vista — aprire il sito e sapere quale codice sta rispondendo, invece di credere al
+momento in cui il deploy dichiara di aver finito — e viene da `package.json`, letto nel layout e
+passato alla navbar come stringa: il deploy compila sul server dopo il checkout, quindi quel numero
+è quello del codice in esecuzione. Si disegna anche senza sessione, così si legge dalla pagina di
+accesso, che è dove si guarda quando l'app non fa entrare. Il blocco utente si disegna solo se c'è una
 sessione e il nome solo se esiste, il che copre senza casi speciali sia `/signin` (dove non c'è
 sessione) sia `/onboarding` (dove il nome è proprio ciò che si sta scrivendo, ma l'uscita deve
 esserci: è l'unica via di fuga per chi è entrato con l'account sbagliato). Si toglie di mezzo sulla

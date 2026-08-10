@@ -44,6 +44,11 @@ esplicita dell'owner («falla direttamente qui»), sono entrati su `dev` senza a
   pausa. `docs/DECISIONS.md`, 2026-08-10.
 - **La prova in locale**: `docs/HOWTO-PROVA-LOCALE.md` e il seed che fa entrare l'owner per ultimo.
 
+In **v1.3.1**, sempre su richiesta esplicita («vai pure da `dev` a `main` senza branch»):
+
+- **La versione nella navbar**, accanto al pulsante per uscire. Serve a controllare a vista quale
+  codice sta rispondendo in produzione. `docs/DECISIONS.md`, 2026-08-10.
+
 Il criterio resta quello di `CLAUDE.md`: una macro si apre su richiesta esplicita. Quando invece
 si lavora direttamente su `dev`, restano dovuti `DECISIONS.md` al momento della scelta e
 `CHANGELOG.md` al rilascio — che è ciò che rende questa riga leggibile fra sei mesi.
