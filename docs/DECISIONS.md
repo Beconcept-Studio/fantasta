@@ -1194,3 +1194,26 @@ solo se l'asta non esiste, quindi qualunque utente autenticato può vedere la lo
 Lo storico si protegge da sé; allineare la lobby è una decisione dell'owner e non un effetto
 collaterale di questa macro. Annotato qui perché è il genere di cosa che, non scritta, si riscopre
 per caso.
+
+## 2026-08-10 — Due code di M3, dopo la prova su `dev`
+
+**La lobby resta visibile a qualunque utente autenticato, e ora è una scelta.** M3 aveva annotato
+come osservazione che `getAuctionOverview` torna `null` solo se l'asta non esiste, quindi chiunque
+sia loggato può aprire la lobby di un'asta che non è sua. Chiesto all'owner, la risposta è stata che
+non gli interessa proteggerla. Va scritto qui e non lasciato implicito, perché altrimenti fra sei mesi
+sembra una dimenticanza e qualcuno la «aggiusta»: **non è un buco rimasto aperto, è un requisito che
+non c'è.** Lo storico invece si protegge da sé — quello contiene le buste, e le buste hanno un
+invariante.
+
+**La versione nella navbar importa il default di `package.json`, non il campo.** `next build` emetteva
+`Should not import the named export 'version' … (only default export is available soon)`: un modulo
+JSON esporrà solo il default, e quel giorno `import { version } from "../package.json"` smetterebbe di
+compilare — cioè la build si romperebbe per una riga scritta un anno prima, durante un deploy. Il
+default si destruttura in una costante subito sotto l'import.
+
+Non cambia niente di ciò che era già stato deciso il 2026-08-10 per questa funzione: la lettura resta
+in `app/layout.tsx`, che è un server component, quindi l'oggetto intero non lascia il server e alla
+navbar arriva sempre e solo la stringa. Le due alternative scartate allora restano scartate, e non per
+abitudine: `process.env.npm_package_version` è vuota quando il processo non è avviato da pnpm, cioè
+sotto pm2, cioè in produzione; una variabile in `next.config.ts` aggiunge un posto da cui la versione
+può divergere da quella vera.
