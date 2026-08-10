@@ -1,6 +1,6 @@
 # M1 — Segretezza e rivelazione delle offerte
 
-> **Stato:** in corso · **Aperta il** 2026-08-09 · **Uscita con** —
+> **Stato:** chiusa · **Aperta il** 2026-08-09 · **Uscita con** v1.2.0, il 2026-08-10
 > **Tocca lo schema del database?** No. Nessun `pnpm db:push` dopo il deploy.
 > **Invarianti coinvolti:** I8 (rafforzato, vedi «L'invariante nuovo»), I10, regole 3 e 7.
 
@@ -162,9 +162,12 @@ racconta, e quando.
 - [x] **M1-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi
 - [x] **M1-10** — `docs/ARCHITECTURE.md` con l'invariante rafforzato e le due card;
       `docs/DECISIONS.md` con le tre scelte non ovvie di questa macro
-- [ ] **M1-11** — Chiusura: merge `--no-ff` su `dev`, prova con Docker + seed + `pnpm bots` e dal
+- [x] **M1-11** — Chiusura: merge `--no-ff` su `dev`, prova con Docker + seed + `pnpm bots` e dal
       telefono con `pnpm dev:lan`, poi — **solo su richiesta dell'owner** — `CHANGELOG.md`,
       `package.json` a `1.2.0`, merge `--no-ff` su `main`, tag `v1.2.0`, push
+      → Rilasciata il 2026-08-10, insieme a «Prosegui asta» e a tre correzioni fuori macro. La
+      prova con Docker, seed e bot l'ha fatta l'owner («funziona tutto»); la prova dal telefono
+      con `pnpm dev:lan` **non è stata rifatta** in questa sessione.
 
 ## Verifica
 
