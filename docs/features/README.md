@@ -12,19 +12,22 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna. La prossima si apre su richiesta esplicita.
-
-## Da pianificare
-
 **[M7 — Le caricature dei calciatori](07-caricature.md)**: le figurine di fantacalcio.it scaricate una
-volta e mostrate nel lotto in corso. Spec concordata e scritta il 2026-08-11, **non aperta**: si apre
-su richiesta esplicita. Non tocca lo schema, ma in produzione l'archivio nasce vuoto e va riempito dal
-pannello dopo il deploy.
+volta e mostrate nel lotto in corso. Aperta il 2026-08-11 su `feature/07-caricature`, codice e
+documentazione fatti, in attesa del rilascio. Non tocca lo schema — **nessun `pnpm db:push` e nessun
+backfill** — ma dopo il deploy restano due passi a mano: `CAMPIONCINI_EDITION` nel `.env` seguito da
+`pm2 reload deploy/ecosystem.config.cjs --update-env`, e **l'archivio riempito dal pannello**, perché
+in produzione nasce vuoto. Fino ad allora l'applicazione funziona come prima: semplicemente non si
+vede nessuna figurina.
 
 ⚠ La spec ha una sezione insolita, ed è la prima: **il collaudo che l'ha scritta.** Il downloader è
 stato provato sui 495 id di un listone vero *prima* di scrivere la spec, e i numeri hanno tolto tre
 pezzi di architettura — batching, marcatori per gli assenti, altezza variabile del riquadro. Chi
 riaprirà quel file troverà scritto anche cosa **non** si scrive, e perché.
+
+## Da pianificare
+
+Nessuna. Il quaderno `docs/REQUESTS.md` è vuoto.
 
 M5 e M6 sono nate da una sessione di spec sola, il 2026-08-10, e sono state **tagliate in due di
 proposito**. M5 tocca la strada del login — l'unica cosa che, se si rompe, chiude fuori tutti — e

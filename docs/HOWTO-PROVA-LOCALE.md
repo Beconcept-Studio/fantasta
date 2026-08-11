@@ -210,6 +210,30 @@ Per fermarli: `Ctrl-C`.
 
 ---
 
+## 6. Le figurine, se vuoi vederle (M7)
+
+Non serve per giocare: senza, il portale e la TV mostrano i lotti esattamente come prima, solo senza
+la caricatura del giocatore. Se la vuoi, è un passo solo e dura pochi secondi.
+
+Da amministratore (`users.is_admin`), **Admin → Figurine**: si carica `fixtures/listone.xlsx` — il
+listone vero da 495 giocatori, già in git — e si preme il pulsante. Al primo giro scarica tutto in
+circa tre secondi; premuto di nuovo non scarica niente e lo dice, perché lo stato è il disco.
+
+Le immagini finiscono in `storage/campioncini/`, che è fuori da git e **fuori da `public/`**: non la
+tocca né `pnpm build` né `git reset --hard`, quindi la scarichi una volta e resta lì per tutte le
+prove successive. Sono ~53 MB.
+
+Due cose che non sono guasti, così non le cerchi:
+
+- **Circa un giocatore su tre ha una sagoma senza volto** con la maglia del club, invece della
+  caricatura. Sono 144 su 495, è così anche in produzione, ed è voluto che si mostrino come le altre.
+- **Se l'archivio è vuoto la figurina non compare e basta**: nessun rettangolo grigio, il testo scorre
+  a sinistra. Non è un errore da indagare, è il caso «non l'ho ancora scaricato».
+
+Per svuotarlo: `rm -rf storage/campioncini`. Non c'è un pulsante, di proposito.
+
+---
+
 ## Chi è chi nell'asta di prova
 
 I posti sono sempre gli stessi fra un seed e l'altro: serve a poter rifare la stessa prova due
