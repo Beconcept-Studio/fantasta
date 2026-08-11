@@ -1576,3 +1576,27 @@ fallire prima di essere creduta.
 **La voce del pannello si chiama «Figurine» e il segmento è in italiano**, a differenza di `users` e
 `auctions`. `campioncini` è il nome che usa il CDN di Fantacalcio.it ed è la parola che sta nel
 codice; «figurina» è la parola che si usa nella stanza. La navigazione parla la seconda lingua.
+
+**Il modale d'offerta è diventato il terzo posto dove si vede la figurina, e §6 diceva «due, e sono
+due».** La spec era stata scritta guardando card e TV; usandola, l'owner ha chiesto la figurina anche
+nel modale, ed è la richiesta giusta per la ragione che la macro esiste — il modale è il posto dove
+si guarda il giocatore *mentre si decide quanto mettere*. Restano fuori regia, rose e storico: §9 non
+si è mossa.
+
+**Nel modale sta di fianco e non sopra il nome, e la differenza l'ha decisa la tastiera.** Era nata
+centrata sopra il nome, che è dove l'occhio la cerca. Ma quello sheet arriva dal basso e con la
+tastiera aperta **l'altezza è la risorsa scarsa**, mentre la colonna a sinistra del testo era spazio
+già disponibile: di fianco non costa nessuna riga, sopra ne costava ~140 pixel proprio quando ne
+restano di meno. Stessa misura della card che sta dietro (68×100), perché è lo stesso giocatore nello
+stesso momento e vederlo cambiare taglia aprendo il modale sarebbe un movimento senza significato.
+
+**Il campo dell'offerta prende il focus all'apertura: una decisione di F5 ribaltata, non dimenticata.**
+Fino a v1.7.0 il focus veniva tolto esplicitamente, con la sua riga di commento: il modale si apre
+**da sé** all'inizio del round, e una tastiera che sale senza che nessuno l'abbia chiesta copre due
+terzi dello schermo nell'istante peggiore. Il ribaltamento viene dall'uso, ed è motivato: quel timore
+descriveva **l'apertura**, non l'uso — il modale lo si apre per scrivere un numero, e trenta secondi
+di countdown non lasciano spazio a un tocco in più. E il costo che la vecchia scelta temeva era già
+stato pagato dal layout: countdown e `max_bid` stanno nell'intestazione dello sheet proprio perché
+restino leggibili sopra la tastiera. `preventDefault` è rimasto — senza, Radix darebbe il focus al
+pulsante «−1» — e il valore già presente viene selezionato, così chi rientra a metà round sovrascrive
+digitando invece di dover cancellare.

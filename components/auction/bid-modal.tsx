@@ -3,6 +3,7 @@
 import { Dialog } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
 
+import { Campioncino } from "@/components/auction/campioncino";
 import { Countdown, CountdownBar } from "@/components/auction/countdown";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
@@ -37,6 +38,10 @@ import { cn } from "@/lib/utils";
  * - **`inputMode="numeric"` su un `type="text"`**: niente spinner (inusabili
  *   col pollice), tastierino nativo, `text-2xl` perché sotto i 16px iOS zooma
  *   da solo e la pagina resta zoomata.
+ *
+ * Da M7 il campo **riceve il focus all'apertura**, e la figurina del giocatore
+ * sta a sinistra dell'intestazione: il perché di entrambe è scritto dove
+ * succedono, perché in entrambi i casi è il perché a non essere ovvio.
  *
  * Il pulsante di conferma non si fida di niente (regola 6): disabilita e
  * spiega, ma il rifiuto vero arriva dal server con il suo codice.
@@ -141,52 +146,87 @@ export function BidModal({
       <Dialog.Portal>
         <Dialog.Overlay className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/60" />
         <Dialog.Content
-          // Il focus non va sul campo all'apertura: la tastiera coprirebbe la
-          // card e il countdown proprio nell'istante in cui il modale compare
-          // da solo. Si tocca il campo quando si è pronti a scrivere.
+          // ⚠ **Il focus va sul campo all'apertura, ed è un cambio di idea
+          // esplicito** (M7, su richiesta dell'owner dopo averlo usato). Fino a
+          // v1.7.0 il focus veniva tolto di proposito: il modale si apre **da
+          // sé** quando il round comincia, e far salire la tastiera senza che
+          // nessuno l'abbia chiesta copre due terzi dello schermo — card e
+          // countdown compresi — nel momento peggiore.
+          //
+          // La ragione del cambio è che quel timore descriveva l'apertura, non
+          // l'uso: si apre il modale per scrivere un numero, e trenta secondi di
+          // countdown non lasciano spazio a un tocco in più. Countdown e
+          // `max_bid` stanno nell'intestazione dello sheet **apposta** per
+          // restare visibili sopra la tastiera, quindi il costo che la scelta
+          // precedente temeva è già pagato dal layout.
+          //
+          // `preventDefault` resta: senza, Radix darebbe il focus al primo
+          // elemento focusabile, che è il pulsante «−1». Il `select()` fa sì che
+          // chi rientra con una cifra già dentro possa sovrascriverla digitando,
+          // invece di dover cancellare prima.
           onOpenAutoFocus={(event) => {
             event.preventDefault();
-            (event.currentTarget as HTMLElement).focus();
+            const field = inputRef.current;
+            if (field === null) return;
+            field.focus();
+            field.select();
           }}
           className="bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-dvh flex-col gap-3 rounded-t-2xl border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl outline-none sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-96 sm:rounded-2xl sm:border"
         >
           {/* ── Intestazione: sempre visibile, anche con la tastiera aperta ── */}
-          <div className="space-y-2">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <Dialog.Title className="truncate text-lg leading-tight font-semibold">
-                  {lot.player.name}
-                </Dialog.Title>
-                <Dialog.Description className="text-muted-foreground truncate text-xs">
-                  {ROLE_LABELS[lot.player.role]} · {lot.player.team} · fvm{" "}
-                  {lot.player.fvm}
-                  {lot.roundNo === 2 ? " · spareggio" : ""}
-                </Dialog.Description>
-              </div>
-              <div className="text-right">
-                <p
-                  className={cn(
-                    "text-2xl leading-none font-semibold",
-                    closing && "text-muted-foreground",
-                  )}
-                >
-                  <Countdown
-                    deadline={lot.endsAt}
-                    offset={offset}
-                    pausedAt={frozen ? snapshot.auction.pausedAt : null}
-                  />
-                </p>
-                <p className="text-muted-foreground mt-1 text-xs whitespace-nowrap">
-                  max <span className="tabular-nums">{bounds.max}</span>
-                </p>
-              </div>
-            </div>
-            <CountdownBar
-              deadline={lot.endsAt}
-              offset={offset}
-              totalSeconds={snapshot.auction.timers.bidSeconds}
-              pausedAt={frozen ? snapshot.auction.pausedAt : null}
+          <div className="flex items-start gap-3">
+            {/*
+              La figurina sta **a sinistra dell'intero blocco** — nome, countdown,
+              `max_bid` e barra — non sopra il nome: questo foglio arriva dal
+              basso e con la tastiera aperta l'altezza è la risorsa scarsa, mentre
+              la larghezza a sinistra del testo è spazio che c'era già. Di fianco
+              non costa nessuna riga, sopra ne costava centoquaranta pixel.
+
+              Stessa misura della card dietro (68×100): è lo stesso giocatore
+              nello stesso momento, e vederlo cambiare taglia aprendo il modale
+              sarebbe un movimento senza significato.
+            */}
+            <Campioncino
+              extId={lot.player.extId}
+              className="h-25 w-17 shrink-0 rounded-md"
             />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Dialog.Title className="truncate text-lg leading-tight font-semibold">
+                    {lot.player.name}
+                  </Dialog.Title>
+                  <Dialog.Description className="text-muted-foreground truncate text-xs">
+                    {ROLE_LABELS[lot.player.role]} · {lot.player.team} · fvm{" "}
+                    {lot.player.fvm}
+                    {lot.roundNo === 2 ? " · spareggio" : ""}
+                  </Dialog.Description>
+                </div>
+                <div className="text-right">
+                  <p
+                    className={cn(
+                      "text-2xl leading-none font-semibold",
+                      closing && "text-muted-foreground",
+                    )}
+                  >
+                    <Countdown
+                      deadline={lot.endsAt}
+                      offset={offset}
+                      pausedAt={frozen ? snapshot.auction.pausedAt : null}
+                    />
+                  </p>
+                  <p className="text-muted-foreground mt-1 text-xs whitespace-nowrap">
+                    max <span className="tabular-nums">{bounds.max}</span>
+                  </p>
+                </div>
+              </div>
+              <CountdownBar
+                deadline={lot.endsAt}
+                offset={offset}
+                totalSeconds={snapshot.auction.timers.bidSeconds}
+                pausedAt={frozen ? snapshot.auction.pausedAt : null}
+              />
+            </div>
           </div>
 
           {/* ── Il campo e i suoi appigli ── */}
