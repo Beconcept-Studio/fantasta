@@ -4,6 +4,46 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.7.0] — 2026-08-11
+
+**M6 — Amministrazione.** Chi amministra l'applicazione ha un pannello: il pulsante **«Admin»** in
+navbar porta a `/admin`, con la lista di tutti gli utenti e quella di tutte le aste. Gli altri non
+vedono il pulsante e, se scrivono l'indirizzo a mano, tornano in dashboard.
+
+**Sugli utenti si può fare tre cose.** Correggere un nome scritto male — l'«asdf» digitato di fretta
+nell'onboarding. **Verificare a mano un indirizzo email**, che è la novità che conta: fino a ieri, se a
+un amico il codice non arrivava, l'unico rimedio era una riga di SQL sul server, e adesso è un
+pulsante. E dare o togliere il permesso di amministratore — **mai sul proprio account**, perché un
+click e ci si chiude fuori tutti.
+
+L'indirizzo email **non si modifica**, e non è una dimenticanza: da v1.6.0 è la chiave con cui si
+entra, quindi cambiarlo vuol dire cambiare chi può entrare in quell'account. Un indirizzo sbagliato si
+risolve rifacendo l'account.
+
+**Sulle aste si può fare una cosa sola: cancellarle**, anche quelle di qualcun altro, digitandone il
+nome per conferma. Niente pausa, niente avvio, niente correzioni: quella è la regia, e resta di chi ha
+creato l'asta. Le aste in corso o in pausa non si cancellano nemmeno da qui.
+
+La lista aste mostra nome, chi l'ha creata con la sua email, stato, posti, membri e date — e
+**nient'altro**: non i lotti, non le offerte, non le rose. Un'asta si guarda da dove si guardano le
+aste, e il pannello dà il link.
+
+Il pannello è pensato **per un portatile**, non per il telefono: tabelle dense e sidebar laterale. Dal
+telefono si offre, e quella parte resta com'era.
+
+### Per chi aggiorna il server
+
+**Niente.** Questa versione non cambia lo schema del database: nessun `pnpm db:push`, nessuna riga di
+`psql`, nessuna variabile nuova nel `.env`. Il deploy automatico basta e si conclude da sé.
+
+Una sola cosa da sapere, che valeva anche prima: il deploy **si rifiuta di partire** se in produzione
+c'è un'asta `LIVE` o `PAUSED`, e in quel caso non tocca niente — si toglie di mezzo l'asta e si
+rilancia `./deploy/deploy.sh`.
+
+E se il pulsante «Admin» non compare a chi dovrebbe vederlo, manca il permesso sull'account, non il
+deploy: `UPDATE users SET is_admin = true WHERE email = '…'`. Da questa versione è l'ultima volta che
+serve — il secondo amministratore lo si nomina dal pannello.
+
 ## [1.6.0] — 2026-08-10
 
 **M5 — Identità.** Ci si può registrare con email e password, non solo con Google. Chi non ha un
