@@ -12,15 +12,14 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-**[M6 — Amministrazione](06-amministrazione.md)**: il pannello, con la lista degli utenti e quella
-delle aste. Aperta il 2026-08-11 su `feature/06-amministrazione`, su richiesta esplicita
-dell'owner. **Non tocca lo schema**, quindi nessun `pnpm db:push` e nessun backfill sul server
-quando andrà in produzione. Porta con sé il pulsante che sostituisce l'unica cosa che M5 aveva
-lasciato scoperta: la verifica a mano di un indirizzo, che fino a v1.6.0 è una `UPDATE` sul server.
+Nessuna. La prossima si apre su richiesta esplicita.
 
 ## Da pianificare
 
-Nessuna. Il quaderno `docs/REQUESTS.md` è vuoto.
+Nel quaderno `docs/REQUESTS.md` c'è **una richiesta**, annotata dall'owner il 2026-08-11: le
+**caricature dei calciatori** — scaricarle una volta partendo da un listone e mostrarle nel lotto
+quando un giocatore viene chiamato. Non ha ancora una spec e non è una macro: lo diventa quando una
+sessione dedicata l'avrà discussa e l'owner ne chiederà l'apertura.
 
 M5 e M6 sono nate da una sessione di spec sola, il 2026-08-10, e sono state **tagliate in due di
 proposito**. M5 tocca la strada del login — l'unica cosa che, se si rompe, chiude fuori tutti — e
@@ -33,6 +32,7 @@ da amministrare.
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M6](06-amministrazione.md) | Amministrazione — il pannello: lista utenti, lista aste, e un perimetro strettissimo | v1.7.0 — 2026-08-11 |
 | [M5](05-identita.md) | Identità — registrazione con email e password, verifica dell'indirizzo, recupero | v1.6.0 — 2026-08-10 |
 | [M4](04-simulazione.md) | Simulazione in-app — l'asta di prova dall'interfaccia, con i bot dentro l'app | v1.5.0 — 2026-08-10 |
 | [M3](03-tracciabilita.md) | Tracciabilità — il verbale delle rose e lo storico dell'asta | v1.4.0 — 2026-08-10 |
