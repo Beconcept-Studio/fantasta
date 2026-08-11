@@ -204,20 +204,20 @@ giusta, e la paginazione si aggiunge quando una lista non ci sta in una schermat
       sostituisce)
 - [x] **M6-02** — `lib/admin-nav.ts` sul modello di `auction-nav.ts`: due sezioni, etichetta, titolo e
       segmento dalla stessa riga, zero dipendenze; il suo test come `tests/auction-nav.test.ts`
-- [ ] **M6-03** — `requireAppAdmin()` accanto a `requireUser()`; il layout `/admin` con la sidebar; il
+- [x] **M6-03** — `requireAppAdmin()` accanto a `requireUser()`; il layout `/admin` con la sidebar; il
       pulsante «Admin» in navbar per chi è `isAppAdmin()`
-- [ ] **M6-04** — `lib/engine/admin.ts`: la lista utenti (con «come entra», i conteggi delle aste, i
+- [x] **M6-04** — `lib/engine/admin.ts`: la lista utenti (con «come entra», i conteggi delle aste, i
       bot filtrati) e la lista aste (owner, email, stato, membri, date — **nessuno stato di gioco**)
-- [ ] **M6-05** — Le tre azioni sull'utente: `display_name`, verifica forzata, `is_admin` con il
+- [x] **M6-05** — Le tre azioni sull'utente: `display_name`, verifica forzata, `is_admin` con il
       divieto sulla propria. Ognuna con la guardia in cima alla server action
-- [ ] **M6-06** — `deleteAuction`: `requireOwner` → owner **oppure** amministratore, e nient'altro; la
+- [x] **M6-06** — `deleteAuction`: `requireOwner` → owner **oppure** amministratore, e nient'altro; la
       cancellazione dal pannello con il nome da digitare e l'avviso su cosa porta via
-- [ ] **M6-07** — Le due pagine, da scrivania: tabelle dense, niente ottimizzazioni per il pollice
-- [ ] **M6-08** — Test: `admin-nav` puro; con Postgres — un non-admin è rifiutato **su ogni server
+- [x] **M6-07** — Le due pagine, da scrivania: tabelle dense, niente ottimizzazioni per il pollice
+- [x] **M6-08** — Test: `admin-nav` puro; con Postgres — un non-admin è rifiutato **su ogni server
       action** e non solo dal layout, `is_admin` non si toglie a sé stessi, la verifica forzata
       scrive `email_verified_at`, `deleteAuction` da parte di un admin funziona **ma resta rifiutata
       su `LIVE`/`PAUSED`**, la lista aste non contiene nessun importo
-- [ ] **M6-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
+- [x] **M6-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
       spento)
 - [ ] **M6-10** — `docs/ARCHITECTURE.md`: il capitolo sul pannello, scritto attorno al perimetro (cosa
       **non** può fare) più che attorno alle schermate. `docs/DECISIONS.md`: **lo scostamento da PLAN

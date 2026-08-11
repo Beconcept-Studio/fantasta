@@ -230,8 +230,15 @@ export async function requireAppAdmin(): Promise<User> {
  * di prova (M5 §9), e in produzione lo scrive il backfill del deploy (§10).
  * Un'eccezione nel codice avrebbe risparmiato quelle due righe e lasciato per
  * sempre la domanda «e questo caso qui, è verificato o no?».
+ *
+ * Il parametro è **strutturale** da M6, come quello di `isAppAdmin`: la tabella
+ * del pannello chiede «è verificato?» su una riga sua, che non è un `User`
+ * intero, e deve poterlo fare senza importare il tipo da `lib/db/schema` — cioè
+ * senza fare esattamente quello che la regola ESLint vieta. La condizione resta
+ * una sola e in un posto solo: è quella che il secondo gradino della scala
+ * interroga, e non ne esistono due idee.
  */
-export function isVerified(user: User): boolean {
+export function isVerified(user: { emailVerifiedAt: Date | null }): boolean {
   return user.emailVerifiedAt !== null;
 }
 
