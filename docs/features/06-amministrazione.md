@@ -1,6 +1,7 @@
 # M6 — Amministrazione: il pannello
 
-> **Stato:** pianificata, **non aperta** · Pianificata il 2026-08-10 · **Dipende da M5**
+> **Stato:** **aperta** su `feature/06-amministrazione` il 2026-08-11 · Pianificata il 2026-08-10 ·
+> **Dipende da M5** (soddisfatta: v1.6.0)
 > **Tocca lo schema del database?** **No.** `email_verified_at` arriva da M5 e al pannello non serve
 > nient'altro: **nessun `pnpm db:push` a mano sul server** dopo il deploy. È una macro di sola UI,
 > query e autorizzazioni, cioè il profilo di rischio più basso che potesse avere.
@@ -219,9 +220,11 @@ giusta, e la paginazione si aggiunge quando una lista non ci sta in una schermat
       su `LIVE`/`PAUSED`**, la lista aste non contiene nessun importo
 - [x] **M6-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
       spento)
-- [ ] **M6-10** — `docs/ARCHITECTURE.md`: il capitolo sul pannello, scritto attorno al perimetro (cosa
+- [x] **M6-10** — `docs/ARCHITECTURE.md`: il capitolo sul pannello, scritto attorno al perimetro (cosa
       **non** può fare) più che attorno alle schermate. `docs/DECISIONS.md`: **lo scostamento da PLAN
       §2**, che diceva admin «sola lettura», e lo stop rimandato con il suo perché
+      · anche `docs/features/README.md` (indice) e `docs/HOWTO-PROVA-LOCALE.md` (come si prova il
+      pannello, e la riga non verificata che il seed non fa)
 - [ ] **M6-11** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       dell'owner** — `CHANGELOG.md`, `package.json`, merge `--no-ff` su `main`, tag, push.
       **Nessun `db:push` sul server**: questa macro non tocca lo schema

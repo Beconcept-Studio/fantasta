@@ -1399,3 +1399,88 @@ se manca una delle cinque variabili storiche; per le cinque dell'SMTP stampa un 
 errore fatale vorrebbe dire che il giorno del deploy di M5 l'applicazione non si avvia affatto —
 molto peggio del problema che eviterebbe, visto che senza SMTP il login Google continua a funzionare
 per tutti.
+
+---
+
+## 2026-08-11 — M6, Amministrazione: il pannello
+
+**Lo scostamento da `PLAN.md` §2, ed è uno scostamento, non una lettura estesa.** Il piano diceva:
+«`users.is_admin` — admin di piattaforma: vede tutte le aste e tutti gli utenti. **Sola lettura**».
+Il pannello di M6 non è in sola lettura: corregge il nome di una persona, forza la verifica del suo
+indirizzo, dà e toglie `is_admin`, e cancella un'asta di qualcun altro. La deroga è deliberata e vale
+la pena dire cosa l'ha giustificata, perché il criterio serva la prossima volta: **ognuna delle
+quattro scritture esiste per chiudere un buco che altrimenti si chiude con una sessione SSH.** Il
+nome sbagliato si correggeva con una `UPDATE`; la verifica manuale era letteralmente una riga di SQL
+scritta per esteso in `docs/features/05-identita.md` §9; `is_admin` si dava a mano a database;
+l'asta di qualcun altro non si cancellava affatto. Una scrittura che sostituisce `psql` alle nove di
+sera non è la stessa cosa di una scrittura che aggiunge un potere.
+
+Il confine è rimasto quello del piano dove il piano aveva ragione: **nessuna scrittura sullo stato di
+un'asta**. Configurare, avviare, mettere in pausa, correggere una rosa restano dell'owner, dalla
+regia. Due posti da cui si comanda la stessa asta sono due verità sullo stesso stato.
+
+**I8 si rispetta per assenza, e la differenza conta.** La lista aste non mostra lotti, offerte, rose
+né crediti. La versione «mostra lo stato di gioco, sanificando» avrebbe funzionato il primo giorno e
+sarebbe stata un campo nuovo lontano dal rompersi: si onora un'invariante togliendo la possibilità di
+violarla, non ricordandosi di non violarla. Per questo il test guarda **l'insieme esatto delle chiavi
+della riga** e non l'assenza di un campo per nome: è la stessa scelta del test I8 di F4-08, e per lo
+stesso motivo — un campo morto nominato in un test non protegge da un campo vivo con un altro nome.
+
+**La guardia sta in ogni server action e non solo nel layout.** Non è una precauzione ridondante: una
+server action è un endpoint raggiungibile da sé, che nessun layout attraversa. Il pannello ha tre
+piani di difesa che rispondono a tre domande diverse — `requireAppAdmin()` in cima a ogni pagina e a
+ogni azione (chi entra), il motore che rilegge `is_admin` dal database a ogni scrittura (chi comanda
+*adesso*, dato che la sessione è un JWT e un declassato ha ancora il suo token), e un test che
+enumera gli export del modulo delle azioni con un'uguaglianza esatta (chi se ne ricorderà la prossima
+volta). Il terzo piano è quello che invecchia meglio: le prime due righe si dimenticano di scrivere,
+la lista di nomi si rompe da sola.
+
+**`is_admin` non si tocca sulla propria riga, in nessuna delle due direzioni.** Un click e ci si
+chiude fuori tutti, e senza pannello non si rientra dal pannello. Il divieto copre anche il caso
+innocuo — riconfermarsi un permesso che si ha già — perché l'eccezione «ma questo verso è sicuro» è
+il gradino da cui rientra quello pericoloso.
+
+**L'email è in sola lettura, e resta un no.** Da M5 è la chiave d'identità: riscriverla cambia *chi
+può entrare* in quell'account. Un indirizzo sbagliato si risolve rifacendo l'account, che a dodici
+utenti è praticabile. Un amministratore che riscrive l'indirizzo di qualcun altro è un potere che
+questa applicazione non ha motivo di avere.
+
+**Il prezzo della verifica forzata, dichiarato.** Da M5, quando Google si aggancia a una riga non
+verificata, `password_hash` viene azzerato: è la difesa contro chi si registra con l'indirizzo di
+qualcun altro e aspetta. Su una riga verificata quella difesa non scatta — giustamente, perché
+l'indirizzo è dimostrato. Quindi **il pulsante mette la parola dell'amministratore al posto della
+prova**, e disattiva quella difesa per quella riga. Non è un difetto del pulsante, è cosa vuol dire
+premerlo: si preme per una persona che si ha davanti. Scritto qui perché fra sei mesi non sembri una
+svista.
+
+**Lo stop degli utenti: valutato e rimandato.** Il quaderno chiedeva «valutare», la valutazione è
+stata fatta, e la decisione dell'owner è di non implementare nulla per ora. Il ragionamento è
+conservato in `docs/features/06-amministrazione.md` §6 e non va rifatto da zero: in sintesi, lo stop
+non serve a fermare l'owner — a token scaduto è già fermo — serve perché **l'asta va avanti da sola
+senza di lui**, e la conclusione a cui si era arrivati è *rifiutare* lo stop di chi è dentro un'asta
+`LIVE` o `PAUSED`, come owner o come membro, invece di mettere in pausa a cascata. La cascata non ha
+una storia transazionale: N aste sono N lock separati, e «due aste in pausa su tre e poi ho fallito»
+è un caso senza una risposta buona. Se un giorno si riprende, il nome è `users.suspended_at`.
+
+**«Super admin» e `is_admin` sono la stessa cosa.** Un secondo livello di amministrazione su due
+persone è una gerarchia senza nessuno da gerarchizzare.
+
+**Niente log di audit delle azioni dell'admin.** Le tre azioni sull'utente sono correzioni di dati; la
+sola distruttiva — la cancellazione di un'asta — scriveva già la sua riga su stdout con `actor`
+dentro. Una cancellazione fatta da un amministratore era quindi tracciata **dal giorno in cui quella
+riga è stata scritta**, senza aggiungere niente. È raro e vale la pena notarlo: una decisione presa in
+M4 per un altro motivo ha coperto gratuitamente il caso di M6.
+
+**Due funzioni salite di livello, e in entrambi i casi il secondo chiamante è arrivato davvero
+(regola 8).** `normalizeDisplayName` era dentro `setDisplayName` in `lib/auth.ts` ed è passata in
+`lib/domain.ts`, perché l'amministratore che corregge un nome deve applicare la stessa regola
+dell'onboarding — due idee di nome valido sono una in più di quelle che servono. E `isVerified` ha
+ora un parametro **strutturale** invece del tipo `User`: la tabella del pannello chiede «è
+verificato?» su una riga sua, e deve poterlo fare senza importare un tipo da `lib/db/schema`, cioè
+senza fare esattamente ciò che la regola ESLint vieta. La condizione resta una sola, ed è quella che
+il secondo gradino della scala interroga.
+
+**`deleteAuction` si è allargata di una riga e non è stata riscritta**, e il rifiuto su `LIVE` e
+`PAUSED` non si è allentato per l'amministratore: la pausa congela la fase, non azzera l'asta. C'è un
+test che lo dimostra per entrambi gli stati, invece di darlo per scontato — era una funzione dove
+«tanto è admin» sarebbe stata una modifica di una parola.
