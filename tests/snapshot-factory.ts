@@ -44,7 +44,17 @@ export function lot(patch: Partial<SnapshotLot> = {}): SnapshotLot {
   return {
     id: "lot-1",
     seq: 1,
-    player: { id: "player-1", name: "Lautaro", role: "A", team: "Inter", fvm: 300 },
+    player: {
+      id: "player-1",
+      // L'id di Fantacalcio.it: è quello vero di Lautaro nel listone 2025/26,
+      // così un componente che ci costruisce sopra un indirizzo lo costruisce
+      // su un numero plausibile (M7).
+      extId: 2764,
+      name: "Lautaro",
+      role: "A",
+      team: "Inter",
+      fvm: 300,
+    },
     calledByMemberId: OTHER,
     autoCalled: false,
     roundNo: 1,

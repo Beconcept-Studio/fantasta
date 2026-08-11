@@ -1,7 +1,7 @@
 # M7 — Le caricature dei calciatori
 
-> **Stato:** pianificata, **non aperta** · Pianificata il 2026-08-11 · Nessuna dipendenza da macro
-> aperte (M6 è in v1.7.0, e il pannello che serve esiste già)
+> **Stato:** **aperta** su `feature/07-caricature` il 2026-08-11 · Pianificata il 2026-08-11 ·
+> Nessuna dipendenza da macro aperte (M6 è in v1.7.0, e il pannello che serve esiste già)
 >
 > **Tocca lo schema del database?** **No.** Nessuna tabella, nessuna colonna: «questa figurina ce
 > l'abbiamo?» lo risponde il **file su disco**. Quindi **nessun `pnpm db:push`** e nessun backfill.
@@ -224,40 +224,65 @@ niente scaricamento automatico all'import del listone di un'asta, che legherebbe
 
 ## Task
 
-> Da rifinire all'apertura della macro.
-
-- [ ] **M7-01** — Aprire `feature/07-caricature` da `dev`; rileggere questo file, e in particolare §1
+- [x] **M7-01** — Aprire `feature/07-caricature` da `dev`; rileggere questo file, e in particolare §1
       — le tre semplificazioni che il collaudo ha imposto sono la parte che si è tentati di rifare
       complicata
-- [ ] **M7-02** — `lib/campioncini.ts`: la parte pura in cima (l'URL da id ed edizione, il nome del
+- [x] **M7-02** — `lib/campioncini.ts`: la parte pura in cima (l'URL da id ed edizione, il nome del
       file, la validazione dell'id) e sotto ciò che tocca il mondo — lo scaricamento e il conteggio
       dell'archivio — con `fetch` e cartella **iniettabili**, perché il test non tocchi la rete
-- [ ] **M7-03** — `.gitignore` (`/storage`), `MEDIA_DIR` calcolato da `ROOT` in
+- [x] **M7-03** — `.gitignore` (`/storage`), `MEDIA_DIR` calcolato da `ROOT` in
       `deploy/ecosystem.config.cjs`, `CAMPIONCINI_EDITION` in `.env.example` col default nel codice
-- [ ] **M7-04** — `GET /api/campioncini/<extId>.png`: `^\d+\.png$` e nient'altro, `ETag`, cache di un
+- [x] **M7-04** — `GET /api/campioncini/<extId>.png`: `^\d+\.png$` e nient'altro, `ETag`, cache di un
       giorno, `404` se il file non c'è
-- [ ] **M7-05** — La server action: carica il listone, scarica ciò che manca, scadenza a 20 secondi,
+- [x] **M7-05** — La server action: carica il listone, scarica ciò che manca, scadenza a 20 secondi,
       guardia `requireAppAdmin()` in cima. **E il nome aggiunto alla lista del test di M6**
-- [ ] **M7-06** — `lib/admin-nav.ts` + la pagina `/admin/figurine`: quante ce ne sono, il form, i
+- [x] **M7-06** — `lib/admin-nav.ts` + la pagina `/admin/figurine`: quante ce ne sono, il form, i
       numeri dell'ultima passata
-- [ ] **M7-07** — `extId` in `SnapshotPlayer` e in `serializeSnapshot`; verificare che il test I8 di
+- [x] **M7-07** — `extId` in `SnapshotPlayer` e in `serializeSnapshot`; verificare che il test I8 di
       F4-08 sia ancora d'accordo (guarda l'insieme esatto delle chiavi del lotto, e un campo nuovo
       **dentro** `player` potrebbe non bastargli)
-- [ ] **M7-08** — Il componente della figurina con `onError`, a 68×100 nel portale e a un terzo sulla
+      → **non gli bastava**: `player` era già una chiave di primo livello, quindi il test restava
+      verde senza obbligare nessuno a guardare. Ora anche le chiavi del giocatore sono un insieme
+      esatto, e la nuova asserzione è stata vista fallire togliendo `extId` dall'elenco atteso
+- [x] **M7-08** — Il componente della figurina con `onError`, a 68×100 nel portale e a un terzo sulla
       TV
-- [ ] **M7-09** — Test: il percorso malevolo rifiutato (`..`, id non numerico, id enorme); `200`
+- [x] **M7-09** — Test: il percorso malevolo rifiutato (`..`, id non numerico, id enorme); `200`
       salva, `403` non salva, il timeout non salva; la scadenza ferma la passata e dice quante
       restano; ripetere la passata non riscarica niente; la rotta serve, nega e non esce dalla
       cartella
-- [ ] **M7-10** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
-      spento)
-- [ ] **M7-11** — `docs/ARCHITECTURE.md`: il capitolo, scritto attorno a **cosa ha insegnato il
+      → 39 test in `tests/campioncini.test.ts`; quelli del traversal scritti **prima** della rotta e
+      visti fallire
+- [x] **M7-10** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
+      spento) → 575 test in 38 file, typecheck pulito, build compilata; e l'archivio è ancora lì
+      dopo il `pnpm build`
+- [x] **M7-11** — `docs/ARCHITECTURE.md`: il capitolo, scritto attorno a **cosa ha insegnato il
       collaudo** più che attorno al codice. `docs/DECISIONS.md`: le tre semplificazioni con il loro
       perché, le sagome tenute, e `storage/` invece di `public/` con la trappola del deploy
 - [ ] **M7-12** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       dell'owner** — `CHANGELOG.md`, `package.json`, merge su `main`, tag, push. **Nessun `db:push`**;
       ma in produzione **l'archivio va riempito dal pannello**, e il changelog deve dirlo insieme al
       `pm2 reload --update-env` per la variabile nuova
+
+## Com'è andata
+
+Il collaudo di §1 si è riprodotto senza sorprese, questa volta chiamando il codice vero invece di un
+prototipo: **495 su 495 in 3,2 secondi**, zero `403`, zero errori, 53 MB. La seconda passata sullo
+stesso listone ha scaricato **zero** e l'ha detto. E le sagome senza volto sono ancora **144 su 495,
+in 20 varianti** — contate confrontando i file identici fra loro, che è un modo di verificarle in una
+riga di shell senza scrivere in produzione il riconoscimento che §5 vieta.
+
+Le tre verifiche chieste all'apertura sono state fatte e non assunte:
+
+- **`storage/` sopravvive.** Provato con un file finto prima di scrivere il downloader: sopravvive a
+  `git reset --hard` (non è tracciato) e a `pnpm build`. `deploy/deploy.sh` non fa nessun `git clean`
+  e tocca solo `.next/standalone/public`.
+- **`MEDIA_DIR` arriva davvero.** Verificato valutando `deploy/ecosystem.config.cjs` con Node in una
+  radice finta — non basta leggerlo: il `.env` locale non ha `AUTH_URL` e il file si rifiuta di
+  valutarsi, quindi la prova voleva un ambiente completo. Finisce in `app.env`, e un `MEDIA_DIR`
+  scritto a mano nel `.env` vince sul calcolo. Confermato anche il motivo per cui serve:
+  `.next/standalone/server.js` fa `process.chdir(__dirname)` alla riga 6.
+- **Il test I8**: vedi M7-07 qui sopra. È l'unica cosa di questa macro che ha cambiato un file di
+  M6/F4 oltre a quanto previsto, ed è stata una scoperta della verifica, non una decisione a priori.
 
 ## Verifica
 

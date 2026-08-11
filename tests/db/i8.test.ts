@@ -144,6 +144,24 @@ const LOT_KEYS = [
   "tie",
 ];
 
+/**
+ * ⚠ **Le chiavi del giocatore, e il buco che le ha fatte aggiungere.**
+ *
+ * Fino a M7 questo file guardava solo l'insieme qui sopra, che è quello di
+ * primo livello. `player` era già una di quelle chiavi, quindi aggiungere
+ * `extId` **dentro** al giocatore ha lasciato il test verde senza che nessuno
+ * dovesse guardare niente in faccia — che è precisamente ciò che il commento in
+ * cima dichiara di voler evitare. Il campo di M7 era innocuo (l'id di
+ * Fantacalcio.it, per la figurina: il giocatore in asta è pubblico, è la busta a
+ * essere segreta), ma il prossimo potrebbe non esserlo, e la sede naturale di un
+ * dato che riguarda «questo lotto» è proprio il giocatore.
+ *
+ * Da qui in poi anche questo insieme è esatto: un campo nuovo nel giocatore
+ * rompe il test, e chi lo aggiunge deve dire perché non racconta niente delle
+ * buste.
+ */
+const PLAYER_KEYS = ["extId", "fvm", "id", "name", "role", "team"];
+
 describe.runIf(dbUp)("F4-08 — I8 e M1 sui tre viewer", () => {
   it("il partecipante vede la propria offerta e nessun'altra", async () => {
     const game = await auctionInLotOpen();
@@ -160,6 +178,7 @@ describe.runIf(dbUp)("F4-08 — I8 e M1 sui tre viewer", () => {
     expect(JSON.stringify(snap)).not.toContain('"amount":57');
     expect(snap.currentLot?.reveal).toBeNull();
     expect(Object.keys(snap.currentLot!).sort()).toEqual(LOT_KEYS);
+    expect(Object.keys(snap.currentLot!.player).sort()).toEqual(PLAYER_KEYS);
   });
 
   it("chi ha consegnato e chi non l'ha fatto ricevono lo stesso lotto", async () => {

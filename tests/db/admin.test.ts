@@ -120,6 +120,10 @@ suite("ogni server action del pannello rifiuta chi non è amministratore", () =>
   it("le azioni esportate sono esattamente quelle attese", () => {
     expect(Object.keys(adminActions).sort()).toEqual([
       "deleteAuctionAsAdminAction",
+      // M7 — la prova che questo test fa il suo lavoro: la riga qui sotto è
+      // stata aggiunta **dopo** aver visto il test rompersi, e insieme alla
+      // guardia in cima all'azione. L'uguaglianza è rimasta esatta.
+      "downloadCampionciniAction",
       "forceVerifyEmailAction",
       "setUserAdminAction",
       "setUserDisplayNameAction",
