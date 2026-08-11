@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { db } from "@/lib/db";
 import { type User, users } from "@/lib/db/schema";
+import { isAppAdmin, normalizeDisplayName } from "@/lib/domain";
 import {
   authenticateWithPassword,
   upsertGoogleUser,
@@ -188,6 +189,39 @@ export async function requireUser(): Promise<User> {
 }
 
 /**
+ * Guardia del pannello di amministrazione (M6): `requireUser()` **e** il flag.
+ *
+ * ```
+ * la scala di requireUser()  → /signin, /verify, /onboarding
+ * is_admin?             no  → /dashboard
+ *                           → il pannello
+ * ```
+ *
+ * Passa dalla scala per intero e non la scavalca: un amministratore non
+ * verificato è un utente non verificato, e il pannello non è una porta di
+ * servizio che aggira M5.
+ *
+ * ⚠ **Va chiamata in cima a ogni pagina e a ogni server action del pannello, non
+ * soltanto nel layout.** Un layout decide cosa mostrare; le server action sono
+ * endpoint raggiungibili per conto proprio — un `POST` che non apre nessuna
+ * pagina — e un pannello protetto solo dal layout è un pannello aperto. Nel
+ * layout ci sta comunque, perché lì serve a dare un redirect pulito invece di un
+ * errore. E il motore ricontrolla `is_admin` rileggendolo dal database, perché la
+ * sessione è un JWT e non sa niente dei permessi: chi è stato declassato non deve
+ * comandare fino alla scadenza del token.
+ *
+ * Il redirect di un non-amministratore va in `/dashboard` e non in `/signin`:
+ * chi è entrato ha una sessione valida, non gli manca il login — gli manca il
+ * permesso. Rimandarlo ad accedere gli farebbe pensare di essere stato buttato
+ * fuori.
+ */
+export async function requireAppAdmin(): Promise<User> {
+  const user = await requireUser();
+  if (!isAppAdmin(user)) redirect("/dashboard");
+  return user;
+}
+
+/**
  * Ha dimostrato di controllare il proprio indirizzo?
  *
  * Una condizione sola, senza eccezioni: la colonna è scritta o non lo è. Le due
@@ -207,13 +241,20 @@ export async function suggestedDisplayName(): Promise<string> {
   return session?.user?.name ?? "";
 }
 
-/** Scrive nome e cognome. Ritorna `false` se la stringa non è accettabile. */
+/**
+ * Scrive nome e cognome. Ritorna `false` se la stringa non è accettabile.
+ *
+ * La regola sta in `normalizeDisplayName` (`lib/domain.ts`) da M6, quando
+ * l'amministratore che corregge il nome di qualcun altro è diventato il secondo
+ * chiamante: una regola sola, o l'onboarding e il pannello accettano due cose
+ * diverse.
+ */
 export async function setDisplayName(
   userId: string,
   displayName: string,
 ): Promise<boolean> {
-  const value = displayName.trim().replace(/\s+/g, " ");
-  if (value.length < 3 || value.length > 60) return false;
+  const value = normalizeDisplayName(displayName);
+  if (value === null) return false;
   await db.update(users).set({ displayName: value }).where(eq(users.id, userId));
   return true;
 }
