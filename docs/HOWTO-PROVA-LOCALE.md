@@ -340,6 +340,29 @@ docker compose down -v && docker compose up -d
 pnpm db:push && pnpm db:seed --auction-status=ready
 ```
 
+**Ripulire i residui dei test.** Una passata completa di `pnpm test` si pulisce da sé — le righe che
+crea le cancella `afterAll`. Ma un run **interrotto a metà** (`Ctrl-C`, un file che muore, il watch
+chiuso di fretta) le lascia dov'erano, e non se ne accorge nessuno finché non si apre la lista utenti
+del pannello e ci si trovano venti righe `Test game-3 <uuid>`. Si contano e si tolgono così — l'unico
+posto che produce quell'indirizzo è `tests/db/helpers.ts`, quindi il filtro non può prendere un
+account vero:
+
+```bash
+docker exec -i fantasta-db psql -U postgres -d asta \
+  -c "SELECT count(*) FROM users WHERE email LIKE '%@test.invalid'"
+
+docker exec -i fantasta-db psql -U postgres -d asta -c "
+  DELETE FROM auctions WHERE owner_user_id IN
+    (SELECT id FROM users WHERE email LIKE '%@test.invalid');
+  DELETE FROM users WHERE email LIKE '%@test.invalid';"
+```
+
+⚠ **L'ordine conta e non è cosmetico**: `auctions.owner_user_id` **non** ha `onDelete`, quindi finché
+l'asta di prova esiste Postgres rifiuta di cancellare il suo owner. È una rete utile — vuol dire che
+nessuna pulizia degli utenti può portarsi via un'asta di nascosto — ma se si dà solo la seconda riga
+sembra che il comando «non funzioni». Lo stesso vale per i bot rimasti senza asta: si tolgono solo
+quelli che non sono membri di niente.
+
 ---
 
 ## Quando qualcosa non torna
