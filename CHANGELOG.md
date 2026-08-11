@@ -4,6 +4,66 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.8.0] — 2026-08-11
+
+**M7 — Le caricature dei calciatori.** Quando un giocatore viene chiamato all'asta, adesso si vede la
+sua **figurina**: la caricatura di Fantacalcio.it dentro la carta con lo scudetto e il ruolo. È la
+risposta alla domanda che la stanza fa a voce alta — «chi è?» — e si legge a colpo d'occhio.
+
+Si vede in **tre posti**, tutti sul percorso di chi gioca: nella card del lotto sul telefono, accanto
+al nome; nel **modale d'offerta**, mentre si decide quanto mettere; e sulla **TV**, grande, che è lo
+schermo per cui quelle carte sono state disegnate. In regia no: lì il lotto è una riga di testo, e chi
+conduce ha la TV nella stessa stanza.
+
+**Le immagini si scaricano una volta sola**, da **Admin → Figurine**: si carica il listone di
+riferimento (il `.xlsx` di Fantacalcio.it) e si preme il pulsante. Su un listone intero sono ~500
+immagini in pochi secondi. Si può premere quante volte si vuole: scarica solo quello che manca, e la
+seconda volta non scarica niente. Il file caricato non viene conservato.
+
+**Circa un giocatore su tre non ha una caricatura** e riceve una sagoma senza volto con la maglia del
+suo club: è così sul sito di Fantacalcio.it, e si mostra come le altre. Non è un difetto
+dell'applicazione, ed è voluto che ci sia — se le sagome venissero saltate, un lotto su tre avrebbe un
+riquadro più corto e il pulsante d'offerta si sposterebbe sotto il pollice.
+
+**Nel modale d'offerta il campo dell'importo parte già attivo**, con la tastiera aperta e il valore
+selezionato: se sei già dentro con 31, digiti e sovrascrivi. Prima bisognava toccarlo.
+
+### Per chi aggiorna il server
+
+**Lo schema del database non cambia**: nessun `pnpm db:push`, nessuna riga di `psql`. Ma questa volta,
+a differenza di v1.7.0, **il deploy automatico non basta**: restano due passi a mano, e finché non
+sono fatti l'applicazione funziona esattamente come prima — semplicemente non si vede nessuna
+figurina. Non si rompe niente, non c'è fretta, ma non è finito.
+
+**1. La variabile nuova nel `.env`.** L'edizione delle figurine è la stagione, ed è l'unica parte
+dell'indirizzo che invecchia. Sul server, in `/home/ploi/fantasta.rggndr.it/.env`:
+
+```bash
+CAMPIONCINI_EDITION="21"
+```
+
+Poi, obbligatoriamente, il ricarico che rilegge il file — **non** `pm2 restart asta`, che riparte con
+l'ambiente vecchio:
+
+```bash
+cd /home/ploi/fantasta.rggndr.it
+pm2 reload deploy/ecosystem.config.cjs --update-env
+```
+
+Si può anche saltare: il codice ha `21` come default, ed è il valore giusto per la stagione in corso.
+Va messa perché **ad agosto prossimo andrà cambiata**, e quel giorno è più facile modificare una riga
+che esiste che scoprire che va aggiunta. Se un giorno l'edizione fosse sbagliata te ne accorgi subito:
+non si scarica nessuna figurina.
+
+**2. L'archivio va riempito, e nasce vuoto.** Da **Admin → Figurine**, si carica il listone e si preme
+il pulsante. La pagina dice quante ce ne sono: finché dice `0`, nessuno vedrà nessuna figurina. Le
+immagini finiscono in `/home/ploi/fantasta.rggndr.it/storage/campioncini/` (~53 MB) e **sopravvivono
+ai deploy successivi e anche a un ritorno a una versione precedente**: questa operazione si fa una
+volta per stagione, non a ogni rilascio.
+
+Vale ancora quello che valeva prima: il deploy **si rifiuta di partire** se in produzione c'è un'asta
+`LIVE` o `PAUSED`, e in quel caso non tocca niente.
+
 ## [1.7.0] — 2026-08-11
 
 **M6 — Amministrazione.** Chi amministra l'applicazione ha un pannello: il pulsante **«Admin»** in

@@ -267,10 +267,12 @@ niente scaricamento automatico all'import del listone di un'asta, che legherebbe
 - [x] **M7-11** — `docs/ARCHITECTURE.md`: il capitolo, scritto attorno a **cosa ha insegnato il
       collaudo** più che attorno al codice. `docs/DECISIONS.md`: le tre semplificazioni con il loro
       perché, le sagome tenute, e `storage/` invece di `public/` con la trappola del deploy
-- [ ] **M7-12** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
+- [x] **M7-12** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       dell'owner** — `CHANGELOG.md`, `package.json`, merge su `main`, tag, push. **Nessun `db:push`**;
       ma in produzione **l'archivio va riempito dal pannello**, e il changelog deve dirlo insieme al
       `pm2 reload --update-env` per la variabile nuova
+      → **v1.8.0**, 2026-08-11. Due merge commit su `dev` invece di uno: il primo dopo M7-11, il
+      secondo per le due richieste arrivate provando l'app (§6, il riquadro qui sopra)
 
 ## Com'è andata
 

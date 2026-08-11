@@ -12,18 +12,14 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-**[M7 — Le caricature dei calciatori](07-caricature.md)**: le figurine di fantacalcio.it scaricate una
-volta e mostrate nel lotto in corso. Aperta il 2026-08-11 su `feature/07-caricature`, codice e
-documentazione fatti, in attesa del rilascio. Non tocca lo schema — **nessun `pnpm db:push` e nessun
-backfill** — ma dopo il deploy restano due passi a mano: `CAMPIONCINI_EDITION` nel `.env` seguito da
-`pm2 reload deploy/ecosystem.config.cjs --update-env`, e **l'archivio riempito dal pannello**, perché
-in produzione nasce vuoto. Fino ad allora l'applicazione funziona come prima: semplicemente non si
-vede nessuna figurina.
+Nessuna. La prossima si apre su richiesta esplicita.
 
-⚠ La spec ha una sezione insolita, ed è la prima: **il collaudo che l'ha scritta.** Il downloader è
-stato provato sui 495 id di un listone vero *prima* di scrivere la spec, e i numeri hanno tolto tre
-pezzi di architettura — batching, marcatori per gli assenti, altezza variabile del riquadro. Chi
-riaprirà quel file troverà scritto anche cosa **non** si scrive, e perché.
+⚠ **M7 è in produzione ma il suo rilascio non è finito finché non si fanno due passi a mano sul
+server**, e nessuno te li ricorda: `CAMPIONCINI_EDITION` nel `.env` seguito da `pm2 reload
+deploy/ecosystem.config.cjs --update-env`, e **l'archivio riempito da Admin → Figurine**, perché in
+produzione nasce vuoto. Nessuno dei due rompe niente se manca — semplicemente non si vede nessuna
+figurina — che è precisamente ciò che li rende facili da dimenticare. La procedura per esteso è nel
+`CHANGELOG.md` di v1.8.0.
 
 ## Da pianificare
 
@@ -40,6 +36,7 @@ da amministrare.
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M7](07-caricature.md) | Le caricature dei calciatori — la figurina scaricata una volta e guardata per tutta la serata | v1.8.0 — 2026-08-11 |
 | [M6](06-amministrazione.md) | Amministrazione — il pannello: lista utenti, lista aste, e un perimetro strettissimo | v1.7.0 — 2026-08-11 |
 | [M5](05-identita.md) | Identità — registrazione con email e password, verifica dell'indirizzo, recupero | v1.6.0 — 2026-08-10 |
 | [M4](04-simulazione.md) | Simulazione in-app — l'asta di prova dall'interfaccia, con i bot dentro l'app | v1.5.0 — 2026-08-10 |
