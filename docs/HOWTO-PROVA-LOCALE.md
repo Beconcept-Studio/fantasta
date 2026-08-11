@@ -313,6 +313,23 @@ Non è una prova che sostituisce del tutto `pnpm bots`: la simulazione gira dent
 **non** collauda sessione, rotta HTTP, SSE e nginx. Quando quello che vuoi provare è il canale — o
 quando vuoi giocare un'asta contro il server di produzione — resta lo script.
 
+**Il pannello di amministrazione** (M6). Entra come **Marco Bianchi** — il primo dei dodici, quello
+che il seed nomina amministratore — e in navbar compare il pulsante **«Admin»**. Gli altri undici non
+lo vedono, e se digitano `/admin` a mano finiscono in dashboard. Da lì:
+
+- **Utenti**: la lista dei dodici, con da quale porta entrano e quante aste possiedono e giocano. I
+  bot non ci sono, e per vederli c'è «mostra anche i bot» — con qualche asta simulata riempita, è la
+  differenza fra una lista di dodici righe e una di sessanta.
+- Il pulsante **«Verifica a mano»** compare solo accanto a chi non è verificato. Per provarlo serve
+  una riga non verificata, e il seed non ne fa: registrane una da `/signup` e **non** inserire il
+  codice. Prima del pulsante quell'account resta inchiodato su `/verify`; subito dopo — basta
+  ricaricare — arriva all'onboarding.
+- **`is_admin`**: sulla propria riga non c'è nessun pulsante, e c'è scritto «sei tu». È deliberato:
+  un click e ti chiudi fuori dal pannello, e da dentro l'applicazione non si rientra più.
+- **Aste**: tutte quelle del database, con l'email di chi le ha create. Le aste `LIVE` o `PAUSED`
+  dicono «in corso» al posto del pulsante di cancellazione — e se ci provi comunque, il server
+  rifiuta anche a un amministratore.
+
 **Ricominciare da capo**: rilancia `pnpm db:seed --auction-status=ready`. L'asta di prova viene
 buttata e rifatta; gli utenti restano quelli, quindi resti loggato.
 
@@ -322,6 +339,29 @@ buttata e rifatta; gli utenti restano quelli, quindi resti loggato.
 docker compose down -v && docker compose up -d
 pnpm db:push && pnpm db:seed --auction-status=ready
 ```
+
+**Ripulire i residui dei test.** Una passata completa di `pnpm test` si pulisce da sé — le righe che
+crea le cancella `afterAll`. Ma un run **interrotto a metà** (`Ctrl-C`, un file che muore, il watch
+chiuso di fretta) le lascia dov'erano, e non se ne accorge nessuno finché non si apre la lista utenti
+del pannello e ci si trovano venti righe `Test game-3 <uuid>`. Si contano e si tolgono così — l'unico
+posto che produce quell'indirizzo è `tests/db/helpers.ts`, quindi il filtro non può prendere un
+account vero:
+
+```bash
+docker exec -i fantasta-db psql -U postgres -d asta \
+  -c "SELECT count(*) FROM users WHERE email LIKE '%@test.invalid'"
+
+docker exec -i fantasta-db psql -U postgres -d asta -c "
+  DELETE FROM auctions WHERE owner_user_id IN
+    (SELECT id FROM users WHERE email LIKE '%@test.invalid');
+  DELETE FROM users WHERE email LIKE '%@test.invalid';"
+```
+
+⚠ **L'ordine conta e non è cosmetico**: `auctions.owner_user_id` **non** ha `onDelete`, quindi finché
+l'asta di prova esiste Postgres rifiuta di cancellare il suo owner. È una rete utile — vuol dire che
+nessuna pulizia degli utenti può portarsi via un'asta di nascosto — ma se si dà solo la seconda riga
+sembra che il comando «non funzioni». Lo stesso vale per i bot rimasti senza asta: si tolgono solo
+quelli che non sono membri di niente.
 
 ---
 

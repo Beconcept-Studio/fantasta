@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { LiveBanner, type LiveMembership } from "@/components/auction/live-banner";
 import { Navbar } from "@/components/nav/navbar";
 import { currentUser } from "@/lib/auth";
+import { isAppAdmin } from "@/lib/domain";
 import { listUserAuctions } from "@/lib/engine/setup";
 
 /**
@@ -97,7 +98,14 @@ export default async function RootLayout({
       <body className="antialiased">
         <LiveBanner auctions={live} />
         <Navbar
-          user={user === null ? null : { name: user.displayName }}
+          user={
+            user === null
+              ? null
+              : // Il booleano, non la riga: la navbar è un client component e
+                // `isAppAdmin` vive in `lib/domain.ts`, che non dipende da
+                // niente (M6 §5).
+                { name: user.displayName, isAdmin: isAppAdmin(user) }
+          }
           version={appVersion}
         />
         {children}

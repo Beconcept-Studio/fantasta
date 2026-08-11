@@ -34,7 +34,13 @@ export function Navbar({
   user,
   version,
 }: {
-  user: { name: string | null } | null;
+  /**
+   * ⚠ Un **booleano** e non l'utente intero, e non è pignoleria: questo è un
+   * client component, e il tipo `User` viene da `lib/db/schema`, che tira dentro
+   * l'ORM. Il layout legge già la riga e sa rispondere alla domanda: `isAppAdmin`
+   * sta in `lib/domain.ts`, che non dipende da niente (M6 §5).
+   */
+  user: { name: string | null; isAdmin: boolean } | null;
   /**
    * La versione compilata, da `package.json`. Serve a un controllo a vista:
    * aprire il sito e sapere **quale** codice sta rispondendo, senza fidarsi di
@@ -74,6 +80,15 @@ export function Navbar({
           <span className="text-muted-foreground/70 shrink-0 font-mono text-xs tabular-nums">
             v{version}
           </span>
+          {/* Il pannello lo vede solo chi è amministratore dell'applicazione
+              (M6). È un link e non un menù: la navbar resta una barra con tre
+              cose dentro (regola 8), e nascondere la voce non è la difesa —
+              quella sta in cima a ogni pagina e a ogni server action. */}
+          {user?.isAdmin === true && (
+            <Button asChild variant="outline" size="sm" className="shrink-0">
+              <Link href="/admin">Admin</Link>
+            </Button>
+          )}
           {user !== null && (
             <form action={signOutAction} className="shrink-0">
               <Button type="submit" variant="outline" size="sm">

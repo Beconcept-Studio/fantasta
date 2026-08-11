@@ -12,17 +12,17 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna. La prossima si apre su richiesta esplicita.
+**[M6 — Amministrazione](06-amministrazione.md)**: il pannello, con la lista degli utenti e quella
+delle aste. Aperta il 2026-08-11 su `feature/06-amministrazione`, su richiesta esplicita
+dell'owner. **Non tocca lo schema**, quindi nessun `pnpm db:push` e nessun backfill sul server
+quando andrà in produzione. Porta con sé il pulsante che sostituisce l'unica cosa che M5 aveva
+lasciato scoperta: la verifica a mano di un indirizzo, che fino a v1.6.0 è una `UPDATE` sul server.
 
 ## Da pianificare
 
-**[M6 — Amministrazione](06-amministrazione.md)**: il pannello, con la lista degli utenti e quella
-delle aste. Spec concordata e scritta, **non aperta**: si apre su richiesta esplicita. Non tocca lo
-schema. La dipendenza da M5 è soddisfatta — M5 è in v1.6.0 — e M6 porta con sé il pulsante che
-sostituisce l'unica cosa che M5 ha lasciato scoperta: la verifica a mano di un indirizzo, che oggi
-è una `UPDATE` sul server.
+Nessuna. Il quaderno `docs/REQUESTS.md` è vuoto.
 
-Le due sono nate da una sessione di spec sola, il 2026-08-10, e sono state **tagliate in due di
+M5 e M6 sono nate da una sessione di spec sola, il 2026-08-10, e sono state **tagliate in due di
 proposito**. M5 tocca la strada del login — l'unica cosa che, se si rompe, chiude fuori tutti — e
 introduce l'unica dipendenza esterna del progetto; M6 è un pannello. Due profili di rischio così
 diversi vogliono due tag e due punti di rollback: un rollback del pannello non deve portarsi via la

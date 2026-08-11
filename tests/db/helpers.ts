@@ -26,8 +26,19 @@ export async function databaseAvailable(): Promise<boolean> {
   }
 }
 
-/** Un utente usa e getta, distinguibile dal seed perché ha un `google_sub`. */
-export async function makeUser(label = "test"): Promise<string> {
+/**
+ * Un utente usa e getta, distinguibile dal seed perché ha un `google_sub`.
+ *
+ * ⚠ **Nasce non verificato** (`email_verified_at` nullo): dalla scala di M5 non
+ * passerebbe. Non è una svista — questi utenti non attraversano `requireUser()`,
+ * perché i test chiamano il motore con un `userId` in mano. Chi ha bisogno di
+ * una riga verificata la chiede, e chi collauda la verifica forzata di M6 ha
+ * bisogno del contrario: che il default sia non verificato.
+ */
+export async function makeUser(
+  label = "test",
+  options: { isAdmin?: boolean; verified?: boolean } = {},
+): Promise<string> {
   // Un uuid, non `Date.now()+contatore`: i file di test girano in worker
   // paralleli e due `makeUser` nello stesso millisecondo collidevano su
   // `users_google_sub_unique`.
@@ -38,6 +49,8 @@ export async function makeUser(label = "test"): Promise<string> {
       displayName: `Test ${label} ${tag}`,
       email: `${label}.${tag}@test.invalid`,
       googleSub: `test-sub-${tag}`,
+      isAdmin: options.isAdmin ?? false,
+      emailVerifiedAt: options.verified === true ? new Date() : null,
     })
     .returning({ id: users.id });
   return row.id;

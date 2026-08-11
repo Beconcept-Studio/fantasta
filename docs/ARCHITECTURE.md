@@ -216,9 +216,16 @@ reinvio del codice è una server action autenticata invece di una rotta pubblica
 mano, e i limiti sono per persona perché *c'è* una persona.
 
 L'accesso è **rigido**: chi non è verificato non fa nulla. Non crea aste, non entra su invito, non
-gioca. Ha un prezzo dichiarato, e finché non arriva il pannello di M6 il prezzo è questo: se a un
-amico l'email non arriva, l'unico rimedio è una `UPDATE` sul server, che sta scritta per esteso in
-`docs/features/05-identita.md` §9 perché alle nove di sera si copia invece di comporla.
+gioca. Per una versione questo ha avuto un prezzo dichiarato — se a un amico l'email non arriva,
+l'unico rimedio è una `UPDATE` sul server, scritta per esteso in `docs/features/05-identita.md` §9
+perché alle nove di sera si copiasse invece di comporla. Da M6 quel rimedio è un pulsante nel
+pannello di amministrazione, e funziona proprio perché il gradino non ha eccezioni: scrivere la
+colonna *è* passare la scala. Il seguito sta nel capitolo sul pannello, insieme a ciò che quel
+pulsante spegne.
+
+C'è una sola scorciatoia, e vale la pena saperla perché è quella che tiene in piedi
+`requireAppAdmin()`: la guardia del pannello **non** scavalca la scala, la attraversa per intero. Un
+amministratore non verificato è un utente non verificato.
 
 Chi entra con Google non ha ancora un nome nell'applicazione. Questo è deliberato: il profilo
 Google avrebbe un `name`, ma l'app **non lo copia**. Al primo login la riga `users` nasce con
@@ -1139,7 +1146,8 @@ client che evidenzia la voce attiva, e importare l'ORM per quattro stringhe mand
 telefono.
 
 Sopra tutto c'è una **navbar globale** nel layout radice: la scritta *Fantasta* che riporta alla
-lista delle aste, il nome di chi è entrato, la versione compilata e l'uscita. La versione è lì per
+lista delle aste, il nome di chi è entrato, la versione compilata, l'uscita, e — solo per chi è
+amministratore dell'applicazione — il pulsante che porta al pannello. La versione è lì per
 un controllo a vista — aprire il sito e sapere quale codice sta rispondendo, invece di credere al
 momento in cui il deploy dichiara di aver finito — e viene da `package.json`, letto nel layout e
 passato alla navbar come stringa: il deploy compila sul server dopo il checkout, quindi quel numero
@@ -1533,9 +1541,11 @@ Un elenco così è il modo in cui, fra sei mesi, si clicca sulla cosa sbagliata.
 
 Le difese sono tre. La cancellazione è **rifiutata su un'asta `LIVE` o `PAUSED`** — la pausa
 congela la fase, non azzera l'asta, e non si butta via qualcosa mentre dodici persone ci stanno
-dentro. Solo l'owner può chiederla. E la conferma non è un `confirm()`, che si clicca per riflesso:
-**si scrive il nome dell'asta**, così chi sta cancellando la cosa sbagliata se ne accorge mentre
-scrive il nome sbagliato.
+dentro. Può chiederla l'owner, e da M6 anche un amministratore dell'applicazione, che è l'unica
+azione del pannello sopra un'asta di qualcun altro; il rifiuto sulle aste in corso **non si allenta
+per lui**. E la conferma non è un `confirm()`, che si clicca per riflesso: **si scrive il nome
+dell'asta**, così chi sta cancellando la cosa sbagliata se ne accorge mentre scrive il nome
+sbagliato.
 
 Resta un fatto da guardare in faccia: su un'asta vera conclusa se ne vanno il verbale delle rose e
 lo storico, perché ogni tabella ha `cascade` su `auction_id` — `events` compresa. L'unica cosa che
@@ -1732,6 +1742,142 @@ qualcuno aggiungerà.
 
 ---
 
+## Il pannello di amministrazione, e ciò che non può fare
+
+`users.is_admin` esiste dal primo giorno del progetto, e per un anno ha voluto dire una cosa sola:
+creare aste simulate e riempirle di bot. Non c'era nessun posto da cui guardare chi è iscritto,
+nessun modo di correggere un nome scritto male, e nessun modo di cancellare l'asta di qualcun altro.
+M6 costruisce quel posto, su `/admin`, e la sua descrizione onesta comincia dalla fine: **è un
+pannello che vede tutto e tocca il meno possibile.**
+
+Conviene raccontarlo così, e non per schermate, perché la parte difficile di questa macro non è
+disegnare due tabelle. È che il pannello gira **sulla stessa macchina e nello stesso processo
+dell'asta vera**: la domanda da cui è nato non è cosa può fare un amministratore, è cosa **non** può
+fare mentre dodici persone stanno offrendo.
+
+### Il perimetro
+
+**Nessuna azione sull'asta, tranne cancellarla.** Niente pausa, niente avvio, niente override,
+niente riassegnazioni, niente rettifiche di budget. La plancia di comando è la regia e resta
+dell'owner. Un secondo posto da cui si comanda la stessa asta sono **due verità sullo stesso stato**,
+che è il modo in cui questa applicazione si romperebbe peggio — e sarebbe anche un secondo posto in
+cui ricordarsi le regole sulle fasi, cioè un secondo posto in cui sbagliarle. La cancellazione è
+l'unica eccezione, `deleteAuction` è la funzione che c'era già, e il rifiuto su un'asta `LIVE` o
+`PAUSED` vale per l'amministratore come per tutti.
+
+**Nessuno stato di gioco nelle liste.** La lista aste mostra nome, owner con la sua email, stato,
+posti, membri, il marchio delle simulazioni e le date. Non i lotti, non le offerte, non le rose. Non
+è pigrizia: è come si rispetta **I8**, l'invariante per cui nessun importo di offerta lascia il
+server mentre un lotto è aperto. Il modo fragile di onorarlo è mostrare lo stato di gioco
+sanificandolo con attenzione; il modo solido è **non avere niente da sanificare**. Chi vuole vedere
+un'asta la apre da dove si aprono le aste — il pannello dà il link e non duplica la vista — e la
+regola per cui lo stato dell'asta esce solo da `serializeSnapshot` resta intatta, perché da qui non
+esce affatto. Il test che lo protegge guarda **la risposta e non la pagina**, e lo fa con l'insieme
+esatto dei campi della riga: un `expect(row.topBid).toBeUndefined()` nominerebbe un campo morto, e
+non vedrebbe l'informazione rientrare un giorno sotto un altro nome.
+
+**Nessuna sospensione degli utenti, e nessuna modifica delle email.** La prima è stata valutata e
+rimandata, con il ragionamento conservato nel file della macro; la seconda è un potere che
+l'applicazione non ha motivo di avere — da quando si entra anche con una password, l'indirizzo è la
+chiave d'identità, e riscriverlo vuol dire cambiare *chi può entrare* in quell'account. Un indirizzo
+sbagliato si risolve rifacendo l'account, che a dodici utenti è praticabile.
+
+**Nessun secondo livello di amministrazione.** «Super admin» e `is_admin` sono la stessa cosa, un
+flag solo: una gerarchia su due persone è una gerarchia senza nessuno da gerarchizzare. E nessun log
+di audit: le tre azioni sul singolo utente sono correzioni di dati, e la sola distruttiva — la
+cancellazione di un'asta — scriveva già la sua riga su stdout, con `actor` dentro. Una cancellazione
+fatta da un amministratore era quindi tracciata dal giorno in cui quella riga è stata scritta, senza
+aggiungere niente.
+
+### La guardia, che è la cosa meno ovvia
+
+C'è un layout su `/admin` che rimanda in dashboard chi non è amministratore. **Quel layout non
+protegge il pannello.** Le server action sono endpoint raggiungibili per conto proprio — un `POST`
+con l'id dell'azione dentro, che non attraversa nessun layout e non apre nessuna pagina — e un
+pannello protetto solo dal layout è un pannello aperto. È l'equivalente, per questa macro, di quello
+che in M5 era il furto d'account: la cosa che sembra un dettaglio e che fa danno se la si semplifica.
+
+Quindi la guardia è distribuita, su tre piani che rispondono a tre domande diverse:
+
+1. **`requireAppAdmin()` in cima a ogni pagina e a ogni server action.** Nel layout ci sta anche, ma
+   solo per dare un redirect pulito invece di un errore. Nelle action sta **prima di leggere un campo
+   della `FormData`**, così il rifiuto non dipende da cosa c'è nel form.
+2. **Il motore rilegge `is_admin` dal database** a ogni scrittura. La sessione è un JWT e non sa
+   niente dei permessi: senza questa rilettura, chi è stato appena declassato continuerebbe a
+   comandare fino alla scadenza del suo token. È il precedente che la simulazione aveva già scelto,
+   dove `fillWithBots` rilegge il flag dentro il lock benché l'azione l'abbia già verificato.
+3. **Il test enumera gli export del modulo delle action** e li chiama tutti, direttamente, con la
+   guardia che rifiuta — e con un'uguaglianza esatta sui nomi, non un «almeno questi». Il giorno in
+   cui qualcuno aggiunge un'azione al pannello, quel test si rompe e lo obbliga a guardare in faccia
+   la riga della guardia.
+
+`requireAppAdmin()` passa per la scala di `requireUser()` **per intero** e non la scavalca: un
+amministratore non verificato è un utente non verificato, e il pannello non è una porta di servizio
+che aggira l'identità.
+
+### Le tre azioni sugli utenti
+
+Sono tre, e sono tre. **Correggere il nome**, che è l'unico modo di sistemare l'«asdf» scritto da un
+amico nell'onboarding: applica la stessa regola dell'onboarding, perché la regola è salita in
+`lib/domain.ts` quando il secondo chiamante è arrivato davvero. **Forzare la verifica
+dell'indirizzo**, di cui fra un attimo. E **dare o togliere `is_admin`**, mai sulla propria riga: un
+click e ci si chiude fuori tutti, e senza pannello non si rientra dal pannello. Il divieto vale in
+entrambe le direzioni, anche per riconfermarsi un permesso che si ha già — l'eccezione «ma darselo è
+innocuo» è il gradino da cui il caso pericoloso rientra. Su un bot il permesso è rifiutato prima
+della query, e comunque lo rifiuterebbe il `CHECK` a database: il controllo esplicito serve a
+rispondere con una frase leggibile invece che con un 500.
+
+La lista mostra, per ogni persona, **da quale porta entra** — Google, password, o entrambe — e i due
+numeri con cui si capisce se una riga è una persona o un residuo: quante aste possiede e quante ne
+gioca. Sono indipendenti, perché l'owner che organizza senza giocare possiede un'asta e non ne gioca
+nessuna. I **bot stanno dietro un filtro** e per default non ci sono: sette righe «Bot 3» per ogni
+asta simulata sono l'unico modo in cui una lista di dodici amici può diventare illeggibile.
+
+### Il pulsante che chiude una finestra
+
+La verifica manuale merita un paragrafo suo, perché è la ragione per cui questa macro esisteva già
+prima di essere scritta. Con l'identità di M5 in produzione e senza pannello, un amico a cui l'email
+non arriva ha un solo rimedio: una `UPDATE` a mano sul server, la sera dell'asta, sotto pressione.
+Quella riga di SQL era scritta per esteso nel file di M5 proprio perché si potesse copiare invece di
+comporla. **Adesso è un pulsante.**
+
+Funziona perché la verifica non ha eccezioni: `isVerified` è una condizione sola — la colonna è
+scritta o non lo è — quindi scrivere la colonna **è** far passare il gradino di mezzo della scala.
+Il test lo prova con `isVerified` autentico, non con una copia del predicato: una copia dimostrerebbe
+che la colonna viene scritta, non che la persona entra. Ed è ripetibile, senza riscrivere un
+timestamp che c'è già: è la lezione del backfill di M5, dove un comando che si può dare una volta
+sola è un comando che qualcuno darà due volte.
+
+Ha un prezzo che va detto ad alta voce. Quando Google si aggancia a una riga **non verificata**,
+l'applicazione azzera la password: è la difesa contro chi si registra con l'indirizzo di qualcun
+altro e aspetta. Su una riga verificata quella difesa non scatta più — giustamente, perché
+l'indirizzo è dimostrato. Forzare la verifica significa quindi **mettere la propria parola al posto
+della prova**, e va fatto per una persona che si ha davanti, non per un indirizzo che si legge in una
+tabella.
+
+### La navigazione, e il fatto che sia roba da scrivania
+
+La sidebar esce da `lib/admin-nav.ts`, costruito sul modello di `lib/auction-nav.ts` e per la stessa
+cicatrice: etichetta, titolo e segmento di URL sulla stessa riga, così il titolo in cima alla pagina
+e la voce da cui ci si è arrivati non possono raccontare due cose diverse. Zero dipendenze, perché lo
+legge il componente client che evidenzia la voce attiva. A differenza delle sezioni di un'asta **non
+c'è nessun parametro «chi guarda»**: qui il ruolo è uno solo, e una navigazione che filtra è una
+navigazione che prima o poi qualcuno confonderà per una difesa. `/admin` non è una schermata: è una
+porta, e atterra sulla prima voce della sidebar ricavata dalla lista, non da una stringa scritta due
+volte.
+
+Il pulsante «Admin» in navbar compare solo a chi è amministratore, e la navbar riceve **un
+booleano** e non la riga dell'utente: è un client component, e il tipo `User` si porterebbe dietro
+l'ORM fino al telefono.
+
+Infine una cosa dichiarata invece che accaduta per caso: **il pannello è roba da scrivania.**
+Tabelle dense, sidebar laterale, nessuna ottimizzazione per il pollice; su schermi stretti le tabelle
+scorrono in orizzontale invece di riflowire in un elenco lunghissimo. Il mobile-first è del portale
+del partecipante — lì si offre dal telefono, sotto pressione, con trenta secondi di countdown — e
+resta suo. Il pannello si apre da un portatile, con calma.
+
+---
+
 ## Il posto dove gira
 
 Tutto quello che hai letto finora vive su **una macchina sola**, ed è la conseguenza pratica della
@@ -1888,9 +2034,10 @@ che si va a guardare quando qualcuno chiede «ma quel portiere a quanto era anda
 
 ## Cosa non c'è ancora
 
-Con la Fase 8 l'applicazione è completa e vive su un indirizzo pubblico. L'unico pezzo rimasto
-fuori dal piano è l'area `/admin` — l'elenco di tutte le aste e di tutti gli utenti per chi ha il
-flag di amministratore: è comoda, non serve a giocare.
+Con la Fase 8 l'applicazione era completa e viveva su un indirizzo pubblico. L'unico pezzo rimasto
+fuori dal piano era l'area `/admin`, ed è arrivata con M6 — con una differenza rispetto a come il
+piano la immaginava, che è annotata in `docs/DECISIONS.md`: là era «sola lettura», qui tocca tre
+campi e cancella un'asta.
 
 Restano poi le cose che un'applicazione usata **una sera all'anno** può permettersi di non avere, e
 vale la pena che siano una scelta consapevole invece di una dimenticanza. Non c'è alta

@@ -1,6 +1,7 @@
 # M6 — Amministrazione: il pannello
 
-> **Stato:** pianificata, **non aperta** · Pianificata il 2026-08-10 · **Dipende da M5**
+> **Stato:** **aperta** su `feature/06-amministrazione` il 2026-08-11 · Pianificata il 2026-08-10 ·
+> **Dipende da M5** (soddisfatta: v1.6.0)
 > **Tocca lo schema del database?** **No.** `email_verified_at` arriva da M5 e al pannello non serve
 > nient'altro: **nessun `pnpm db:push` a mano sul server** dopo il deploy. È una macro di sola UI,
 > query e autorizzazioni, cioè il profilo di rischio più basso che potesse avere.
@@ -199,29 +200,31 @@ giusta, e la paginazione si aggiunge quando una lista non ci sta in una schermat
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso in questa
 > sessione.
 
-- [ ] **M6-01** — Aprire `feature/06-amministrazione` da `dev`; rileggere questo file **e** verificare
+- [x] **M6-01** — Aprire `feature/06-amministrazione` da `dev`; rileggere questo file **e** verificare
       cosa M5 ha lasciato in piedi (in particolare la `UPDATE` d'emergenza di M5 §9, che questa macro
       sostituisce)
-- [ ] **M6-02** — `lib/admin-nav.ts` sul modello di `auction-nav.ts`: due sezioni, etichetta, titolo e
+- [x] **M6-02** — `lib/admin-nav.ts` sul modello di `auction-nav.ts`: due sezioni, etichetta, titolo e
       segmento dalla stessa riga, zero dipendenze; il suo test come `tests/auction-nav.test.ts`
-- [ ] **M6-03** — `requireAppAdmin()` accanto a `requireUser()`; il layout `/admin` con la sidebar; il
+- [x] **M6-03** — `requireAppAdmin()` accanto a `requireUser()`; il layout `/admin` con la sidebar; il
       pulsante «Admin» in navbar per chi è `isAppAdmin()`
-- [ ] **M6-04** — `lib/engine/admin.ts`: la lista utenti (con «come entra», i conteggi delle aste, i
+- [x] **M6-04** — `lib/engine/admin.ts`: la lista utenti (con «come entra», i conteggi delle aste, i
       bot filtrati) e la lista aste (owner, email, stato, membri, date — **nessuno stato di gioco**)
-- [ ] **M6-05** — Le tre azioni sull'utente: `display_name`, verifica forzata, `is_admin` con il
+- [x] **M6-05** — Le tre azioni sull'utente: `display_name`, verifica forzata, `is_admin` con il
       divieto sulla propria. Ognuna con la guardia in cima alla server action
-- [ ] **M6-06** — `deleteAuction`: `requireOwner` → owner **oppure** amministratore, e nient'altro; la
+- [x] **M6-06** — `deleteAuction`: `requireOwner` → owner **oppure** amministratore, e nient'altro; la
       cancellazione dal pannello con il nome da digitare e l'avviso su cosa porta via
-- [ ] **M6-07** — Le due pagine, da scrivania: tabelle dense, niente ottimizzazioni per il pollice
-- [ ] **M6-08** — Test: `admin-nav` puro; con Postgres — un non-admin è rifiutato **su ogni server
+- [x] **M6-07** — Le due pagine, da scrivania: tabelle dense, niente ottimizzazioni per il pollice
+- [x] **M6-08** — Test: `admin-nav` puro; con Postgres — un non-admin è rifiutato **su ogni server
       action** e non solo dal layout, `is_admin` non si toglie a sé stessi, la verifica forzata
       scrive `email_verified_at`, `deleteAuction` da parte di un admin funziona **ma resta rifiutata
       su `LIVE`/`PAUSED`**, la lista aste non contiene nessun importo
-- [ ] **M6-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
+- [x] **M6-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
       spento)
-- [ ] **M6-10** — `docs/ARCHITECTURE.md`: il capitolo sul pannello, scritto attorno al perimetro (cosa
+- [x] **M6-10** — `docs/ARCHITECTURE.md`: il capitolo sul pannello, scritto attorno al perimetro (cosa
       **non** può fare) più che attorno alle schermate. `docs/DECISIONS.md`: **lo scostamento da PLAN
       §2**, che diceva admin «sola lettura», e lo stop rimandato con il suo perché
+      · anche `docs/features/README.md` (indice) e `docs/HOWTO-PROVA-LOCALE.md` (come si prova il
+      pannello, e la riga non verificata che il seed non fa)
 - [ ] **M6-11** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       dell'owner** — `CHANGELOG.md`, `package.json`, merge `--no-ff` su `main`, tag, push.
       **Nessun `db:push` sul server**: questa macro non tocca lo schema
