@@ -180,3 +180,106 @@ export function isAppAdmin(
 ): boolean {
   return user?.isAdmin === true;
 }
+
+// ─── Insight sul listone (M8) ────────────────────────────────────────────────
+
+/**
+ * Cosa sappiamo di un calciatore oltre alla sua quotazione.
+ *
+ * È la forma con cui gli insight viaggiano fino al browser: la stessa colonna
+ * per colonna di `player_insights`, ma dichiarata **qui** e non dedotta dallo
+ * schema, perché la legge un client component e `lib/db` nel bundle non ci deve
+ * entrare. Le due definizioni devono restare d'accordo, e il test del parser è
+ * ciò che se ne accorge.
+ */
+export type PlayerInsights = {
+  extId: number;
+  fullName: string | null;
+  team: string;
+  /** `"current"` o `"previous"`: a quale stagione appartengono i numeri. */
+  statsSeason: string;
+  presenze: number;
+  startsEleven: number;
+  minPlayingTime: number;
+  rigoriFatti: number;
+  rigoriSbagliati: number;
+  rigoriParati: number;
+  fmvHome: number | null;
+  fmvAway: number | null;
+  /** `1` = primo della gerarchia. `null` = non designato. */
+  rigoristaRank: number | null;
+  piazzatiRank: number | null;
+};
+
+/** Le giornate di una stagione di Serie A. Una costante con un nome, non un 38 sparso in tre file. */
+export const GIORNATE = 38;
+
+/**
+ * Quante volte è partito titolare, in frazione di stagione. È il numero che
+ * decide all'asta: 0,63 per Berardi contro 0,32 per Bernardeschi, che nel file
+ * Statistiche di Fantacalcio.it sono due `Pv` quasi uguali (M8 §2).
+ *
+ * Il denominatore è `GIORNATE`, **non** `presenze`: `startsEleven / presenze`
+ * risponde a «quando c'era, partiva?», che è un'altra domanda — vera, ma non
+ * quella che si fa mentre scorre un countdown.
+ *
+ * ⚠ **Il clamp non è difensivo, serve a due giocatori veri.** Nella risposta
+ * salvata in `fixtures/fantalab-listone.json` Thiam ha `starts_eleven: 42` e
+ * Stankovic A. 39 presenze: il campo somma più competizioni, quindi può superare
+ * le 38 giornate. Senza clamp la card scriverebbe «110% da titolare». Il test ha
+ * il caso col suo nome dentro, così la riga non viene tolta per pulizia.
+ */
+export function quotaTitolare(i: PlayerInsights): number {
+  return Math.min(1, i.startsEleven / GIORNATE);
+}
+
+/**
+ * Quando era in campo, quanto ci stava. Distingue il titolare dallo spezzone:
+ * 76' contro 50' per i due di sopra.
+ *
+ * `null` senza presenze, e non zero: non aver giocato non vuol dire giocare zero
+ * minuti a partita. È la stessa distinzione fra `—` e `0` che la UI deve tenere.
+ */
+export function minutiMedi(i: PlayerInsights): number | null {
+  return i.presenze > 0 ? i.minPlayingTime / i.presenze : null;
+}
+
+/**
+ * Gli insight **mostrabili**, cioè quelli della stagione corrente.
+ *
+ * ⚠ Esiste per un motivo solo, e sta qui perché la decisione va presa in **un**
+ * punto: nella risposta della fonte convivono due stagioni — 329 `current` e 168
+ * `previous` — e mettere `statsSeason === "current"` dentro i componenti
+ * vorrebbe dire due copie della stessa regola, che prima o poi divergono.
+ *
+ * Chi ha solo la stagione precedente esce come `null`, e la UI scrive `—`: i suoi
+ * numeri parlano di un altro campionato, e accanto a quelli di quest'anno
+ * sarebbero un confronto falso. Regge anche `undefined`, che è il caso del viewer
+ * non-pro e della tabella ancora vuota — così i chiamanti non hanno due controlli
+ * da fare ma uno.
+ */
+export function showableInsights(
+  i: PlayerInsights | null | undefined,
+): PlayerInsights | null {
+  if (!i) return null;
+  return i.statsSeason === "current" ? i : null;
+}
+
+/**
+ * Chi vede gli insight sul listone.
+ *
+ * ⚠ **Questo predicato decide una query, non un `className`.** Gli insight non
+ * arrivano affatto nel payload di chi non li può vedere (M8 §6): `PoolPlayer` è
+ * una prop di un client component, quindi nasconderli in JSX li lascerebbe
+ * leggibili in DevTools in tre click. È la regola 6 — mai fidarsi del client —
+ * applicata alla lettura invece che alla scrittura.
+ *
+ * L'amministratore li vede anche senza il flag: altrimenti dovrebbe accendersi
+ * `is_pro` da sé per guardare i dati che ha appena importato, e
+ * `lib/engine/admin.ts` gli vieta di toccare la propria riga.
+ */
+export function canSeeInsights(
+  user: { isPro: boolean; isAdmin: boolean } | null | undefined,
+): boolean {
+  return user?.isPro === true || user?.isAdmin === true;
+}

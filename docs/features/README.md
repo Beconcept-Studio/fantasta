@@ -23,7 +23,11 @@ figurina — che è precisamente ciò che li rende facili da dimenticare. La pro
 
 ## Da pianificare
 
-Nessuna. Il quaderno `docs/REQUESTS.md` è vuoto.
+- **[M8](08-insight-listone.md)** — Insight sul listone: titolarità, rigoristi, calci piazzati.
+  Spec scritta il 2026-08-11 su richiesta diretta dell'owner (il quaderno `docs/REQUESTS.md` era
+  vuoto), e **riscritta lo stesso giorno dopo aver chiamato le fonti per davvero**: il collaudo ha
+  smentito quattro cose che la prima stesura dava per certe, e ha tolto una tabella e quattro
+  colonne. Tocca lo schema in modo additivo. **Non è aperta**: nessun branch, nessun codice.
 
 M5 e M6 sono nate da una sessione di spec sola, il 2026-08-10, e sono state **tagliate in due di
 proposito**. M5 tocca la strada del login — l'unica cosa che, se si rompe, chiude fuori tutti — e

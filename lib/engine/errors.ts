@@ -93,6 +93,20 @@ export const ERROR_CODES = [
   "RESEND_TOO_SOON",
   "ALREADY_VERIFIED",
   "RATE_LIMITED",
+
+  // Insight sul listone (M8)
+  /**
+   * La fonte non risponde, o non risponde con quello che dice di essere.
+   *
+   * ⚠ Questi tre codici esistono perché le due fonti sono **fuori dal nostro
+   * controllo**: un giorno cambieranno forma senza avvisare, e quel giorno l'unica
+   * cosa che conta è che l'import **fallisca**, invece di scrivere 497 righe di
+   * `null` sopra dati buoni.
+   */
+  "SOURCE_UNREACHABLE",
+  "SOURCE_SCHEMA",
+  /** Il match `ext_id` è troppo magro: qualcosa è cambiato, meglio non scrivere. */
+  "SOURCE_COVERAGE",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
