@@ -256,6 +256,28 @@ export function romeTime(iso: string): string {
   }).format(new Date(iso));
 }
 
+/**
+ * «11/08/2026» — il giorno e nient'altro, per le tabelle dense del pannello di
+ * amministrazione (M6).
+ *
+ * Sta qui, accanto alle altre due, e non in un file di date suo: la cosa che non
+ * deve esistere in due copie è la **regola** — `Europe/Rome` fissato dal server e
+ * non lasciato al browser di chi guarda — e questo è il posto in cui abita. Il
+ * pannello è il secondo chiamante di quella regola, non di questa funzione.
+ *
+ * Numerico e con l'anno, al contrario di `romeDateTime`: in una riga di elenco
+ * conta la data di iscrizione di un account che si guarda mesi dopo, non il
+ * minuto in cui è stata scritta.
+ */
+export function romeDay(iso: string): string {
+  return new Intl.DateTimeFormat("it-IT", {
+    timeZone: ROME,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(iso));
+}
+
 /** «10 agosto, 21:04» — per le righe in cui il giorno conta. */
 export function romeDateTime(iso: string): string {
   return new Intl.DateTimeFormat("it-IT", {

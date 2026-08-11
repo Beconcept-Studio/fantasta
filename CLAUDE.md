@@ -131,6 +131,14 @@ pm2 reload deploy/ecosystem.config.cjs --update-env
 Se il cambio è distruttivo (una colonna che sparisce, un tipo che cambia), prima un `pg_dump`:
 `deploy/db-backup.sh`.
 
+⚠ **`pnpm db:push` applica lo schema, non i dati.** Se la macro ha un **backfill**, quello va dato a
+mano e **nulla te lo ricorda**: il push riesce, l'app riparte, il deploy dice «completato», e il
+guaio si vede solo dal comportamento — con M5 (v1.6.0) sarebbe stato ogni utente esistente spedito
+sulla schermata del codice. Il file della feature lo dichiara in testa insieme allo schema; qui vale
+la regola generale: **finché il backfill non è dato, il deploy non è finito.** E scrivi i comandi
+per esteso quando li passi a qualcuno — un `pm2 reload … --update-env` abbreviato viene copiato
+com'è, `…` compresi (successo il 2026-08-11).
+
 **Tornare indietro a una versione.** È a questo che servono i tag:
 
 ```bash

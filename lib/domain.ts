@@ -143,6 +143,27 @@ export function isPlausibleEmail(value: string): boolean {
 }
 
 /**
+ * Il nome che si legge in giro per l'applicazione: `trim`, spazi interni
+ * collassati, fra 3 e 60 caratteri. `null` se non è accettabile.
+ *
+ * Stava dentro `setDisplayName` in `lib/auth.ts`, dove è nata con l'onboarding.
+ * È salita qui in M6, quando il secondo chiamante è arrivato davvero (regola 8):
+ * l'amministratore che corregge l'«asdf» scritto da un amico deve applicare
+ * **la stessa** regola dell'onboarding, altrimenti esistono due idee di nome
+ * valido e la seconda le scavalca la prima.
+ *
+ * Accetta `unknown` perché i due chiamanti ricevono entrambi una `FormData`, e
+ * il posto giusto per rifiutare ciò che non è una stringa è la regola, non il
+ * chiamante.
+ */
+export function normalizeDisplayName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const name = value.trim().replace(/\s+/g, " ");
+  if (name.length < 3 || name.length > 60) return null;
+  return name;
+}
+
+/**
  * L'amministratore **dell'applicazione**, che non è l'owner di un'asta.
  *
  * ⚠ In questo progetto «owner» è già chi possiede *un'asta*: conduce la sua e

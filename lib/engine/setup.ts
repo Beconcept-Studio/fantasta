@@ -98,6 +98,32 @@ function requireOwner<T>(auction: Auction, userId: string): Result<T> | null {
   return null;
 }
 
+/**
+ * Owner **oppure** amministratore dell'applicazione (M6 §2).
+ *
+ * ⚠ Ha **un solo chiamante**, `deleteAuction`, e deve restare così: dal pannello
+ * si cancella un'asta e non si fa nient'altro. Configurare, invitare, avviare,
+ * mettere in pausa restano dell'owner — un secondo posto da cui si comanda la
+ * stessa asta sono due verità sullo stesso stato, che è il modo in cui questa
+ * applicazione si romperebbe peggio.
+ *
+ * Il permesso si rilegge dal database e non arriva dal chiamante: la sessione è
+ * un JWT (P17) e non sa niente di `is_admin`.
+ */
+async function requireOwnerOrAppAdmin<T>(
+  tx: Tx,
+  auction: Auction,
+  userId: string,
+): Promise<Result<T> | null> {
+  if (auction.ownerUserId === userId) return null;
+  const actor = await tx.query.users.findFirst({ where: eq(users.id, userId) });
+  if (isAppAdmin(actor)) return null;
+  return fail<T>(
+    "FORBIDDEN",
+    "Solo chi ha creato l'asta, o un amministratore dell'applicazione, può cancellarla.",
+  );
+}
+
 /** Il setup si tocca solo prima dell'avvio. */
 function requireSetupPhase<T>(auction: Auction): Result<T> | null {
   if (auction.status !== "DRAFT" && auction.status !== "READY") {
@@ -889,13 +915,27 @@ export async function removeMember(
  * senza questa riga di una cancellazione non resterebbe niente da nessuna parte.
  * La conferma per digitazione del nome sta nella UI, ed è cortesia verso la mano
  * che clicca: la difesa vera è chi può chiamare questa funzione.
+ *
+ * ⚠ **M6 l'ha allargata di una riga, e di nient'altro.** L'autorizzazione è
+ * passata da «l'owner» a «l'owner **oppure** un amministratore
+ * dell'applicazione», perché dal pannello si cancella l'asta di qualcun altro.
+ * Il rifiuto su `LIVE` e `PAUSED` **non si allenta**: vale per l'amministratore
+ * esattamente come per tutti — non si butta via una stanza con dodici persone
+ * dentro, e la pausa non è un'asta ferma, è un'asta congelata. La riga su stdout
+ * registrava già `actor: userId`, quindi una cancellazione fatta da un
+ * amministratore è tracciata dal giorno in cui quella riga è stata scritta,
+ * senza aggiungere niente.
  */
 export async function deleteAuction(
   userId: string,
   auctionId: string,
 ): Promise<Result<{ name: string }>> {
   return withSetupLock(auctionId, async (tx, auction) => {
-    const forbidden = requireOwner<{ name: string }>(auction, userId);
+    const forbidden = await requireOwnerOrAppAdmin<{ name: string }>(
+      tx,
+      auction,
+      userId,
+    );
     if (forbidden) return forbidden;
 
     if (auction.status === "LIVE" || auction.status === "PAUSED") {
