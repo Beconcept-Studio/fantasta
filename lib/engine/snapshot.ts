@@ -178,6 +178,12 @@ function serializeLot(
     seq: lot.seq,
     player: {
       id: player.id,
+      // M7 — l'id di Fantacalcio.it, da cui il portale e la TV costruiscono
+      // l'indirizzo della figurina. È un campo nuovo dentro il lotto, quindi
+      // per definizione un candidato a raccontare qualcosa delle buste: non lo
+      // fa. Il giocatore in asta è pubblico — è la busta a essere segreta — e
+      // questo numero è la stessa informazione di `name` e `team`.
+      extId: player.extId,
       name: pv?.name ?? "",
       role: player.role,
       team: pv?.team ?? "",

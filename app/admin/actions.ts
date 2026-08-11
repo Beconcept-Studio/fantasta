@@ -6,10 +6,16 @@ import type { FormState } from "@/app/auctions/form-state";
 import { requireAppAdmin } from "@/lib/auth";
 import { ADMIN_ROOT } from "@/lib/admin-nav";
 import {
+  type CampionciniRun,
+  campionciniDir,
+  downloadCampioncini,
+} from "@/lib/campioncini";
+import {
   forceVerifyEmail,
   setUserAdmin,
   setUserDisplayName,
 } from "@/lib/engine/admin";
+import { parseListone } from "@/lib/import/parseListone";
 import { deleteAuction } from "@/lib/engine/setup";
 
 /**
@@ -43,6 +49,7 @@ function text(form: FormData, key: string): string | undefined {
 
 const USERS_PATH = `${ADMIN_ROOT}/users`;
 const AUCTIONS_PATH = `${ADMIN_ROOT}/auctions`;
+const FIGURINE_PATH = `${ADMIN_ROOT}/figurine`;
 
 /** Correggere il nome scritto male da qualcun altro. */
 export async function setUserDisplayNameAction(
@@ -142,4 +149,67 @@ export async function deleteAuctionAsAdminAction(
 
   revalidatePath(AUCTIONS_PATH);
   return { error: null, ok: `Asta «${result.value.name}» cancellata.` };
+}
+
+/** I numeri della passata, detti in italiano: è tutto ciò che la pagina mostra. */
+function runSummary(run: CampionciniRun): string {
+  const parts = [
+    `${run.downloaded} scaricate`,
+    `${run.alreadyThere} già presenti`,
+  ];
+  // I due numeri che devono essere zero si dicono **solo se non lo sono**: una
+  // riga di zeri sembra un problema anche quando non c'è.
+  if (run.withoutImage > 0) parts.push(`${run.withoutImage} senza immagine`);
+  if (run.failed > 0) parts.push(`${run.failed} non riuscite`);
+
+  const summary = `${parts.join(" · ")}.`;
+  if (!run.expired) return summary;
+  return (
+    `${summary} Tempo scaduto: ne restano ${run.remaining}. ` +
+    `Premi di nuovo — il file è ancora selezionato e riprende da dov'era.`
+  );
+}
+
+/**
+ * Lo scaricamento delle figurine (M7 §4): **un click**.
+ *
+ * Si carica il `.xlsx` del listone di riferimento, il parser che c'è già lo
+ * legge — è puro e non tocca il database — e per ogni id che non è già sul disco
+ * si scarica l'immagine. Il file **non si conserva** (P6, come l'import del
+ * listone di un'asta): serve solo la lista di id, dentro questa richiesta.
+ *
+ * ⚠ **Qui non c'è nient'altro, ed è il punto.** Nessun lavoro in background,
+ * nessun singleton su `globalThis`, nessuna tabella di avanzamento: lo stato è
+ * il disco, «mancante» vuol dire «file che non c'è», e l'operazione è quindi
+ * ripetibile per costruzione. La prima versione della spec aveva batching a
+ * lotti da venticinque, una lista di id parcheggiata in un file e un pulsante
+ * «Ferma»; il collaudo su 495 id veri ha misurato **7,3 secondi** e ha tolto
+ * tutto. Se un giorno questa funzione ricomincia a crescere, la domanda da farsi
+ * è quella che l'owner ha fatto allora: «l'hai provato?».
+ *
+ * Gli id vengono da un listone **di riferimento** e non dalle aste: l'archivio è
+ * globale, e legarlo alle aste vorrebbe dire perderlo quando un'asta si cancella
+ * — che da M6 è facile.
+ */
+export async function downloadCampionciniAction(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  await requireAppAdmin();
+
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Scegli il file .xlsx del listone di riferimento." };
+  }
+
+  const parsed = parseListone(await file.arrayBuffer());
+  if (!parsed.ok) return { error: parsed.error.message };
+
+  const run = await downloadCampioncini({
+    extIds: parsed.value.map((player) => player.extId),
+    dir: campionciniDir(),
+  });
+
+  revalidatePath(FIGURINE_PATH);
+  return { error: null, ok: runSummary(run) };
 }

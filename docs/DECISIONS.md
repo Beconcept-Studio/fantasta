@@ -1484,3 +1484,119 @@ il secondo gradino della scala interroga.
 `PAUSED` non si è allentato per l'amministratore: la pausa congela la fase, non azzera l'asta. C'è un
 test che lo dimostra per entrambi gli stati, invece di darlo per scontato — era una funzione dove
 «tanto è admin» sarebbe stata una modifica di una parola.
+
+---
+
+## 2026-08-11 — M7, Le figurine dei calciatori
+
+**Il collaudo prima della spec, e le tre semplificazioni che ha imposto.** Il downloader è stato
+provato sui 495 id di un listone vero *prima* di scrivere una riga: 495 su 495, 51,56 MB in **7,3
+secondi**, zero errori, zero `403`. La spec che esisteva fino a quel momento era costruita attorno a
+un'operazione lunga, ed è caduta in tre pezzi. **Primo: niente batching.** Lo scaricamento a lotti da
+venticinque, la lista degli id parcheggiata in un `listone.json`, la pagina che si richiama da sé e
+il pulsante «Ferma» servivano a sopravvivere a un'attesa che non esiste; al loro posto c'è una server
+action che fa il lavoro dentro la richiesta. **Secondo: niente marcatori per gli assenti.** Ci si
+aspettava un `403` per chi non ha la caricatura, e quindi un file `.none` per non riprovarlo
+all'infinito; invece quel CDN risponde con una sagoma, che è un `200` — non c'è nessun assente da
+marcare. **Terzo: niente riquadro ad altezza variabile**, perché ogni giocatore del listone ha
+un'immagine. La domanda «l'hai provato?» è arrivata dall'owner, non da Claude, ed è il precedente da
+citare la prossima volta che qualcosa va scaricato da fuori.
+
+**La scadenza è a 20 secondi, e il numero non è arbitrario.** `location /` in
+`deploy/nginx-asta.conf` non imposta `proxy_read_timeout`, quindi vale il default di 60 secondi — il
+timeout lungo di un'ora è solo sulla rotta dello stream. Venti secondi sono tre volte il misurato e
+un terzo del taglio del proxy: se un giorno il CDN fosse dieci volte più lento, la passata si ferma
+da sé e dice quante ne restano invece di farsi tagliare a metà da nginx. È ciò che resta del
+batching, e sono tre righe.
+
+**Lo stato è il disco, quindi lo schema non è stato toccato.** «Questa figurina ce l'abbiamo?» lo
+risponde un file che c'è o non c'è. Una tabella `campioncini` avrebbe aggiunto un secondo posto dove
+la stessa domanda ha una risposta, cioè un posto dove disallinearsi: un file cancellato a mano e una
+riga che resta è un'immagine rotta per sempre. Senza tabella l'operazione è ripetibile per
+costruzione, e non c'è nessun `pnpm db:push` né backfill in questo rilascio.
+
+**`storage/` e non `public/`, ed è una trappola vera, non un'ipotesi.** Il server standalone fa
+`process.chdir(__dirname)`, quindi la sua `public/` è `.next/standalone/public`, che
+`deploy/deploy.sh` cancella e ricopia a ogni rilascio: 53 MB di figurine sarebbero spariti al primo
+deploy successivo, in silenzio, con il sintomo «non si vedono più» e nessun errore. `storage/` sta
+fuori da git e non viene toccata né da `pnpm build` né da `git reset --hard` — verificato con un file
+finto **prima** di scrivere il downloader, perché tutto il disegno dell'archivio poggia su quello.
+`MEDIA_DIR` lo calcola `deploy/ecosystem.config.cjs` dalla radice del progetto, così in produzione non
+c'è nessun percorso da mettere a mano; anche questo verificato valutando davvero il file con Node,
+invece di fidarsi della lettura.
+
+**La difesa della rotta è una sola, ed è «non usare la stringa».** Il parametro accetta soltanto
+`^\d+\.png$` e ne esce un intero; il percorso lo costruisce una funzione da quell'intero, e la
+stringa arrivata da fuori non tocca mai `path.join`. Sanificare sarebbe stato il modo sbagliato di
+avere ragione: una sanificazione si può scrivere male, un valore che non viene usato no. Il rifiuto è
+un **`400` e non un `404`**, e la differenza è l'evidenza: `400` vuol dire prima del filesystem. Il
+test è stato scritto prima della rotta ed è stato visto fallire.
+
+**Un formato solo, la `card` 255×378.** Esistono anche `medium` e `small`, ma un formato solo
+significa un file per giocatore, un indirizzo e un solo caso «manca», e la `card` sta bene su
+entrambi gli schermi che la mostrano. Niente ritaglio, ridimensionamento o conversione in WebP: 53 MB
+stanno su un disco da 40 GB, e un'immagine ritoccata è un'immagine da ritoccare di nuovo alla
+prossima edizione.
+
+**Le sagome senza volto si tengono, e non si riconoscono.** 144 su 495 — verificato di nuovo in
+questa sessione, e sono 144 in 20 varianti. La sagoma è riconoscibile per quello che è, tenerla
+mantiene il riquadro del lotto sempre della stessa forma (altrimenti quasi un lotto su tre
+sposterebbe il pulsante d'offerta sotto il pollice), e scartarle vorrebbe dire venti impronte scritte
+nel codice **che cambiano alla prossima edizione**: un riconoscimento che un giorno smette di
+funzionare in silenzio.
+
+**Il fallback è `onError` che nasconde l'immagine**, non un segnaposto grigio: un rettangolo vuoto
+segnalerebbe un'assenza, e l'unica assenza rimasta — l'archivio non ancora riempito — non è un
+guasto, ed è comunque uniforme perché in quel caso non ce l'ha nessuno. Lo stato del componente tiene
+**quale** id ha fallito e non un booleano, così al cambio di lotto la figurina nuova riparte da sola:
+una `key` che chi chiama deve ricordarsi di passare è una difesa che prima o poi si dimentica.
+
+**Un `<img>` e non `next/image`.** Le figurine sono già alla dimensione giusta e le serve una nostra
+rotta che legge un file dal disco: passare dall'ottimizzatore vorrebbe dire un secondo giro sul
+server per riconvertire un PNG che va benissimo com'è.
+
+**Gli id vengono da un listone di riferimento, non dalle aste.** L'archivio è globale e sopravvive
+alla cancellazione di un'asta, che da M6 è facile; agganciare lo scaricamento all'import del listone
+di un'asta l'avrebbe legato al ciclo di vita sbagliato. Il `.xlsx` non si conserva, come in P6.
+
+**Il test di M6 sugli export delle server action ha fatto esattamente il suo lavoro.** L'uguaglianza
+esatta si è rotta all'aggiunta di `downloadCampionciniAction`, ed è stata sistemata aggiungendo la
+guardia `requireAppAdmin()` e il nome alla lista nello stesso momento — non allentando l'uguaglianza.
+È il secondo rilascio consecutivo in cui quel test paga il proprio costo.
+
+**Il test I8 passava, ma passava per il motivo sbagliato.** `extId` è stato aggiunto **dentro**
+`player`, e l'insieme esatto delle chiavi che quel test confronta è quello di primo livello di
+`currentLot`, dove `player` era già presente: il campo nuovo non ha svegliato nessuno, che è
+precisamente ciò che il commento in cima a quel file dichiara di voler evitare. Il campo di M7 è
+innocuo — il giocatore in asta è pubblico, è la busta a essere segreta — ma il giocatore è la sede
+naturale di un dato che riguarda «questo lotto», e il prossimo campo potrebbe non essere innocuo. Da
+qui in poi anche le chiavi del giocatore sono un insieme esatto, e la nuova asserzione è stata vista
+fallire prima di essere creduta.
+
+**La voce del pannello si chiama «Figurine» e il segmento è in italiano**, a differenza di `users` e
+`auctions`. `campioncini` è il nome che usa il CDN di Fantacalcio.it ed è la parola che sta nel
+codice; «figurina» è la parola che si usa nella stanza. La navigazione parla la seconda lingua.
+
+**Il modale d'offerta è diventato il terzo posto dove si vede la figurina, e §6 diceva «due, e sono
+due».** La spec era stata scritta guardando card e TV; usandola, l'owner ha chiesto la figurina anche
+nel modale, ed è la richiesta giusta per la ragione che la macro esiste — il modale è il posto dove
+si guarda il giocatore *mentre si decide quanto mettere*. Restano fuori regia, rose e storico: §9 non
+si è mossa.
+
+**Nel modale sta di fianco e non sopra il nome, e la differenza l'ha decisa la tastiera.** Era nata
+centrata sopra il nome, che è dove l'occhio la cerca. Ma quello sheet arriva dal basso e con la
+tastiera aperta **l'altezza è la risorsa scarsa**, mentre la colonna a sinistra del testo era spazio
+già disponibile: di fianco non costa nessuna riga, sopra ne costava ~140 pixel proprio quando ne
+restano di meno. Stessa misura della card che sta dietro (68×100), perché è lo stesso giocatore nello
+stesso momento e vederlo cambiare taglia aprendo il modale sarebbe un movimento senza significato.
+
+**Il campo dell'offerta prende il focus all'apertura: una decisione di F5 ribaltata, non dimenticata.**
+Fino a v1.7.0 il focus veniva tolto esplicitamente, con la sua riga di commento: il modale si apre
+**da sé** all'inizio del round, e una tastiera che sale senza che nessuno l'abbia chiesta copre due
+terzi dello schermo nell'istante peggiore. Il ribaltamento viene dall'uso, ed è motivato: quel timore
+descriveva **l'apertura**, non l'uso — il modale lo si apre per scrivere un numero, e trenta secondi
+di countdown non lasciano spazio a un tocco in più. E il costo che la vecchia scelta temeva era già
+stato pagato dal layout: countdown e `max_bid` stanno nell'intestazione dello sheet proprio perché
+restino leggibili sopra la tastiera. `preventDefault` è rimasto — senza, Radix darebbe il focus al
+pulsante «−1» — e il valore già presente viene selezionato, così chi rientra a metà round sovrascrive
+digitando invece di dover cancellare.

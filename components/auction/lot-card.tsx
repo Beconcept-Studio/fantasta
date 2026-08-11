@@ -1,5 +1,6 @@
 "use client";
 
+import { Campioncino } from "@/components/auction/campioncino";
 import { Countdown, CountdownBar } from "@/components/auction/countdown";
 import { TiePanel } from "@/components/auction/reveal-panel";
 import { Badge } from "@/components/ui/badge";
@@ -60,23 +61,36 @@ export function LotCard({
       {/* ── Il giocatore, e quanto tempo resta ── */}
       <header className="space-y-2 p-4 pb-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">{ROLE_LABELS[lot.player.role]}</Badge>
-              {lot.roundNo === 2 && <Badge>Spareggio</Badge>}
-              {lot.autoCalled && (
-                <Badge variant="outline" title="Nessuno ha chiamato in tempo">
-                  auto
-                </Badge>
-              )}
+          <div className="flex min-w-0 items-start gap-3">
+            {/*
+              ⚠ 68×100, a sinistra del nome (M7 §6). Venti pixel di altezza in
+              più rispetto ai 54×80 provati sono il prezzo minimo perché sia una
+              figurina invece di una macchia colorata; a 81×120 si vedrebbe
+              meglio, ma costerebbe quaranta pixel su uno schermo da 667. Se non
+              c'è, sparisce e il testo scorre a sinistra.
+            */}
+            <Campioncino
+              extId={lot.player.extId}
+              className="h-25 w-17 shrink-0 rounded-md"
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{ROLE_LABELS[lot.player.role]}</Badge>
+                {lot.roundNo === 2 && <Badge>Spareggio</Badge>}
+                {lot.autoCalled && (
+                  <Badge variant="outline" title="Nessuno ha chiamato in tempo">
+                    auto
+                  </Badge>
+                )}
+              </div>
+              <h2 className="mt-1.5 truncate text-2xl leading-tight font-semibold">
+                {lot.player.name}
+              </h2>
+              <p className="text-muted-foreground truncate text-sm">
+                {lot.player.team} · fvm {lot.player.fvm} · chiamato da{" "}
+                {iCalled ? "te" : memberLabel(caller)}
+              </p>
             </div>
-            <h2 className="mt-1.5 truncate text-2xl leading-tight font-semibold">
-              {lot.player.name}
-            </h2>
-            <p className="text-muted-foreground truncate text-sm">
-              {lot.player.team} · fvm {lot.player.fvm} · chiamato da{" "}
-              {iCalled ? "te" : memberLabel(caller)}
-            </p>
           </div>
           <p className="text-right text-3xl leading-none font-semibold">
             <Countdown

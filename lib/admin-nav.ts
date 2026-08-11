@@ -25,7 +25,7 @@
 /** La radice del pannello. Il pulsante in navbar punta qui. */
 export const ADMIN_ROOT = "/admin";
 
-export const ADMIN_SECTION_KEYS = ["users", "auctions"] as const;
+export const ADMIN_SECTION_KEYS = ["users", "auctions", "figurine"] as const;
 export type AdminSectionKey = (typeof ADMIN_SECTION_KEYS)[number];
 
 export type AdminSection = {
@@ -40,12 +40,20 @@ export type AdminSection = {
 
 /**
  * L'ordine è quello con cui si guarda l'applicazione dall'alto: prima le
- * persone, poi le partite. E la prima voce è anche dove atterra `/admin`, che
- * la ricava da qui invece di ripetere una stringa.
+ * persone, poi le partite, poi le cose che si vedono giocando. E la prima voce
+ * è anche dove atterra `/admin`, che la ricava da qui invece di ripetere una
+ * stringa.
  *
  * I titoli sono al plurale e con «tutti»: in dashboard c'è «Le tue aste», qui
  * «Tutte le aste». La differenza fra le due schermate è esattamente quella, e
  * conviene che si legga nel titolo.
+ *
+ * ⚠ **Le figurine sono in fondo perché sono l'unica voce che non parla di
+ * righe del database** (M7): è un archivio di file, globale, che sopravvive
+ * alla cancellazione di un'asta. Il segmento è in italiano — `figurine` — a
+ * differenza degli altri due, e non è una svista: `campioncini` è il nome che
+ * usa il CDN di Fantacalcio.it, «figurina» è la parola che si usa nella stanza.
+ * Il codice parla la prima lingua, la navigazione la seconda.
  */
 const SECTIONS: AdminSection[] = [
   {
@@ -59,6 +67,12 @@ const SECTIONS: AdminSection[] = [
     segment: "auctions",
     label: "Aste",
     title: "Tutte le aste",
+  },
+  {
+    key: "figurine",
+    segment: "figurine",
+    label: "Figurine",
+    title: "Le figurine dei calciatori",
   },
 ];
 

@@ -1297,6 +1297,16 @@ Nel layout radice `interactiveWidget: "resizes-content"` fa in modo che su Andro
 rimpicciolisca la pagina invece di coprirla. Lo zoom non è bloccato: impedirlo è una scortesia
 verso chi non vede bene.
 
+**All'apertura il campo prende il focus, e la tastiera sale da sola.** Fino a v1.7.0 era il
+contrario, di proposito: il modale si apre da sé quando il round comincia, e una tastiera che
+compare senza che nessuno l'abbia chiesta copre due terzi dello schermo nel momento peggiore. È
+stato ribaltato dopo averlo usato, perché quel timore descriveva l'apertura e non l'uso — il modale
+lo si apre per scrivere un numero, e trenta secondi di countdown non lasciano spazio a un tocco in
+più. Il costo che la vecchia scelta temeva, del resto, il layout lo aveva già pagato: countdown e
+`max_bid` stanno nell'intestazione dello sheet proprio perché restino leggibili sopra la tastiera.
+Il valore già presente viene selezionato, così chi rientra a metà round sovrascrive digitando invece
+di dover cancellare.
+
 Il feedback di salvataggio ha una riga fissa tutta sua, che non sposta il pulsante di conferma
 quando compare. «L'ansia da *è passata?* a cinque secondi dalla scadenza è il vero problema di UX di
 questa app», e la risposta è un `✓ Offerta salvata: 9` che arriva dalla risposta della `fetch`, non
@@ -1875,6 +1885,193 @@ Tabelle dense, sidebar laterale, nessuna ottimizzazione per il pollice; su scher
 scorrono in orizzontale invece di riflowire in un elenco lunghissimo. Il mobile-first è del portale
 del partecipante — lì si offre dal telefono, sotto pressione, con trenta secondi di countdown — e
 resta suo. Il pannello si apre da un portatile, con calma.
+
+---
+
+## Le figurine dei calciatori
+
+Quando un giocatore viene chiamato all'asta, la stanza guarda lo schermo e chiede «chi è?». Fino a
+v1.7.0 trovava un nome, una squadra e un numero. Fantacalcio.it disegna per ogni giocatore una
+**figurina** — la caricatura dentro una carta con lo scudetto e il ruolo — e quella figurina è
+esattamente la risposta a quella domanda, a colpo d'occhio, da tre metri di distanza. Questa parte
+dell'applicazione la scarica una volta e la mostra per tutta la serata. Non fa nient'altro, e il
+capitolo racconta soprattutto **perché non fa nient'altro**.
+
+### Venti richieste vere hanno tolto tre pezzi di architettura
+
+È la cosa da portarsi via da qui, ed è successa prima che venisse scritta una riga di codice.
+
+La prima versione di questa funzionalità era progettata attorno a un'operazione lunga. Cinquecento
+richieste HTTP a un CDN esterno sembrano una cosa da gestire bene: scaricamento a lotti da
+venticinque, la lista degli id parcheggiata in un file `listone.json` fra un lotto e l'altro, una
+pagina che si richiama da sé per far avanzare il lavoro, un pulsante «Ferma», una condizione di
+terminazione per il caso «nessun progresso». Tutto ragionevole, tutto approvato a voce, e tutto
+inutile — perché nessuno aveva provato quanto ci mettesse.
+
+L'owner ha chiesto «l'hai provato?», e la risposta è stata un prototipo in Node — la stessa `fetch`
+che avrebbe usato l'applicazione, non `curl`, così un CDN che rifiutasse un client non-browser si
+sarebbe visto subito — lanciato sui 495 id di un listone vero:
+
+```text
+495 su 495 scaricate · 0 errori · 0 403 · 0 risposte non-PNG
+51,56 MB in 7,3 secondi · mediana 18ms · peggiore 234ms
+concorrenza 4 · timeout 10s per richiesta · nessun 429
+```
+
+Sette secondi. Il batching, il file di stato e il pulsante «Ferma» servivano a sopravvivere a
+un'attesa che non esisteva, e sono spariti tutti e tre. Al loro posto è rimasta **una server action**
+che fa il lavoro dentro la richiesta e risponde con i numeri, più una scadenza a venti secondi che
+sta in tre righe: se un giorno il CDN fosse dieci volte più lento la passata si ferma da sé e dice
+quante ne restano, si ripreme il pulsante e riprende. Venti secondi e non sessanta perché
+`location /` in nginx non imposta `proxy_read_timeout` e vale il default di un minuto — il timeout
+lungo di un'ora è solo sulla rotta dello stream — quindi il margine è di tre volte su quanto misurato
+e resta comodamente sotto il taglio del proxy.
+
+Lo stesso collaudo ha tolto un secondo pezzo. Ci si aspettava che i giocatori senza caricatura
+dessero `403`, e quindi era previsto un marcatore su disco per non riprovarli all'infinito. Non è
+così: a chi non ha la foto quel CDN restituisce una **sagoma senza volto con la maglia del suo
+club**, che è un `200` come tutti gli altri — 144 giocatori su 495, il 29%, in venti varianti. Il
+`403` arriva solo per id che non sono giocatori (provato con `1` e `99999`). Non c'era nessun assente
+da marcare, e i marcatori sono spariti.
+
+La morale è scritta qui perché varrà anche per la prossima cosa da scaricare da fuori: **venti
+richieste vere hanno tolto tre pezzi di design già approvati.** Prima di progettare attorno a un
+costo, misurarlo.
+
+### Lo stato è il disco
+
+Non c'è nessuna tabella e nessuna colonna: questa macro non ha toccato lo schema. «Questa figurina ce
+l'abbiamo?» lo risponde **un file che c'è o non c'è**, in `storage/campioncini/<extId>.png`, dove
+`extId` è la colonna `#` del listone, quella che il progetto salva già in `players.ext_id`. Nel nome
+c'è solo l'id e mai il nome del giocatore, perché il giorno che il listone scrivesse «Martinez L.» in
+un altro modo il file diventerebbe orfano.
+
+Da questa scelta discende gratuitamente la proprietà che conta: **l'operazione è ripetibile per
+costruzione.** La si può dare due volte, e la seconda non scarica niente — non «riscarica e
+sovrascrive»: proprio non parte, perché la lista di cosa manca è la differenza fra gli id del listone
+e i nomi dei file nella cartella. Non c'è nessuno stato da tenere allineato, quindi non c'è nessuno
+stato che possa disallinearsi.
+
+L'unico dettaglio di implementazione che vale la pena conoscere è che ogni file viene scritto con un
+nome temporaneo e poi rinominato. Il rinomino è atomico, quindi un file che porta il nome di un id è
+completo per definizione: senza, un processo interrotto a metà scrittura lascerebbe un'immagine
+troncata che nessuno riproverebbe mai più, proprio perché per noi «ce l'abbiamo» significa «il file
+c'è».
+
+### `storage/` e non `public/`, e la trappola che l'ha deciso
+
+La cartella naturale per delle immagini sarebbe `public/`. Sarebbe stata una bomba a orologeria.
+
+In produzione il server standalone di Next fa `process.chdir(__dirname)`: gira quindi con la working
+directory in `.next/standalone`, e la sua `public/` è `.next/standalone/public` — che
+`deploy/deploy.sh` **cancella e ricopia a ogni rilascio**. Cinquantatré megabyte di figurine
+scaricate a settembre sarebbero spariti al primo deploy di ottobre, in silenzio, e il sintomo sarebbe
+stato «le figurine non si vedono più» senza nessun errore da nessuna parte.
+
+`storage/` invece non la sfiora nessuno: sta nel `.gitignore`, `git reset --hard` non rimuove i file
+non tracciati e `pnpm build` non ci entra. L'archivio sopravvive a ogni rilascio e anche a un ritorno
+a un tag precedente. È stato verificato con un file finto prima di scrivere il downloader, perché
+tutto il disegno dell'archivio poggia su quella proprietà.
+
+Il percorso lo calcola `deploy/ecosystem.config.cjs`, che già risolve la radice del progetto per pm2:
+passa `MEDIA_DIR` nell'ambiente del processo, così in produzione non c'è nessun percorso da scrivere
+a mano. In sviluppo il default è `<cwd>/storage`, che sotto `pnpm dev` è la radice del progetto — ed
+è esattamente perché sotto `.next/standalone` la working directory è un'altra che in produzione la
+variabile si passa invece di indovinarla.
+
+### La difesa della rotta, ed è una sola
+
+I file li serve l'applicazione, su `GET /api/campioncini/<extId>.png`, con `ETag` da dimensione e
+mtime e una cache di un giorno: durante una serata ogni browser scarica ogni figurina una volta sola.
+Senza sessione, di proposito — la vista TV è un browser senza login, e il giocatore in asta è
+pubblico per definizione: è la busta a essere segreta, non chi è stato chiamato.
+
+**Questa rotta è il punto pericoloso dell'intera macro**, ed è l'equivalente di ciò che in M6 era la
+guardia in cima a ogni server action: prende un pezzo di URL scritto da chi sta dall'altra parte e
+con quello costruisce un percorso su disco. `..%2f..%2f.env.png` non deve nemmeno arrivare al
+filesystem.
+
+La regola per non sbagliare non è «sanificare la stringa» ma **non usarla affatto**. Il parametro
+passa da una funzione che accetta soltanto `^\d+\.png$` e restituisce un intero o `null`; il nome del
+file lo costruisce poi un'altra funzione a partire da quell'intero. La stringa che è arrivata da
+fuori non tocca mai `path.join`, quindi non c'è nessuna sanificazione da fare bene — non c'è proprio
+niente da sanificare.
+
+Un dettaglio che sembra cosmetico e non lo è: un ingresso malevolo riceve **`400`, non `404`**. La
+differenza è l'evidenza che il test cerca. `400` significa rifiutato dal validatore, cioè prima che
+esistesse un percorso da cercare; `404` significherebbe che il percorso è stato costruito e il disco
+interrogato. Il test di quel rifiuto è stato scritto prima della rotta ed è stato visto fallire.
+
+### Le sagome senza volto, tenute apposta
+
+144 giocatori su 495 non hanno una caricatura e ricevono la sagoma con la maglia del club. Si salvano
+e si mostrano come tutte le altre: un `200` è un `200`, e nel codice non esiste nessun riconoscimento.
+
+Non è pigrizia, sono tre ragioni. La sagoma è **riconoscibile per quello che è** — non ha scudetto né
+nome stampato, mentre le figurine vere li hanno — quindi nessuno penserà che l'applicazione sia
+rotta. Il riquadro del lotto **non cambia mai forma**, perché ogni giocatore del listone ha
+un'immagine: se le sagome venissero scartate, quasi un lotto su tre avrebbe un riquadro più corto e
+il pulsante d'offerta si sposterebbe mentre un pollice lo sta cercando. E scartarle richiederebbe
+riconoscerle, cioè venti impronte scritte nel codice che **cambiano alla prossima edizione**: un
+riconoscimento che un giorno smette di funzionare in silenzio, che è il modo peggiore di rompersi.
+
+### L'unica parte che invecchia
+
+L'indirizzo di una figurina è `content.fantacalcio.it/web/campioncini/<edizione>/card/<extId>.png`, e
+si scarica **solo il formato `card`, 255×378**. Esistono anche `medium` e `small` — la caricatura sola
+su fondo trasparente — e un formato solo significa un file per giocatore, un indirizzo, un solo caso
+«manca»; la `card` sta bene su entrambi gli schermi che la mostrano.
+
+`<edizione>` è la stagione, ed è l'unica parte che invecchia: oggi è `21`, la `20` risponde ancora, la
+`22` no. Sta in `CAMPIONCINI_EDITION` nel `.env`, con `21` come default nel codice — una variabile
+assente non deve rompere niente, e una variabile sbagliata si vede subito perché non si scarica più
+nessuna figurina. Ad agosto prossimo si cambia sul server, seguita dal `pm2 reload
+deploy/ecosystem.config.cjs --update-env` che ogni modifica di `.env` pretende. La pagina del pannello
+scrive a schermo l'edizione in uso proprio perché fra dodici mesi nessuno si ricorderà di questo
+paragrafo.
+
+### Dove si vede, e dove no
+
+Nello snapshot è cambiato **un campo**: `extId` dentro il giocatore del lotto, aggiunto in
+`serializeSnapshot` — che è l'unico punto da cui lo stato esce dal server, e quindi l'unico posto dove
+un campo si aggiunge. Nel pool dei giocatori non c'è: il pool serve a scegliere chi chiamare, e
+nessuno ha chiesto le figurine lì.
+
+Aggiungerlo ha fatto emergere una crepa nel test dell'invariante I8, e vale la pena raccontarla
+perché è il tipo di cosa che si scopre solo provandoci. Quel test confronta **l'insieme esatto delle
+chiavi** del lotto, apposta per obbligare chi aggiunge un campo a guardare in faccia la riga che
+scrive: ogni campo nuovo del lotto è un candidato a raccontare qualcosa delle buste. Ma `player` era
+già una di quelle chiavi, quindi un campo nuovo *dentro* il giocatore lasciava il test verde senza
+svegliare nessuno. Il campo di M7 era innocuo; il prossimo potrebbe non esserlo, e il giocatore è la
+sede naturale di un dato che riguarda «questo lotto». Da v1.8.0 anche le chiavi del giocatore sono un
+insieme esatto.
+
+La figurina si vede in **tre posti**, tutti e tre sul percorso di chi gioca: la card del lotto nel
+portale, a 68×100 a sinistra del nome; il modale d'offerta, alla stessa misura e nella stessa
+posizione; e la vista TV, a un terzo della larghezza della colonna del lotto. Le misure del portale
+sono state scelte guardando i layout a dimensione reale: a 54×80 la figurina non costava niente e non
+si vedeva niente, a 81×120 si vedeva meglio ma costava quaranta pixel su uno schermo alto 667.
+
+Nel modale la figurina è nata **sopra il nome** e ci è rimasta il tempo di guardarla su un telefono.
+Sta di fianco perché quello sheet arriva dal basso e con la tastiera aperta **l'altezza è la risorsa
+scarsa**, mentre la colonna a sinistra del testo era spazio che c'era già: di fianco non costa
+nessuna riga, sopra ne costava centoquaranta pixel. Ed è alla stessa misura della card che sta
+dietro, perché è lo stesso giocatore nello stesso momento — vederlo cambiare taglia aprendo il modale
+sarebbe un movimento senza significato.
+
+In regia **no**: la console mostra il lotto come una riga di testo e non come un riquadro, e chi
+conduce ha la TV nella stessa stanza. Nelle rose e nello storico nemmeno.
+
+Se l'immagine non arriva, l'elemento **sparisce** e il testo scorre a sinistra. Niente segnaposto
+grigio: un rettangolo vuoto segnalerebbe un'assenza, e qui l'assenza non è un guasto — è l'archivio
+non ancora riempito, che in produzione è lo stato del primo giorno. E in quel caso non ce l'ha
+nessuno, quindi il riquadro resta uniforme comunque.
+
+Che porta all'ultima cosa da sapere, ed è operativa: **in produzione l'archivio nasce vuoto.** Il
+deploy non lo riempie, e va riempito dal pannello caricando un listone di riferimento e premendo il
+pulsante. Fino a quel momento l'applicazione funziona esattamente come prima, semplicemente senza
+figurine. È una differenza importante rispetto al backfill di M5, dove il passo mancante *rompeva* il
+login: qui il passo mancante non rompe niente, si vede e basta.
 
 ---
 

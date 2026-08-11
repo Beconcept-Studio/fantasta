@@ -1,7 +1,8 @@
 # M6 — Amministrazione: il pannello
 
-> **Stato:** **aperta** su `feature/06-amministrazione` il 2026-08-11 · Pianificata il 2026-08-10 ·
-> **Dipende da M5** (soddisfatta: v1.6.0)
+> **Stato:** **chiusa** — **v1.7.0 in produzione il 2026-08-11**, verificata da fuori (`/signin`
+> risponde `1.7.0`, e le tre rotte di `/admin` rispondono `307` verso `/signin` a un anonimo).
+> Pianificata il 2026-08-10, aperta e chiusa il 2026-08-11 · **Dipendeva da M5** (v1.6.0)
 > **Tocca lo schema del database?** **No.** `email_verified_at` arriva da M5 e al pannello non serve
 > nient'altro: **nessun `pnpm db:push` a mano sul server** dopo il deploy. È una macro di sola UI,
 > query e autorizzazioni, cioè il profilo di rischio più basso che potesse avere.
@@ -225,9 +226,41 @@ giusta, e la paginazione si aggiunge quando una lista non ci sta in una schermat
       §2**, che diceva admin «sola lettura», e lo stop rimandato con il suo perché
       · anche `docs/features/README.md` (indice) e `docs/HOWTO-PROVA-LOCALE.md` (come si prova il
       pannello, e la riga non verificata che il seed non fa)
-- [ ] **M6-11** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
+- [x] **M6-11** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       dell'owner** — `CHANGELOG.md`, `package.json`, merge `--no-ff` su `main`, tag, push.
       **Nessun `db:push` sul server**: questa macro non tocca lo schema
+
+## Com'è andata
+
+Le nove verifiche sono passate: le prime otto in locale — il gate, la guardia, il divieto sulla
+propria riga, la lista senza importi, la cancellazione — e la nona provata dall'owner su più aste.
+Tre cose vale la pena portarsi dietro.
+
+**La guardia è stata scritta prima delle azioni e vista fallire due volte**: la prima perché il modulo
+non c'era, la seconda togliendo `requireAppAdmin()` a un'azione a mano. Il secondo fallimento ha detto
+una cosa in più di quanto chiedesse: **senza la guardia dell'azione il rifiuto è arrivato comunque dal
+motore**, che rilegge `is_admin` dal database. I due piani si coprono a vicenda per davvero, e non
+soltanto sulla carta.
+
+**Il test I8 è stato messo alla prova aggiungendo un `topBid` finto** alla riga della lista aste, per
+vedere se l'insieme esatto delle chiavi lo notava. L'ha notato. Un test di assenza che non si è mai
+visto fallire non è un test di assenza.
+
+**Due funzioni sono salite di livello, e in entrambi i casi perché il secondo chiamante è arrivato
+davvero** (regola 8): `normalizeDisplayName` in `lib/domain.ts` — pannello e onboarding devono
+accettare la stessa cosa — e il parametro di `isVerified`, ora strutturale come quello di
+`isAppAdmin`, così una riga del pannello può chiedere «è verificato?» senza importare un tipo da
+`lib/db`.
+
+Una cosa **non** prevista dalla spec è emersa e sta in `docs/DECISIONS.md`: forzare la verifica di un
+indirizzo **spegne, per quella riga, la difesa di M5** che azzera `password_hash` quando Google si
+aggancia a un account non verificato. Non è un difetto del pulsante — è cosa vuol dire premerlo: si
+mette la propria parola al posto della prova, e si fa per una persona che si ha davanti.
+
+Fuori spec, una riga di manutenzione: `docs/HOWTO-PROVA-LOCALE.md` spiega come si tolgono i residui
+dei test dal database locale. Se ne erano accumulati venti — non per un difetto dei test, che una
+passata completa li pulisce da sé, ma per i run interrotti a metà: nessuno se ne accorgeva finché non
+è esistita una lista utenti da guardare.
 
 ## Verifica
 
