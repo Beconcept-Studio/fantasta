@@ -1,5 +1,6 @@
 "use client";
 
+import { Campioncino } from "@/components/auction/campioncino";
 import { Countdown } from "@/components/auction/countdown";
 import { statusLabel } from "@/components/setup/status-badge";
 import {
@@ -409,6 +410,17 @@ function LotStage({
   return (
     <div className="space-y-4">
       <div className="text-center">
+        {/*
+          ⚠ Un terzo della larghezza **di questa colonna** (M7 §6). È lo schermo
+          per cui la `card` è stata disegnata, ed è il posto dove si legge la
+          cornice con lo scudetto: qui la figurina risponde alla domanda che la
+          stanza fa a voce alta — «chi è?» — mentre il tabellone accanto risponde
+          a quella che nessuno può tenere a mente.
+        */}
+        <Campioncino
+          extId={lot.player.extId}
+          className="mx-auto mb-3 w-1/3 rounded-lg"
+        />
         <p className="text-xs tracking-[0.2em] text-white/50 uppercase">
           {ROLE_LABELS_ONE[lot.player.role]} · {lot.player.team}
         </p>

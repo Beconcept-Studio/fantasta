@@ -75,6 +75,19 @@ export type SnapshotMember = {
 
 export type SnapshotPlayer = {
   id: string;
+  /**
+   * L'identificativo di Fantacalcio.it — la colonna `#` del listone — con cui
+   * si costruisce l'indirizzo della figurina (M7).
+   *
+   * ⚠ **Non tocca I8, e vale la pena dire perché**: il giocatore in asta è
+   * pubblico per definizione, è la busta a essere segreta. Da `extId` non si
+   * deduce niente di nessuna offerta — è la stessa informazione di `name` e
+   * `team`, scritta in numeri.
+   *
+   * Sta qui e **non** nel pool dei giocatori: il pool serve a scegliere chi
+   * chiamare, e nessuno ha chiesto le figurine lì (regola 8).
+   */
+  extId: number;
   name: string;
   role: Role;
   team: string;
