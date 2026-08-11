@@ -24,6 +24,11 @@
 .DS_Store
 *.pem
 
+# I file che scrive l'applicazione: l'archivio delle figurine (M7).
+# ⚠ Sta fuori da `public/` di proposito — vedi lib/campioncini.ts — e fuori da
+# git perché sono 51 MB di immagini che si riscaricano in sette secondi.
+/storage
+
 # debug
 npm-debug.log*
 yarn-debug.log*

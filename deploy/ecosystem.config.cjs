@@ -123,6 +123,18 @@ module.exports = {
         PORT: fileEnv.PORT || "3000",
         HOSTNAME: "127.0.0.1",
         TZ: "UTC",
+        // ⚠ **Dove l'applicazione scrive i file che deve conservare** (M7:
+        // l'archivio delle figurine). Va calcolata qui e non lasciata al
+        // default perché il default è `<cwd>/storage`, e la cwd del processo
+        // **non** è la radice del progetto: `script` punta al server
+        // standalone, che fa `process.chdir(__dirname)` e si ritrova in
+        // `.next/standalone`. Là dentro un archivio da 51 MB verrebbe
+        // dimenticato al primo rilascio. `ROOT` è la stessa radice che pm2 usa
+        // come `cwd`, quindi in produzione non c'è nessun percorso da mettere
+        // a mano in `.env`. Se un giorno servisse un disco diverso, un
+        // `MEDIA_DIR` scritto in `.env` vince comunque: il default è il
+        // secondo termine, non il primo.
+        MEDIA_DIR: fileEnv.MEDIA_DIR || path.join(ROOT, "storage"),
       },
     },
   ],
