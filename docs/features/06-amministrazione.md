@@ -199,10 +199,10 @@ giusta, e la paginazione si aggiunge quando una lista non ci sta in una schermat
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso in questa
 > sessione.
 
-- [ ] **M6-01** — Aprire `feature/06-amministrazione` da `dev`; rileggere questo file **e** verificare
+- [x] **M6-01** — Aprire `feature/06-amministrazione` da `dev`; rileggere questo file **e** verificare
       cosa M5 ha lasciato in piedi (in particolare la `UPDATE` d'emergenza di M5 §9, che questa macro
       sostituisce)
-- [ ] **M6-02** — `lib/admin-nav.ts` sul modello di `auction-nav.ts`: due sezioni, etichetta, titolo e
+- [x] **M6-02** — `lib/admin-nav.ts` sul modello di `auction-nav.ts`: due sezioni, etichetta, titolo e
       segmento dalla stessa riga, zero dipendenze; il suo test come `tests/auction-nav.test.ts`
 - [ ] **M6-03** — `requireAppAdmin()` accanto a `requireUser()`; il layout `/admin` con la sidebar; il
       pulsante «Admin» in navbar per chi è `isAppAdmin()`
