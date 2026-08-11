@@ -183,6 +183,15 @@ di testo, non come un riquadro, e chi sta in regia ha la TV nella stessa stanza.
 
 Scelte guardando i tre layout a dimensione reale, non a naso.
 
+> ⚠ **Aggiornato in corso d'opera: i posti sono diventati tre.** Su richiesta dell'owner, dopo aver
+> visto i primi due, la figurina è entrata anche nel **modale d'offerta**
+> (`components/auction/bid-modal.tsx`), che è il posto dove si guarda il giocatore mentre si decide
+> quanto mettere — cioè esattamente la domanda a cui questa macro serve a rispondere. Sta **a sinistra
+> dell'intestazione** (nome, countdown, `max_bid`, barra) e non sopra il nome, dov'era nata: quel foglio
+> arriva dal basso e con la tastiera aperta l'altezza è la risorsa scarsa, mentre lo spazio a sinistra
+> del testo c'era già. Misura identica alla card che sta dietro — è lo stesso giocatore nello stesso
+> momento. Restano fuori regia, rose e storico: §9 non cambia.
+
 **Nello snapshot cambia un campo**: `extId` dentro il giocatore del lotto, in `serializeSnapshot` —
 che è l'unico punto da cui lo stato esce (regola 3) e quindi l'unico posto dove si aggiunge. Nel pool
 dei giocatori **non** ci va: il pool serve a scegliere chi chiamare, e nessuno ha chiesto le figurine lì

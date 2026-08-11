@@ -1297,6 +1297,16 @@ Nel layout radice `interactiveWidget: "resizes-content"` fa in modo che su Andro
 rimpicciolisca la pagina invece di coprirla. Lo zoom non è bloccato: impedirlo è una scortesia
 verso chi non vede bene.
 
+**All'apertura il campo prende il focus, e la tastiera sale da sola.** Fino a v1.7.0 era il
+contrario, di proposito: il modale si apre da sé quando il round comincia, e una tastiera che
+compare senza che nessuno l'abbia chiesta copre due terzi dello schermo nel momento peggiore. È
+stato ribaltato dopo averlo usato, perché quel timore descriveva l'apertura e non l'uso — il modale
+lo si apre per scrivere un numero, e trenta secondi di countdown non lasciano spazio a un tocco in
+più. Il costo che la vecchia scelta temeva, del resto, il layout lo aveva già pagato: countdown e
+`max_bid` stanno nell'intestazione dello sheet proprio perché restino leggibili sopra la tastiera.
+Il valore già presente viene selezionato, così chi rientra a metà round sovrascrive digitando invece
+di dover cancellare.
+
 Il feedback di salvataggio ha una riga fissa tutta sua, che non sposta il pulsante di conferma
 quando compare. «L'ansia da *è passata?* a cinque secondi dalla scadenza è il vero problema di UX di
 questa app», e la risposta è un `✓ Offerta salvata: 9` che arriva dalla risposta della `fetch`, non
@@ -2036,12 +2046,21 @@ svegliare nessuno. Il campo di M7 era innocuo; il prossimo potrebbe non esserlo,
 sede naturale di un dato che riguarda «questo lotto». Da v1.8.0 anche le chiavi del giocatore sono un
 insieme esatto.
 
-La figurina si vede in **due posti soli**: il portale del partecipante, a 68×100 a sinistra del nome,
-e la vista TV, a un terzo della larghezza della colonna del lotto. Le misure sono state scelte
-guardando i layout a dimensione reale: a 54×80 la figurina non costava niente e non si vedeva niente,
-a 81×120 si vedeva meglio ma costava quaranta pixel su uno schermo alto 667. In regia **no**: la
-console mostra il lotto come una riga di testo e non come un riquadro, e chi conduce ha la TV nella
-stessa stanza.
+La figurina si vede in **tre posti**, tutti e tre sul percorso di chi gioca: la card del lotto nel
+portale, a 68×100 a sinistra del nome; il modale d'offerta, alla stessa misura e nella stessa
+posizione; e la vista TV, a un terzo della larghezza della colonna del lotto. Le misure del portale
+sono state scelte guardando i layout a dimensione reale: a 54×80 la figurina non costava niente e non
+si vedeva niente, a 81×120 si vedeva meglio ma costava quaranta pixel su uno schermo alto 667.
+
+Nel modale la figurina è nata **sopra il nome** e ci è rimasta il tempo di guardarla su un telefono.
+Sta di fianco perché quello sheet arriva dal basso e con la tastiera aperta **l'altezza è la risorsa
+scarsa**, mentre la colonna a sinistra del testo era spazio che c'era già: di fianco non costa
+nessuna riga, sopra ne costava centoquaranta pixel. Ed è alla stessa misura della card che sta
+dietro, perché è lo stesso giocatore nello stesso momento — vederlo cambiare taglia aprendo il modale
+sarebbe un movimento senza significato.
+
+In regia **no**: la console mostra il lotto come una riga di testo e non come un riquadro, e chi
+conduce ha la TV nella stessa stanza. Nelle rose e nello storico nemmeno.
 
 Se l'immagine non arriva, l'elemento **sparisce** e il testo scorre a sinistra. Niente segnaposto
 grigio: un rettangolo vuoto segnalerebbe un'assenza, e qui l'assenza non è un guasto — è l'archivio
