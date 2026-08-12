@@ -4,6 +4,71 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.9.0] — 2026-08-12
+
+**M8 — Insight sul listone.** `fvm` dice quanto **costa** un giocatore, non se gioca. Da questa
+versione l'applicazione risponde anche alle altre domande che si fanno davvero a un'asta: **parte
+titolare? tira i rigori? batte i calci piazzati?** Prima si rispondeva con un telefono in mano e
+un'altra app aperta, che in dieci secondi di countdown vuol dire non rispondere.
+
+Si vede in **due posti**, entrambi sul percorso di chi gioca. Nella **lista di chiamata** ogni nome ha
+una riga in più: la percentuale di partite da titolare, i minuti medi quando era in campo, e i badge
+`Rigori 1°` / `Piazzati 2°` per chi è designato. Nel **modale d'offerta**, mentre si decide quanto
+mettere, ci sono solo le tre macro — quanto è titolare, e se batte — perché lì ogni riga in più ruba
+spazio al campo dell'importo con la tastiera aperta.
+
+**I dati arrivano da due fonti pubbliche**, che il server interroga da sé: nessun file da caricare,
+nessuna password da custodire. Da **Admin → Listone** ci sono due pulsanti — il primo scarica
+titolarità, minuti e rigori storici, il secondo i rigoristi e i battitori di piazzati — e in tutto ci
+vogliono **due secondi**. Il pannello dice quando è stata aggiornata ciascuna delle due fonti, e
+**quanti giocatori del tuo listone sono agganciati**: sul listone vero sono 487 su 495, e gli otto che
+mancano sono elencati per nome. Non arriverà mai a 495: i due elenchi non coincidono, ed è normale.
+
+**Non li vedono tutti.** È una scelta, non un limite tecnico: il permesso si dà dalla lista utenti,
+colonna «Insight». Chi non ce l'ha vede l'applicazione esattamente come prima — e i dati **non
+arrivano nemmeno nel suo browser**, non sono nascosti a schermo. Chi amministra li vede sempre.
+
+**Due dettagli che sembrano difetti e non lo sono.** Circa un terzo dei giocatori mostra `—` invece
+dei numeri: sono quelli per cui la fonte ha solo i dati della stagione **precedente**, e mescolarli con
+quelli di quest'anno sarebbe un confronto falso. E `—` non è `0`: un giocatore senza storico e uno che
+non è mai partito titolare sono due cose diverse, e all'asta si pagano in modo diverso.
+
+**Se una fonte cambia forma, l'aggiornamento si rifiuta e lo dice**, invece di riempire la tabella di
+righe vuote. Vale anche se la lista che arriva non somiglia più a quella di prima: in quel caso non
+viene scritto niente e i dati di ieri restano al loro posto.
+
+### Per chi aggiorna il server
+
+⚠ **Questa volta il deploy automatico non basta, e ci sono tre passi.** I primi due sono
+obbligatori — senza il primo l'applicazione **non parte**, perché il database non ha le colonne nuove.
+
+**1. Lo schema del database cambia** (in modo additivo: una tabella nuova e una colonna, niente
+sparisce e nessun tipo cambia, quindi **non serve un backup preventivo**). Dopo che il deploy
+automatico è finito, sul server, **con nessuna asta `LIVE` o `PAUSED`**:
+
+```bash
+cd /home/ploi/fantasta.rggndr.it
+pnpm db:push
+pm2 reload deploy/ecosystem.config.cjs --update-env
+```
+
+**2. La tabella nasce vuota.** Da **Admin → Listone**, si premono i due pulsanti **in quest'ordine**:
+prima «Importa il listone», poi «Aggiorna i designati» — il secondo aggiorna righe che nascono dal
+primo, e su una tabella vuota rifiuta dicendolo. La pagina dice quanti giocatori ci sono: finché dice
+`0`, nessuno vede niente. Sono due secondi, e si può ripremere quante volte si vuole.
+
+**3. Il permesso nasce spento per tutti.** Da **Admin → Utenti**, colonna «Insight», pulsante «Dai
+insight» su chi lo deve avere. Prima di quel momento la feature è invisibile a tutti tranne agli
+amministratori — che la vedono per costruzione, così chi importa i dati può controllare che siano
+arrivati.
+
+⚠ Finché i passi 2 e 3 non sono fatti, **tutto funziona come prima e non si vede niente**: non si
+rompe nulla, non c'è fretta, ma il rilascio non è finito. È lo stesso inciampo delle figurine di
+v1.8.0.
+
+Vale ancora quello che valeva prima: il deploy **si rifiuta di partire** se in produzione c'è un'asta
+`LIVE` o `PAUSED`, e in quel caso non tocca niente.
+
 ## [1.8.0] — 2026-08-11
 
 **M7 — Le caricature dei calciatori.** Quando un giocatore viene chiamato all'asta, adesso si vede la
