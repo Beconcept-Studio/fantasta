@@ -232,6 +232,35 @@ Due cose che non sono guasti, così non le cerchi:
 
 Per svuotarlo: `rm -rf storage/campioncini`. Non c'è un pulsante, di proposito.
 
+
+## 7. Gli insight sul listone, se vuoi vederli (M8)
+
+Anche questo non serve per giocare: senza, la lista di chiamata e il modale d'offerta sono quelli di
+prima. Ma è il modo per vedere la parte nuova, e sono **due click e mezzo**.
+
+Da amministratore, **Admin → Listone**: si preme «Importa il listone» (scarica 497 giocatori da
+`api.fantalab.it`, poco più di un secondo) e poi «Aggiorna i designati» (la pagina dei rigoristi di
+Fantacalcio.it, mezzo secondo). ⚠ **In quest'ordine**: il secondo aggiorna righe che nascono dal
+primo, e su una tabella vuota rifiuta dicendolo.
+
+Il mezzo click è il permesso: **Admin → Utenti**, colonna «Insight», pulsante «Dai insight» sulla riga
+di chi vuoi far giocare. Chi è amministratore li vede già senza.
+
+Tre cose che non sono guasti:
+
+- **Con l'asta di prova del seed non si vede quasi niente**, ed è giusto: quel listone è sintetico e i
+  suoi `ext_id` non esistono nella fonte. Il pannello lo dice — la copertura di quell'asta è vicina a
+  zero. Per vedere gli insight sul serio serve un'asta creata importando `fixtures/listone.xlsx`, che
+  ha gli identificativi veri: lì la copertura è **487 su 495**.
+- **Un terzo dei giocatori mostra `—`**: sono quelli per cui la fonte ha solo i numeri della stagione
+  precedente, e non si mescolano con quelli di quest'anno.
+- **Otto giocatori del listone vero non hanno insight** (Djimsiti, Angelino, Gutierrez e altri
+  cinque): i due elenchi non coincidono, e il pannello li elenca per nome.
+
+La tabella è **globale**: sopravvive alla cancellazione delle aste e ai `pnpm db:seed`, quindi si
+importa una volta e resta lì per tutte le prove. Per svuotarla:
+`docker compose exec db psql -U postgres -d asta -c "delete from player_insights;"`.
+
 ---
 
 ## Chi è chi nell'asta di prova

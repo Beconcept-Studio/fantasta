@@ -1,7 +1,8 @@
 # M8 — Insight sul listone: titolarità, rigoristi, calci piazzati
 
-> **Stato:** **da pianificare** · Spec scritta il 2026-08-11, **riscritta lo stesso giorno dopo il
-> collaudo delle fonti** (§1) · Nessuna dipendenza da macro aperte: non ce ne sono, e M7 (v1.8.0) ha
+> **Stato:** **aperta** su `feature/08-insight-listone` il 2026-08-11 · Spec scritta il 2026-08-11,
+> **riscritta lo stesso giorno dopo il collaudo delle fonti** (§1), e corretta ancora **scrivendo il
+> codice** (§1, la correzione dei numeri della fonte B) · Nessuna dipendenza da macro aperte: non ce ne sono, e M7 (v1.8.0) ha
 > già portato in casa tutto ciò che serve — il pannello, l'archivio figurine, l'`ext_id` come chiave
 > verso il mondo di fuori.
 >
@@ -432,60 +433,128 @@ Tre passi a mano sul server, e nessuno te li ricorda:
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M8-01** — Aprire `feature/08-insight-listone` da `dev`; rileggere questo file, e in
+- [x] **M8-01** — Aprire `feature/08-insight-listone` da `dev`; rileggere questo file, e in
       particolare §1: le quattro smentite del collaudo sono la parte che si è tentati di rimettere
       dentro. Verificare che `tests/db/i8.test.ts` e `tests/db/admin.test.ts` siano verdi **prima**
       di toccare qualcosa, così quando romperanno si sa perché
-- [ ] **M8-02** — Rifare le due `GET` di §1 e **salvare le risposte in `fixtures/`**
+      → fatti: 34 test verdi prima di toccare qualunque cosa
+- [x] **M8-02** — Rifare le due `GET` di §1 e **salvare le risposte in `fixtures/`**
       (`fantalab-listone.json`, `rigoristi.html`): sono le fixture dei due parser, e i numeri di §1
       vanno riconfermati sui byte veri del giorno in cui si apre la macro
-- [ ] **M8-03** — `lib/db/schema.ts`: `player_insights` (con `stats_season`), `users.is_pro`,
+      → rifatte: A 507 KB in 1,26 s, B 168 KB in 0,42 s, e i numeri di §1 riconfermati sui byte nuovi
+- [x] **M8-03** — `lib/db/schema.ts`: `player_insights` (con `stats_season`), `users.is_pro`,
       `real` aggiunto agli import di `drizzle-orm/pg-core`. `pnpm db:push` in locale
-- [ ] **M8-04** — `lib/domain.ts`: `GIORNATE`, `quotaTitolare` **con il clamp**, `minutiMedi`,
+      → più `PlayerInsightRow` fra i tipi inferiti
+- [x] **M8-04** — `lib/domain.ts`: `GIORNATE`, `quotaTitolare` **con il clamp**, `minutiMedi`,
       `canSeeInsights`, e il tipo `PlayerInsights`. Zero dipendenze, con il loro test puro sul
       modello di `tests/auction-nav.test.ts` — **e il caso Thiam dentro il test**, perché il clamp
-      senza il suo caso è una riga che qualcuno togliera
-- [ ] **M8-05** — `lib/import/parseFantalabListone.ts`: bytes → `Result<Insight[]>`. Valida
+      senza il suo caso è una riga che qualcuno toglierà
+      → **e una quinta funzione non prevista**, `showableInsights`: è l'unico punto in cui si decide che la stagione precedente non si mostra, e senza di lei quella regola sarebbe finita in due componenti
+- [x] **M8-05** — `lib/import/parseFantalabListone.ts`: bytes → `Result<Insight[]>`. Valida
       l'envelope (`count === players.length`, `season`), i campi obbligatori, e **fallisce forte** su
       schema diverso: `SOURCE_UNREACHABLE` e `SOURCE_SCHEMA`. Mappa
       `presenze ← display_presenze` e `statsSeason ← display_stats_season`
-- [ ] **M8-06** — `lib/import/parseRigoristi.ts`: HTML → `Result<SetPiece[]>`, secondo le quattro
+      → i codici sono `SOURCE_UNREACHABLE` e `SOURCE_SCHEMA`, condivisi con l'altro parser: un codice per fonte non avrebbe aggiunto niente a chi legge il messaggio
+- [x] **M8-06** — `lib/import/parseRigoristi.ts`: HTML → `Result<SetPiece[]>`, secondo le quattro
       righe di §4 — blocchi squadra, le due liste per `<header>`, rank dalla posizione nell'`<ol>`,
       `ext_id` dall'`href`. **Il test che si accorge quando la struttura cambia è il parser**, non un
       extra: sulla fixture deve trovare **20 squadre, 60 rigoristi, 60 piazzati, 92 id distinti**, e
       **i cinque nomi con l'accento** che un regex distratto perde (§1)
-- [ ] **M8-07** — `lib/engine/insights.ts`: le due `upsert` e le due `fetch` server-side, con
+      → 20 squadre, 60 rigoristi, 60 piazzati, 92 id: i numeri della spec erano sbagliati e il parser li ha corretti (§1)
+- [x] **M8-07** — `lib/engine/insights.ts`: le due `upsert` e le due `fetch` server-side, con
       timeout e un errore leggibile se la fonte risponde male. Unico posto che importa `lib/db`,
       **nessuna eccezione nuova all'allowlist ESLint**. La copertura si calcola contro il listone di
       un'asta e **fallisce sotto soglia** invece di scrivere `null` (soglia ~90%: la baseline reale è
       487/495, §3)
-- [ ] **M8-08** — `lib/engine/admin.ts`: `setUserPro` con `refuseNonAdmin`, che **ri-legge `is_admin`
+      → la soglia è diventata **continuità** invece di copertura, e il perché è in §1 e in `DECISIONS.md`
+- [x] **M8-08** — `lib/engine/admin.ts`: `setUserPro` con `refuseNonAdmin`, che **ri-legge `is_admin`
       dal database** e non si fida del JWT
-- [ ] **M8-09** — `app/admin/actions.ts`: `refreshListoneAction`, `refreshRigoristiAction`,
+      → senza il divieto di toccare la propria riga, che in `setUserAdmin` esiste per una ragione che qui non c'è
+- [x] **M8-09** — `app/admin/actions.ts`: `refreshListoneAction`, `refreshRigoristiAction`,
       `setUserProAction`. `requireAppAdmin()` **prima riga di ognuna**, e **la lista di uguaglianza
       esatta in `tests/db/admin.test.ts` va aggiornata**: 5 azioni diventano **8**
-- [ ] **M8-10** — `app/admin/`: la pagina Listone con i due pulsanti, i **due timestamp** e la
+      → `refreshListoneInsightsAction`, `refreshSetPiecesAction`, `setUserProAction`: 5 → 8, e la lista aggiornata **dopo** aver visto il test rompersi
+- [x] **M8-10** — `app/admin/`: la pagina Listone con i due pulsanti, i **due timestamp** e la
       copertura (`n/495 agganciati`, e i non agganciati per nome). Il toggle `is_pro` in
       `app/admin/users/page.tsx`. `lib/admin-nav.ts`: quarta voce
-- [ ] **M8-11** — `listPickPool(auctionId, withInsights)` + `PoolPlayer.insights?`. **Entrambi** i
+      → e la copertura è per asta, non aggregata
+- [x] **M8-11** — `listPickPool(auctionId, withInsights)` + `PoolPlayer.insights?`. **Entrambi** i
       chiamanti passano `canSeeInsights(user)` (§6). **`SnapshotPlayer` non si tocca**
-- [ ] **M8-12** — `pick-panel.tsx`: quota titolare, minuti medi, badge rigorista/piazzati accanto a
+      → `extId` esce dal pool quando non serve: c'era solo per agganciare
+- [x] **M8-12** — `pick-panel.tsx`: quota titolare, minuti medi, badge rigorista/piazzati accanto a
       `fvm`. Riga densa, si legge in mezzo secondo. L'assenza è **`—`, non `0`**
-- [ ] **M8-13** — `bid-modal.tsx`: la prop `pool` da `portal.tsx` e le **sole macro** (§7)
-- [ ] **M8-14** — Test con Postgres: **il pool di un non-pro non contiene la chiave `insights`** (si
+      → sotto la squadra, dove la riga era già su due righe: nessun cambio d'altezza
+- [x] **M8-13** — `bid-modal.tsx`: la prop `pool` da `portal.tsx` e le **sole macro** (§7)
+      → tre informazioni, non dieci
+- [x] **M8-14** — Test con Postgres: **il pool di un non-pro non contiene la chiave `insights`** (si
       asserisce sull'oggetto, non sul render); **un'asta arriva a `COMPLETED` con `player_insights`
       vuota**; la copertura sotto soglia fa fallire l'import; un non-admin è rifiutato **su ognuna
       delle tre azioni nuove**; un giocatore `previous` esce come `—`
-- [ ] **M8-15** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
+      → 16 test, in **un file solo**: `player_insights` è globale e due file in parallelo si guastano a vicenda
+- [x] **M8-15** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
       spento)
-- [ ] **M8-16** — `docs/ARCHITECTURE.md`: il capitolo sulle fonti, scritto attorno a **cosa succede
+      → 622 test in 41 file, typecheck pulito, build compilata a dev spento
+- [x] **M8-16** — `docs/ARCHITECTURE.md`: il capitolo sulle fonti, scritto attorno a **cosa succede
       quando una fonte cambia forma**. `docs/DECISIONS.md`: perché una tabella globale e non colonne
       su `players`; perché i .xlsx sono stati scartati; perché `injured` non entra pur essendo
       disponibile; perché `is_pro` è prodotto e non licenza. Più `docs/features/README.md` e
       `docs/HOWTO-PROVA-LOCALE.md`
-- [ ] **M8-17** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
+- [x] **M8-17** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       esplicita** — `main`, tag `v1.9.0`, `CHANGELOG.md` **con i tre passi a mano scritti dentro**
       (§10)
+
+## Com'è andata
+
+Il collaudo di §1 si è riprodotto senza sorprese chiamando il codice vero invece di uno script:
+**497 giocatori in 1,26 s** dalla fonte A, **168 KB in 0,42 s** dalla fonte B, e tutti i numeri di §1
+riconfermati sui byte del giorno dopo. Le fixture sono in `fixtures/`.
+
+Ma **la spec è stata corretta tre volte dal codice**, e le tre correzioni sono la parte da leggere
+fra sei mesi:
+
+- **I numeri della fonte B erano sbagliati nella spec, non nella pagina** (§1). Li aveva prodotti uno
+  script d'analisi il cui regex scartava cinque nomi con l'accento. Il parser vero ha trovato 60
+  rigoristi, 60 piazzati e 92 designati, e con essi è caduto anche l'argomento con cui la spec
+  giustificava l'estrazione dall'`href` — che resta la scelta giusta, ma per un'altra ragione (il
+  `src` contiene l'edizione delle figurine, che invecchia ogni stagione).
+- **La soglia è diventata continuità.** La spec voleva far fallire l'import sotto una certa copertura
+  dei listoni delle aste. Scrivendo il test si è visto che **una sola asta simulata la avvelena**:
+  `ext_id` sintetici da 1 a 40 portano la copertura a zero e l'import fallirebbe su dati perfetti.
+- **Una quinta funzione pura**, `showableInsights`, non prevista da §5: senza di lei la regola «la
+  stagione precedente non si mostra» sarebbe finita scritta due volte, in due componenti.
+
+E tre inciampi che i test hanno trovato e che non si sarebbero visti a occhio:
+
+- **`max()` in SQL grezzo torna una stringa, non una `Date`.** Il tipo dichiarato era una promessa
+  falsa; il test l'ha scoperta con un `getTime is not a function`, che in pagina si sarebbe visto
+  alle nove di sera.
+- **Due file di test si guastavano a vicenda.** `player_insights` è globale — non ha nessun
+  `auction_id` da cui dipendere per isolarsi — e vitest gira i file in worker paralleli: verdi da
+  soli, rossi nella suite. Ora sono un file solo, e c'è scritto perché non va spezzato.
+- **`insightsCoverage` guardava solo le cinque aste più recenti**, quindi il suo test dipendeva da
+  quante aste creavano gli altri file nel frattempo. Ha preso un parametro: il secondo chiamante è
+  arrivato davvero (regola 8).
+
+**La prova in locale è stata fatta con le fonti vere e guardando il payload, non lo schermo.** Le due
+`fetch` chiamate dal codice dell'applicazione — non dal test, non da uno script — hanno risposto in
+**1,65 s** in tutto: 497 righe, 92 designati, `unknown: 0`, e copertura **487/495** su entrambe le
+aste vere del database locale. Il pannello mostra i due timestamp in ora italiana (07:25 per un
+import delle 05:25 UTC) e gli otto nomi non agganciati, per nome.
+
+E §6 è stato verificato **sopra HTTP**, che è il posto dove conta, su un'asta usa-e-getta creata col
+listone vero e cancellata dopo:
+
+| Chi apre `/play` | Payload | `startsEleven` nel sorgente |
+|---|---|---|
+| Utente senza permesso | 92 KB | **0 occorrenze** — e il listone c'è lo stesso: 490 `fvm`, Berardi compreso |
+| Lo **stesso** utente, permesso acceso | 241 KB | 487 occorrenze, con `"insights":{…}` dentro la riga del giocatore |
+
+Due richieste alla stessa pagina, con lo stesso utente e la stessa sessione: cambia solo la colonna
+`is_pro`, e cambia **cosa arriva nel browser** — non cosa si vede. È la differenza che tutta §6 esiste
+per ottenere, e a schermo non si sarebbe potuta distinguere.
+
+Il perimetro deciso all'apertura è stato rispettato: niente griglia portieri, niente `injured`, e
+`serializeSnapshot` non è stato toccato di una riga.
 
 ## Verifica
 
