@@ -5,7 +5,21 @@ import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeEach, expect, it, suite, vi } from "vitest";
 
 import { db } from "@/lib/db";
-import { auctions, listonePlayers, players } from "@/lib/db/schema";
+import { auctions, carmyPlayers, listonePlayers, players } from "@/lib/db/schema";
+import {
+  CARMY_FASCE,
+  CARMY_TEAM_BY_SIGLA,
+  SOGLIA_TITOLARE_CARMY,
+  normalizeCarmyName,
+} from "@/lib/domain";
+import {
+  CARMY_MATCH_THRESHOLD,
+  CARMY_STALE_HOURS,
+  allCarmy,
+  carmyStatus,
+  carmyTags,
+  uploadCarmy,
+} from "@/lib/engine/carmy";
 import { transition } from "@/lib/engine/machine";
 import {
   centroDatiRows,
@@ -19,14 +33,20 @@ import {
   createAuction,
   importPlayers,
   importPlayersFromListone,
+  listPickPool,
 } from "@/lib/engine/setup";
 import { DEFAULT_CONFIG } from "@/lib/engine/setup-rules";
 
 import * as XLSX from "xlsx";
 
-import { SHEET_NAME } from "@/lib/import/parseListone";
+import { CARMY_SHEETS } from "@/lib/import/parseCarmy";
+import { SHEET_NAME, parseListone } from "@/lib/import/parseListone";
 
-import { makeGameAuction, markAllPresent } from "./game-helpers";
+import {
+  type GameAuction,
+  makeGameAuction,
+  markAllPresent,
+} from "./game-helpers";
 import {
   closeDatabase,
   databaseAvailable,
@@ -67,6 +87,23 @@ import {
  *
  * ⚠ **«Altissimi» va preso alla lettera**, e la prima versione di questo file lo
  * aveva sbagliato: vedi `EXT_ID_BASE` qui sotto.
+ *
+ * ## ⚠ Perché i test di M10B stanno qui e non in `tests/db/carmy.test.ts`
+ *
+ * Perché **`uploadListone` fa `DELETE` su `listone_players`**, e M10B si aggancia
+ * proprio a quella tabella: il suo join per nome non si può provare senza un
+ * listone caricato. Due file che caricano un listone sono due `DELETE` e due
+ * `INSERT` sulla stessa tabella globale in **worker paralleli** — e la prima
+ * versione di M10B li aveva separati, con questo risultato: dieci test rossi nella
+ * suite ed entrambi i file verdi da soli, con un `duplicate key value violates
+ * unique constraint "listone_players_pkey"` su un `ext_id` che l'altro worker
+ * stava inserendo. È **la stessa cicatrice** del `player_insights` qui sopra, e la
+ * regola che ne esce è quella: **una tabella globale, un file che la possiede.**
+ * Questo file possiede `listone_players` e `carmy_players`.
+ *
+ * L'alternativa — serializzare i file di test con `fileParallelism: false` —
+ * costerebbe secondi a ogni `pnpm test` per un problema che riguarda due file, e
+ * lascerebbe la trappola aperta per il terzo.
  */
 
 const dbUp = await databaseAvailable();
@@ -155,6 +192,92 @@ async function statusOf(auctionId: string): Promise<string> {
   return row!.status;
 }
 
+/**
+ * Un'asta di gioco pronta a partire, con i suoi utenti registrati per la pulizia.
+ *
+ * Estratto in M10B, che è il secondo chiamante (regola 8): le tre righe di
+ * `createdUsers.push` ripetute erano il genere di duplicazione che, dimenticata
+ * una volta, lascia otto utenti in giro e fa fallire un test che non c'entra.
+ */
+async function gameAuction(): Promise<GameAuction> {
+  const game = await makeGameAuction();
+  createdAuctions.push(game.auctionId);
+  createdUsers.push(...game.userIds);
+  if (!game.userIds.includes(game.ownerId)) createdUsers.push(game.ownerId);
+  return game;
+}
+
+type Esito = {
+  state: Awaited<ReturnType<typeof loadAuctionState>>["state"];
+  /**
+   * I **nomi** comprati, nell'ordine di assegnazione.
+   *
+   * ⚠ Nomi e non `playerId`: quelli sono uuid di `players`, cioè della **copia per
+   * asta** del listone, quindi due aste hanno due uuid diversi per lo stesso
+   * giocatore. La prima versione del test di M10B li confrontava direttamente ed è
+   * diventata rossa su due liste identiche — il che è anche la prova che `players`
+   * è per asta, come M10 §3 dice che deve essere.
+   */
+  comprati: string[];
+};
+
+/**
+ * Porta un'asta fino a `COMPLETED` senza che nessuno agisca: pick e round scadono,
+ * e l'asta si gioca da sola. È la tecnica di `tests/engine/machine.test.ts`, ma
+ * contro Postgres.
+ */
+async function giocaFinoAllaFine(game: GameAuction): Promise<Esito> {
+  const row = async () => {
+    const found = await db.query.auctions.findFirst({
+      where: eq(auctions.id, game.auctionId),
+    });
+    if (!found) throw new Error("asta sparita");
+    return found;
+  };
+
+  const t0 = Date.now();
+  await markAllPresent(game.auctionId, game.memberIds, t0);
+
+  let loaded = await loadAuctionState(db, await row());
+  expect(loaded.state.status).toBe("READY");
+
+  const started = transition(
+    loaded.state,
+    { type: "START", startSeatIndex: 0 },
+    t0,
+  );
+  if (!started.ok) throw new Error(started.error.message);
+  await persistTransition(db, loaded, started.value, t0);
+
+  let guard = 0;
+  for (;;) {
+    loaded = await loadAuctionState(db, await row());
+    if (loaded.state.status !== "LIVE") break;
+    if ((guard += 1) > 400) throw new Error("l'asta non converge");
+
+    const now = loaded.state.phaseDeadline!;
+    const advanced = transition(loaded.state, { type: "ADVANCE" }, now);
+    if (!advanced.ok) throw new Error(advanced.error.message);
+    await persistTransition(db, loaded, advanced.value, now);
+  }
+
+  const nomi = new Map(
+    (
+      await db
+        .select({ id: players.id, name: players.name })
+        .from(players)
+        .where(eq(players.auctionId, game.auctionId))
+    ).map((r) => [r.id, r.name]),
+  );
+
+  return {
+    state: loaded.state,
+    comprati: loaded.state.assignments.map(
+      (a) => nomi.get(a.playerId) ?? `?${a.playerId}`,
+    ),
+  };
+}
+
 /** Le righe di `players` di un'asta, nella forma confrontabile fra due import. */
 async function playersOf(auctionId: string) {
   return db
@@ -176,11 +299,17 @@ async function playersOf(auctionId: string) {
 // `pg` fa vero I/O: i timer finti del setup condiviso qui darebbero fastidio.
 beforeEach(async () => {
   vi.useRealTimers();
-  if (dbUp) await db.delete(listonePlayers);
+  if (!dbUp) return;
+  // ⚠ Prima `carmy_players`: non ha una foreign key verso `listone_players` — il
+  // join è per nome e l'`ext_id` lo mette l'import — ma l'ordine racconta la
+  // dipendenza vera, ed è quello in cui si caricano i due file.
+  await db.delete(carmyPlayers);
+  await db.delete(listonePlayers);
 });
 
 afterAll(async () => {
   if (!dbUp) return;
+  await db.delete(carmyPlayers);
   await db.delete(listonePlayers);
   await dropAuctions(createdAuctions);
   await dropUsers(createdUsers);
@@ -371,49 +500,12 @@ suite.runIf(dbUp)("nessun dato di M10 sta su un percorso critico", () => {
   it("un'asta si crea, si prepara e arriva a COMPLETED con la tabella vuota", async () => {
     expect((await listoneStatus()).rows).toBe(0);
 
-    const game = await makeGameAuction();
-    createdAuctions.push(game.auctionId);
-    createdUsers.push(...game.userIds);
-    if (!game.userIds.includes(game.ownerId)) createdUsers.push(game.ownerId);
+    const esito = await giocaFinoAllaFine(await gameAuction());
 
-    const row = async () => {
-      const found = await db.query.auctions.findFirst({
-        where: eq(auctions.id, game.auctionId),
-      });
-      if (!found) throw new Error("asta sparita");
-      return found;
-    };
-
-    const t0 = Date.now();
-    await markAllPresent(game.auctionId, game.memberIds, t0);
-
-    let loaded = await loadAuctionState(db, await row());
-    expect(loaded.state.status).toBe("READY");
-
-    const started = transition(
-      loaded.state,
-      { type: "START", startSeatIndex: 0 },
-      t0,
-    );
-    if (!started.ok) throw new Error(started.error.message);
-    await persistTransition(db, loaded, started.value, t0);
-
-    let guard = 0;
-    for (;;) {
-      loaded = await loadAuctionState(db, await row());
-      if (loaded.state.status !== "LIVE") break;
-      if ((guard += 1) > 400) throw new Error("l'asta non converge");
-
-      const now = loaded.state.phaseDeadline!;
-      const advanced = transition(loaded.state, { type: "ADVANCE" }, now);
-      if (!advanced.ok) throw new Error(advanced.error.message);
-      await persistTransition(db, loaded, advanced.value, now);
-    }
-
-    expect(loaded.state.status).toBe("COMPLETED");
+    expect(esito.state.status).toBe("COMPLETED");
     // 8 posti × 4 slot: le rose sono piene, e nessuna riga è mai passata dal
     // listone a sistema.
-    expect(loaded.state.assignments).toHaveLength(32);
+    expect(esito.state.assignments).toHaveLength(32);
     expect((await listoneStatus()).rows).toBe(0);
   }, 120_000);
 });
@@ -456,3 +548,497 @@ suite.runIf(dbUp)("il Centro dati", () => {
     expect(status.coverage.matched).toBe(0);
   });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// M10B — il foglio di Carmy
+//
+// Stanno in questo file e non in uno loro perché `uploadListone` fa `DELETE` su
+// `listone_players`, a cui il join di M10B si aggancia: due file che caricano un
+// listone sono due `DELETE` sulla stessa tabella globale in worker paralleli. Il
+// perché per esteso, con il rosso che l'ha insegnato, è in testa al file.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const CARMY = readFileSync(
+  fileURLToPath(new URL("../../fixtures/carmy.xlsx", import.meta.url)),
+);
+
+const T0 = new Date("2026-08-12T10:00:00.000Z");
+
+// ─── Il caricamento e il join ────────────────────────────────────────────────
+
+suite.runIf(dbUp)("il caricamento del foglio di Carmy", () => {
+  it("⚠ senza listone rifiuta, perché senza denominatore non c'è nessun join", async () => {
+    const result = await uploadCarmy(CARMY, T0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("CARMY_NO_LISTONE");
+    // E non scrive niente: non resta nessuna riga a metà.
+    expect(await db.select().from(carmyPlayers)).toHaveLength(0);
+  });
+
+  it("aggancia 487 nomi su 497 e dice quali dieci non ha trovato", async () => {
+    await uploadListone(LISTONE, T0);
+
+    const result = await uploadCarmy(CARMY, T0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.fromFile).toBe(497);
+    expect(result.value.written).toBe(487);
+    // ⚠ **Per nome e non per numero**: dieci nomi in fondo alla pagina sono
+    // l'unico modo di accorgersi che il foglio e il listone hanno cominciato a
+    // divergere. Sono acquisti più recenti del listone del 6 agosto.
+    expect(result.value.unmatched).toHaveLength(10);
+    expect(result.value.unmatched).toContain("Mastantuono");
+    expect(result.value.unmatched).toContain("Kevin Carlos");
+    expect(await db.select().from(carmyPlayers)).toHaveLength(487);
+  });
+
+  it("⚠ la sigla è il controllo e non la chiave: le tre discordanze si dicono", async () => {
+    await uploadListone(LISTONE, T0);
+    const result = await uploadCarmy(CARMY, T0);
+    if (!result.ok) throw new Error(result.error.message);
+
+    // Sono trasferimenti veri, e il giudizio va importato comunque: un giocatore
+    // che ha cambiato squadra resta lo stesso giocatore.
+    expect(result.value.teamMismatches).toHaveLength(3);
+    expect(result.value.teamMismatches.map((m) => m.name).sort()).toEqual([
+      "Dominguez B.",
+      "Maldini",
+      "Masini",
+    ]);
+    expect(
+      result.value.teamMismatches.find((m) => m.name === "Dominguez B."),
+    ).toMatchObject({ carmy: "Sassuolo", listone: "Bologna" });
+  });
+
+  it("l'`ext_id` viene dal listone, non dal file: il file non ce l'ha", async () => {
+    await uploadListone(LISTONE, T0);
+    await uploadCarmy(CARMY, T0);
+
+    const parsed = parseListone(LISTONE);
+    if (!parsed.ok) throw new Error(parsed.error.message);
+    const byName = new Map(
+      parsed.value.map((row) => [normalizeCarmyName(row.name), row.extId]),
+    );
+
+    const rows = await db
+      .select()
+      .from(carmyPlayers)
+      .orderBy(asc(carmyPlayers.extId));
+    for (const row of rows) {
+      expect(row.extId).toBe(byName.get(normalizeCarmyName(row.sourceName)));
+    }
+  });
+
+  it("⚠ un caricamento sostituisce l'intera tabella, non fonde", async () => {
+    await uploadListone(LISTONE, T0);
+    await uploadCarmy(CARMY, T0);
+    expect(await db.select().from(carmyPlayers)).toHaveLength(487);
+
+    // Un foglio ridotto a un giocatore per ruolo: se fondesse, resterebbero 487
+    // righe e un giudizio ritirato non sparirebbe mai.
+    const dopo = new Date("2026-08-12T18:00:00.000Z");
+    expect((await uploadCarmy(minimalCarmy(), dopo)).ok).toBe(true);
+
+    const rows = await db.select().from(carmyPlayers);
+    expect(rows).toHaveLength(4);
+    expect(rows.every((row) => row.uploadedAt.getTime() === dopo.getTime())).toBe(
+      true,
+    );
+  });
+
+  it("le colonne arrivano a database come le legge il parser", async () => {
+    await uploadListone(LISTONE, T0);
+    await uploadCarmy(CARMY, T0);
+
+    const [dimarco] = await db
+      .select()
+      .from(carmyPlayers)
+      .where(eq(carmyPlayers.sourceName, "Dimarco"));
+    expect(dimarco).toMatchObject({
+      sourceTeam: "INT",
+      fascia: "Top",
+      titolarita: 5,
+      affidabilita: 5,
+      integrita: 4,
+      prezzo: 75,
+    });
+    // I tag sono un array `jsonb`, non una stringa con le virgole.
+    expect(dimarco.tags).toEqual([
+      "modificatore",
+      "tiratore",
+      "bonus",
+      "titolarissimo",
+    ]);
+  });
+
+  it("⚠ Aurelio non entra, e nessuno zero del foglio diventa un voto", async () => {
+    await uploadListone(LISTONE, T0);
+    await uploadCarmy(CARMY, T0);
+
+    // È il caso in cui i due scarti di §1 si incrociano: la riga non compilata è
+    // anche uno dei dieci nomi che il listone non ha.
+    expect(
+      await db
+        .select()
+        .from(carmyPlayers)
+        .where(eq(carmyPlayers.sourceName, "Aurelio")),
+    ).toHaveLength(0);
+
+    const all = await db.select().from(carmyPlayers);
+    expect(all.filter((row) => row.titolarita === 0)).toHaveLength(0);
+    expect(all.filter((row) => row.prezzo === 0)).toHaveLength(0);
+  });
+});
+
+// ─── La soglia di aggancio ───────────────────────────────────────────────────
+
+suite.runIf(dbUp)("la soglia di aggancio del foglio", () => {
+  /**
+   * ⚠ **Sotto la soglia non si scrive niente**, e la differenza con il controllo
+   * che M8 aveva smontato è la parte da non perdere (M10B §3): qui il denominatore
+   * è `listone_players`, che è **globale** e non appartiene a nessuna asta —
+   * nessuna simulazione con `ext_id` sintetici lo può avvelenare.
+   */
+  it("con un listone che non c'entra niente, rifiuta e non scrive", async () => {
+    await uploadListone(estraneoListone(), T0);
+    const result = await uploadCarmy(CARMY, T0);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("CARMY_COVERAGE");
+    expect(result.error.message).toContain(
+      `${Math.round(CARMY_MATCH_THRESHOLD * 100)}%`,
+    );
+    expect(await db.select().from(carmyPlayers)).toHaveLength(0);
+  });
+
+  it("un caricamento fallito non tocca quello di prima", async () => {
+    await uploadListone(LISTONE, T0);
+    await uploadCarmy(CARMY, T0);
+    expect(await db.select().from(carmyPlayers)).toHaveLength(487);
+
+    // Il listone cambia sotto e diventa estraneo: il secondo caricamento
+    // fallisce, e la transazione lascia in piedi i 487 giudizi di prima.
+    await uploadListone(estraneoListone(), T0);
+    expect((await uploadCarmy(CARMY, T0)).ok).toBe(false);
+    expect(await db.select().from(carmyPlayers)).toHaveLength(487);
+  });
+
+  it("il 98% misurato passa comodamente il 90% richiesto", async () => {
+    await uploadListone(LISTONE, T0);
+    const result = await uploadCarmy(CARMY, T0);
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value.written / result.value.fromFile).toBeGreaterThan(
+      CARMY_MATCH_THRESHOLD,
+    );
+  });
+});
+
+// ─── Lo stato del pannello ───────────────────────────────────────────────────
+
+suite.runIf(dbUp)("lo stato del foglio, per il pannello", () => {
+  it("a tabella vuota non c'è nessuna data e niente è vecchio", async () => {
+    expect(await carmyStatus(T0)).toMatchObject({
+      rows: 0,
+      uploadedAt: null,
+      stale: false,
+    });
+  });
+
+  it("conta i giudizi, i titolari sopra soglia e i prezzi", async () => {
+    await uploadListone(LISTONE, T0);
+    await uploadCarmy(CARMY, T0);
+
+    const status = await carmyStatus(T0);
+    expect(status.rows).toBe(487);
+    // ⚠ La soglia è quella di `lib/domain.ts`, non un `4` scritto in SQL: il
+    // pannello e il badge devono contare la stessa cosa.
+    expect(SOGLIA_TITOLARE_CARMY).toBe(4);
+    expect(status.titolari).toBeGreaterThan(0);
+    expect(status.titolari).toBeLessThan(status.conTitolarita);
+    expect(status.conPrezzo).toBeGreaterThan(0);
+    // ⚠ `max()` in SQL grezzo torna una stringa: se `asDate` sparisse, qui
+    // arriverebbe un `getTime is not a function`.
+    expect(status.uploadedAt?.getTime()).toBe(T0.getTime());
+  });
+
+  it("il caricamento di ieri si distingue da quello di stamattina", async () => {
+    await uploadListone(LISTONE, T0);
+    await uploadCarmy(CARMY, T0);
+
+    expect((await carmyStatus(new Date("2026-08-12T11:00:00.000Z"))).stale).toBe(
+      false,
+    );
+    const dopo = new Date(T0.getTime() + (CARMY_STALE_HOURS + 1) * 3_600_000);
+    expect((await carmyStatus(dopo)).stale).toBe(true);
+  });
+
+  it("i tag si leggono dai dati, ordinati per frequenza", async () => {
+    await uploadListone(LISTONE, T0);
+    await uploadCarmy(CARMY, T0);
+
+    const tags = await carmyTags();
+    expect(tags.length).toBeGreaterThan(10);
+    // Dal più frequente: è l'ordine in cui servono in un filtro.
+    for (let i = 1; i < tags.length; i += 1) {
+      expect(tags[i - 1].count).toBeGreaterThanOrEqual(tags[i].count);
+    }
+    expect(tags.map((t) => t.tag)).toContain("rigorista");
+  });
+});
+
+// ─── Il Centro dati con i giudizi ────────────────────────────────────────────
+
+suite.runIf(dbUp)("il Centro dati con i giudizi", () => {
+  it("porta i giudizi accanto al listone, e lascia senza chi non ne ha", async () => {
+    await uploadListone(LISTONE, T0);
+    await uploadCarmy(CARMY, T0);
+
+    const rows = await centroDatiRows();
+    expect(rows).toHaveLength(495);
+    expect(rows.find((row) => row.name === "Dimarco")?.carmy).toMatchObject({
+      fascia: "Top",
+      titolarita: 5,
+    });
+
+    // ⚠ La chiave **non c'è affatto** per chi non ha un giudizio: non è un `null`
+    // da nascondere in pagina.
+    const senza = rows.filter((row) => !("carmy" in row));
+    expect(senza).toHaveLength(495 - 487);
+  });
+
+  it("con la tabella di Carmy vuota il Centro dati resta quello di M10", async () => {
+    await uploadListone(LISTONE, T0);
+
+    const rows = await centroDatiRows();
+    expect(rows).toHaveLength(495);
+    expect(rows.every((row) => !("carmy" in row))).toBe(true);
+  });
+
+  it("ogni fascia a database è fra quelle che l'applicazione sa ordinare", async () => {
+    await uploadListone(LISTONE, T0);
+    await uploadCarmy(CARMY, T0);
+
+    for (const j of (await allCarmy()).values()) {
+      if (j.fascia === null) continue;
+      expect(CARMY_FASCE).toContain(j.fascia);
+    }
+  });
+
+  /**
+   * ⚠ **La mappa sigla → squadra va rigenerata a ogni promozione** (M10B §3), e
+   * questo è il test che se ne accorge: il giorno in cui il listone porta una
+   * squadra nuova, il foglio porta una sigla nuova, e una delle due parti resta
+   * indietro. Meglio un rosso qui che un giudizio che non aggancia.
+   */
+  it("la mappa delle sigle copre tutte le squadre del listone caricato", async () => {
+    await uploadListone(LISTONE, T0);
+
+    const squadre = new Set(
+      (await db.select({ team: listonePlayers.team }).from(listonePlayers)).map(
+        (row) => row.team,
+      ),
+    );
+    const tradotte = new Set(Object.values(CARMY_TEAM_BY_SIGLA));
+    for (const squadra of squadre) {
+      expect(tradotte, `${squadra} non è in CARMY_TEAM_BY_SIGLA`).toContain(
+        squadra,
+      );
+    }
+  });
+});
+
+// ─── Chi li vede: una query, non un `className` ──────────────────────────────
+
+suite.runIf(dbUp)("chi vede i giudizi", () => {
+  /**
+   * ⚠ **Il test è quello di M8, e si asserisce l'assenza della chiave, non il suo
+   * valore** (M10B §7). `PoolPlayer` finisce nel payload RSC di un client
+   * component, cioè nel browser: un `null` nascosto in pagina sarebbe leggibile in
+   * DevTools in tre click. I filtri per `is_pro` sono l'interfaccia sopra questo
+   * dato, non la sua protezione.
+   */
+  it("un non-pro non riceve la chiave `carmy`", async () => {
+    const game = await gameAuction();
+
+    const pool = await listPickPool(game.auctionId, false);
+    expect(pool.length).toBeGreaterThan(0);
+    for (const player of pool) {
+      expect(Object.keys(player)).not.toContain("carmy");
+      expect(Object.keys(player)).not.toContain("insights");
+    }
+  });
+
+  /**
+   * ⚠ **Perché il giudizio si scrive a mano invece di caricare il foglio vero.**
+   * Il listone sintetico di `game-helpers.ts` numera gli `ext_id` **da 1**, e
+   * quelli veri partono da 4: i due insiemi **si sovrappongono**. È la stessa
+   * cicatrice di `EXT_ID_BASE` qui sopra — la prima versione di questo test
+   * caricava `carmy.xlsx` credendo che «tanto quegli id non esistono», ed è
+   * diventata rossa su un pool che conteneva la chiave per costruzione. Qui la
+   * sovrapposizione è **voluta e misurata**: un `ext_id` noto, un giocatore solo.
+   */
+  it("e un pro la riceve solo per chi ha davvero un giudizio", async () => {
+    const game = await gameAuction();
+
+    await db.insert(carmyPlayers).values({
+      extId: 1,
+      sourceName: "Giocatore 1",
+      sourceTeam: "INT",
+      fascia: "Top",
+      prezzo: 42,
+      titolarita: 5,
+      affidabilita: 4,
+      integrita: 3,
+      fmvExp: 7,
+      tags: ["bonus"],
+      commento: null,
+      uploadedAt: T0,
+    });
+
+    const pool = await listPickPool(game.auctionId, true);
+    const giudicati = pool.filter((p) => "carmy" in p);
+    expect(giudicati).toHaveLength(1);
+    expect(giudicati[0].name).toBe("Giocatore 1");
+    expect(giudicati[0].carmy).toMatchObject({ fascia: "Top", prezzo: 42 });
+
+    // E lo stesso pool, chiesto senza il permesso, non la porta a nessuno.
+    expect(
+      (await listPickPool(game.auctionId, false)).filter((p) => "carmy" in p),
+    ).toHaveLength(0);
+  });
+});
+
+// ─── Il percorso critico, e l'auto-pick ──────────────────────────────────────
+
+suite.runIf(dbUp)("nessun dato di M10B sta su un percorso critico", () => {
+  /**
+   * ⚠ **La verifica 3 di M10B**, la stessa che M10 ha per `listone_players` e per
+   * la stessa ragione: un'asta si crea, si prepara e arriva a `COMPLETED` con
+   * `carmy_players` **vuota**. Se un giorno un `JOIN` verso questa tabella
+   * comparisse in `machine.ts`, `rules.ts`, `snapshot.ts` o in `listPickPool`, è
+   * qui che si romperebbe.
+   */
+  it("un'asta arriva a COMPLETED con carmy_players vuota", async () => {
+    expect((await carmyStatus(T0)).rows).toBe(0);
+
+    const esito = await giocaFinoAllaFine(await gameAuction());
+
+    expect(esito.state.status).toBe("COMPLETED");
+    expect(esito.state.assignments).toHaveLength(32);
+    expect((await carmyStatus(T0)).rows).toBe(0);
+  }, 120_000);
+
+  /**
+   * ⚠ **La verifica 2 di M10B, e il vincolo del riquadro di §6.**
+   *
+   * L'asta si gioca con la tabella di Carmy **piena** di giudizi che riguardano
+   * proprio i giocatori in gara — e finisce **identica** a quella di sopra. È la
+   * prova che un giudizio non entra in nessuna regola: l'auto-pick pesca dal pool
+   * intero, ordinando per `fvm DESC, quot DESC`, e di Carmy non sa niente.
+   *
+   * ⚠ **I giudizi sono messi contro l'ordine dell'auto-pick**: il `fvm` decresce
+   * con l'indice e la titolarità cresce, quindi il migliore per Carmy è l'ultimo
+   * per il motore. Se un giudizio o un filtro riuscisse a toccare l'auto-pick,
+   * l'asta comprerebbe giocatori diversi — e il confronto fra le due liste di nomi
+   * lo direbbe.
+   */
+  it("⚠ con i giudizi addosso ai giocatori in gara, compra esattamente gli stessi", async () => {
+    const attesi = await giocaFinoAllaFine(await gameAuction());
+
+    const con = await gameAuction();
+    await db.insert(carmyPlayers).values(
+      Array.from({ length: 40 }, (_, i) => ({
+        extId: i + 1,
+        sourceName: `Giocatore ${i + 1}`,
+        sourceTeam: "INT",
+        fascia: "Top",
+        prezzo: 50,
+        titolarita: (i % 5) + 1,
+        affidabilita: 3,
+        integrita: 3,
+        fmvExp: 6,
+        tags: i % 2 === 0 ? ["bonus"] : ["scommessa"],
+        commento: null,
+        uploadedAt: T0,
+      })),
+    );
+    expect((await carmyStatus(T0)).rows).toBe(40);
+
+    const ottenuti = await giocaFinoAllaFine(con);
+
+    expect(ottenuti.state.status).toBe("COMPLETED");
+    expect(ottenuti.state.assignments).toHaveLength(32);
+    // Gli stessi giocatori, nello stesso ordine di acquisto.
+    expect(ottenuti.comprati).toEqual(attesi.comprati);
+  }, 240_000);
+});
+
+// ─── Aiutanti di M10B ────────────────────────────────────────────────────────
+
+/** Un foglio di Carmy con un solo giocatore per ruolo, preso dal listone vero. */
+function minimalCarmy(): ArrayBuffer {
+  const parsed = parseListone(LISTONE);
+  if (!parsed.ok) throw new Error(parsed.error.message);
+
+  const wb = XLSX.utils.book_new();
+  for (const sheet of CARMY_SHEETS) {
+    const target = parsed.value.find((row) => row.role === sheet);
+    if (!target) throw new Error(`nessun ${sheet} nel listone`);
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet([
+        {
+          "Obiett.": "",
+          Fascia: "Top",
+          Ruolo: sheet,
+          // La sigla giusta per la sua squadra, così il controllo non segnala.
+          Team:
+            Object.entries(CARMY_TEAM_BY_SIGLA).find(
+              ([, name]) => name === target.team,
+            )?.[0] ?? "INT",
+          Nome: target.name,
+          Prezzo: 10,
+          PMA: "2%",
+          Quo: target.quot,
+          Titolarità: 4,
+          Affidabilità: 3,
+          Integrità: 3,
+          Commento: "",
+          "Nota 1": "bonus",
+          "Nota 2": "",
+          "Nota 3": "",
+          "Nota 4": "",
+          "Nota 5": "",
+          "FMV Exp.": 6.5,
+        },
+      ]),
+      sheet,
+    );
+  }
+  return XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+}
+
+/**
+ * Un listone con nomi che il foglio di Carmy non può avere: porta l'aggancio sotto
+ * la soglia **senza** toccare il foglio.
+ */
+function estraneoListone(): ArrayBuffer {
+  const rows = (["P", "D", "C", "A"] as const).flatMap((role, r) =>
+    Array.from({ length: 20 }, (_, i) => ({
+      "#": EXT_ID_BASE + 500 + r * 100 + i,
+      Nome: `Nessuno ${role}${i}`,
+      "Fuori lista": "",
+      "Sq.": "Test",
+      "R.": role,
+      "R.MANTRA": role,
+      "FVM/1000": 100,
+      "QUOT.": 10,
+    })),
+  );
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), SHEET_NAME);
+  return XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+}

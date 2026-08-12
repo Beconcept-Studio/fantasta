@@ -12,12 +12,12 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M10 è chiusa su `dev`** e ⚠ **non è ancora in produzione**.
+Nessuna aperta. **M10 e M10B sono chiuse su `dev`** e ⚠ **non sono ancora in produzione**.
 
-⚠ **E non ci andrà da sola: l'owner ha deciso il 2026-08-12 che M10 e M10B escono insieme**, in un
-rilascio solo, quando M10B sarà finita. Tre conseguenze da non riscoprire:
+⚠ **Escono insieme, per decisione dell'owner del 2026-08-12**, in un rilascio solo, **su sua
+richiesta esplicita**. Tre conseguenze da non riscoprire:
 
-1. **`dev` resta avanti a `main` per tutta la durata di M10B.** Non è una dimenticanza: è la
+1. **`dev` resta avanti a `main` finché il rilascio non viene chiesto.** Non è una dimenticanza: è la
    decisione. Chi apre una sessione e trova `dev` con roba non rilasciata non deve «sistemare».
 2. **Il `CHANGELOG.md` dovrà portare i passi a mano di *entrambe*.** Un solo `pnpm db:push` copre i
    due cambi di schema, ma i **file da caricare sono due** — il listone da Admin → Listone, e poi il
@@ -30,12 +30,16 @@ rilascio solo, quando M10B sarà finita. Tre conseguenze da non riscoprire:
    trovarsi a fare un rollback alle nove di sera. La versione la scrive M10B alla sua chiusura: M10
    non ne alza nessuna per conto suo.
 
-⚠ **E quando ci andrà, il rilascio non finirà col deploy**: M10 tocca lo schema **e** ha un backfill.
-Sul server servono `pnpm db:push` più `pm2 reload deploy/ecosystem.config.cjs --update-env`, e poi il
-file da caricare da **Admin → Listone**, senza il quale la tabella resta vuota — niente caricature
-nuove, Centro dati vuoto, nessuna proposta a chi crea un'asta. **Niente si rompe**, ed è precisamente
-ciò che rende quel passo facile da dimenticare. I due comandi per esteso stanno in testa a
-`10-listone-a-sistema.md`.
+⚠ **E quando ci andrà, il rilascio non finirà col deploy**: entrambe toccano lo schema **e** entrambe
+hanno un backfill. Sul server serve **un solo** `pnpm db:push` — copre i due cambi, che sono additivi:
+una tabella nuova (`carmy_players`) e una colonna (`player_insights.name`), niente di distruttivo — più
+`pm2 reload deploy/ecosystem.config.cjs --update-env`. E poi **due file da caricare, in
+quest'ordine**: prima il listone da **Admin → Listone**, poi il **foglio di Carmy** sotto di lui,
+perché il secondo si aggancia al primo **per nome** e senza il primo il suo pulsante è spento. Senza
+quei due caricamenti le tabelle restano vuote — niente caricature nuove, Centro dati vuoto, nessuna
+proposta a chi crea un'asta, e nessun giudizio in `/play`. **Niente si rompe**, ed è precisamente ciò
+che rende quel passo facile da dimenticare: è il quarto di fila. I comandi per esteso stanno in testa a
+`10-listone-a-sistema.md` e a `10b-insight-da-carmy.md`.
 
 Prima di M10 la produzione non aveva nessun passo a mano pendente: M9 non tocca lo schema — il suo
 rilascio è finito col deploy, il primo da tre versioni di cui si potesse dire. I tre passi di M8
@@ -49,7 +53,10 @@ compare**, per nessun utente, e il sintomo è «non vedo niente in `/play`» —
 un bug. È successo il 2026-08-12, subito dopo la chiusura di M9. Da M10 vale lo stesso per
 `listone_players`, con una differenza che conviene sapere: **quella tabella non fa sparire niente che
 prima si vedesse** — semplicemente le caricature non si scaricano, il Centro dati è vuoto e alla
-creazione di un'asta non compare nessuna proposta. La procedura per entrambe sta in
+creazione di un'asta non compare nessuna proposta. Da M10B la stessa cosa vale per `carmy_players`, e
+di nuovo **senza far sparire niente**: il badge della titolarità torna quello calcolato dalle presenze,
+che è il ripiego dichiarato. ⚠ **E in locale l'ordine dei caricamenti conta**: listone → Carmy →
+caricature, perché il foglio si aggancia al listone per nome. La procedura per tutte sta in
 `docs/HOWTO-PROVA-LOCALE.md`, §6 e §7.
 
 ## Da pianificare
@@ -60,15 +67,14 @@ sono chiuse**; le altre due si aprono **su richiesta esplicita**, una alla volta
 
 | Macro | Tema | Schema | Ordine |
 |---|---|---|---|
-| **[M10B](10b-insight-da-carmy.md)** | Gli insight che vengono da un umano: il foglio di Carmy, la titolarità letta invece che dedotta, i filtri per chi ha `is_pro` | **sì** + backfill | libera |
 | **[M11](11-refresh-giornaliero.md)** | Il refresh giornaliero degli insight, dentro l'unico processo | sì, piccolo | 3ª |
 | **[M12](12-cancellazione-aste.md)** | Cancellare un'asta per forza, anche in corso | no | 4ª |
 
-**M10B non è della fila delle quattro**, ed è scritta il 2026-08-12 dopo la chiusura di M10. È il
-**refactor degli insight** che M10 ha reso possibile: si aggancia a `listone_players` per nome — 98%
-misurato, zero omonimi — e senza quella tabella non avrebbe un denominatore. Va dopo M10; rispetto a
-M11 l'ordine è indifferente, ma se M11 arriva prima eredita gratis il posto dove dire da quanto il
-file non viene ricaricato. ⚠ **M11 non la può automatizzare**: è un file che una persona compila.
+⚠ **M11 non può automatizzare il foglio di Carmy, e nessuno ci provi**: è un file che una persona
+compila e che arriva da fuori. Quello che M11 *può* dare è il posto dove dire da quanto non lo si
+ricarica — e M10B quel posto l'ha già preso, con il **quarto timestamp** nel pannello e l'avviso
+quando il file è più vecchio di un giorno. Con un file che invecchia in un giorno, quella data conta
+più che per il listone.
 
 ⚠ **E porta una misura che corregge M8 §9, da non riscoprire da capo.** Il 2026-08-12
 `fantacalcio.it/probabili-formazioni-serie-a` è **piena** — 20 moduli, 220 titolari tutti con
@@ -93,9 +99,12 @@ punti di rollback, perché un ritorno indietro sui badge non deve portarsi via l
 aste, e un ritorno indietro sul listone non deve rimettere la striscia verde.
 
 **Le dipendenze sono due, e sono debolissime.** Quella di M10 su M9 è stata **onorata**: il Centro
-dati è il terzo chiamante dei badge, e li ha resi un componente vero — `TitolaritaBadge` e
-`SetPieceBadges` sono stati esportati da `components/auction/insights.tsx` perché una tabella li vuole
-in due colonne separate, non nelle due composizioni pronte. M11 ha bisogno del pannello di M10 per
+dati è il terzo chiamante dei badge, e li ha resi un componente vero — `TitolaritaAnyBadge` e
+`SetPieceBadges` sono esportati da `components/auction/insights.tsx` perché una tabella li vuole in due
+colonne separate, non nelle due composizioni pronte. ⚠ Il primo dei due si chiamava
+`TitolaritaBadge` fino a M10B, che lo ha **sostituito**: da quando la titolarità ha due fonti, un
+badge per fonte voleva dire che ogni chiamante decideva quale disegnare — tre copie della regola che
+`titolarita()` esiste per centralizzare. M11 ha bisogno del pannello di M10 per
 avere un posto dove dire «ho provato e non ci sono riuscito» — e quella non è cosmetica: un
 automatismo muto è peggio di nessun automatismo. M12 non dipende da niente.
 
@@ -111,6 +120,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M10B](10b-insight-da-carmy.md) | Gli insight che vengono da un umano: il foglio di Carmy, la titolarità letta invece che dedotta, i filtri per chi ha `is_pro` | ⚠ chiusa su `dev`, **non ancora rilasciata** (sarà v1.11.0) |
 | [M10](10-listone-a-sistema.md) | Il listone a sistema: la sezione admin, il Centro dati, la proposta alla creazione di un'asta | ⚠ chiusa su `dev`, **non ancora rilasciata** (sarà v1.11.0) |
 | [M9](09-badge-insight.md) | I badge degli insight, e la striscia verde via | v1.10.0 — 2026-08-12 |
 | [M8](08-insight-listone.md) | Insight sul listone — titolarità, rigoristi, calci piazzati | v1.9.0 — 2026-08-12 |

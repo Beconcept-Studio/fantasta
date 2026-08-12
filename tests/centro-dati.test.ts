@@ -10,7 +10,11 @@ import {
   initialDirection,
   nextSort,
 } from "@/lib/centro-dati";
-import { GIORNATE, type PlayerInsights } from "@/lib/domain";
+import {
+  type CarmyJudgement,
+  GIORNATE,
+  type PlayerInsights,
+} from "@/lib/domain";
 
 /**
  * M10 — l'ordinamento e i filtri del Centro dati.
@@ -37,6 +41,23 @@ function insights(over: Partial<PlayerInsights> = {}): PlayerInsights {
     fmvAway: null,
     rigoristaRank: null,
     piazzatiRank: null,
+    ...over,
+  };
+}
+
+function judge(over: Partial<CarmyJudgement> = {}): CarmyJudgement {
+  return {
+    extId: 1,
+    sourceName: "Test",
+    sourceTeam: "INT",
+    fascia: null,
+    prezzo: null,
+    titolarita: null,
+    affidabilita: null,
+    integrita: null,
+    fmvExp: null,
+    tags: [],
+    commento: null,
     ...over,
   };
 }
@@ -264,5 +285,104 @@ describe("i filtri", () => {
     expect(
       arrangeRows(rows, { ...NO_FILTERS, query: "inesistente" }, DEFAULT_SORT),
     ).toEqual([]);
+  });
+});
+
+// ─── Le colonne che vengono dal foglio di Carmy (M10B §6) ────────────────────
+
+describe("le colonne di Carmy", () => {
+  it("la fascia si ordina per posizione, non in alfabeto: Top prima di Terza", () => {
+    const rows = [
+      row("Terzo", { carmy: judge({ fascia: "Terza" }) }),
+      row("Primo", { carmy: judge({ fascia: "Top" }) }),
+      row("Secondo", { carmy: judge({ fascia: "Semi-Top" }) }),
+    ];
+    expect(
+      names(arrangeRows(rows, NO_FILTERS, { key: "fascia", direction: "desc" })),
+    ).toEqual(["Primo", "Secondo", "Terzo"]);
+  });
+
+  it("chi non ha una fascia va in fondo in **entrambe** le direzioni", () => {
+    const rows = [
+      row("Senza", {}),
+      row("Top", { carmy: judge({ fascia: "Top" }) }),
+      row("Outsider", { carmy: judge({ fascia: "Outsider" }) }),
+    ];
+    for (const direction of ["asc", "desc"] as const) {
+      const ordered = names(arrangeRows(rows, NO_FILTERS, { key: "fascia", direction }));
+      expect(ordered[ordered.length - 1]).toBe("Senza");
+    }
+  });
+
+  it("prezzo, affidabilità e integrità sono numeri, e l'assenza resta in fondo", () => {
+    const rows = [
+      row("Caro", { carmy: judge({ prezzo: 90 }) }),
+      row("Senza prezzo", { carmy: judge({ prezzo: null }) }),
+      row("Economico", { carmy: judge({ prezzo: 3 }) }),
+    ];
+    expect(
+      names(arrangeRows(rows, NO_FILTERS, { key: "prezzo", direction: "desc" })),
+    ).toEqual(["Caro", "Economico", "Senza prezzo"]);
+    expect(
+      names(arrangeRows(rows, NO_FILTERS, { key: "prezzo", direction: "asc" })),
+    ).toEqual(["Economico", "Caro", "Senza prezzo"]);
+  });
+
+  /**
+   * ⚠ **La titolarità è una colonna sola con due fonti dentro** (M10B §4), e
+   * ordinarla richiede la scelta scritta in `valueOf`: i due valori si riportano a
+   * 0–1 — `voto / 5` da un lato, `quotaTitolare` dall'altro — perché rispondono
+   * alla stessa domanda. Un `5` di Carmy finisce sopra un `34/38`, che è l'ordine
+   * giusto: il giudizio parla di quest'anno, il rapporto dell'anno scorso.
+   */
+  it("ordina il giudizio di Carmy insieme al badge calcolato dalle presenze", () => {
+    const rows = [
+      row("Presenze alte", { insights: insights({ startsEleven: 34 }) }),
+      row("Giudizio 5", {
+        carmy: judge({ titolarita: 5 }),
+        insights: insights({ startsEleven: 3 }),
+      }),
+      row("Giudizio 2", {
+        carmy: judge({ titolarita: 2 }),
+        insights: insights({ startsEleven: 30 }),
+      }),
+      row("Niente", {}),
+    ];
+    expect(
+      names(arrangeRows(rows, NO_FILTERS, { key: "titolarita", direction: "desc" })),
+    ).toEqual(["Giudizio 5", "Presenze alte", "Giudizio 2", "Niente"]);
+  });
+
+  it("il filtro per tag tiene solo chi ce l'ha", () => {
+    const rows = [
+      row("Rigorista", { carmy: judge({ tags: ["rigorista", "bonus"] }) }),
+      row("Solo bonus", { carmy: judge({ tags: ["bonus"] }) }),
+      row("Senza giudizio", {}),
+    ];
+    expect(
+      names(arrangeRows(rows, { ...NO_FILTERS, tag: "rigorista" }, DEFAULT_SORT)),
+    ).toEqual(["Rigorista"]);
+    expect(
+      names(arrangeRows(rows, { ...NO_FILTERS, tag: "bonus" }, DEFAULT_SORT)).sort(),
+    ).toEqual(["Rigorista", "Solo bonus"]);
+  });
+
+  it("⚠ chi non ha un giudizio esce dal filtro per tag: «non lo so» non è un sì", () => {
+    // Stessa regola del filtro «rigori e piazzati», e stessa ragione: un filtro
+    // acceso è una domanda, e l'assenza non è una risposta affermativa.
+    const rows = [row("Senza giudizio", {}), row("Con tag", { carmy: judge({ tags: ["bonus"] }) })];
+    expect(
+      names(arrangeRows(rows, { ...NO_FILTERS, tag: "bonus" }, DEFAULT_SORT)),
+    ).toEqual(["Con tag"]);
+  });
+
+  it("i filtri di Carmy si compongono con quelli di M10", () => {
+    const rows = [
+      row("Portiere top", { role: "P", carmy: judge({ tags: ["imbattibilità"] }) }),
+      row("Attaccante top", { role: "A", carmy: judge({ tags: ["imbattibilità"] }) }),
+    ];
+    expect(
+      names(arrangeRows(rows, { ...NO_FILTERS, role: "P", tag: "imbattibilità" }, DEFAULT_SORT)),
+    ).toEqual(["Portiere top"]);
   });
 });

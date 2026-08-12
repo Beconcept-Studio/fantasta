@@ -1,10 +1,15 @@
 import { asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { listonePlayers, playerInsights } from "@/lib/db/schema";
-import { type PlayerInsights, type Role } from "@/lib/domain";
+import { carmyPlayers, listonePlayers, playerInsights } from "@/lib/db/schema";
+import {
+  type CarmyJudgement,
+  type PlayerInsights,
+  type Role,
+} from "@/lib/domain";
 import { parseListone } from "@/lib/import/parseListone";
 
+import { toJudgement } from "./carmy";
 import { type Result, fail, ok } from "./errors";
 
 /**
@@ -251,6 +256,13 @@ export type CentroDatiRow = {
   outOfList: boolean;
   /** `undefined` per chi non ha una riga di insight: la tabella scrive `—`. */
   insights?: PlayerInsights;
+  /**
+   * `undefined` per chi non ha un giudizio (M10B). ⚠ **Le due chiavi sono
+   * indipendenti**: il foglio di Carmy può essere caricato e gli insight no, o il
+   * contrario, e un giocatore può avere l'uno e non l'altro — i dieci nomi che il
+   * listone non aveva sono esattamente quel caso.
+   */
+  carmy?: CarmyJudgement;
 };
 
 /**
@@ -273,6 +285,9 @@ export type CentroDatiRow = {
  * righe sarà il momento di cambiare, e non prima (regola 8).
  */
 export async function centroDatiRows(): Promise<CentroDatiRow[]> {
+  // ⚠ **Due `LEFT JOIN` e non uno**: le tre tabelle sono globali e indipendenti, e
+  // un giocatore con un giudizio ma senza riga di insight (o viceversa) deve
+  // comparire comunque, con la sola colonna che ha.
   const rows = await db
     .select({
       extId: listonePlayers.extId,
@@ -282,22 +297,25 @@ export async function centroDatiRows(): Promise<CentroDatiRow[]> {
       quot: listonePlayers.quot,
       outOfList: listonePlayers.outOfList,
       insights: playerInsights,
+      carmy: carmyPlayers,
     })
     .from(listonePlayers)
     .leftJoin(playerInsights, eq(playerInsights.extId, listonePlayers.extId))
+    .leftJoin(carmyPlayers, eq(carmyPlayers.extId, listonePlayers.extId))
     // Lo stesso ordine con cui la pagina si apre — quotazione dal più alto al
     // più basso, e il nome a parità. La tabella riordina comunque nel browser a
     // ogni click, ma far arrivare le righe già nell'ordine giusto evita che il
     // primo disegno e il primo `sort` mostrino due liste diverse.
     .orderBy(desc(listonePlayers.quot), asc(listonePlayers.name));
 
-  return rows.map(({ insights, ...player }) => {
+  return rows.map(({ insights, carmy, ...player }) => {
     // ⚠ Niente `insights: undefined` esplicito: la chiave si aggiunge **solo** se
     // c'è qualcosa, come in `listPickPool`. Questo risultato finisce nel payload
     // RSC di un client component, e il tipo deve dire la verità su cosa contiene.
-    if (insights === null) return player;
+    const base = carmy === null ? player : { ...player, carmy: toJudgement(carmy) };
+    if (insights === null) return base;
     return {
-      ...player,
+      ...base,
       insights: {
         extId: insights.extId,
         fullName: insights.fullName,

@@ -1,7 +1,13 @@
 # M10B — Gli insight che vengono da un umano
 
-> **Stato:** **da aprire** su `feature/10b-insight-da-carmy` · Scritta il 2026-08-12 in una sessione
-> di sola analisi, a valle di M10 · ⚠ **Si apre su richiesta esplicita dell'owner**, come tutte.
+> **Stato:** **chiusa su `dev`** il 2026-08-12, merge `--no-ff` da
+> `feature/10b-insight-da-carmy` · ⚠ **Non ancora rilasciata**: esce con M10 in un tag solo,
+> `v1.11.0`, **su richiesta esplicita dell'owner** (task M10B-16) · Spec scritta lo stesso giorno in
+> una sessione di sola analisi, a valle di M10.
+>
+> ⚠ **Cosa è cambiato rispetto a questa spec sta in «Com'è andata», in fondo**, e sotto ogni task con
+> la freccia `→`. Le tre decisioni che l'owner ha preso guardando — la forma del badge, la riga
+> dell'auto-pick, dove sta il prezzo consigliato — sono in `docs/DECISIONS.md`, 2026-08-12.
 >
 > **Perché «10B» e non «M13».** Non è una macro nuova nella fila M11–M12: è il **refactor della
 > gestione degli insight** che M10 ha reso possibile, e che si appoggia alla tabella che M10 ha
@@ -364,50 +370,225 @@ pannello, e va detto quando è vecchio di più di un giorno.
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M10B-01** — Aprire `feature/10b-insight-da-carmy` da `dev`; rileggere questo file, e in
+- [x] **M10B-01** — Aprire `feature/10b-insight-da-carmy` da `dev`; rileggere questo file, e in
       particolare §1 (Carmy non porta statistiche nuove, e `Pt. Inf.` non è ciò che sembra), §3 (il
       join per nome) e il riquadro di §6 (l'auto-pick). `pnpm test` verde **prima** di toccare
       qualcosa: i test di M9 su `quotaTitolare` si romperanno, e va saputo perché
-- [ ] **M10B-02** — Rifare la misura di §1 e §2 sui byte del giorno in cui la macro si apre, e
+      → 659 test su 43 file verdi prima di toccare qualsiasi cosa.
+- [x] **M10B-02** — Rifare la misura di §1 e §2 sui byte del giorno in cui la macro si apre, e
       **salvare il file in `fixtures/`**: se le colonne sono cambiate, la spec va corretta prima di
       scrivere il parser, non dopo (è il metodo di M8-02)
-- [ ] **M10B-03** — `lib/db/schema.ts`: `carmy_players` come in §5, più `name` su `player_insights`.
+      → **La spec regge quasi per intero**, e i numeri che la giustificano sono confermati sui byte
+      del 2026-08-12: quattro fogli `P`/`D`/`C`/`A` con 59+176+174+88 = **497 righe**, aggancio sul
+      solo nome **497/497 contro la fonte A** e **487/497 = 98,0% contro `listone.xlsx`** con **zero
+      omonimi** in entrambi, **0/497** su `(Nome, Squadra)` senza mappa delle sigle, 20 sigle contro
+      20 squadre, `Pt. Inf.` **identica a `injured` 497/497** (0–5, 351 a zero, uno a 5, e
+      `Presenze + Pt. Inf.` che non converge a 38: max 42), correlazione `Titolarità` × `Pt. Tit./38`
+      **0,649** su **466** confrontabili, **11** giudicati titolari con ≤10 partite da titolare e
+      **13** panchinari con ≥25, `>= 4` che colora **168/497 = 33,8%**, `>= 5` **103/497 = 20,7%**,
+      M9 oggi **61** verdi su 329 mostrabili. Fasce, tag (17 etichette, 396 giocatori) e commenti
+      (10) coincidono riga per riga con §1. **Cinque scarti, tutti corretti prima del parser:**
+      → ⚠ **1. Lo `0` esiste, e la spec dice «1–5».** Un giocatore — **Aurelio (CAG)**, che è anche
+      uno dei dieci non agganciati — ha `Titolarità`, `Affidabilità`, `Integrità`, `Prezzo` e `MV`
+      tutti a `0`, `PMA` a `"0%"` e `FMV Exp.` vuota: è una **riga non compilata**, non un giudizio
+      basso. Da qui la regola del parser: **`0` su un giudizio è `null`, non un voto** (ed è ciò che
+      spiega il «1→75, 2→94, 3→159, 4→65, 5→103» di §1, che somma 496 e non 497). Lo stesso `0`
+      spiega perché §2 contava 13 panchinari «1–2»: dodici più Aurelio.
+      → ⚠ **2. `Prezzo = 0` su 73 giocatori**, il 15% del file — riserve e terzi portieri, quasi
+      tutti di fascia `Non Impostata` o `Outsider`, tutti con `PMA` a `"0%"`. Non è un prezzo: **zero
+      non è nemmeno un'offerta valida**. Trattato come assente, e detto in `DECISIONS.md` perché è
+      una scelta e non un dettaglio del parser.
+      → **3. Carmy non riporta i `display_*`, riporta i campi grezzi della fonte A.** `Presenze` è
+      identica a `presenze` **497/497** ma a `display_presenze` — quella che **noi** importiamo — solo
+      465/497; `MV`/`FMV` stanno a 438/497 contro `display_mv`/`display_fmv`. La conclusione di §1 non
+      si indebolisce, si rafforza: Carmy ri-esporta gli stessi numeri, e per due colonne su quindici
+      ri-esporta perfino la variante che la fonte stessa **non** mostra.
+      → **4. Due colonne che §1 non cita**: `Ruolo` (ridondante col nome del foglio — 0 discordanze su
+      497, quindi si ignora) e `Obiett.`, valorizzata `Sí` su **tre** giocatori (McTominay, Baturina,
+      Rowe). È la lista della spesa di chi compila il foglio, non un giudizio sul giocatore: **non si
+      importa**, e il motivo va scritto perché è la colonna che qualcuno vorrà aggiungere.
+      → **5. `PMA` è una stringa** (`"10.5%"`), non un numero, e `Commento` è **multi-riga**. Nessuna
+      delle due entra nello schema di §5: `PMA` è `Prezzo` diviso il budget, cioè un dato derivato.
+      → Il file era già in `fixtures/carmy.xlsx` (74 KB) e non è stato toccato.
+- [x] **M10B-03** — `lib/db/schema.ts`: `carmy_players` come in §5, più `name` su `player_insights`.
       `pnpm db:push` in locale
-- [ ] **M10B-04** — `lib/import/parseCarmy.ts`, **puro**: bytes → `Result<CarmyRow[]>`. Quattro fogli,
+      → Fatto come da §5, con **una colonna in più non prevista**: `source_team`, la sigla di tre
+      lettere. §5 aveva `source_name` «per spiegare un aggancio», ma il controllo della squadra ha
+      bisogno di ricordare *cosa* diceva il foglio, non solo di confrontarlo una volta al
+      caricamento. Il `db:push` in locale è additivo e pulito: una `CREATE TABLE` e una
+      `ADD COLUMN`, nessun `ALTER` distruttivo.
+      → **`name` su `player_insights` ha richiesto anche chi la riempie**, che la spec non diceva:
+      `parseFantalabListone` leggeva `full_name ?? name` e buttava il nome corto. Ora lo porta, e
+      l'`upsert` di `refreshListoneInsights` lo scrive. Nasce `null` sulle righe già in tabella e si
+      riempie al primo refresh: **nessun backfill dedicato**, perché nessuna schermata la pretende.
+- [x] **M10B-04** — `lib/import/parseCarmy.ts`, **puro**: bytes → `Result<CarmyRow[]>`. Quattro fogli,
       le note compattate in un array, e un rifiuto forte se le intestazioni cambiano. Con la sua
       fixture e i suoi test, senza database
-- [ ] **M10B-05** — La mappa sigla → squadra in `lib/domain.ts`, venti righe in chiaro, con il test
+      → 30 test in `tests/parse-carmy.test.ts`, con i numeri **esatti** del 2026-08-12 dentro. I
+      quattro fogli si chiamano `P`/`D`/`C`/`A`, cioè **esattamente `ROLES`**: il ruolo si prende dal
+      nome del foglio e la colonna `Ruolo` si butta (0 discordanze su 497).
+      → **Il rifiuto forte è su tre cose e non su una**: intestazioni mancanti (note e commento
+      compresi — se sparissero, i tag sparirebbero in silenzio), un voto **fuori dalla scala 1–5**
+      perché una scala cambiata letta come se non lo fosse è un badge verde su un giocatore
+      qualsiasi, e **due righe con lo stesso nome**, perché il nome *è* la chiave del join.
+      → ⚠ **Un rifiuto in meno di quelli sperati**: `XLSX.read` **non lancia** su del testo qualsiasi
+      — lo legge come un foglio unico chiamato `Sheet1` — quindi dei byte spazzatura escono come
+      `CARMY_SHEET_MISSING` e non `CARMY_UNREADABLE`. È la stessa cosa che `parse-listone.test.ts`
+      aveva già scoperto, e il test accetta entrambi i codici per la stessa ragione. Un
+      `CARMY_UNREADABLE` vero si ottiene solo con un archivio zip cifrato, e c'è il suo test.
+- [x] **M10B-05** — La mappa sigla → squadra in `lib/domain.ts`, venti righe in chiaro, con il test
       che verifica che copra tutte le squadre del listone caricato
-- [ ] **M10B-06** — `lib/engine/carmy.ts`: l'upload (join per nome su `listone_players`, soglia di
+      → Venti righe, e **due** test invece di uno: quello puro contro `fixtures/listone.xlsx` (le
+      sigle del foglio si traducono **esattamente** nelle venti squadre del listone, insieme) e
+      quello con Postgres contro il listone caricato, come chiedeva il task.
+      → Accanto è finito il resto del vocabolario, che la spec non elencava ma che serviva a non
+      spargere decisioni nei componenti: `normalizeCarmyName` (la chiave del join), `CARMY_FASCE`
+      con `carmyFasciaRank`, `CarmyJudgement`, `CARMY_SCALA_MAX`, `SOGLIA_TITOLARE_CARMY`.
+      → **L'ordine delle fasce non è stato inventato: è quello del foglio.** Tutti e quattro i fogli
+      raggruppano le righe nella stessa sequenza (`Top > Semi-Top > Terza > Quarta > Scomm. >
+      Titolare "Scarso" > Outsider`) e la mediana del `Prezzo` la conferma (47 → 26 → 13 → 3 → 2 → 1
+      → 1). L'unico punto in cui serviva indovinare — `Titolare "Scarso"` contro `Outsider`, stessa
+      mediana — è risolto tenendo l'ordine del file, che è l'unica fonte che ne sa qualcosa.
+- [x] **M10B-06** — `lib/engine/carmy.ts`: l'upload (join per nome su `listone_players`, soglia di
       aggancio al 90%, sostituzione integrale in transazione), lo stato per il pannello, e i nomi non
       agganciati riportati per nome. **Nessuna eccezione nuova all'allowlist ESLint**
-- [ ] **M10B-07** — `lib/domain.ts`: la titolarità che viene da Carmy, con il ripiego su M9 quando il
+      → Nessuna eccezione aggiunta: `lib/engine/**` era già dentro, e `eslint.config.mjs` non è
+      stato toccato. Sui byte veri: **487/497 scritti**, i dieci nomi detti per nome, le **tre**
+      discordanze di squadra segnalate (Dominguez B., Masini, Maldini — tutti e tre trasferimenti
+      veri, e il giudizio si importa comunque).
+      → **Un rifiuto in più di quelli previsti**, e serviva: `CARMY_NO_LISTONE`. Senza listone la
+      soglia di aggancio sarebbe una divisione per zero, e il messaggio dice **cosa fare** invece di
+      lasciar scrivere zero righe dichiarando successo. È anche il gate del pulsante nel pannello.
+      → `carmyStatus` prende `now` come parametro invece di leggerlo: l'avviso «questo file è di
+      ieri» è la regola 2 applicata fuori dal motore puro, e senza quel parametro non sarebbe
+      provabile. La soglia dentro il `count(... filter ...)` arriva da `lib/domain.ts` e **non** è
+      un `4` scritto in SQL, altrimenti il pannello direbbe «168 titolari» mentre la pagina ne
+      colora altri.
+- [x] **M10B-07** — `lib/domain.ts`: la titolarità che viene da Carmy, con il ripiego su M9 quando il
       file non c'è, **in un posto solo** e con il suo test (§4). La soglia del verde è **`>= 4`**
       (owner), e il test la contiene con la sua misura accanto — 168/497, come `SOGLIA_TITOLARE` ha
       la sua. ⚠ La **forma** del badge la sceglie l'owner guardandola: prima una pagina di prova,
       poi il codice
-- [ ] **M10B-08** — Il pannello: il caricamento sotto quello del listone, il quarto timestamp, e
+      → `titolarita(insights, carmy)` restituisce una **unione discriminata** — `{fonte: "carmy"}`
+      oppure `{fonte: "presenze"}`, mai un misto — e i tre chiamanti non sanno quale vince. 14 test
+      in `tests/carmy-domain.test.ts`, con Dovbyk e Stankovic A. dentro col loro nome.
+      → ⚠ **La spec sbagliava una previsione, e il task M10B-01 con lei**: «i test di M9 su
+      `quotaTitolare` si romperanno». **Non si è rotto niente** (659 verdi prima, 659 dopo), perché
+      il ripiego *è* il codice di M9 lasciato intatto — `quotaTitolare`, `titolareForte` e
+      `SOGLIA_TITOLARE` non sono stati toccati. Portare la titolarità su Carmy è stato **additivo**.
+      → **Un componente in meno, non uno in più.** `TitolaritaBadge` di M9 **non esiste più**: al suo
+      posto c'è `TitolaritaAnyBadge`, che prende le due chiavi. Tenerne due voleva dire che ogni
+      chiamante decideva quale disegnare, cioè tre copie della regola che `titolarita()` esiste per
+      centralizzare — e la prima stesura l'aveva fatto davvero, duplicando la resa del badge di M9
+      in due punti.
+      → **La pagina di prova è esistita e poi è stata cancellata**, come quella dei colori di M9:
+      `/admin/listone/prova` con quaranta difensori veri e gli interruttori per confrontare le
+      forme. Di lei nel codice resta solo la costante con la scelta dentro. ⚠ Dopo averla cancellata
+      `pnpm typecheck` è rimasto rosso su dei tipi generati in `.next/types` per una pagina che non
+      c'era più: si cancella quella cartella, non è codice.
+      → **La scelta dell'owner è `parola`** — «Titolarissimo» / «Titolare» — e **non** era la
+      proposta. Ha comportato due cose che vanno lette insieme a lei, ed entrambe sono nel commento
+      di `FORMA_TITOLARITA`: (1) sotto soglia la parola **non si inventa** — il foglio dice «3 su
+      5», non «panchinaro» — quindi quei badge portano la scala, `Titolarità 3/5`; (2) il tag
+      `titolarissimo`, che il foglio scrive su **106 giocatori**, **sparisce dalla riga** quando il
+      badge lo dice già, altrimenti la stessa parola comparirebbe due volte sulla stessa riga di un
+      telefono — una verde e una grigia — rubando il posto al secondo tag.
+- [x] **M10B-08** — Il pannello: il caricamento sotto quello del listone, il quarto timestamp, e
       l'avviso quando il file è vecchio di più di un giorno (§8)
-- [ ] **M10B-09** — Il Centro dati: le colonne nuove, ordinabili con la regola di M10, e il filtro
+      → Tutto come da §8. Il pulsante è **spento finché il listone non c'è**, e questo è un gate
+      *vero* — a differenza di quello che M10 §5 aveva scelto di non mettere sugli insight: qui il
+      caricamento fallirebbe davvero, quindi un pulsante attivo sarebbe la bugia.
+      → I nomi non agganciati e le discordanze di squadra si dicono **in due frasi separate** nel
+      messaggio di successo, perché sono due cose diverse: un aggancio mancato è un file vecchio, una
+      discordanza è un trasferimento.
+- [x] **M10B-09** — Il Centro dati: le colonne nuove, ordinabili con la regola di M10, e il filtro
       per tag
-- [ ] **M10B-10** — `listPickPool`: la chiave `carmy` **assente** per chi non è pro, come `insights`
+      → Cinque colonne nuove (`Fascia`, `Consigl.`, `Affid.`, `Integr.`, `Note`) più il filtro per
+      tag su una riga sua, letto **dai dati** e non da un elenco scritto a mano.
+      → ⚠ **Una decisione che §6 non aveva previsto: `Titolarità` è una colonna sola, non due.** §6
+      la elencava fra le «colonne nuove», ma il Centro dati ne aveva già una. Due colonne che dicono
+      la stessa cosa con due scale sono due colonne che nessuno confronta, quindi è una: il badge di
+      Carmy quando c'è, quello delle presenze quando non c'è, e il rapporto grezzo in grigio
+      accanto. Ordinarla ha richiesto una scelta scritta in `valueOf`: i due valori si riportano a
+      0–1 (`voto / 5` da un lato, `quotaTitolare` dall'altro) perché rispondono alla stessa domanda.
+      → Il filtro per tag è **uno per volta e non un elenco**: un elenco pone subito la domanda
+      «tutti o almeno uno?», cioè due significati per lo stesso controllo.
+- [x] **M10B-10** — `listPickPool`: la chiave `carmy` **assente** per chi non è pro, come `insights`
       (§7). Il test è quello di M8: si asserisce l'assenza della chiave, non il suo valore
-- [ ] **M10B-11** — Il portale: `InsightsLine` nella lista di chiamata, `InsightsMacro` nel modale, e
+      → Fatto con lo **stesso** `canSeeInsights`, senza nessun permesso nuovo. Le due letture vanno
+      in `Promise.all` e le due chiavi si aggiungono **una per una**: un giocatore giudicato da Carmy
+      ma senza riga di insight arriva con `carmy` e senza `insights`, ed è il caso vero dei dieci
+      nomi che il listone non aveva.
+- [x] **M10B-11** — Il portale: `InsightsLine` nella lista di chiamata, `InsightsMacro` nel modale, e
       **il prezzo consigliato**, che si scrive (owner). ⚠ In un componente suo e con **un posto solo**
       da cui si decide se e dove compare: le tre forme fra cui l'owner sceglierà guardando non devono
       costare tre riscritture (§6)
-- [ ] **M10B-12** — I filtri della chiamata per `is_pro`: fascia, titolarità minima, tag. ⚠ **E la
+      → `components/auction/prezzo-consigliato.tsx`, con **quattro** posizioni scritte e non tre:
+      `campo`, `macro`, `tocco` e **`spento`**. La quarta è quella che la spec chiedeva senza
+      nominarla — «poter essere spostato o spento senza rifare niente» — e spegnerlo è una riga,
+      non una rimozione di codice: i due punti d'innesto restano scritti e tacciono da sé.
+      → **La scelta dell'owner è `macro`**: il prezzo c'è, ma fra i giudizi e non accanto al campo.
+- [x] **M10B-12** — I filtri della chiamata per `is_pro`: fascia, titolarità minima, tag. ⚠ **E la
       riga dell'auto-pick**, che è il vincolo del riquadro di §6 — da scegliere guardando, e da
       provare col filtro acceso
-- [ ] **M10B-13** — Test con Postgres: un caricamento sostituisce l'intera tabella; sotto la soglia di
+      → I filtri si mostrano **se e solo se i dati sono arrivati** (`pool.some(p => p.carmy)`), e non
+      con un `if (isPro)`: la chiave è assente nel payload di chi non ha il permesso, quindi quella
+      condizione **è** il permesso — più il caso «foglio non caricato», che si comporta allo stesso
+      modo e giustamente.
+      → La titolarità minima ha **due** valori e non cinque: «da 4» è la soglia del verde, «da 5» è
+      il solo titolarissimo, e i gradi in mezzo non sono una domanda che qualcuno si fa mentre offre
+      con un pollice sotto un countdown.
+      → **Sulla riga dell'auto-pick l'owner ha delegato**: «non importa, l'importante è che la
+      dinamica di auto estrazione del lotto esista — la pagina di visualizzazione è più una utility
+      per l'utente». Scelta `riga` (entrambe restano scritte, dietro `MODO_AUTOPICK`), perché è
+      l'unica che non fa mentire l'elenco una seconda volta: `fissa` risolve «il primo nome non è
+      quello giusto» introducendo una riga presente in un elenco che dichiara di averla filtrata.
+      La riga si scrive **sempre**, filtro o no, e diventa ambrata quando il primo della lista non è
+      più quello: se comparisse solo a filtro acceso, chi non filtra continuerebbe a fidarsi
+      dell'ordinamento e chi filtra la leggerebbe come un avviso d'errore.
+- [x] **M10B-13** — Test con Postgres: un caricamento sostituisce l'intera tabella; sotto la soglia di
       aggancio **non si scrive niente** e i nomi mancati si dicono; **un'asta si gioca fino a
       `COMPLETED` con `carmy_players` vuota**; un non-pro **non riceve la chiave** `carmy`; il filtro
       per tag non cambia chi vince l'auto-pick
+      → Tutti e cinque, più la mappa delle sigle contro il listone caricato. Il test del motore è più
+      forte di quello chiesto: non prova che *il filtro* non cambia l'auto-pick — un filtro vive nel
+      browser e non può — ma che **una tabella piena di giudizi addosso ai giocatori in gara** non
+      cambia di una virgola chi viene comprato. I giudizi sono messi **contro** l'ordine
+      dell'auto-pick (il `fvm` decresce con l'indice, la titolarità cresce), e due aste identiche
+      comprano gli stessi nomi nello stesso ordine.
+      → ⚠ **I test non stanno in `tests/db/carmy.test.ts`, e questo è lo scarto più importante del
+      task.** Erano in un file loro, verde da solo — e la suite intera è diventata **rossa in dieci
+      test** con un `duplicate key ... listone_players_pkey`: `uploadListone` fa `DELETE` sulla
+      tabella, il join di M10B ha bisogno di un listone caricato, e vitest gira i file in worker
+      **paralleli**. È la stessa cicatrice che il file di M10 aveva già documentato per
+      `player_insights`, e la regola che ne esce è quella: **una tabella globale, un file che la
+      possiede.** I test di M10B sono quindi in `tests/db/listone.test.ts`, che ora possiede
+      `listone_players` **e** `carmy_players`, e il perché è scritto in testa al file. L'alternativa
+      — `fileParallelism: false` — costerebbe secondi a ogni `pnpm test` per un problema che
+      riguarda due file, e lascerebbe la trappola aperta per il terzo.
+      → E due errori miei che i test hanno preso: `state.assignments[].playerId` è un **uuid per
+      asta** (due aste hanno uuid diversi per lo stesso giocatore, il che è anche la prova che
+      `players` è per asta), quindi si confrontano i **nomi**; e il listone sintetico di
+      `game-helpers.ts` numera gli `ext_id` **da 1**, che si **sovrappongono** a quelli veri — la
+      cicatrice `EXT_ID_BASE`, di nuovo, sul test del non-pro.
 - [ ] **M10B-14** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
       spento)
-- [ ] **M10B-15** — `docs/ARCHITECTURE.md`: il capitolo sugli insight si riapre — **da dove viene un
+- [x] **M10B-15** — `docs/ARCHITECTURE.md`: il capitolo sugli insight si riapre — **da dove viene un
       giudizio, e perché non è una misura**. `docs/DECISIONS.md`, `docs/HOWTO-PROVA-LOCALE.md` (in
       locale il file si carica dopo il listone), `docs/features/README.md`
+      → `ARCHITECTURE.md` ha un capitolo suo, «Il giudizio di un umano: da dove viene, e perché non è
+      una misura», dopo quello del listone a sistema e prima di «Il posto dove gira». Non riassume la
+      spec: racconta perché la domanda dell'asta («quanto giocherà quest'anno») non è quella a cui
+      rispondono i numeri, cosa dice la misura di 0,65, perché è una terza fonte e non un rimpiazzo, e
+      perché il prezzo consigliato è l'unico numero della macro che **propone un'azione**.
+      → `DECISIONS.md` ha una voce nuova, «M10B, quello che è cambiato scrivendola», che **non
+      riscrive** quella della sessione d'analisi: richiama e aggiunge solo ciò che la spec non sapeva.
+      → `HOWTO-PROVA-LOCALE.md`: §6 cambia titolo e porta l'ordine dei tre passi — **listone → Carmy →
+      caricature** — con l'output atteso del caricamento e le tre cose che non sono guasti. Il Centro
+      dati guadagna il paragrafo sulle colonne nuove e la regola dell'ordinamento.
+      → `features/README.md`: M10B passa fra le chiuse, spariscono le righe che la davano «da
+      pianificare», e i passi a mano del rilascio comune diventano espliciti — **un solo `db:push`**,
+      poi **due file nell'ordine**.
 - [ ] **M10B-16** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       esplicita** — `CHANGELOG.md`, `package.json`, merge su `main`, **tag `v1.11.0`**, push.
       ⚠ **Quel rilascio porta in produzione anche M10**, che è ferma su `dev` dal 2026-08-12: un tag
@@ -434,3 +615,72 @@ pannello, e va detto quando è vecchio di più di un giorno.
 7. **Senza il file caricato, `/play` è identica a v1.11.0** e il badge torna quello di M9.
 8. **Il caricamento di ieri si distingue da quello di stamattina**: la data è in ora italiana, e il
    pannello dice quando il file è vecchio.
+
+---
+
+## Com'è andata
+
+Scritto alla chiusura, il 2026-08-12. Non è il riassunto di cosa è stato fatto — quello sta nei task,
+sotto le frecce. **È cosa la spec aveva sbagliato**, perché è l'unica parte che serve alla prossima.
+
+**La misura di §1 e §2 ha tenuto, e questo è il risultato più importante del metodo.** Rifatta sui
+byte del giorno di apertura, la spec regge riga per riga: 497 righe, 487/497 di aggancio, zero omonimi,
+`Pt. Inf.` identica a `injured`, correlazione 0,649, 11 e 13 disaccordi, `>= 4` a 168/497 = 33,8%, M9
+a 61 su 329 mostrabili, le otto fasce e le diciassette etichette coi loro conteggi. Scrivere una spec
+partendo da una misura sui byte veri, e non da un'idea di com'è fatto il file, ha fatto sì che il
+parser si scrivesse in un pomeriggio invece di essere riscritto tre volte.
+
+**Ma la spec aveva letto la scala e non i valori fuori scala.** §1 dice «1–5» cinque volte e nel file
+c'è uno **zero** — su tutti e tre i giudizi di un giocatore, sul prezzo di settantatré, e nella fascia
+di ottantaquattro sotto forma di `"Non Impostata"`. Sono tre modi diversi di scrivere «non compilato»,
+e letti come valori diventano tre bugie diverse: il peggior giocatore del listone, un prezzo
+consigliato di zero crediti (che non è nemmeno un'offerta valida), una fascia che non esiste. **La
+lezione non è «guarda gli zeri»: è che una distribuzione va contata anche fuori dall'intervallo che ti
+aspetti.** La spec aveva contato 1→75, 2→94, 3→159, 4→65, 5→103, che fa 496 su 497 — il conto non
+tornava già lì, e nessuno l'aveva fatto.
+
+**Due decisioni le ha prese l'owner guardando, e una l'ha delegata.** La forma del badge è `parola` e
+**non** era la proposta: la proposta era `voto`, con due argomenti scritti nella domanda stessa (perde
+la scala, e collide con un tag che il foglio ha già su 106 giocatori). L'owner ha scelto comunque, che
+è il suo diritto — e le due obiezioni non sono cadute, sono diventate due righe di codice: sotto soglia
+il badge porta la scala invece di inventare una parola, e il tag `titolarissimo` sparisce dalla riga
+quando il badge lo dice già. ⚠ **Vale come metodo: una preferenza dell'owner contro una proposta
+motivata non chiude le obiezioni, le trasforma in requisiti.**
+La terza — la riga dell'auto-pick — è stata delegata, ed è interessante *come*: «l'importante è che la
+dinamica di auto estrazione del lotto esista, la pagina di visualizzazione è più una utility». Cioè
+l'owner ha risposto al **vincolo** (il motore non si tocca) e non alla domanda sulla forma. Il vincolo
+era la parte che contava.
+
+**La pagina di prova ha funzionato e sarebbe stata sbagliata sostituirla con una descrizione.** Tre
+decisioni su tre sono state prese guardando, come per i colori di M9. È esistita per il tempo di una
+domanda e poi è stata cancellata: nel codice non resta niente di lei tranne tre costanti con la scelta
+dentro, e le forme scartate — che restano scritte, perché il costo di cambiare idea deve essere una
+riga.
+
+**Lo scarto tecnico più costoso non era nella spec: era nei test.** I test con Postgres, in un file
+loro, erano verdi da soli e hanno reso **rossa la suite in dieci test**. La causa è banale e la
+diagnosi non lo è: `uploadListone` fa `DELETE` su una tabella **globale**, M10B ha bisogno di quella
+tabella per esistere, e vitest gira i file in worker paralleli. È **la terza volta** che questo
+progetto incontra la stessa cosa — `player_insights` in M10, l'`EXT_ID_BASE` in M10, questa — e la
+regola che ne esce va scritta una volta per tutte: **una tabella globale, un file di test che la
+possiede.** Costa un file di test più grosso e fa risparmiare un pomeriggio di «funziona da solo, non
+funziona insieme».
+
+**Una previsione della spec era falsa e ha rischiato di costare tempo.** M10B-01 diceva «i test di M9
+su `quotaTitolare` si romperanno, e va saputo perché». Non si sono rotti, perché il ripiego di §4 *è*
+il codice di M9 lasciato intatto. Una spec che predice un rosso fa cercare quel rosso: se non arriva,
+si sospetta di non aver fatto il lavoro. **Le previsioni sui test non vanno scritte nelle spec** — ci
+si scrive cosa deve valere alla fine, non cosa si romperà nel mezzo.
+
+**Tre cose che la spec non aveva previsto e che sono entrate.** Una colonna `source_team`, perché il
+controllo della squadra ha bisogno di ricordare cosa diceva il foglio; un codice d'errore
+`CARMY_NO_LISTONE`, perché senza denominatore la soglia di aggancio sarebbe una divisione per zero e il
+messaggio deve dire cosa fare; e una quarta posizione del prezzo consigliato, `spento`, che §6 chiedeva
+senza nominarla («poter essere spostato o spento senza rifare niente»).
+
+**E una cosa che la spec aveva previsto meglio di quanto sembrasse.** Il riquadro di §6 — il primo nome
+della lista con un filtro acceso — sembrava un dettaglio di interfaccia e invece era l'unico posto in
+cui questa macro poteva far perdere un giocatore a qualcuno. Non perché rompe il motore: perché rompe
+**una promessa che l'interfaccia aveva fatto senza scriverla**. Vale la pena tenerlo a mente per le
+prossime: i vincoli peggiori non sono negli invarianti, sono nelle abitudini che l'applicazione ha
+insegnato.

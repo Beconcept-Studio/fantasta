@@ -33,6 +33,13 @@ export type ParsedInsight = {
   extId: number;
   fantalabId: string | null;
   fullName: string | null;
+  /**
+   * Il nome **corto** (`name`): «Abankwah», dove `full_name` scrive «James
+   * Abankwah». Aggiunto in M10B §5: non serve a nessun join — quello di Carmy
+   * passa da `listone_players` — ma è ciò che permette di capire perché un nome
+   * non ha agganciato senza riaprire a mano la risposta della fonte.
+   */
+  name: string | null;
   team: string;
   /** `"current"` o `"previous"`, da `display_stats_season`. */
   statsSeason: string;
@@ -176,6 +183,7 @@ export function parseFantalabListone(
       extId,
       fantalabId: asText(row.player_id),
       fullName: asText(row.full_name) ?? asText(row.name),
+      name: asText(row.name),
       team,
       statsSeason,
       // `display_presenze`, non `presenze`: vedi il commento in testa al file.

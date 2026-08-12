@@ -327,6 +327,243 @@ export function bestSetPieceRank(
   return ranks.length === 0 ? null : Math.min(...ranks);
 }
 
+// ─── Il giudizio di un umano (M10B) ──────────────────────────────────────────
+
+/**
+ * Le venti sigle di tre lettere con cui il foglio di Carmy scrive le squadre.
+ *
+ * ⚠ **Venti righe in chiaro, e non un algoritmo di somiglianza** (M10B §3).
+ * `ROM` → `Roma` lo indovinerebbe qualunque prefisso, ma `MON` sta per `Monza` e
+ * non per `Modena`, e una funzione che sbaglia in silenzio su una squadra sola
+ * sposta un giudizio da un giocatore a un altro. Venti righe che qualcuno rilegge
+ * ad agosto sono più oneste.
+ *
+ * ⚠ **Va rigenerata a ogni promozione**, ed è la stessa nota che M8 §9 aveva
+ * scritto per la griglia portieri. Il test lo verifica contro le squadre del
+ * listone caricato, così la dimenticanza si vede in un rosso e non in un
+ * giudizio mancante.
+ *
+ * ⚠ **Non è la chiave del join, è il controllo.** Il join passa dal nome (§3);
+ * questa mappa serve a confrontare la squadra e a **segnalare** una discordanza,
+ * che è un trasferimento o un omonimo. Sul file del 2026-08-12 sono tre —
+ * Dominguez B., Masini, Maldini — e sono tutti e tre mercato vero.
+ */
+export const CARMY_TEAM_BY_SIGLA: Record<string, string> = {
+  ATA: "Atalanta",
+  BOL: "Bologna",
+  CAG: "Cagliari",
+  COM: "Como",
+  FIO: "Fiorentina",
+  FRO: "Frosinone",
+  GEN: "Genoa",
+  INT: "Inter",
+  JUV: "Juventus",
+  LAZ: "Lazio",
+  LEC: "Lecce",
+  MIL: "Milan",
+  MON: "Monza",
+  NAP: "Napoli",
+  PAR: "Parma",
+  ROM: "Roma",
+  SAS: "Sassuolo",
+  TOR: "Torino",
+  UDI: "Udinese",
+  VEN: "Venezia",
+};
+
+/**
+ * Il nome di un calciatore ridotto alla forma con cui si confrontano due file.
+ *
+ * ⚠ **È la chiave del join di M10B**, quindi è la funzione più delicata di questo
+ * file: `trim`, minuscolo, accenti tolti, spazi interni collassati. Gli accenti
+ * si tolgono perché è l'unica differenza plausibile fra due export dello stesso
+ * nome — sui byte del 2026-08-12 i dodici nomi accentati (`Dodò`, `Lucumì`,
+ * `Zè Pedro`…) sono scritti **identici** nei due file, e togliere gli accenti non
+ * cambia il risultato: è la garanzia che continui a non cambiarlo il giorno in cui
+ * uno dei due esporta in un'altra codifica.
+ *
+ * **Non fa niente di più.** Nessuna somiglianza, nessuna distanza di Levenshtein,
+ * nessun cognome estratto: 487 nomi su 497 agganciano così, e i dieci che restano
+ * sono giocatori che nel listone **non c'erano** — nessuna normalizzazione li
+ * troverebbe. Un aggancio approssimato che indovina nove volte e sbaglia la decima
+ * mette il giudizio di un giocatore addosso a un altro, e non lo dice a nessuno.
+ */
+export function normalizeCarmyName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Le fasce di Carmy, dalla più cara alla meno cara.
+ *
+ * ⚠ **L'ordine non è inventato: è quello del foglio.** Tutti e quattro i fogli
+ * raggruppano le righe in questa sequenza identica, e la mediana del `Prezzo` la
+ * conferma (47 → 26 → 13 → 3 → 2 → 1 → 1). L'unico punto in cui servirebbe
+ * indovinare è fra `Titolare "Scarso"` e `Outsider`, che hanno la stessa mediana:
+ * lì si tiene l'ordine in cui li mette il file, che è l'unica fonte che ne sa
+ * qualcosa.
+ *
+ * `Non Impostata` non è in elenco perché il parser la traduce in `null`: nel file
+ * è **il modo in cui si scrive «nessuna fascia»** — 84 giocatori su 497, e nessuna
+ * cella vuota — e l'applicazione scrive l'assenza in un modo solo.
+ */
+export const CARMY_FASCE = [
+  "Top",
+  "Semi-Top",
+  "Terza",
+  "Quarta",
+  "Scomm.",
+  'Titolare "Scarso"',
+  "Outsider",
+] as const;
+
+/** Il valore con cui il foglio scrive «nessuna fascia». Non arriva mai a database. */
+export const CARMY_FASCIA_ASSENTE = "Non Impostata";
+
+/**
+ * Dove sta una fascia nell'ordine, per ordinare una colonna. Le sconosciute vanno
+ * in fondo insieme alle assenti: se un giorno Carmy aggiunge una fascia, compare
+ * in tabella e finisce in coda, senza che niente si rompa.
+ */
+export function carmyFasciaRank(fascia: string | null | undefined): number {
+  if (!fascia) return CARMY_FASCE.length;
+  const index = (CARMY_FASCE as readonly string[]).indexOf(fascia);
+  return index === -1 ? CARMY_FASCE.length : index;
+}
+
+/**
+ * Il giudizio di Carmy su un calciatore, nella forma con cui arriva al browser.
+ *
+ * Dichiarato **qui** e non dedotto da `carmy_players` per la stessa ragione di
+ * `PlayerInsights`: lo legge un client component, e `lib/db` nel bundle non ci
+ * deve entrare. Le due definizioni devono restare d'accordo, e il test del parser
+ * è ciò che se ne accorge.
+ */
+export type CarmyJudgement = {
+  extId: number;
+  /** Il nome e la sigla come li scrive il foglio: spiegano un aggancio. */
+  sourceName: string;
+  sourceTeam: string;
+  fascia: string | null;
+  /** `null` anche quando il foglio scrive `0`: zero non è un'offerta valida. */
+  prezzo: number | null;
+  /** 1–5, oppure `null` su una riga che nel foglio non è compilata. */
+  titolarita: number | null;
+  affidabilita: number | null;
+  integrita: number | null;
+  fmvExp: number | null;
+  tags: string[];
+  commento: string | null;
+};
+
+/** La scala dei tre giudizi. Un numero fuori da qui è un file cambiato, non un voto. */
+export const CARMY_SCALA_MAX = 5;
+
+/**
+ * Da qui in su la titolarità è verde: **`Titolarità >= 4`** (owner, 2026-08-12).
+ *
+ * ⚠ **Va letta con la sua misura accanto, perché tocca una regola che M9 aveva
+ * messo per iscritto contando.** Sul file del 2026-08-12, 497 giocatori:
+ *
+ * | Soglia | Verdi | Sul listone |
+ * |---|---|---|
+ * | **`>= 4`** — la scelta | **168** | **33,8%** — uno su tre |
+ * | `>= 5` | 103 | 20,7% — uno su cinque |
+ * | M9, l'80% sulle presenze | 61 | 12,3% sui soli mostrabili |
+ *
+ * M9 §1 aveva scritto che «uno su cinque è il punto in cui un colore smette di
+ * essere un segnale e diventa decorazione», e `>= 5` cade **esattamente** lì.
+ * **La scelta resta `>= 4` perché è dell'owner**, che l'ha guardata su una lista
+ * vera: la misura sta qui così che, se un giorno risultasse troppo, la riga da
+ * cambiare sia una sola e il numero da confrontare sia già scritto.
+ */
+export const SOGLIA_TITOLARE_CARMY = 4;
+
+/**
+ * La titolarità di un calciatore, e **l'unico posto in cui si decide da dove
+ * viene** (M10B §4).
+ *
+ * Restituisce una delle due forme, mai un misto:
+ *
+ * - `{ fonte: "carmy" }` — il giudizio di chi compila il foglio, 1–5. È **la**
+ *   titolarità dell'applicazione quando c'è (decisione dell'owner, 2026-08-12): si
+ *   smette di dedurla da `starts_eleven / 38`. Porta con sé `quota`, il rapporto
+ *   grezzo dell'anno scorso, che **non si perde** — resta accanto in grigio, ed è
+ *   ciò che rende il giudizio verificabile. Un `5/5` da solo è un'affermazione che
+ *   nessuno può controllare; `5/5` accanto a `3/38` è un'affermazione con la sua
+ *   prova, **e quando i due divergono quella divergenza è l'informazione più
+ *   preziosa della riga** (Dovbyk: giudicato 5, tre partite da titolare).
+ * - `{ fonte: "presenze" }` — il badge di M9, calcolato dalle presenze, per quando
+ *   il file non è caricato o quel giocatore non ha agganciato.
+ * - `null` — non c'è né l'uno né l'altro: la UI scrive `—`.
+ *
+ * ⚠ **Esiste perché la scelta fra le due sta in un posto solo.** Due regole per la
+ * stessa cosa sparse nei componenti sono esattamente ciò che `showableInsights` era
+ * stato scritto per evitare: il giorno in cui la lista di chiamata e il modale
+ * d'offerta le applicassero in due modi diversi, lo stesso giocatore sarebbe verde
+ * in una schermata e grigio nell'altra.
+ *
+ * ⚠ **`showableInsights` continua a valere sul ramo `presenze` e non su quello di
+ * Carmy**, ed è la stessa distinzione di `bestSetPieceRank`: le presenze sono un
+ * numero *di stagione*, e quello dell'anno scorso accanto a uno di quest'anno è un
+ * confronto falso. Il giudizio di Carmy no — è un'opinione su **quest'anno**,
+ * scritta oggi, e non cambia significato per quanto ha giocato chi la porta.
+ * Conseguenza voluta: la `quota` accanto a un giudizio di Carmy c'è **solo** se è
+ * mostrabile, così un `5/5` non finisce mai accanto a un `34/38` di due campionati
+ * fa (è il caso di Stankovic A., giudicato 2).
+ */
+export type Titolarita =
+  | {
+      fonte: "carmy";
+      /** 1–5. */
+      voto: number;
+      /** Il rapporto grezzo, se mostrabile: `{ starts, giornate }`. */
+      quota: { starts: number; giornate: number } | null;
+      forte: boolean;
+    }
+  | {
+      fonte: "presenze";
+      /** 0–1, già col clamp di `quotaTitolare`. */
+      quota: number;
+      starts: number;
+      giornate: number;
+      forte: boolean;
+    };
+
+export function titolarita(
+  insights: PlayerInsights | null | undefined,
+  carmy: CarmyJudgement | null | undefined,
+): Titolarita | null {
+  const showable = showableInsights(insights);
+
+  if (carmy && carmy.titolarita !== null) {
+    return {
+      fonte: "carmy",
+      voto: carmy.titolarita,
+      quota: showable
+        ? { starts: showable.startsEleven, giornate: GIORNATE }
+        : null,
+      forte: carmy.titolarita >= SOGLIA_TITOLARE_CARMY,
+    };
+  }
+
+  if (showable) {
+    return {
+      fonte: "presenze",
+      quota: quotaTitolare(showable),
+      starts: showable.startsEleven,
+      giornate: GIORNATE,
+      forte: titolareForte(showable),
+    };
+  }
+
+  return null;
+}
+
 /**
  * Chi vede gli insight sul listone.
  *

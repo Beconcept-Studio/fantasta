@@ -428,6 +428,19 @@ export const playerInsights = pgTable("player_insights", {
    */
   fantalabId: uuid("fantalab_id"),
   fullName: text("full_name"),
+  /**
+   * Il nome **corto** della fonte A (`name`): «Abankwah», dove `full_name` scrive
+   * «James Abankwah».
+   *
+   * ⚠ **Non serve a nessun join** — quello di M10B passa da `listone_players`
+   * (§3) — e per questo è facile crederla inutile. Serve a **spiegare** un
+   * aggancio mancato: Carmy e il listone scrivono il nome corto, e senza questa
+   * colonna l'unico modo di capire perché dieci nomi non agganciano è riaprire a
+   * mano la risposta della fonte. Nasce `null` sulle righe già in tabella e si
+   * riempie al primo refresh: nessun backfill dedicato, perché nessuna schermata
+   * la pretende.
+   */
+  name: text("name"),
   team: text("team").notNull(),
 
   /**
@@ -468,6 +481,74 @@ export const playerInsights = pgTable("player_insights", {
   /** Due timestamp perché due fonti indipendenti: il pannello dice quale è vecchia. */
   listoneUpdatedAt: timestamp("listone_updated_at", { withTimezone: true }),
   setPiecesUpdatedAt: timestamp("set_pieces_updated_at", { withTimezone: true }),
+});
+
+// ─── Il giudizio di un umano (globale, non per asta) ──────────────────────────
+
+/**
+ * Il foglio di Carmy: un giudizio su ogni calciatore, compilato a mano da una
+ * persona e caricato dal pannello (M10B).
+ *
+ * ⚠ **Perché una tabella sua e non tre colonne su `player_insights`**, che pure
+ * ospita già due fonti diverse (M10B §5): perché quelle due si aggiornano **per
+ * colonna con un `upsert`** — la fonte A scrive le statistiche, la fonte B i due
+ * rank, e nessuna delle due tocca le colonne dell'altra — mentre questa si
+ * **sostituisce per intero** a ogni caricamento, come `listone_players`.
+ * Mescolarle vorrebbe dire che il refresh giornaliero e un file umano scrivono
+ * nella stessa riga con due semantiche diverse, ed è il punto in cui qualcuno,
+ * fra sei mesi, cancella i giudizi con una `GET`.
+ *
+ * ⚠ **Non c'è `ext_id` nel file.** La chiave qui è comunque `ext_id`, ma **la
+ * mette il join**: Carmy ha `Nome` e una sigla di tre lettere, e si aggancia per
+ * nome normalizzato a `listone_players` (§3). Conseguenza: un giocatore che non
+ * sta nel listone **non entra qui**, e questo è voluto — un giudizio su qualcuno
+ * che non si può comprare non serve a nessuno.
+ *
+ * Come `player_insights` e `listone_players`: **l'asta funziona con questa tabella
+ * vuota**, si legge in `LEFT JOIN` e nessun percorso critico la attraversa.
+ * Un'asta si crea, si prepara e arriva a `COMPLETED` senza che qui ci sia una riga.
+ */
+export const carmyPlayers = pgTable("carmy_players", {
+  /** L'`ext_id` del listone a cui il nome ha agganciato: non viene dal file. */
+  extId: integer("ext_id").primaryKey(),
+  /**
+   * Il nome come lo scrive Carmy, e la sigla della sua squadra: servono a
+   * **spiegare** un aggancio, non ad agganciare. La sigla è il *controllo* di §3 —
+   * una discordanza con la squadra del listone si segnala, non si ingoia.
+   */
+  sourceName: text("source_name").notNull(),
+  sourceTeam: text("source_team").notNull(),
+  fascia: text("fascia"),
+  /**
+   * Il prezzo consigliato in crediti.
+   *
+   * ⚠ **`null` quando il foglio scrive `0`, e non è pignoleria**: nel file del
+   * 2026-08-12 sono **73 giocatori su 497** — riserve e terzi portieri, tutti con
+   * `PMA` a `"0%"` — e **zero non è nemmeno un'offerta valida**. Un «prezzo
+   * consigliato: 0» accanto al campo dell'offerta sarebbe un suggerimento
+   * impossibile da seguire (M10B-02, DECISIONS 2026-08-12).
+   */
+  prezzo: integer("prezzo"),
+  /**
+   * I tre giudizi, da 1 a 5.
+   *
+   * ⚠ **`null` anche qui quando il foglio scrive `0`.** Lo `0` non è un voto
+   * basso: è una riga non compilata — nel file del 2026-08-12 è **una sola**
+   * (Aurelio, con tutti e tre gli zeri, `MV` a zero e la fantamedia attesa vuota),
+   * e trattarla come «titolarità 0» la farebbe passare per il peggior giocatore
+   * del listone invece che per un giocatore su cui non c'è giudizio.
+   */
+  titolarita: integer("titolarita"),
+  affidabilita: integer("affidabilita"),
+  integrita: integer("integrita"),
+  /** La fantamedia attesa. 494 righe su 497 nel file del 2026-08-12. */
+  fmvExp: real("fmv_exp"),
+  /** Le cinque note del foglio, già ripulite e senza i vuoti. */
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  /** Testo libero, multi-riga, su dieci giocatori: gli abbinamenti dei portieri. */
+  commento: text("commento"),
+  /** Uguale su tutte le righe di uno stesso caricamento, come in `listone_players`. */
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull(),
 });
 
 // ─── Lotti (una chiamata all'asta) ───────────────────────────────────────────
@@ -664,6 +745,8 @@ export type Player = typeof players.$inferSelect;
 export type NewPlayer = typeof players.$inferInsert;
 export type PlayerInsightRow = typeof playerInsights.$inferSelect;
 export type NewPlayerInsightRow = typeof playerInsights.$inferInsert;
+export type CarmyPlayerRow = typeof carmyPlayers.$inferSelect;
+export type NewCarmyPlayerRow = typeof carmyPlayers.$inferInsert;
 export type Lot = typeof lots.$inferSelect;
 export type LotRound = typeof lotRounds.$inferSelect;
 export type Bid = typeof bids.$inferSelect;

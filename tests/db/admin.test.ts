@@ -140,6 +140,11 @@ suite("ogni server action del pannello rifiuta chi non è amministratore", () =>
       // `downloadCampionciniAction`, che infatti non cambia nome né firma
       // rispetto all'elenco — ma la macro **un'azione la aggiunge**, ed è
       // questa. Il test ha fatto il suo lavoro anche stavolta.
+      // M10B — il caricamento del foglio di Carmy. Quarta volta di fila che
+      // questa riga viene aggiunta **dopo** aver visto il rosso, insieme al
+      // `requireAppAdmin()` in cima all'azione: a questo punto non è più una
+      // coincidenza, è il test che funziona.
+      "uploadCarmyAction",
       "uploadListoneAction",
     ]);
   });

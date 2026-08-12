@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CampionciniPanel } from "@/components/admin/campioncini-panel";
+import { CarmyUpload } from "@/components/admin/carmy-upload";
 import { InsightsPanel } from "@/components/admin/insights-panel";
 import { ListoneUpload } from "@/components/admin/listone-upload";
 import { requireAppAdmin } from "@/lib/auth";
@@ -9,6 +10,8 @@ import {
   campionciniDir,
   countArchive,
 } from "@/lib/campioncini";
+import { SOGLIA_TITOLARE_CARMY } from "@/lib/domain";
+import { carmyStatus } from "@/lib/engine/carmy";
 import { insightsStatus } from "@/lib/engine/insights";
 import { listoneStatus } from "@/lib/engine/listone";
 import { when } from "@/lib/when";
@@ -51,6 +54,7 @@ export default async function AdminListonePage() {
 
   const listone = await listoneStatus();
   const insights = await insightsStatus();
+  const carmy = await carmyStatus();
   const archived = await countArchive(campionciniDir());
 
   return (
@@ -66,6 +70,40 @@ export default async function AdminListonePage() {
       </div>
 
       <ListoneUpload rows={listone.rows} />
+
+      <div className="max-w-2xl space-y-3 border-t pt-6">
+        <CarmyUpload rows={carmy.rows} listoneRows={listone.rows} />
+        {carmy.rows > 0 && (
+          <p className="text-muted-foreground text-sm">
+            <strong className="tabular-nums">{carmy.rows}</strong> giudizi a
+            sistema ·{" "}
+            <span className="tabular-nums">{carmy.conTitolarita}</span> con una
+            titolarità, di cui{" "}
+            <span className="tabular-nums">{carmy.titolari}</span> da{" "}
+            {SOGLIA_TITOLARE_CARMY} in su ·{" "}
+            <span className="tabular-nums">{carmy.conPrezzo}</span> con un prezzo
+            consigliato.
+          </p>
+        )}
+        {/*
+          ⚠ L'avviso è sul **foglio di Carmy e non sul listone**, e la ragione sta
+          in §8: questo file invecchia in un giorno, perché un giudizio sulla
+          titolarità cambia con un infortunio o con una probabile formazione. Il
+          listone a sistema invecchia in settimane. `stale` lo calcola il motore,
+          non questo componente: `now` si passa, non si legge (regola 2).
+        */}
+        {carmy.stale && (
+          <p
+            role="status"
+            className="rounded-md border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-sm text-amber-800"
+          >
+            Il foglio a sistema è di <strong>{when(carmy.uploadedAt)}</strong>,
+            cioè vecchio di più di un giorno. Questo file invecchia in fretta —
+            la titolarità di un giocatore cambia con un infortunio — quindi
+            conviene ricaricarlo prima dell&apos;asta.
+          </p>
+        )}
+      </div>
 
       <div className="grid max-w-3xl gap-6 border-t pt-6 sm:grid-cols-2">
         <CampionciniPanel archived={archived} listoneRows={listone.rows} />
@@ -88,6 +126,17 @@ export default async function AdminListonePage() {
             Designati sui piazzati
           </dt>
           <dd>{when(insights.setPiecesUpdatedAt)}</dd>
+        </div>
+        {/*
+          ⚠ **Il quarto timestamp**, e va accanto agli altri tre perché la domanda
+          è la stessa — «quale di queste quattro cose è ferma?». Ma è l'unico che
+          ha un avviso sopra: gli altri tre si aggiornano da una fonte che si
+          aggiorna da sé (o quasi), questo lo carica una persona a mano, e M11 non
+          lo potrà automatizzare (§8).
+        */}
+        <div>
+          <dt className="text-muted-foreground text-xs">Foglio di Carmy</dt>
+          <dd>{when(carmy.uploadedAt)}</dd>
         </div>
       </dl>
 
@@ -181,6 +230,23 @@ export default async function AdminListonePage() {
           pubblica di <span className="font-mono">api.fantalab.it</span>, e porta
           i numeri. Sono nella stessa pagina perché è il posto giusto per
           guardarli insieme, non perché siano la stessa cosa.
+        </p>
+        <p>
+          <strong>Il foglio di Carmy porta un giudizio, non una misura.</strong>{" "}
+          Le sue colonne di numeri — presenze, partite da titolare, minuti,
+          rigori, cartellini — sono <em>identiche</em> a quelle che importiamo
+          già dalla fonte pubblica, quindi non le prendiamo. Quello che prendiamo
+          sono le tre colonne da 1 a 5, la fascia, il prezzo consigliato e le
+          note: sono l&apos;opinione di una persona su come andrà{" "}
+          <em>quest&apos;anno</em>, ed è una cosa che nessuna fonte pubblica ha.
+          Accanto alla titolarità giudicata resta sempre il rapporto grezzo
+          dell&apos;anno scorso, in grigio: quando i due divergono — giudicato
+          titolare con tre partite da titolare — quella divergenza è
+          l&apos;informazione. Il foglio si aggancia al listone{" "}
+          <strong>per nome</strong>, e se meno del 90% dei nomi lo trova
+          l&apos;import si rifiuta senza scrivere niente: vuol dire che i due
+          file parlano di due elenchi diversi, di solito perché il listone è
+          vecchio.
         </p>
         <p>
           <strong>Il listone si copia dentro l&apos;asta.</strong> Chi crea

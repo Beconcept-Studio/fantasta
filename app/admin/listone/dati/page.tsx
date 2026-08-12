@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { CentroDatiTable } from "@/components/admin/centro-dati-table";
 import { requireAppAdmin } from "@/lib/auth";
+import { carmyTags } from "@/lib/engine/carmy";
 import { centroDatiRows, listoneStatus } from "@/lib/engine/listone";
 import { when } from "@/lib/when";
 
@@ -27,6 +28,10 @@ export default async function CentroDatiPage() {
 
   const status = await listoneStatus();
   const rows = status.rows === 0 ? [] : await centroDatiRows();
+  // I tag si leggono dai dati, non da una costante: chi compila il foglio ne
+  // aggiungerà uno, e un elenco scritto a mano vorrebbe dire un filtro che non lo
+  // mostra senza che nessuno sappia perché (M10B §6).
+  const tags = rows.length === 0 ? [] : await carmyTags();
 
   if (rows.length === 0) {
     return (
@@ -58,7 +63,7 @@ export default async function CentroDatiPage() {
         confronto falso, quindi non si scrive.
       </p>
 
-      <CentroDatiTable rows={rows} />
+      <CentroDatiTable rows={rows} tags={tags} />
     </section>
   );
 }
