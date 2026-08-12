@@ -152,6 +152,77 @@ describe("parseCarmy — il giudizio, che è il motivo per cui il file esiste", 
     expect(Math.max(...prezzi)).toBe(155);
   });
 
+  /**
+   * ⚠ **Il `PMA` non è `Prezzo` in un'altra unità, ed è questo test a dirlo.**
+   *
+   * La spec di M10B l'aveva scartata come «dato derivato, `Prezzo` diviso il
+   * budget». Misurato quando l'owner l'ha chiesta: **solo 132 righe su 385**
+   * coincidono con `round(prezzo / 5, 1)`. La correlazione coi prezzi è alta —
+   * 0,969, perché entrambe seguono il valore di un giocatore — e il rapporto ha
+   * mediana **esattamente 5**, ma quella mediana la fanno i **166 giocatori da un
+   * credito**, dove `0,2%` è l'unico valore scrivibile. Fuori da quelli le due
+   * colonne dicono cose diverse: Di Gregorio costa 41 con `PMA` 2,5% (da `prezzo`
+   * verrebbe 8,2), De Gea costa 24 con 6,4% (verrebbe 4,8).
+   *
+   * I numeri sono **esatti** come tutti gli altri di questo file: se un giorno il
+   * foglio venisse ricompilato, cambiano insieme alla fixture — e cambiando
+   * direbbero che quella colonna ha cambiato significato, che è precisamente ciò
+   * che si vuole sapere.
+   */
+  it("⚠ il PMA non si ricalcola dal prezzo: solo 132 righe su 385 coinciderebbero", () => {
+    const both = rows().filter(
+      (row): row is typeof row & { prezzo: number; pma: number } =>
+        row.prezzo !== null && row.pma !== null,
+    );
+    expect(both).toHaveLength(385);
+
+    const round1 = (x: number) => Math.round(x * 10) / 10;
+    const coincidono = both.filter(
+      (row) => Math.abs(row.pma - round1(row.prezzo / 5)) < 0.051,
+    );
+    expect(coincidono).toHaveLength(132);
+
+    // La mediana del rapporto è 5, e da sola sarebbe stata fuorviante.
+    const ratios = both.map((row) => row.prezzo / row.pma).sort((a, b) => a - b);
+    expect(ratios[Math.floor(ratios.length / 2)]).toBeCloseTo(5, 6);
+
+    // I tre casi col nome dentro, così nessuno «corregge» quelle righe.
+    expect(rows().find((row) => row.name === "Di Gregorio")).toMatchObject({
+      prezzo: 41,
+      pma: 2.5,
+    });
+    expect(rows().find((row) => row.name === "De Gea")).toMatchObject({
+      prezzo: 24,
+      pma: 6.4,
+    });
+    expect(rows().find((row) => row.name === "Mkhitaryan")).toMatchObject({
+      prezzo: 14,
+      pma: 0.2,
+    });
+  });
+
+  it("legge il PMA come numero, non come la stringa col simbolo dentro", () => {
+    // Nel foglio è testo: `"10.5%"`, `"9%"`. Qui esce `10.5` e `9`.
+    expect(rows().find((row) => row.name === "Svilar")?.pma).toBeCloseTo(10.5);
+    expect(rows().find((row) => row.name === "Martinez Jo.")?.pma).toBe(9);
+    expect(rows().every((row) => row.pma === null || typeof row.pma === "number")).toBe(
+      true,
+    );
+  });
+
+  it("⚠ lo `0%` è assente, e i due zeri non coincidono con quelli del prezzo", () => {
+    const senzaPma = rows().filter((row) => row.pma === null);
+    const senzaPrezzo = rows().filter((row) => row.prezzo === null);
+    expect(senzaPma).toHaveLength(67);
+    expect(senzaPrezzo).toHaveLength(73);
+    // In comune 28: è l'altra faccia della deriva fra le due colonne, e il motivo
+    // per cui nessuna delle due si deduce dall'altra.
+    const entrambi = rows().filter(
+      (row) => row.pma === null && row.prezzo === null,
+    );
+    expect(entrambi).toHaveLength(28);
+  });
+
   it("le fasce sono le sette dichiarate, e `Non Impostata` diventa `null` su 84", () => {
     const dist: Record<string, number> = {};
     for (const row of rows()) dist[row.fascia ?? "null"] = (dist[row.fascia ?? "null"] ?? 0) + 1;
@@ -210,6 +281,7 @@ describe("parseCarmy — il giudizio, che è il motivo per cui il file esiste", 
       "fmvExp",
       "integrita",
       "name",
+      "pma",
       "prezzo",
       "role",
       "tags",

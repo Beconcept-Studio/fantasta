@@ -530,6 +530,33 @@ export const carmyPlayers = pgTable("carmy_players", {
    */
   prezzo: integer("prezzo"),
   /**
+   * Il `PMA` del foglio, in **punti percentuali** (`10.5` sta per «10,5%»).
+   *
+   * ⚠ **La spec di M10B l'aveva scartata chiamandola «un dato derivato, `Prezzo`
+   * diviso il budget». È falso, ed è stato misurato quando l'owner l'ha chiesta
+   * (2026-08-12):** solo **132 righe su 385** coincidono con
+   * `round(prezzo / 5, 1)`. Le altre no, e non di poco — Di Gregorio costa 41 con un
+   * `PMA` di 2,5% (da `prezzo` verrebbe 8,2), De Gea costa 24 con 6,4% (verrebbe
+   * 4,8), Mkhitaryan costa 14 con 0,2%. La correlazione coi prezzi è alta (**0,969**,
+   * perché entrambe seguono il valore di un giocatore) e il rapporto ha mediana
+   * esattamente 5 — ma quella mediana la fanno i **166 giocatori da un credito**,
+   * dove `0,2%` è l'unico valore scrivibile. **Sono due numeri diversi**, e il
+   * secondo porta informazione che il primo non ha.
+   *
+   * Cosa significhi esattamente lo sa chi compila il foglio, e **non si indovina
+   * qui**: si importa quello che c'è scritto e si mostra con la sua etichetta. Il
+   * fatto strutturale che serve al codice è uno solo — **non si ricalcola da
+   * `prezzo`**, perché ricalcolarla vorrebbe dire sostituire il dato di qualcun
+   * altro con una nostra stima.
+   *
+   * La cella è **testo battuto a mano** (`"10.5%"`, nessuna formula: verificato sui
+   * byte), da cui il parser prende il numero. `null` quando il foglio scrive `0%`,
+   * come per tutto il resto. ⚠ E i due zeri **non coincidono**: 67 righe hanno `PMA`
+   * a zero, 73 hanno `prezzo` a zero, in comune 28 — l'ennesima prova che sono due
+   * colonne indipendenti.
+   */
+  pma: real("pma"),
+  /**
    * I tre giudizi, da 1 a 5.
    *
    * ⚠ **`null` anche qui quando il foglio scrive `0`.** Lo `0` non è un voto

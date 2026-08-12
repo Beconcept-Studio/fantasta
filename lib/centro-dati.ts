@@ -53,7 +53,19 @@ export const SORT_KEYS = [
   "fascia",
   "affidabilita",
   "integrita",
-  "prezzo",
+  /**
+   * La fantamedia attesa e il `PMA`.
+   *
+   * ⚠ **`prezzo` non è fra le colonne ordinabili, e non è una dimenticanza**
+   * (owner, 2026-08-12): la colonna del prezzo consigliato in crediti è stata
+   * **tolta** dal Centro dati, e al suo posto ci sono queste due. Il `PMA` non è il
+   * prezzo in un'altra unità — solo 132 righe su 385 coincidono con `prezzo / 5` —
+   * quindi non è un rimpiazzo per equivalenza: è un altro numero, che l'owner
+   * preferisce guardare. Il prezzo in crediti resta a database e nel modale
+   * d'offerta, dove serve a proporre una cifra.
+   */
+  "fmvExp",
+  "pma",
 ] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 
@@ -171,8 +183,10 @@ function valueOf(row: CentroDatiSortable, key: SortKey): number | string | null 
       return row.carmy?.affidabilita ?? null;
     case "integrita":
       return row.carmy?.integrita ?? null;
-    case "prezzo":
-      return row.carmy?.prezzo ?? null;
+    case "fmvExp":
+      return row.carmy?.fmvExp ?? null;
+    case "pma":
+      return row.carmy?.pma ?? null;
   }
 }
 

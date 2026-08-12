@@ -663,7 +663,12 @@ suite.runIf(dbUp)("il caricamento del foglio di Carmy", () => {
       affidabilita: 5,
       integrita: 4,
       prezzo: 75,
+      // ⚠ Il `PMA` arriva **come lo scrive il foglio**, non ricalcolato: 15,6 e non
+      // 15 (che sarebbe `prezzo / 5`). Sono due numeri diversi, e su 385 righe
+      // coincidono solo 132 — vedi lo schema.
+      pma: 15.6,
     });
+    expect(dimarco.fmvExp).toBeCloseTo(7.36, 2);
     // I tag sono un array `jsonb`, non una stringa con le virgole.
     expect(dimarco.tags).toEqual([
       "modificatore",
@@ -889,6 +894,7 @@ suite.runIf(dbUp)("chi vede i giudizi", () => {
       sourceTeam: "INT",
       fascia: "Top",
       prezzo: 42,
+      pma: 8.4,
       titolarita: 5,
       affidabilita: 4,
       integrita: 3,
@@ -902,7 +908,11 @@ suite.runIf(dbUp)("chi vede i giudizi", () => {
     const giudicati = pool.filter((p) => "carmy" in p);
     expect(giudicati).toHaveLength(1);
     expect(giudicati[0].name).toBe("Giocatore 1");
-    expect(giudicati[0].carmy).toMatchObject({ fascia: "Top", prezzo: 42 });
+    expect(giudicati[0].carmy).toMatchObject({
+      fascia: "Top",
+      prezzo: 42,
+      pma: 8.4,
+    });
 
     // E lo stesso pool, chiesto senza il permesso, non la porta a nessuno.
     expect(
@@ -956,6 +966,7 @@ suite.runIf(dbUp)("nessun dato di M10B sta su un percorso critico", () => {
         sourceTeam: "INT",
         fascia: "Top",
         prezzo: 50,
+        pma: 10,
         titolarita: (i % 5) + 1,
         affidabilita: 3,
         integrita: 3,

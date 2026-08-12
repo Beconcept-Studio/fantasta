@@ -52,6 +52,7 @@ function judge(over: Partial<CarmyJudgement> = {}): CarmyJudgement {
     sourceTeam: "INT",
     fascia: null,
     prezzo: null,
+    pma: null,
     titolarita: null,
     affidabilita: null,
     integrita: null,
@@ -314,18 +315,41 @@ describe("le colonne di Carmy", () => {
     }
   });
 
-  it("prezzo, affidabilità e integrità sono numeri, e l'assenza resta in fondo", () => {
+  /**
+   * ⚠ **Il prezzo consigliato in crediti non è una colonna del Centro dati**
+   * (owner, 2026-08-12): al suo posto c'è il `PMA`, che è lo stesso numero in
+   * percentuale — e la percentuale è l'unica delle due che resta vera se un'asta ha
+   * un budget diverso da 500. `prezzo` resta a database e nel modale d'offerta, e
+   * **non** è fra le chiavi di ordinamento: se qualcuno lo rimettesse in tabella
+   * dovrebbe rimettere anche la chiave, ed è giusto che se ne accorga qui.
+   */
+  it("PMA e attesa sono numeri, e l'assenza resta in fondo in entrambi i versi", () => {
     const rows = [
-      row("Caro", { carmy: judge({ prezzo: 90 }) }),
-      row("Senza prezzo", { carmy: judge({ prezzo: null }) }),
-      row("Economico", { carmy: judge({ prezzo: 3 }) }),
+      row("Caro", { carmy: judge({ pma: 18.2, fmvExp: 7.5 }) }),
+      row("Senza", { carmy: judge({ pma: null, fmvExp: null }) }),
+      row("Economico", { carmy: judge({ pma: 0.6, fmvExp: 5.1 }) }),
+    ];
+    for (const key of ["pma", "fmvExp"] as const) {
+      expect(
+        names(arrangeRows(rows, NO_FILTERS, { key, direction: "desc" })),
+      ).toEqual(["Caro", "Economico", "Senza"]);
+      expect(
+        names(arrangeRows(rows, NO_FILTERS, { key, direction: "asc" })),
+      ).toEqual(["Economico", "Caro", "Senza"]);
+    }
+  });
+
+  it("l'affidabilità si ordina come gli altri numeri", () => {
+    const rows = [
+      row("Tre", { carmy: judge({ affidabilita: 3 }) }),
+      row("Senza", {}),
+      row("Cinque", { carmy: judge({ affidabilita: 5 }) }),
     ];
     expect(
-      names(arrangeRows(rows, NO_FILTERS, { key: "prezzo", direction: "desc" })),
-    ).toEqual(["Caro", "Economico", "Senza prezzo"]);
-    expect(
-      names(arrangeRows(rows, NO_FILTERS, { key: "prezzo", direction: "asc" })),
-    ).toEqual(["Economico", "Caro", "Senza prezzo"]);
+      names(
+        arrangeRows(rows, NO_FILTERS, { key: "affidabilita", direction: "desc" }),
+      ),
+    ).toEqual(["Cinque", "Tre", "Senza"]);
   });
 
   /**

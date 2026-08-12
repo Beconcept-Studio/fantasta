@@ -2643,6 +2643,33 @@ che come un'istruzione a due centimetri dalla cifra da scrivere — e spegnerlo 
 è cambiare una parola, non togliere del codice: i due punti d'innesto restano al loro posto e tacciono
 da sé.
 
+### La riga della lista di chiamata, e la densità che si è scelta di pagare
+
+La schermata in cui si sceglie chi chiamare è quella con più informazione dell'applicazione, e il
+motivo è che è l'unica in cui si **confronta**: quaranta nomi, trenta secondi, e la domanda non è
+«quanto vale questo?» ma «quale di questi?». Il capitolo su M8 aveva fissato una regola per quella
+riga — «tre informazioni, non dieci» — e questa macro l'ha allargata: accanto al nome ci sono ora la
+titolarità giudicata, il rapporto grezzo, i minuti medi, i badge dei piazzati, la fascia, la
+fantamedia attesa, il `PMA` e le note.
+
+È una scelta esplicita e va detta come tale, perché va contro la regola precedente. La spec di questa
+macro aveva deciso «la titolarità e al più un tag», e guardando la pagina vera la decisione è stata
+rovesciata: in una schermata di confronto, l'informazione che non c'è è un giocatore che non si
+considera. Il prezzo si paga sulla densità, e per pagarlo il meno possibile la riga è **su due
+righe**: sopra i numeri di stagione, sotto il giudizio del foglio. Due blocchi da tre o quattro voci
+si scorrono; uno da otto si guarda e non si legge.
+
+Due cose sono rimaste fuori, e sono le stesse due che nessuno confronterebbe con un pollice sotto un
+countdown: **affidabilità e integrità**, che vivono nel modale d'offerta insieme al prezzo consigliato
+in crediti. Il modale è il posto in cui si è già scelto il giocatore e si sta scegliendo la cifra, e
+là la domanda è un'altra.
+
+Un dettaglio di nomi che sembra pedanteria e non lo è: la fantamedia attesa si scrive **`attesa
+7.36`**, non con la sua sigla. In questo progetto `fvm` è il *Fantavalore di Mercato* — un indice di
+prezzo che vale 300 — e sta **sulla stessa riga**, a destra. `FMV Exp.` è la *fantamedia attesa*, e
+vale 7.36. Due sigle quasi identiche per due cose che non si somigliano: scritte accanto, l'una si
+legge per l'altra, e il numero sbagliato letto sotto un countdown è un giocatore comprato male.
+
 ### Il vincolo che non è un invariante, e che era il più facile da rompere
 
 Sopra la lista di chiamata, per chi ha il permesso, ci sono dei filtri: titolarità minima e fascia.

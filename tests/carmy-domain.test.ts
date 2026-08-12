@@ -54,6 +54,7 @@ function carmy(over: Partial<CarmyJudgement> = {}): CarmyJudgement {
     sourceTeam: "SAS",
     fascia: "Terza",
     prezzo: 13,
+    pma: 2.6,
     titolarita: 4,
     affidabilita: 3,
     integrita: 3,

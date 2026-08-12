@@ -309,10 +309,15 @@ filtro per ruolo. È il posto più veloce da cui vedere se gli insight sono stat
 chi ha `—` in tutte e due le colonne non ha una riga di insight, o ne ha una della stagione
 precedente.
 
-Da M10B ci sono anche le colonne del foglio di Carmy — fascia, prezzo consigliato, affidabilità,
-integrità, note — e il **filtro per tag**, che è il fratello di «rigori e piazzati». Tutte le
-intestazioni ordinano, e chi non ha il valore va **in fondo in entrambe le direzioni**: se invertendo
-una colonna ti aspettavi trecento trattini in cima, è quella la regola.
+Da M10B ci sono anche le colonne del foglio di Carmy — fascia, fantamedia **attesa**, `PMA`,
+affidabilità, integrità, note — e il **filtro per tag**, che è il fratello di «rigori e piazzati».
+Tutte le intestazioni ordinano, e chi non ha il valore va **in fondo in entrambe le direzioni**: se
+invertendo una colonna ti aspettavi trecento trattini in cima, è quella la regola.
+
+⚠ **Il prezzo consigliato in crediti non è una colonna di questa tabella** (owner, 2026-08-12): al suo
+posto c'è il `PMA`. Non sono lo stesso numero — su 385 righe con entrambi, solo 132 coincidono con
+`prezzo / 5` — e il prezzo in crediti si vede nel **modale d'offerta**, dove serve a proporre una
+cifra. Se cerchi «Consigl.» in tabella e non c'è, è questo il motivo.
 
 ## 7. Gli insight sul listone, se vuoi vederli (M8, M9)
 
