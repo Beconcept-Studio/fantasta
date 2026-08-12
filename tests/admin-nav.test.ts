@@ -21,13 +21,16 @@ import {
  */
 
 describe("le sezioni del pannello", () => {
-  it("sono Utenti, Aste e Figurine, in quest'ordine", () => {
+  it("sono Utenti, Aste, Figurine e Listone, in quest'ordine", () => {
     expect(adminSections().map((s) => s.key)).toEqual([
       "users",
       "auctions",
       // M7 — in fondo perché è l'unica voce che non parla di righe del
       // database: è un archivio di file, e sopravvive alle aste.
       "figurine",
+      // M8 — l'altra voce globale, dopo le figurine: si somigliano, ma quella
+      // che conta di più sta prima.
+      "listone",
     ]);
   });
 
@@ -74,6 +77,7 @@ describe("la sezione attiva si ricava dal pathname", () => {
     ["users", "Tutti gli utenti"],
     ["auctions", "Tutte le aste"],
     ["figurine", "Le figurine dei calciatori"],
+    ["listone", "Gli insight sul listone"],
   ])("/admin/%s è la sezione con titolo «%s»", (segment, title) => {
     const section = activeAdminSection(`${ADMIN_ROOT}/${segment}`);
     expect(section?.key).toBe(segment);

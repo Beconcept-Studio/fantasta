@@ -14,7 +14,12 @@ import {
   forceVerifyEmail,
   setUserAdmin,
   setUserDisplayName,
+  setUserPro,
 } from "@/lib/engine/admin";
+import {
+  refreshListoneInsights,
+  refreshSetPieces,
+} from "@/lib/engine/insights";
 import { parseListone } from "@/lib/import/parseListone";
 import { deleteAuction } from "@/lib/engine/setup";
 
@@ -50,6 +55,7 @@ function text(form: FormData, key: string): string | undefined {
 const USERS_PATH = `${ADMIN_ROOT}/users`;
 const AUCTIONS_PATH = `${ADMIN_ROOT}/auctions`;
 const FIGURINE_PATH = `${ADMIN_ROOT}/figurine`;
+const LISTONE_PATH = `${ADMIN_ROOT}/listone`;
 
 /** Correggere il nome scritto male da qualcun altro. */
 export async function setUserDisplayNameAction(
@@ -212,4 +218,93 @@ export async function downloadCampionciniAction(
 
   revalidatePath(FIGURINE_PATH);
   return { error: null, ok: runSummary(run) };
+}
+
+// ─── Gli insight sul listone (M8) ────────────────────────────────────────────
+
+/**
+ * Dare o togliere `is_pro`, cioè gli insight sul listone.
+ *
+ * Stessa forma di `setUserAdminAction`, e la differenza sta nel motore: là
+ * toccare la propria riga è vietato — togliersi `is_admin` chiude fuori — qui no,
+ * perché il flag non apre nessuna porta e un amministratore vede gli insight
+ * comunque.
+ */
+export async function setUserProAction(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  const admin = await requireAppAdmin();
+  const userId = text(form, "userId");
+  if (!userId) return { error: "Utente non indicato." };
+
+  const wanted = text(form, "isPro");
+  const result = await setUserPro(
+    admin.id,
+    userId,
+    wanted === "true" ? true : wanted === "false" ? false : undefined,
+  );
+  if (!result.ok) return { error: result.error.message };
+
+  revalidatePath(USERS_PATH);
+  return {
+    error: null,
+    ok: result.value.isPro
+      ? "Adesso vede gli insight sul listone."
+      : "Non vede più gli insight sul listone.",
+  };
+}
+
+/**
+ * Il refresh della fonte A: titolarità, minuti, rigori storici.
+ *
+ * ⚠ **Nessun file da caricare, a differenza delle figurine**: qui la fonte è una
+ * `GET` pubblica, quindi il pulsante è un pulsante e basta. Per la stessa ragione
+ * la firma non prende parametri — non c'è nessuna `FormData` da leggere — e
+ * `useActionState` la accetta comunque, perché una funzione che ignora gli
+ * argomenti è assegnabile a una che li riceve. È la ragione per cui
+ * questa macro non aggiunge nessun upload — l'unico che c'era in progetto, la
+ * griglia portieri, è rimasto fuori dal perimetro.
+ */
+export async function refreshListoneInsightsAction(): Promise<FormState> {
+  await requireAppAdmin();
+
+  const result = await refreshListoneInsights();
+  if (!result.ok) return { error: result.error.message };
+
+  revalidatePath(LISTONE_PATH);
+  const { fromSource, coverage } = result.value;
+  const parts = [`${fromSource} giocatori aggiornati dalla fonte`];
+  for (const c of coverage) {
+    parts.push(`«${c.auctionName}»: ${c.matched}/${c.wanted} agganciati`);
+  }
+  return { error: null, ok: `${parts.join(" · ")}.` };
+}
+
+/**
+ * Il refresh della fonte B: rigoristi e calci piazzati.
+ *
+ * Va dato **dopo** il listone la prima volta: aggiorna righe che nascono da
+ * quello, e se la tabella è vuota rifiuta dicendolo — invece di scrivere zero
+ * righe e dichiarare successo.
+ */
+export async function refreshSetPiecesAction(): Promise<FormState> {
+  await requireAppAdmin();
+
+  const result = await refreshSetPieces();
+  if (!result.ok) return { error: result.error.message };
+
+  revalidatePath(LISTONE_PATH);
+  const { fromSource, written, unknown } = result.value;
+  const summary = `${written} designati aggiornati su ${fromSource} letti dalla pagina`;
+  // Gli id che la tabella non conosce si dicono solo se ci sono: una riga «0
+  // sconosciuti» sembra un problema anche quando non c'è.
+  if (unknown.length === 0) return { error: null, ok: `${summary}.` };
+  return {
+    error: null,
+    ok:
+      `${summary}. ${unknown.length} non sono nel listone importato ` +
+      `(${unknown.slice(0, 5).join(", ")}${unknown.length > 5 ? "…" : ""}): ` +
+      `prova a riaggiornare prima il listone.`,
+  };
 }

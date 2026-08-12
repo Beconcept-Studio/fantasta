@@ -105,6 +105,8 @@ export type AdminUserRow = {
   entry: AdminEntry;
   emailVerifiedAt: Date | null;
   isAdmin: boolean;
+  /** Vede gli insight sul listone (M8). Un amministratore li vede comunque. */
+  isPro: boolean;
   isBot: boolean;
   createdAt: Date;
   /** Aste possedute e aste giocate: è con questi due numeri che si capisce se
@@ -138,6 +140,7 @@ export async function listAdminUsers({
       passwordHash: users.passwordHash,
       emailVerifiedAt: users.emailVerifiedAt,
       isAdmin: users.isAdmin,
+      isPro: users.isPro,
       isBot: users.isBot,
       createdAt: users.createdAt,
     })
@@ -399,4 +402,46 @@ export async function setUserAdmin(
 
   await db.update(users).set({ isAdmin }).where(eq(users.id, target.id));
   return ok({ isAdmin });
+}
+
+/**
+ * Accende o spegne `is_pro`, cioè chi vede gli insight sul listone (M8 §6).
+ *
+ * ⚠ **Qui il divieto di toccare la propria riga non c'è**, e la differenza con
+ * `setUserAdmin` è di sostanza, non una dimenticanza. Là il divieto esiste perché
+ * togliersi `is_admin` **chiude fuori**: non c'è un'altra porta da cui rientrare
+ * nel pannello. Qui il flag non apre nessuna porta — decide solo quali numeri si
+ * vedono in una lista — e un amministratore li vede comunque per costruzione
+ * (`canSeeInsights`). Vietare a se stessi qualcosa di reversibile e innocuo
+ * sarebbe una simmetria di forma, non una difesa.
+ *
+ * Su un bot è rifiutato, non perché sia pericoloso — un bot non guarda nessuna
+ * lista — ma perché è una richiesta che non vuol dire niente, e un'azione che
+ * accetta richieste senza senso non aiuta a capire cosa fa.
+ */
+export async function setUserPro(
+  actorUserId: string,
+  targetUserId: string,
+  isPro: unknown,
+): Promise<Result<{ isPro: boolean }>> {
+  const refused = await refuseNonAdmin<{ isPro: boolean }>(actorUserId);
+  if (refused) return refused;
+
+  if (typeof isPro !== "boolean") {
+    return fail<{ isPro: boolean }>("INVALID_REQUEST", "Richiesta non valida.");
+  }
+
+  const target = await findUser(targetUserId);
+  if (!target) {
+    return fail<{ isPro: boolean }>("NOT_FOUND", "Questo utente non esiste.");
+  }
+  if (target.isBot) {
+    return fail<{ isPro: boolean }>(
+      "FORBIDDEN",
+      "Un bot non guarda nessuna lista: gli insight non gli servono.",
+    );
+  }
+
+  await db.update(users).set({ isPro }).where(eq(users.id, target.id));
+  return ok({ isPro });
 }

@@ -1,4 +1,9 @@
-import type { AuctionPhase, AuctionStatus, Role } from "@/lib/domain";
+import type {
+  AuctionPhase,
+  AuctionStatus,
+  PlayerInsights,
+  Role,
+} from "@/lib/domain";
 
 /**
  * La forma dello snapshot (PLAN §8): l'unico messaggio che viaggia dal server
@@ -179,6 +184,19 @@ export type PoolPlayer = {
   role: Role;
   fvm: number;
   quot: number;
+  /**
+   * Titolarità, rigoristi, calci piazzati (M8).
+   *
+   * ⚠ **`?` e non `| null`, e la differenza è il cuore di M8 §6.** La chiave è
+   * *assente* per chi non ha `is_pro`: non arriva un `null` da nascondere, non
+   * arriva niente. Questo tipo viaggia nel payload RSC di un client component,
+   * quindi tutto ciò che sta qui **è nel browser di chi apre la pagina**,
+   * leggibile in DevTools in tre click — nasconderlo in JSX o in CSS non sarebbe
+   * una protezione, sarebbe una decorazione. La decisione la prende la query, una
+   * volta sola (`canSeeInsights`), e da qui in poi l'assenza si propaga da sé:
+   * `undefined` non si renderizza, senza nessun `if (isPro)` nei componenti.
+   */
+  insights?: PlayerInsights;
 };
 
 export type Snapshot = {

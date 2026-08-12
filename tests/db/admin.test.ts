@@ -125,8 +125,14 @@ suite("ogni server action del pannello rifiuta chi non è amministratore", () =>
       // guardia in cima all'azione. L'uguaglianza è rimasta esatta.
       "downloadCampionciniAction",
       "forceVerifyEmailAction",
+      // M8 — le tre azioni degli insight sul listone. Come per M7, le righe qui
+      // sotto sono state aggiunte **dopo** aver visto il test rompersi, insieme
+      // alla guardia in cima a ognuna delle tre.
+      "refreshListoneInsightsAction",
+      "refreshSetPiecesAction",
       "setUserAdminAction",
       "setUserDisplayNameAction",
+      "setUserProAction",
     ]);
   });
 

@@ -1600,3 +1600,91 @@ stato pagato dal layout: countdown e `max_bid` stanno nell'intestazione dello sh
 restino leggibili sopra la tastiera. `preventDefault` è rimasto — senza, Radix darebbe il focus al
 pulsante «−1» — e il valore già presente viene selezionato, così chi rientra a metà round sovrascrive
 digitando invece di dover cancellare.
+
+---
+
+## 2026-08-12 — M8, gli insight sul listone
+
+**Una tabella globale, non colonne su `players`.** `player_insights` ha per chiave l'`ext_id` e
+nessun `auction_id`: un aggiornamento serve tutte le aste e sopravvive alla cancellazione di
+un'asta. Metterle come colonne di `players` avrebbe voluto dire ricopiare 497 righe di dati di
+mercato dentro ogni asta e rifare l'import a ogni listone caricato. Il precedente è l'archivio
+figurine di M7, tenuto fuori dal ciclo dell'asta per la stessa ragione: un dato di mercato non è un
+fatto dell'asta. Il prezzo di questa scelta è che la tabella **non si isola per asta**, e si vede nei
+test (sotto).
+
+**Scartati i file .xlsx di Fantacalcio.it.** Il file *Quotazioni* è ridondante con l'export delle
+Leghe che già usiamo — che ha in più `Fuori lista`, da cui dipende I9. Il file *Statistiche* ha
+numeri che combaciano esatti con la fonte scelta, ma **non ha `starts_eleven` né
+`min_playing_time`**, cioè proprio i due campi per cui la macro esiste: `Pv` misura «ha preso il
+voto», non «è partito titolare», e sui due casi di prova (Berardi 26 presenze di cui 24 da titolare,
+Bernardeschi 24 di cui 12) li tratterebbe da pari. Restano come possibile ripiego se la fonte
+diventasse instabile.
+
+**`injured` non entra, pur essendo disponibile.** Il campo esiste nella fonte ma è un **conteggio
+degli infortuni della stagione**, non lo stato attuale: valori 0–5, e correla al contrario (media
+presenze 20,3 con `injured = 0` contro 24,5 con `injured > 0`). Su richiesta esplicita dell'owner
+sarebbe entrato solo potendo dire «è infortunato *adesso*», e la verifica ha risposto di no per una
+ragione di calendario: `fantacalcio.it/probabili-formazioni-serie-a` serve quel dato pubblicamente,
+con l'`ext_id` dentro, ma **si popola a campionato in corso** — interrogata il 2026-08-11 conteneva
+0 titolari attesi e 4 infortunati in tutta la Serie A — e l'asta si fa ad agosto. Un numero che
+sembra rispondere a una domanda a cui non risponde è peggio di un numero assente. È annotato come
+l'aggiornamento più ovvio della macro, e **corregge la spec di partenza**, che dava quei dati
+raggiungibili solo dal `POST /guida` di Fantalab protetto da JWT.
+
+**`is_pro` è prodotto, non licenza.** Le due fonti sono pubbliche: non c'è nessun vincolo esterno che
+obblighi a limitare chi vede gli insight. È una scelta di prodotto — un vantaggio informativo che si
+riserva — ed è scritto nello schema perché non venga difeso un giorno con un argomento che non ha.
+Conseguenza: **nessun `CHECK NOT (is_pro AND is_bot)`** (un bot pro è insensato ma innocuo, mentre un
+bot amministratore è un conflitto vero) e **nessun divieto di toccare la propria riga** in
+`setUserPro`, a differenza di `setUserAdmin`: là il divieto esiste perché togliersi `is_admin` chiude
+fuori dal pannello e non c'è un'altra porta, qui il flag non apre niente.
+
+**La protezione sta nella query, non nel JSX.** `PoolPlayer` è una prop di un client component, cioè
+arriva nel browser di chiunque apra la pagina: nascondere gli insight in JSX o in CSS sarebbe una
+decorazione. `listPickPool(auctionId, withInsights)` decide **una volta**, e per chi non ha il
+permesso la chiave `insights` non esiste nell'oggetto — non è un `null` da nascondere. Il test
+asserisce sull'oggetto restituito e non sul render, che è la differenza fra un dato protetto e un
+dato nascosto. Entrambi i chiamanti (portale e regia) passano `canSeeInsights(user)`: **la regia non
+è un'eccezione**, un owner senza permesso non li vede nemmeno lì.
+
+**`serializeSnapshot` non è stato toccato.** Gli insight viaggiano nel pool, che la pagina carica per
+quel singolo viewer; lo snapshot è uno solo e va in broadcast a tutti, quindi metterceli vorrebbe
+dire mandarli anche a chi non li può vedere. I8 attraversa M8 senza che una riga del motore cambi.
+
+**Si mostra solo la stagione corrente.** Nella risposta convivono 329 righe `current` e 168
+`previous`: la colonna `stats_season` le distingue e la UI mostra soltanto le prime, le altre come
+`—`. Questa scelta cancella da sé anche il problema delle 32 righe in cui `presenze` e
+`display_presenze` divergono, che sono tutte `previous`. Fra i due campi si legge `display_presenze`,
+perché è il numero che la fonte stessa mostra.
+
+**La soglia guarda la continuità, non la copertura.** Prima versione: «sotto una certa copertura dei
+listoni delle aste, non scrivere». È **avvelenabile** — il listone di un'asta simulata ha `ext_id`
+sintetici da 1 a 40, quindi una sola asta di prova nel database avrebbe fatto fallire l'import su
+dati perfetti. Un controllo che si può far scattare da un'altra parte dell'applicazione non è un
+controllo. La continuità (85% di identificativi in comune con l'import precedente, saltata al primo
+import) misura ciò che si vuole davvero sapere: se la fonte parla ancora la stessa lingua. La
+copertura resta, ma **come informazione nel pannello** — per asta, e non aggregata, perché la domanda
+è «il *mio* listone è coperto?».
+
+**Tre errori di misura, corretti dal codice e non dalla spec.** Vale la pena scriverli perché
+riguardano il metodo, non il dominio. (1) I numeri della pagina dei rigoristi nella prima stesura
+erano sbagliati — 87 designati, 57 rigoristi — e l'errore era in uno script d'analisi usa-e-getta,
+non nella pagina: sono **92 e 60**, e i cinque «di troppo» erano nomi con l'accento, che nello slug
+arrivano come entità HTML (`…/roma/soul&#xE8;/5734`). Un conteggio ottenuto con uno script
+usa-e-getta non è un dato verificato. (2) `max()` scritto in SQL grezzo restituisce una **stringa**,
+non una `Date`: il tipo dichiarato era una promessa falsa, e il test l'ha trovata con un `getTime is
+not a function`. (3) `insightsCoverage` guardava le cinque aste più recenti e basta: siccome vitest
+gira i file di test in parallelo e gli altri file creano decine di aste, il test della copertura era
+**verde da solo e rosso nella suite**. Ora la funzione accetta anche delle aste precise.
+
+**Tutti i test di M8 stanno in un file solo, e non va spezzato.** Ogni altro test del database si
+isola creandosi le proprie aste, e la cascata su `auction_id` fa il resto; `player_insights` non ha
+nessun `auction_id` da cui dipendere, quindi due file che la riempissero e svuotassero in worker
+paralleli si guasterebbero a vicenda. È il costo della scelta globale in cima a questa voce, ed è
+scritto in testa al file di test.
+
+**La voce del pannello si chiama «Listone» e sta dopo «Figurine».** Sono le due voci che non parlano
+di righe legate a un'asta e si somigliano, ma quella che conta di più sta prima: una figurina si vede
+da tre metri, una percentuale di titolarità si legge col telefono in mano.
+

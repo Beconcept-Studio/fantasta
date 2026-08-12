@@ -214,6 +214,7 @@ export function Portal({
           // Chiudere il modale non nasconde niente: la card resta e lo riapre.
           onOpenChange={(open) => setDismissedLotId(open ? null : lot.id)}
           snapshot={snapshot}
+          pool={pool}
           myMemberId={myMemberId}
           offset={offset}
           onBid={(amount) => sendAction(auctionId, { type: "BID", amount })}

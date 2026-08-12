@@ -25,7 +25,12 @@
 /** La radice del pannello. Il pulsante in navbar punta qui. */
 export const ADMIN_ROOT = "/admin";
 
-export const ADMIN_SECTION_KEYS = ["users", "auctions", "figurine"] as const;
+export const ADMIN_SECTION_KEYS = [
+  "users",
+  "auctions",
+  "figurine",
+  "listone",
+] as const;
 export type AdminSectionKey = (typeof ADMIN_SECTION_KEYS)[number];
 
 export type AdminSection = {
@@ -54,6 +59,12 @@ export type AdminSection = {
  * differenza degli altri due, e non è una svista: `campioncini` è il nome che
  * usa il CDN di Fantacalcio.it, «figurina» è la parola che si usa nella stanza.
  * Il codice parla la prima lingua, la navigazione la seconda.
+ *
+ * ⚠ **«Listone» sta dopo «Figurine» per la stessa ragione** (M8): è l'altra voce
+ * che non parla di righe legate a un'asta. Le due si somigliano — un archivio
+ * globale riempito da un pulsante, che sopravvive alle aste — ma quella che
+ * conta di più sta prima, e a schermo una figurina si vede da tre metri mentre
+ * una percentuale di titolarità si legge col telefono in mano.
  */
 const SECTIONS: AdminSection[] = [
   {
@@ -73,6 +84,12 @@ const SECTIONS: AdminSection[] = [
     segment: "figurine",
     label: "Figurine",
     title: "Le figurine dei calciatori",
+  },
+  {
+    key: "listone",
+    segment: "listone",
+    label: "Listone",
+    title: "Gli insight sul listone",
   },
 ];
 

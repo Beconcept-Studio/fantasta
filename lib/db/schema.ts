@@ -8,6 +8,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   unique,
@@ -83,6 +84,21 @@ export const users = pgTable(
      */
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     isAdmin: boolean("is_admin").notNull().default(false),
+    /**
+     * Vede gli insight sul listone (M8): titolarità, rigoristi, piazzati.
+     *
+     * ⚠ **Non è una necessità di licenza** — le fonti sono pubbliche — ma una
+     * scelta di prodotto: un vantaggio informativo che si riserva. Va detto qui
+     * perché non venga difeso, un giorno, con un argomento che non ha.
+     *
+     * Chi è amministratore li vede comunque (`canSeeInsights` in `lib/domain.ts`),
+     * altrimenti servirebbe auto-assegnarsi il flag per vedere i dati che si è
+     * appena importati — e `lib/engine/admin.ts` vieta di toccare la propria riga.
+     * Per questo **nessun `CHECK NOT (is_pro AND is_bot)`**: un bot pro è
+     * insensato ma innocuo, mentre un bot amministratore è un conflitto vero, ed
+     * è per quello che esiste `users_admin_not_bot_check`.
+     */
+    isPro: boolean("is_pro").notNull().default(false),
     /** Un partecipante simulato. Le sue mosse le decide il tick di `lib/engine/bots.ts`. */
     isBot: boolean("is_bot").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -318,6 +334,81 @@ export const players = pgTable(
   ],
 );
 
+// ─── Insight sul listone (globale, non per asta) ──────────────────────────────
+
+/**
+ * Cosa dicono le fonti pubbliche di un calciatore: quanto è partito titolare,
+ * se batte i rigori, se batte i piazzati (M8).
+ *
+ * ⚠ **Sta accanto a `players` ma non ne segue il ciclo di vita, ed è il punto
+ * più importante di questa tabella.** `players` è un *snapshot per asta*:
+ * `auction_id` congela il listone al momento dell'import e le righe muoiono in
+ * cascata con l'asta. Qui no: la chiave è `ext_id` e nient'altro, un refresh
+ * dall'admin serve **tutte** le aste, e i dati sopravvivono alla cancellazione
+ * di un'asta. Il precedente è l'archivio figurine di M7, tenuto fuori dal ciclo
+ * dell'asta per la stessa ragione: un dato di mercato non è un fatto dell'asta.
+ *
+ * Conseguenza che il codice deve rispettare: **l'asta funziona con questa
+ * tabella vuota.** Si legge in `LEFT JOIN`, mai in `INNER JOIN`, e nessun
+ * percorso critico la attraversa. In produzione nasce vuota e resta vuota
+ * finché qualcuno non preme i pulsanti del pannello.
+ *
+ * E i due elenchi **non coincidono**: dei 495 `ext_id` del listone di prova, 487
+ * trovano una riga qui (98,4%) e la fonte ne ha 10 che il listone non ha. La
+ * copertura si misura contro il listone dell'asta, non contro il conteggio della
+ * fonte.
+ */
+export const playerInsights = pgTable("player_insights", {
+  /** La colonna `#` del file Fantacalcio.it — la stessa di `players.ext_id`. */
+  extId: integer("ext_id").primaryKey(),
+  /**
+   * L'uuid Fantalab (`player_id`). Non lo legge nessuno oggi: è l'unico modo di
+   * ritrovare la stessa riga se un giorno la fonte cambiasse l'id pubblico.
+   */
+  fantalabId: uuid("fantalab_id"),
+  fullName: text("full_name"),
+  team: text("team").notNull(),
+
+  /**
+   * ⚠ **A quale stagione appartengono i numeri qui sotto**: `"current"` o
+   * `"previous"`, copiato da `display_stats_season`.
+   *
+   * Non è una raffinatezza. Nella risposta della fonte le due stagioni
+   * **convivono** — misurati 329 `current` e 168 `previous` — e senza questa
+   * colonna un numero del 24/25 finirebbe accanto a uno del 25/26 senza che
+   * nessuno possa accorgersene. La UI mostra solo i `current` (M8 §5).
+   */
+  statsSeason: text("stats_season").notNull(),
+
+  /**
+   * Fonte A, `api.fantalab.it/v2/listone`. `presenze` viene da
+   * `display_presenze`, cioè il numero che la fonte stessa mostra: in 32 righe
+   * differisce da `presenze`, e sono tutte `previous`.
+   */
+  presenze: integer("presenze").notNull(),
+  startsEleven: integer("starts_eleven").notNull(),
+  minPlayingTime: integer("min_playing_time").notNull(),
+  rigoriFatti: integer("rigori_fatti").notNull(),
+  rigoriSbagliati: integer("rigori_sbagliati").notNull(),
+  rigoriParati: integer("rigori_parati").notNull(),
+  fmvHome: real("fmv_home"),
+  fmvAway: real("fmv_away"),
+
+  /**
+   * Fonte B, `fantacalcio.it/rigoristi-serie-a`. `1` = primo della gerarchia,
+   * `null` = non designato — che è un'informazione, non un dato mancante.
+   *
+   * Sono **due** e non tre: la pagina ha esattamente le liste «Rigori» e «Calci
+   * piazzati», e la parola «Punizioni» non compare nel suo HTML.
+   */
+  rigoristaRank: integer("rigorista_rank"),
+  piazzatiRank: integer("piazzati_rank"),
+
+  /** Due timestamp perché due fonti indipendenti: il pannello dice quale è vecchia. */
+  listoneUpdatedAt: timestamp("listone_updated_at", { withTimezone: true }),
+  setPiecesUpdatedAt: timestamp("set_pieces_updated_at", { withTimezone: true }),
+});
+
 // ─── Lotti (una chiamata all'asta) ───────────────────────────────────────────
 
 export const lots = pgTable(
@@ -510,6 +601,8 @@ export type Invite = typeof invites.$inferSelect;
 export type NewInvite = typeof invites.$inferInsert;
 export type Player = typeof players.$inferSelect;
 export type NewPlayer = typeof players.$inferInsert;
+export type PlayerInsightRow = typeof playerInsights.$inferSelect;
+export type NewPlayerInsightRow = typeof playerInsights.$inferInsert;
 export type Lot = typeof lots.$inferSelect;
 export type LotRound = typeof lotRounds.$inferSelect;
 export type Bid = typeof bids.$inferSelect;
