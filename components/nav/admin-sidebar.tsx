@@ -63,6 +63,10 @@ export function AdminSidebar({
               aria-current={current ? "page" : undefined}
               className={cn(
                 "rounded-md px-3 py-1.5 text-sm transition",
+                // Una voce annidata (M10) rientra, e solo da schermo largo: in
+                // orizzontale le voci stanno in fila e un margine sinistro
+                // sposterebbe soltanto quella, senza dire niente a nessuno.
+                section.parent !== undefined && "md:ml-3",
                 current
                   ? "bg-muted font-medium"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/60",

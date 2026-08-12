@@ -107,6 +107,35 @@ export const ERROR_CODES = [
   "SOURCE_SCHEMA",
   /** Il match `ext_id` è troppo magro: qualcosa è cambiato, meglio non scrivere. */
   "SOURCE_COVERAGE",
+
+  // Il foglio di Carmy (M10B)
+  /**
+   * Il file non si apre, o non ha la forma che dichiara.
+   *
+   * ⚠ Sono distinti da quelli del listone e da quelli delle due fonti per una
+   * ragione pratica: qui il file lo compila **una persona**, e un messaggio che
+   * dice «nel foglio C manca la colonna Titolarità» è azionabile — si apre il
+   * foglio e si guarda. «SOURCE_SCHEMA» non lo è.
+   */
+  "CARMY_UNREADABLE",
+  "CARMY_SHEET_MISSING",
+  "CARMY_COLUMNS_MISSING",
+  "CARMY_ROW_INVALID",
+  "CARMY_EMPTY",
+  /** Due righe con lo stesso nome: il nome **è** la chiave del join (M10B §3). */
+  "CARMY_DUPLICATE_NAME",
+  /**
+   * Troppi nomi che non agganciano il listone.
+   *
+   * ⚠ **Guardia sana, e la differenza con `SOURCE_COVERAGE` conta** (M10B §3): là
+   * il denominatore era il listone di *un'asta*, avvelenabile da una simulazione
+   * con `ext_id` sintetici, e per questo il controllo è stato smontato. Qui il
+   * denominatore è `listone_players`, che è globale e non appartiene a nessuna
+   * asta: nessuna simulazione lo può inquinare.
+   */
+  "CARMY_COVERAGE",
+  /** Non c'è un listone a sistema: senza denominatore non c'è nessun join. */
+  "CARMY_NO_LISTONE",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

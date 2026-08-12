@@ -210,17 +210,85 @@ Per fermarli: `Ctrl-C`.
 
 ---
 
-## 6. Le figurine, se vuoi vederle (M7)
+## 6. Il listone a sistema, il foglio di Carmy, e le figurine (M7, M10, M10B)
 
-Non serve per giocare: senza, il portale e la TV mostrano i lotti esattamente come prima, solo senza
-la caricatura del giocatore. Se la vuoi, è un passo solo e dura pochi secondi.
+⚠ **Da M10 questo è il passo che conviene dare per primo**, prima ancora dei bot: il listone a
+sistema si carica **una volta** e serve tutte le prove successive — le caricature, il Centro dati, e
+la proposta che compare a chi crea un'asta. Prima di M10 lo stesso file andava ricaricato ogni volta
+e in tre posti diversi.
 
-Da amministratore (`users.is_admin`), **Admin → Figurine**: si carica `fixtures/listone.xlsx` — il
-listone vero da 495 giocatori, già in git — e si preme il pulsante. Al primo giro scarica tutto in
-circa tre secondi; premuto di nuovo non scarica niente e lo dice, perché lo stato è il disco.
+⚠ **E da M10B l'ordine dentro questo passo conta: listone → Carmy → caricature.** Non è una
+preferenza: il foglio di Carmy si aggancia al listone **per nome** e le caricature prendono gli
+identificativi dal listone, quindi il listone è il primo **di necessità**. I pulsanti degli altri due
+sono spenti finché non c'è, e lo dicono.
+
+Da amministratore (`users.is_admin`), **Admin → Listone**: si carica `fixtures/listone.xlsx` — il
+listone vero da 495 giocatori, già in git — e si preme «Carica il listone». È istantaneo.
+
+⚠ **La tabella `listone_players` nasce vuota anche in locale**, ed è la stessa storia di
+`player_insights`: finché non carichi il file **non si rompe niente**, semplicemente le caricature
+non si scaricano, il Centro dati è vuoto, e alla creazione di un'asta non compare nessuna proposta.
+Se vuoi controllare a vista:
+
+```bash
+docker compose exec db psql -U postgres -d asta -c "select count(*) from listone_players;"
+```
+
+Da qui in poi, creando un'asta, la prima domanda del form è quale listone usare: «Il listone a
+sistema · 495 giocatori · caricato il …» oppure «lo carico io». La seconda strada è quella di
+sempre, e resta: serve a correggere un file sbagliato. ⚠ Se scegli il listone a sistema per
+un'asta a **12** partecipanti con gli slot di default, I9 passa — la fixture regge tutti e tre i
+tagli — ma se provi con un listone piccolo l'asta **viene creata lo stesso**, in DRAFT, e il motivo
+è scritto in cima alla sua configurazione. Non è un guasto: è la regola.
+
+### Il foglio di Carmy (M10B)
+
+⚠ **Va caricato dopo il listone e prima delle caricature**, e l'ordine **non è una preferenza**: il
+foglio non ha identificativi, si aggancia al listone **per nome**, e senza listone non c'è niente a cui
+agganciarsi. Il pulsante è spento finché il listone non c'è, e lo dice.
+
+Nella stessa pagina, sotto l'upload del listone: si carica `fixtures/carmy.xlsx` — quattro fogli,
+497 giocatori, già in git — e si preme «Carica il foglio». È istantaneo.
+
+Cosa deve dire quando è andato bene, sui byte del 2026-08-12:
+
+```text
+487 giudizi a sistema su 497 righe del foglio.
+Non trovati nel listone (10): Satalino, Chalobah T., … — di solito sono acquisti
+più recenti del listone caricato.
+Squadra diversa dal listone (3): Dominguez B. — Carmy Sassuolo, listone Bologna; …
+```
+
+**Tutte e tre le righe sono normali.** I dieci non agganciati sono giocatori che il listone del 6
+agosto non aveva ancora; le tre discordanze di squadra sono trasferimenti veri, e il giudizio viene
+importato comunque. Se invece il caricamento **rifiuta** dicendo «solo N nomi su 497 (…%) trovano un
+giocatore nel listone», il foglio e il listone parlano di due elenchi diversi: di solito il listone è
+vecchio, e si ricarica quello prima.
+
+Tre cose che non sono guasti:
+
+- **Un nome su tre diventa verde** nella lista di chiamata: la soglia è `Titolarità >= 4`, e sui byte
+  veri sono 168 su 497. È una scelta dell'owner, misurata (`docs/DECISIONS.md`, 2026-08-12).
+- **Accanto al badge c'è un rapporto tipo `3/38`**, ed è voluto che a volte contraddica il badge: è la
+  prova del giudizio, e la divergenza è l'informazione. Su chi ha solo le statistiche della stagione
+  precedente quel rapporto **non compare**, e il giudizio resta da solo.
+- **Senza il foglio caricato il portale è identico a prima**, badge delle presenze compreso. È il
+  ripiego dichiarato, non un caso.
+
+Per svuotarlo:
+`docker compose exec db psql -U postgres -d asta -c "delete from carmy_players;"`. Come per il
+listone, non c'è un pulsante, di proposito.
+
+### Le figurine
+
+Non servono per giocare: senza, il portale e la TV mostrano i lotti esattamente come prima, solo
+senza la caricatura del giocatore. Se le vuoi, adesso è **un pulsante e basta**, nella stessa pagina:
+«Scarica le caricature». Gli identificativi li prende dal listone a sistema, quindi va caricato
+prima — il pulsante è spento finché non lo fai, e lo dice. Al primo giro scarica tutto in circa tre
+secondi; premuto di nuovo non scarica niente e lo dice, perché lo stato è il disco.
 
 Le immagini finiscono in `storage/campioncini/`, che è fuori da git e **fuori da `public/`**: non la
-tocca né `pnpm build` né `git reset --hard`, quindi la scarichi una volta e resta lì per tutte le
+tocca né `pnpm build` né `git reset --hard`, quindi le scarichi una volta e restano lì per tutte le
 prove successive. Sono ~53 MB.
 
 Due cose che non sono guasti, così non le cerchi:
@@ -230,8 +298,26 @@ Due cose che non sono guasti, così non le cerchi:
 - **Se l'archivio è vuoto la figurina non compare e basta**: nessun rettangolo grigio, il testo scorre
   a sinistra. Non è un errore da indagare, è il caso «non l'ho ancora scaricato».
 
-Per svuotarlo: `rm -rf storage/campioncini`. Non c'è un pulsante, di proposito.
+Per svuotare l'archivio: `rm -rf storage/campioncini`. Per svuotare il listone a sistema:
+`docker compose exec db psql -U postgres -d asta -c "delete from listone_players;"`. Non c'è un
+pulsante né per l'uno né per l'altro, di proposito.
 
+### Il Centro dati
+
+**Admin → Listone → Centro dati**: tutto il listone a sistema in una tabella, con la ricerca e il
+filtro per ruolo. È il posto più veloce da cui vedere se gli insight sono stati importati davvero —
+chi ha `—` in tutte e due le colonne non ha una riga di insight, o ne ha una della stagione
+precedente.
+
+Da M10B ci sono anche le colonne del foglio di Carmy — fascia, fantamedia **attesa**, `PMA`,
+affidabilità, integrità, note — e il **filtro per tag**, che è il fratello di «rigori e piazzati».
+Tutte le intestazioni ordinano, e chi non ha il valore va **in fondo in entrambe le direzioni**: se
+invertendo una colonna ti aspettavi trecento trattini in cima, è quella la regola.
+
+⚠ **Il prezzo consigliato in crediti non è una colonna di questa tabella** (owner, 2026-08-12): al suo
+posto c'è il `PMA`. Non sono lo stesso numero — su 385 righe con entrambi, solo 132 coincidono con
+`prezzo / 5` — e il prezzo in crediti si vede nel **modale d'offerta**, dove serve a proporre una
+cifra. Se cerchi «Consigl.» in tabella e non c'è, è questo il motivo.
 
 ## 7. Gli insight sul listone, se vuoi vederli (M8, M9)
 
@@ -252,7 +338,8 @@ docker compose exec db psql -U postgres -d asta -c "select count(*) from player_
 sei idoneo). **Non** sulla card del lotto, **non** al reveal, **non** in regia, **non** sulla TV. Un'asta
 ferma in `LOT_REVEAL` non mostra badge nemmeno funzionando tutto.
 
-Da amministratore, **Admin → Listone**: si preme «Importa il listone» (scarica 497 giocatori da
+Da amministratore, **Admin → Listone** — la stessa pagina del passo 6, i due pulsanti stanno sotto
+l'upload: si preme «Importa il listone» (scarica 497 giocatori da
 `api.fantalab.it`, poco più di un secondo) e poi «Aggiorna i designati» (la pagina dei rigoristi di
 Fantacalcio.it, mezzo secondo). ⚠ **In quest'ordine**: il secondo aggiorna righe che nascono dal
 primo, e su una tabella vuota rifiuta dicendolo.

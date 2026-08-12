@@ -334,6 +334,67 @@ export const players = pgTable(
   ],
 );
 
+// ─── Il listone a sistema (globale, non per asta) ────────────────────────────
+
+/**
+ * Il listone dell'applicazione: l'export **Leghe** di Fantacalcio.it caricato una
+ * volta sola dal pannello, da cui si copia dentro le aste (M10).
+ *
+ * ⚠ **Si chiama `listone_players` e non `listone`, ed è deliberato.** Nel
+ * pannello la parola «listone» indica **due file diversi** (M10 §1): questo, che
+ * definisce un'asta e si carica a mano perché l'export passa da un login, e la
+ * `GET` pubblica di Fantalab che riempie `player_insights`. Una tabella che si
+ * chiama come un concetto ambiguo è una tabella che qualcuno userà per la cosa
+ * sbagliata. Il menu dice `Listone`, lo schema dice di quali righe si tratta.
+ *
+ * ⚠ **È una sorgente da cui si copia, mai una tabella da cui l'asta legge**
+ * (M10 §3). `players.auction_id` continua a congelare il listone al momento
+ * dell'import, e un'asta preparata lunedì non cambia perché martedì qualcuno ha
+ * caricato un file nuovo. Se un `JOIN` verso questa tabella compare in
+ * `lib/engine/machine.ts`, `rules.ts`, `snapshot.ts` o in `listPickPool`, il
+ * lavoro è fuori posto. Conseguenza che il codice deve rispettare: **un'asta si
+ * crea, si prepara e arriva a `COMPLETED` con questa tabella vuota.**
+ *
+ * Un upload **sostituisce l'intera tabella** (`DELETE` + `INSERT` in
+ * transazione), come `importPlayers` sostituisce lo snapshot di un'asta. Non
+ * viola la regola 5: qui non ci sono assegnazioni né ledger, è un elenco di
+ * calciatori di Serie A, e sostituirlo è l'unico modo di correggere un file
+ * sbagliato senza inventare un merge fra due listoni.
+ */
+export const listonePlayers = pgTable("listone_players", {
+  /** La colonna `#` del file: la stessa chiave di `players.ext_id` e di `player_insights.ext_id`. */
+  extId: integer("ext_id").primaryKey(),
+  name: text("name").notNull(),
+  team: text("team").notNull(),
+  role: text("role").$type<Role>().notNull(),
+  roleMantra: text("role_mantra"),
+  /**
+   * ⚠ **C'è anche se il Centro dati non lo mostra** (M10 §2), e questa è la
+   * trappola numero uno della macro. La decisione dell'owner («FVM togli»)
+   * riguarda una colonna di una tabella a schermo, non il dato:
+   * `players_autopick_idx` ordina per **`fvm` DESC, `quot` DESC, `ext_id` ASC**,
+   * e quell'ordinamento *è* l'auto-pick. Una copia verso `players` senza `fvm`
+   * cambierebbe chi viene scelto allo scadere di una chiamata, per una scelta di
+   * layout.
+   */
+  fvm: integer("fvm").notNull(),
+  quot: integer("quot").notNull(),
+  /**
+   * ⚠ **Obbligatorio, ed è l'altro campo da non perdere.** Senza,
+   * `validateRolePool` conta i giocatori sbagliati (I9) e il toggle
+   * `include_out_of_list` (P7) non ha niente su cui lavorare. È anche il campo
+   * che **impedisce** di costruire questa tabella dal file *Quotazioni*, che è
+   * pubblico ma non ce l'ha (M10 §1, DECISIONS 2026-08-12).
+   */
+  outOfList: boolean("out_of_list").notNull().default(false),
+  /**
+   * Quando è stato caricato il file da cui viene questa riga. Uguale su tutte le
+   * righe di uno stesso upload: è la data che l'owner legge alla creazione di
+   * un'asta per decidere se usare questo listone o caricarne uno suo.
+   */
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull(),
+});
+
 // ─── Insight sul listone (globale, non per asta) ──────────────────────────────
 
 /**
@@ -367,6 +428,19 @@ export const playerInsights = pgTable("player_insights", {
    */
   fantalabId: uuid("fantalab_id"),
   fullName: text("full_name"),
+  /**
+   * Il nome **corto** della fonte A (`name`): «Abankwah», dove `full_name` scrive
+   * «James Abankwah».
+   *
+   * ⚠ **Non serve a nessun join** — quello di M10B passa da `listone_players`
+   * (§3) — e per questo è facile crederla inutile. Serve a **spiegare** un
+   * aggancio mancato: Carmy e il listone scrivono il nome corto, e senza questa
+   * colonna l'unico modo di capire perché dieci nomi non agganciano è riaprire a
+   * mano la risposta della fonte. Nasce `null` sulle righe già in tabella e si
+   * riempie al primo refresh: nessun backfill dedicato, perché nessuna schermata
+   * la pretende.
+   */
+  name: text("name"),
   team: text("team").notNull(),
 
   /**
@@ -407,6 +481,101 @@ export const playerInsights = pgTable("player_insights", {
   /** Due timestamp perché due fonti indipendenti: il pannello dice quale è vecchia. */
   listoneUpdatedAt: timestamp("listone_updated_at", { withTimezone: true }),
   setPiecesUpdatedAt: timestamp("set_pieces_updated_at", { withTimezone: true }),
+});
+
+// ─── Il giudizio di un umano (globale, non per asta) ──────────────────────────
+
+/**
+ * Il foglio di Carmy: un giudizio su ogni calciatore, compilato a mano da una
+ * persona e caricato dal pannello (M10B).
+ *
+ * ⚠ **Perché una tabella sua e non tre colonne su `player_insights`**, che pure
+ * ospita già due fonti diverse (M10B §5): perché quelle due si aggiornano **per
+ * colonna con un `upsert`** — la fonte A scrive le statistiche, la fonte B i due
+ * rank, e nessuna delle due tocca le colonne dell'altra — mentre questa si
+ * **sostituisce per intero** a ogni caricamento, come `listone_players`.
+ * Mescolarle vorrebbe dire che il refresh giornaliero e un file umano scrivono
+ * nella stessa riga con due semantiche diverse, ed è il punto in cui qualcuno,
+ * fra sei mesi, cancella i giudizi con una `GET`.
+ *
+ * ⚠ **Non c'è `ext_id` nel file.** La chiave qui è comunque `ext_id`, ma **la
+ * mette il join**: Carmy ha `Nome` e una sigla di tre lettere, e si aggancia per
+ * nome normalizzato a `listone_players` (§3). Conseguenza: un giocatore che non
+ * sta nel listone **non entra qui**, e questo è voluto — un giudizio su qualcuno
+ * che non si può comprare non serve a nessuno.
+ *
+ * Come `player_insights` e `listone_players`: **l'asta funziona con questa tabella
+ * vuota**, si legge in `LEFT JOIN` e nessun percorso critico la attraversa.
+ * Un'asta si crea, si prepara e arriva a `COMPLETED` senza che qui ci sia una riga.
+ */
+export const carmyPlayers = pgTable("carmy_players", {
+  /** L'`ext_id` del listone a cui il nome ha agganciato: non viene dal file. */
+  extId: integer("ext_id").primaryKey(),
+  /**
+   * Il nome come lo scrive Carmy, e la sigla della sua squadra: servono a
+   * **spiegare** un aggancio, non ad agganciare. La sigla è il *controllo* di §3 —
+   * una discordanza con la squadra del listone si segnala, non si ingoia.
+   */
+  sourceName: text("source_name").notNull(),
+  sourceTeam: text("source_team").notNull(),
+  fascia: text("fascia"),
+  /**
+   * Il prezzo consigliato in crediti.
+   *
+   * ⚠ **`null` quando il foglio scrive `0`, e non è pignoleria**: nel file del
+   * 2026-08-12 sono **73 giocatori su 497** — riserve e terzi portieri, tutti con
+   * `PMA` a `"0%"` — e **zero non è nemmeno un'offerta valida**. Un «prezzo
+   * consigliato: 0» accanto al campo dell'offerta sarebbe un suggerimento
+   * impossibile da seguire (M10B-02, DECISIONS 2026-08-12).
+   */
+  prezzo: integer("prezzo"),
+  /**
+   * Il `PMA` del foglio, in **punti percentuali** (`10.5` sta per «10,5%»).
+   *
+   * ⚠ **La spec di M10B l'aveva scartata chiamandola «un dato derivato, `Prezzo`
+   * diviso il budget». È falso, ed è stato misurato quando l'owner l'ha chiesta
+   * (2026-08-12):** solo **132 righe su 385** coincidono con
+   * `round(prezzo / 5, 1)`. Le altre no, e non di poco — Di Gregorio costa 41 con un
+   * `PMA` di 2,5% (da `prezzo` verrebbe 8,2), De Gea costa 24 con 6,4% (verrebbe
+   * 4,8), Mkhitaryan costa 14 con 0,2%. La correlazione coi prezzi è alta (**0,969**,
+   * perché entrambe seguono il valore di un giocatore) e il rapporto ha mediana
+   * esattamente 5 — ma quella mediana la fanno i **166 giocatori da un credito**,
+   * dove `0,2%` è l'unico valore scrivibile. **Sono due numeri diversi**, e il
+   * secondo porta informazione che il primo non ha.
+   *
+   * Cosa significhi esattamente lo sa chi compila il foglio, e **non si indovina
+   * qui**: si importa quello che c'è scritto e si mostra con la sua etichetta. Il
+   * fatto strutturale che serve al codice è uno solo — **non si ricalcola da
+   * `prezzo`**, perché ricalcolarla vorrebbe dire sostituire il dato di qualcun
+   * altro con una nostra stima.
+   *
+   * La cella è **testo battuto a mano** (`"10.5%"`, nessuna formula: verificato sui
+   * byte), da cui il parser prende il numero. `null` quando il foglio scrive `0%`,
+   * come per tutto il resto. ⚠ E i due zeri **non coincidono**: 67 righe hanno `PMA`
+   * a zero, 73 hanno `prezzo` a zero, in comune 28 — l'ennesima prova che sono due
+   * colonne indipendenti.
+   */
+  pma: real("pma"),
+  /**
+   * I tre giudizi, da 1 a 5.
+   *
+   * ⚠ **`null` anche qui quando il foglio scrive `0`.** Lo `0` non è un voto
+   * basso: è una riga non compilata — nel file del 2026-08-12 è **una sola**
+   * (Aurelio, con tutti e tre gli zeri, `MV` a zero e la fantamedia attesa vuota),
+   * e trattarla come «titolarità 0» la farebbe passare per il peggior giocatore
+   * del listone invece che per un giocatore su cui non c'è giudizio.
+   */
+  titolarita: integer("titolarita"),
+  affidabilita: integer("affidabilita"),
+  integrita: integer("integrita"),
+  /** La fantamedia attesa. 494 righe su 497 nel file del 2026-08-12. */
+  fmvExp: real("fmv_exp"),
+  /** Le cinque note del foglio, già ripulite e senza i vuoti. */
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  /** Testo libero, multi-riga, su dieci giocatori: gli abbinamenti dei portieri. */
+  commento: text("commento"),
+  /** Uguale su tutte le righe di uno stesso caricamento, come in `listone_players`. */
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull(),
 });
 
 // ─── Lotti (una chiamata all'asta) ───────────────────────────────────────────
@@ -603,6 +772,8 @@ export type Player = typeof players.$inferSelect;
 export type NewPlayer = typeof players.$inferInsert;
 export type PlayerInsightRow = typeof playerInsights.$inferSelect;
 export type NewPlayerInsightRow = typeof playerInsights.$inferInsert;
+export type CarmyPlayerRow = typeof carmyPlayers.$inferSelect;
+export type NewCarmyPlayerRow = typeof carmyPlayers.$inferInsert;
 export type Lot = typeof lots.$inferSelect;
 export type LotRound = typeof lotRounds.$inferSelect;
 export type Bid = typeof bids.$inferSelect;

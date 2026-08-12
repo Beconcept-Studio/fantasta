@@ -28,19 +28,25 @@ export const ADMIN_ROOT = "/admin";
 export const ADMIN_SECTION_KEYS = [
   "users",
   "auctions",
-  "figurine",
   "listone",
+  "dati",
 ] as const;
 export type AdminSectionKey = (typeof ADMIN_SECTION_KEYS)[number];
 
 export type AdminSection = {
   key: AdminSectionKey;
-  /** Il segmento dopo `/admin/`. */
+  /**
+   * Il percorso dopo `/admin/`. ⚠ **Può contenere una barra** da M10:
+   * `listone/dati` è una voce annidata, e `activeAdminSection` risolve i
+   * percorsi a due segmenti scegliendo il match più lungo.
+   */
   segment: string;
   /** La voce nella sidebar. */
   label: string;
   /** Il titolo in cima alla pagina. */
   title: string;
+  /** La voce sotto cui rientra, per l'indentazione della sidebar. */
+  parent?: AdminSectionKey;
 };
 
 /**
@@ -53,18 +59,17 @@ export type AdminSection = {
  * «Tutte le aste». La differenza fra le due schermate è esattamente quella, e
  * conviene che si legga nel titolo.
  *
- * ⚠ **Le figurine sono in fondo perché sono l'unica voce che non parla di
- * righe del database** (M7): è un archivio di file, globale, che sopravvive
- * alla cancellazione di un'asta. Il segmento è in italiano — `figurine` — a
- * differenza degli altri due, e non è una svista: `campioncini` è il nome che
- * usa il CDN di Fantacalcio.it, «figurina» è la parola che si usa nella stanza.
- * Il codice parla la prima lingua, la navigazione la seconda.
+ * ⚠ **`Figurine` non è più una voce di primo livello** (M10). Fino a v1.10.0 lo
+ * era, e stava in fondo perché era «l'unica voce che non parla di righe legate a
+ * un'asta»; poi M8 ne ha aggiunta una seconda con la stessa proprietà, e due voci
+ * che si somigliano una accanto all'altra erano un pannello cresciuto per
+ * accumulo. Adesso le figurine sono un blocco dentro `Listone`: si scaricano
+ * **con** un listone appena caricato, ed è lì che quella frase ha un senso.
  *
- * ⚠ **«Listone» sta dopo «Figurine» per la stessa ragione** (M8): è l'altra voce
- * che non parla di righe legate a un'asta. Le due si somigliano — un archivio
- * globale riempito da un pulsante, che sopravvive alle aste — ma quella che
- * conta di più sta prima, e a schermo una figurina si vede da tre metri mentre
- * una percentuale di titolarità si legge col telefono in mano.
+ * ⚠ **`listone/dati` è la prima voce annidata dell'applicazione**, e il suo
+ * segmento ha una barra dentro. Il Centro dati ha una pagina sua perché
+ * cinquecento righe con una casella di ricerca non stanno sotto un form di
+ * upload, e perché è una pagina che si apre per consultare, non per agire.
  */
 const SECTIONS: AdminSection[] = [
   {
@@ -80,26 +85,28 @@ const SECTIONS: AdminSection[] = [
     title: "Tutte le aste",
   },
   {
-    key: "figurine",
-    segment: "figurine",
-    label: "Figurine",
-    title: "Le figurine dei calciatori",
-  },
-  {
     key: "listone",
     segment: "listone",
     label: "Listone",
-    title: "Gli insight sul listone",
+    title: "Il listone a sistema",
+  },
+  {
+    key: "dati",
+    segment: "listone/dati",
+    label: "Centro dati",
+    title: "Centro dati — tutto il listone, con gli insight",
+    parent: "listone",
   },
 ];
 
 /** Le sezioni del pannello, nell'ordine della sidebar. */
 export function adminSections(): AdminSection[] {
-  return SECTIONS.map(({ key, segment, label, title }) => ({
+  return SECTIONS.map(({ key, segment, label, title, parent }) => ({
     key,
     segment,
     label,
     title,
+    parent,
   }));
 }
 
@@ -117,10 +124,24 @@ export function adminSectionHref(section: AdminSection): string {
  * ⚠ Il primo segmento va confrontato con `admin`, non cercato dentro il
  * pathname: `/auctions` e `/admin/auctions` finiscono con lo stesso segmento, e
  * la lista delle proprie aste non deve accendere la voce del pannello.
+ *
+ * ⚠ **Il match più lungo vince** (M10). Fino a v1.10.0 questa funzione guardava
+ * `parts[1]` e basta, perché tutte le sezioni stavano a un segmento; con una
+ * voce annidata quella riga accenderebbe «Listone» su `/admin/listone/dati`, e
+ * il titolo in cima alla pagina direbbe una cosa mentre la barra degli indirizzi
+ * ne dice un'altra. È precisamente il bug per cui questo file esiste.
  */
 export function activeAdminSection(pathname: string): AdminSection | null {
   const parts = pathname.split("/").filter((part) => part !== "");
-  // ["admin", "<segmento>"] — un pezzo solo è la radice, che reindirizza.
+  // ["admin", "<segmento>", …] — un pezzo solo è la radice, che reindirizza.
   if (parts.length < 2 || parts[0] !== "admin") return null;
-  return SECTIONS.find((section) => section.segment === parts[1]) ?? null;
+
+  const path = parts.slice(1).join("/");
+  const matches = SECTIONS.filter(
+    (section) => path === section.segment || path.startsWith(`${section.segment}/`),
+  );
+  if (matches.length === 0) return null;
+  return matches.reduce((longest, section) =>
+    section.segment.length > longest.segment.length ? section : longest,
+  );
 }

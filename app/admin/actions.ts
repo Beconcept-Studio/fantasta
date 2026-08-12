@@ -20,7 +20,8 @@ import {
   refreshListoneInsights,
   refreshSetPieces,
 } from "@/lib/engine/insights";
-import { parseListone } from "@/lib/import/parseListone";
+import { uploadCarmy } from "@/lib/engine/carmy";
+import { listoneExtIds, uploadListone } from "@/lib/engine/listone";
 import { deleteAuction } from "@/lib/engine/setup";
 
 /**
@@ -54,8 +55,8 @@ function text(form: FormData, key: string): string | undefined {
 
 const USERS_PATH = `${ADMIN_ROOT}/users`;
 const AUCTIONS_PATH = `${ADMIN_ROOT}/auctions`;
-const FIGURINE_PATH = `${ADMIN_ROOT}/figurine`;
 const LISTONE_PATH = `${ADMIN_ROOT}/listone`;
+const DATI_PATH = `${ADMIN_ROOT}/listone/dati`;
 
 /** Correggere il nome scritto male da qualcun altro. */
 export async function setUserDisplayNameAction(
@@ -170,19 +171,24 @@ function runSummary(run: CampionciniRun): string {
 
   const summary = `${parts.join(" · ")}.`;
   if (!run.expired) return summary;
+  // M10: non si dice più «il file è ancora selezionato», perché di file non ce
+  // n'è più uno. Il «riprende da dov'era» resta vero per la stessa ragione di
+  // sempre — lo stato è il disco, e si scarica solo ciò che non c'è.
   return (
     `${summary} Tempo scaduto: ne restano ${run.remaining}. ` +
-    `Premi di nuovo — il file è ancora selezionato e riprende da dov'era.`
+    `Premi di nuovo: riprende da dov'era.`
   );
 }
 
 /**
  * Lo scaricamento delle figurine (M7 §4): **un click**.
  *
- * Si carica il `.xlsx` del listone di riferimento, il parser che c'è già lo
- * legge — è puro e non tocca il database — e per ogni id che non è già sul disco
- * si scarica l'immagine. Il file **non si conserva** (P6, come l'import del
- * listone di un'asta): serve solo la lista di id, dentro questa richiesta.
+ * ⚠ **E da M10 nemmeno un file.** Gli id arrivano dal listone a sistema, non più
+ * da un `.xlsx` ricaricato a ogni passata: era l'ultimo upload usa-e-getta del
+ * pannello, e lo stesso file veniva caricato tre volte per tre scopi diversi. Se
+ * la tabella è vuota l'azione **rifiuta e dice dove si carica**, invece di
+ * scaricare zero figurine e dichiarare successo — che è il modo esatto in cui un
+ * pulsante insegna a non fidarsi di sé (stessa regola di `refreshSetPieces`).
  *
  * ⚠ **Qui non c'è nient'altro, ed è il punto.** Nessun lavoro in background,
  * nessun singleton su `globalThis`, nessuna tabella di avanzamento: lo stato è
@@ -193,11 +199,38 @@ function runSummary(run: CampionciniRun): string {
  * tutto. Se un giorno questa funzione ricomincia a crescere, la domanda da farsi
  * è quella che l'owner ha fatto allora: «l'hai provato?».
  *
- * Gli id vengono da un listone **di riferimento** e non dalle aste: l'archivio è
- * globale, e legarlo alle aste vorrebbe dire perderlo quando un'asta si cancella
- * — che da M6 è facile.
+ * L'archivio resta **globale** e slegato dalle aste: legarlo a un'asta vorrebbe
+ * dire perderlo quando quell'asta si cancella — che da M6 è facile.
  */
-export async function downloadCampionciniAction(
+export async function downloadCampionciniAction(): Promise<FormState> {
+  await requireAppAdmin();
+
+  const extIds = await listoneExtIds();
+  if (extIds.length === 0) {
+    return {
+      error:
+        "A sistema non c'è nessun listone: carica il file qui sopra, poi riprova.",
+    };
+  }
+
+  const run = await downloadCampioncini({ extIds, dir: campionciniDir() });
+
+  revalidatePath(LISTONE_PATH);
+  return { error: null, ok: runSummary(run) };
+}
+
+/**
+ * Il caricamento del listone a sistema (M10 §2).
+ *
+ * ⚠ **È l'unico upload rimasto nel pannello**, ed è quello che ne toglie due: le
+ * caricature non chiedono più un file e il Centro dati non esisteva. Il file non
+ * si conserva (P6): se ne estraggono le righe e si butta.
+ *
+ * ⚠ **Non valida I9 e non può**: posti e slot sono di un'asta, qui non ce n'è
+ * nessuna. I9 si valida alla copia dentro un'asta, che è il momento in cui esiste
+ * qualcuno di cui chiederlo.
+ */
+export async function uploadListoneAction(
   _prev: FormState,
   form: FormData,
 ): Promise<FormState> {
@@ -205,19 +238,69 @@ export async function downloadCampionciniAction(
 
   const file = form.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    return { error: "Scegli il file .xlsx del listone di riferimento." };
+    return { error: "Scegli il file .xlsx del listone." };
   }
 
-  const parsed = parseListone(await file.arrayBuffer());
-  if (!parsed.ok) return { error: parsed.error.message };
+  const result = await uploadListone(await file.arrayBuffer());
+  if (!result.ok) return { error: result.error.message };
 
-  const run = await downloadCampioncini({
-    extIds: parsed.value.map((player) => player.extId),
-    dir: campionciniDir(),
-  });
+  revalidatePath(LISTONE_PATH);
+  revalidatePath(DATI_PATH);
+  const { rows, outOfList } = result.value;
+  return {
+    error: null,
+    ok: `${rows} giocatori a sistema (${outOfList} fuori lista). Da adesso è quello proposto a chi crea un'asta.`,
+  };
+}
 
-  revalidatePath(FIGURINE_PATH);
-  return { error: null, ok: runSummary(run) };
+/**
+ * Il caricamento del foglio di Carmy (M10B §8).
+ *
+ * ⚠ **Va dato dopo il listone, e non è una preferenza**: il join passa per nome da
+ * `listone_players` (§3), quindi senza listone non c'è denominatore. Il motore lo
+ * rifiuta dicendolo, invece di scrivere zero righe e dichiarare successo.
+ *
+ * ⚠ **I nomi non agganciati si dicono per nome**, come `unknown` in
+ * `refreshSetPieces`: dieci nomi in fondo alla pagina sono l'unico modo di
+ * accorgersi che il foglio e il listone hanno cominciato a divergere. E le
+ * discordanze di squadra si dicono accanto, perché sono un'altra cosa — un
+ * trasferimento, non un aggancio mancato.
+ */
+export async function uploadCarmyAction(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  await requireAppAdmin();
+
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Scegli il file .xlsx del foglio di Carmy." };
+  }
+
+  const result = await uploadCarmy(await file.arrayBuffer());
+  if (!result.ok) return { error: result.error.message };
+
+  revalidatePath(LISTONE_PATH);
+  revalidatePath(DATI_PATH);
+  const { fromFile, written, unmatched, teamMismatches } = result.value;
+
+  const parts = [
+    `${written} giudizi a sistema su ${fromFile} righe del foglio.`,
+  ];
+  if (unmatched.length > 0) {
+    parts.push(
+      `Non trovati nel listone (${unmatched.length}): ${unmatched.join(", ")} — di solito sono acquisti più recenti del listone caricato.`,
+    );
+  }
+  if (teamMismatches.length > 0) {
+    parts.push(
+      `Squadra diversa dal listone (${teamMismatches.length}): ${teamMismatches
+        .map((m) => `${m.name} — Carmy ${m.carmy}, listone ${m.listone}`)
+        .join("; ")}. Il giudizio è stato importato comunque: di solito è un trasferimento.`,
+    );
+  }
+
+  return { error: null, ok: parts.join(" ") };
 }
 
 // ─── Gli insight sul listone (M8) ────────────────────────────────────────────
@@ -273,6 +356,7 @@ export async function refreshListoneInsightsAction(): Promise<FormState> {
   if (!result.ok) return { error: result.error.message };
 
   revalidatePath(LISTONE_PATH);
+  revalidatePath(DATI_PATH);
   const { fromSource, coverage } = result.value;
   const parts = [`${fromSource} giocatori aggiornati dalla fonte`];
   for (const c of coverage) {
@@ -295,6 +379,7 @@ export async function refreshSetPiecesAction(): Promise<FormState> {
   if (!result.ok) return { error: result.error.message };
 
   revalidatePath(LISTONE_PATH);
+  revalidatePath(DATI_PATH);
   const { fromSource, written, unknown } = result.value;
   const summary = `${written} designati aggiornati su ${fromSource} letti dalla pagina`;
   // Gli id che la tabella non conosce si dicono solo se ci sono: una riga «0

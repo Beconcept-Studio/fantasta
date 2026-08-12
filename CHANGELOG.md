@@ -4,6 +4,116 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.11.0] — 2026-08-12
+
+**Due macro in un rilascio solo** (M10 e M10B), perché la seconda si appoggia alla tabella che
+costruisce la prima: senza il listone a sistema, il foglio di Carmy non ha un elenco di nomi a cui
+agganciarsi. ⚠ **I passi a mano stanno in fondo a questa sezione e sono tre**: uno è un comando sul
+server, due sono file da caricare **in quest'ordine**. Finché non sono dati, niente si rompe e niente
+si vede.
+
+### M10 — Il listone a sistema
+
+**Il listone si carica una volta e vale per tutte le aste.** Prima lo stesso `.xlsx` andava ricaricato
+a ogni asta e per le figurine, in tre posti diversi. Adesso c'è **Admin → Listone**: si carica lì, e
+da quel momento chi crea un'asta se lo trova **proposto**, con la data del caricamento accanto — un
+tocco invece di cercare il file nei download.
+
+⚠ **Le aste già preparate non cambiano.** Ognuna si porta dentro la **sua copia** delle righe,
+congelata al momento in cui l'ha presa: le rose, i prezzi e le regole di quella serata sono appesi a
+quelle. Caricare un listone nuovo non tocca un'asta esistente, mai.
+
+**Le caricature sono diventate un pulsante.** «Scarica le caricature» prende gli identificativi dal
+listone a sistema, quindi non c'è più nessun file da riallegare. È spento finché il listone non c'è, e
+lo dice.
+
+**E c'è il Centro dati** (Admin → Listone → Centro dati): tutto il listone in una tabella, con la
+ricerca, il filtro per ruolo, il filtro «rigori e piazzati» e le intestazioni che ordinano. È il posto
+da cui si controlla a vista se i dati sono arrivati davvero. Chi non ha un valore mostra `—` e va **in
+fondo in entrambe le direzioni** dell'ordinamento: invertire una colonna non porta in cima trecento
+trattini.
+
+La pagina dice anche quanti giocatori del listone hanno una riga di insight, e quanti hanno i numeri
+di quest'anno — cioè quelli che si vedono davvero. Resta un'informazione e **non** diventa una
+guardia: un import bloccato da una soglia sarebbe un import che rifiuta dati buoni.
+
+### M10B — Gli insight che vengono da un umano
+
+**La titolarità si legge, non si deduce più.** Fino a ieri l'app rispondeva a «quanto gioca?» con le
+partenze da titolare dell'anno scorso. Ma all'asta la domanda è **quanto giocherà quest'anno**, e
+quella dipende da chi lo ha comprato, da che modulo gioca il suo allenatore nuovo, da chi gli è
+arrivato davanti — cose che nessun numero dell'anno scorso contiene.
+
+Adesso si carica un **foglio compilato a mano** (Admin → Listone, sotto il listone) con tre giudizi da
+1 a 5 per ogni calciatore — titolarità, affidabilità, tenuta fisica — più una fascia, un prezzo
+consigliato, la fantamedia attesa e delle etichette brevi: `rigorista`, `rischio infortuni`,
+`subentrante`, `scommessa`. Da lì viene la titolarità dell'applicazione: **verde da 4 in su**.
+
+⚠ **Il numero dell'anno scorso resta accanto, in grigio, e serve.** Un «Titolarissimo» da solo è
+un'affermazione che nessuno può controllare; accanto a `3/38` diventa un'affermazione con la sua
+prova — e **quando i due divergono, quella divergenza è l'informazione**. Un attaccante giudicato
+titolare pieno che l'anno scorso ha giocato tre partite non è un errore del foglio: è una notizia.
+
+**Nella lista di chiamata** — la schermata in cui si sceglie chi chiamare — ogni riga porta ora
+titolarità, rapporto grezzo, minuti medi, rigori e piazzati, **fascia, fantamedia attesa, PMA e note**.
+È la schermata più densa dell'app di proposito: è l'unica in cui si *confronta*, e l'informazione che
+non c'è è un giocatore che non si considera. Sta su due righe perché otto voci in fila non si leggono.
+
+**Nel modale d'offerta** ci sono le stesse macro più affidabilità, tenuta fisica e il **prezzo
+consigliato** — messo fra gli altri giudizi e non accanto al campo, di proposito: una cifra suggerita a
+due centimetri dalla cifra da digitare è un suggerimento che si segue senza pensarci.
+
+**Sopra la lista, per chi ha il permesso, ci sono i filtri**: titolari da 4, titolari da 5, e le fasce.
+⚠ E c'è una riga che dice **sempre** chi comprerebbe il timer allo scadere, filtro o no. Serve a questo:
+la lista è ordinata come l'auto-pick, quindi il suo primo nome ha sempre voluto dire «quello che il
+timer prenderebbe al posto tuo» — ma **un filtro non cambia chi il timer sceglie**, perché quello guarda
+tutti i giocatori liberi. Con un filtro acceso quella riga diventa ambrata e lo dice a voce alta.
+
+**Il Centro dati** guadagna fascia, fantamedia attesa, PMA, affidabilità, tenuta fisica e note, tutte
+ordinabili, più il filtro per **tag**. Il prezzo consigliato in crediti non è fra le colonne: al suo
+posto c'è il PMA, e la cifra in crediti si legge nel modale d'offerta.
+
+**Il foglio invecchia in un giorno**, e il pannello lo dice: c'è la data dell'ultimo caricamento
+accanto agli altri tre, e un avviso quando è più vecchia di ventiquattr'ore. Un caricamento
+**sostituisce** il precedente per intero, così un giudizio ritirato sparisce davvero.
+
+Se il foglio non aggancia almeno il 90% dei nomi, il caricamento **rifiuta e non scrive niente**: vuol
+dire che il foglio e il listone parlano di due elenchi diversi, di solito perché il listone è vecchio.
+I nomi che non agganciano vengono **elencati per nome** (di solito sono acquisti più recenti del
+listone), e così le squadre che non corrispondono — quelli sono trasferimenti, e il giudizio si importa
+comunque.
+
+**Chi vede i giudizi**: chi ha il permesso «Insight», più gli amministratori. Come per i numeri di
+v1.9.0, a chi non ce l'ha **non arrivano affatto**: non sono nascosti a schermo.
+
+### ⚠ Il rilascio non finisce col deploy: tre passi a mano
+
+**1. Lo schema, sul server.** Un solo comando copre entrambe le macro — i cambi sono additivi (una
+tabella nuova per il listone, una per i giudizi, una colonna su quella degli insight), quindi **niente
+`pg_dump` preventivo**:
+
+```bash
+cd /home/ploi/fantasta.rggndr.it && pnpm db:push
+pm2 reload deploy/ecosystem.config.cjs --update-env
+```
+
+**2. Il listone, da Admin → Listone.** La tabella nasce vuota: finché è vuota, le caricature non si
+scaricano, il Centro dati è vuoto e chi crea un'asta non trova nessuna proposta. Si carica l'export
+**Leghe** in `.xlsx` — quello con la colonna `Fuori lista`.
+
+**3. Il foglio di Carmy, sotto quello del listone.** ⚠ **In quest'ordine, e non è una preferenza**: il
+foglio non ha identificativi e si aggancia al listone **per nome**, quindi senza il passo 2 il suo
+pulsante è spento e lo dice. Finché non è caricato, la titolarità torna quella calcolata dalle presenze
+e `/play` è identica a v1.10.0.
+
+⚠ **Finché i passi 2 e 3 non sono dati, tutto funziona come prima e non si vede niente**: non si rompe
+nulla, non c'è fretta, ma il rilascio non è finito. È lo stesso inciampo di v1.8.0 e v1.9.0, il quarto
+di fila.
+
+Vale ancora quello che valeva prima: il deploy **si rifiuta di partire** se in produzione c'è un'asta
+**reale** `LIVE` o `PAUSED`, e in quel caso non tocca niente. Le aste **simulate** non lo bloccano: le
+dice e tira avanti.
+
 ## [1.10.0] — 2026-08-12
 
 **M9 — I badge degli insight, e la striscia verde via.** I numeri arrivati con v1.9.0 c'erano ma erano

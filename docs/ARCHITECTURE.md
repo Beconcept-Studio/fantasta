@@ -514,6 +514,14 @@ momento dell'import. Se l'anno prossimo il file cambia, le aste dell'anno scorso
 con sé stesse. Un secondo caricamento sostituisce lo snapshot precedente invece di aggiungersi,
 così correggere un file sbagliato non richiede di rifare l'asta.
 
+Dalla versione 1.11 quel file si può anche **non** caricare: se un amministratore ne ha messo uno a
+sistema, chi crea un'asta se lo trova proposto con la data del caricamento accanto, e le righe
+vengono copiate dentro l'asta al posto suo. Il caricamento da file resta comunque — serve a
+correggere un file sbagliato, e a preparare un'asta il giorno in cui a sistema non c'è ancora
+niente — e le due strade si possono alternare quante volte si vuole finché l'asta non parte. Quello
+che **non** cambia è che dentro l'asta ci finisca una copia: il capitolo «Il listone a sistema»
+racconta perché quella parola è la cosa importante della frase.
+
 ### L'invariante che rifiuta un'asta impossibile
 
 Prima di accettare un import, il server verifica che **per ogni ruolo ci siano almeno
@@ -1900,6 +1908,13 @@ navigazione che prima o poi qualcuno confonderà per una difesa. `/admin` non è
 porta, e atterra sulla prima voce della sidebar ricavata dalla lista, non da una stringa scritta due
 volte.
 
+Dalla versione 1.11 una voce è **annidata** — il Centro dati, sotto il listone — e questo ha
+richiesto di riscrivere la funzione che decide quale voce è accesa: guardava il primo segmento dopo
+`/admin` e basta, quindi su `/admin/listone/dati` avrebbe acceso «Listone» e messo in cima alla
+pagina il titolo sbagliato. Adesso vince il percorso più lungo che combacia. È esattamente il bug
+per cui quel file esiste, ripresentatosi in una forma nuova; il test che lo copre nomina il percorso
+per esteso.
+
 Il pulsante «Admin» in navbar compare solo a chi è amministratore, e la navbar riceve **un
 booleano** e non la riga dell'utente: è un client component, e il tipo `User` si porterebbe dietro
 l'ORM fino al telefono.
@@ -2291,6 +2306,418 @@ al 100%**. Nella risposta vera c'è un giocatore con 42 partenze da titolare su 
 campo somma più competizioni — e senza quel limite la card scriverebbe «110% da titolare», che è la
 sola cosa peggiore di non scrivere niente. Il test ha il suo nome dentro, così quella riga non viene
 tolta per pulizia da qualcuno che non sa perché c'è.
+
+---
+
+## Il listone a sistema, e i due file che si chiamano allo stesso modo
+
+Fino alla versione 1.10 il listone non esisteva come cosa in sé. Esisteva solo *dentro* un'asta:
+chi la creava caricava il suo `.xlsx`, quelle righe finivano in `players` con l'`auction_id`
+accanto, e lì restavano. Lo stesso file veniva poi ricaricato per scaricare le caricature, e
+ricaricato ancora per l'asta dopo. Nessun posto dell'applicazione sapeva rispondere alla domanda più
+semplice che ci sia: *chi c'è nel listone di quest'anno?*
+
+Adesso quel posto c'è, e si chiama `listone_players`. Il file si carica **una volta**, in
+amministrazione; da lì si scaricano le caricature, si consulta il Centro dati, e chi crea un'asta se
+lo trova proposto invece di andarlo a cercare nei download.
+
+### Perché la tabella non si chiama `listone`
+
+Perché nel pannello quella parola indica **due file diversi**, ed è la distinzione da cui dipende
+tutto il resto del capitolo.
+
+Il primo è l'export **Leghe** di Fantacalcio.it: un `.xlsx` che si scarica a mano dall'area
+riservata, e che è *quello che definisce un'asta*. Porta la colonna `Fuori lista`, e da quella
+colonna dipendono l'invariante I9 e il toggle che decide se i fuori lista sono comprabili. Il
+secondo è la `GET` pubblica di `api.fantalab.it`, quella che riempie `player_insights` con
+titolarità, minuti e rigori: è la fonte del capitolo precedente, e il pulsante che la chiama si
+chiama «Importa il listone» da quando esiste.
+
+Solo il secondo si può chiedere da sé, e non è una questione di pigrizia: l'export Leghe passa da un
+login, quindi nessun automatismo può andarselo a prendere. C'è un terzo file, *Quotazioni*, che è
+pubblico e si scaricherebbe senza credenziali — ed è già stato scartato una volta, per una ragione
+che vale la pena ripetere: **non ha la colonna `Fuori lista`**. Un listone a sistema costruito da
+lì lascerebbe I9 e il toggle senza il loro dato di ingresso.
+
+Da qui la divisione del lavoro: il listone d'asta si carica a mano, e il refresh automatico
+giornaliero — che arriverà — riguarda solo le due fonti pubbliche degli insight. Le due cose stanno
+nella stessa pagina del pannello perché è il posto giusto per guardarle insieme, non perché siano la
+stessa cosa. E la tabella si chiama `listone_players` e non `listone` per lo stesso motivo per cui
+il codice dice `campioncini` e il menu dice «Figurine»: una tabella che porta il nome di un concetto
+ambiguo è una tabella che qualcuno userà per la cosa sbagliata.
+
+### Resta una copia, e questa è la parte da non toccare
+
+La tentazione, avendo finalmente un listone globale, è farlo leggere direttamente all'asta: una
+tabella sola, niente duplicazione, un `JOIN` e via. Sarebbe sbagliato, e non per ragioni di
+architettura ma di dominio.
+
+Un'asta preparata lunedì non può cambiare listone perché martedì un amministratore ne ha caricato
+uno aggiornato. Le rose comprate quella sera, i prezzi pagati, i giocatori che erano chiamabili e
+quelli che non lo erano: tutto è appeso a quelle righe. Se il listone fosse condiviso, correggere un
+refuso in un nome cambierebbe il verbale di un'asta finita tre settimane fa.
+
+Quindi il principio scritto in `schema.ts` dal primo giorno — *«il listone è copiato dentro l'asta,
+`players.auction_id` congela la lista al momento dell'import»* — non si tocca, e attorno a
+`listone_players` vale una regola con una direzione sola: **è una sorgente da cui si copia, mai una
+tabella da cui l'asta legge.** Nessuna query di gioco la attraversa. Se un `JOIN` verso quella
+tabella comparisse in `machine.ts`, in `rules.ts`, in `snapshot.ts` o nella lettura del pool
+chiamabile, sarebbe un errore anche se funzionasse.
+
+C'è un test che difende esattamente questo, ed è la stessa forma del test che difende gli insight:
+un'asta si crea, si prepara e arriva a `COMPLETED` con `listone_players` **vuota**. Se un giorno un
+pezzo di motore cominciasse a dipendere da quella tabella, è lì che si romperebbe — prima della sera
+dell'asta, invece che durante.
+
+La conseguenza pratica è che le due strade — caricare il file dentro l'asta, oppure caricarlo a
+sistema e copiarlo — devono produrre **le stesse identiche righe**. C'è un test anche per quello, e
+ha un motivo preciso: `players_autopick_idx` ordina per valore di mercato decrescente, e
+quell'ordinamento *è* la scelta automatica che scatta quando scade il tempo di una chiamata. La
+colonna del valore di mercato non si mostra nel Centro dati, per decisione di chi guarda la pagina;
+ma toglierla dalla copia perché «tanto non si vede» cambierebbe **chi viene comprato** allo scadere
+di un countdown. È la trappola più facile di tutta questa parte, e il test esiste per non caderci
+fra sei mesi.
+
+### I9 si valida alla copia, non al caricamento
+
+L'invariante I9 dice: per ogni ruolo, i giocatori disponibili devono essere almeno
+`slot × partecipanti`. Sono tre termini, e due — gli slot e i partecipanti — appartengono a
+un'asta. Al momento in cui il file entra a sistema non c'è nessuna asta di cui chiederlo, quindi
+lì si valida solo il file: che sia leggibile, che abbia le colonne, che gli identificativi non si
+ripetano.
+
+I9 si verifica **alla copia**, con la stessa funzione di sempre. La conseguenza è che lo stesso
+listone globale può passare per un'asta a otto partecipanti e fallire per una a dodici — ed è
+giusto che fallisca, perché quella seconda asta si bloccherebbe davvero a metà serata.
+
+Questo apre una domanda che vale la pena aver risolto bene: cosa succede se la copia fallisce
+proprio **mentre si sta creando l'asta**? La risposta è che l'asta **resta creata**, in bozza, senza
+listone, e il motivo arriva scritto in cima alla sua configurazione. L'alternativa — rifiutare la
+creazione — sarebbe la trappola in cui un file inadatto impedisce di creare un'asta che si
+preparerebbe a mano in trenta secondi.
+
+### Il pannello, e il gate messo solo dove è vero
+
+La sezione «Listone» del pannello tiene insieme il caricamento, lo stato e le due azioni che si
+fanno *con* un listone appena caricato: scaricare le caricature e aggiornare gli insight. Le
+figurine, che fino a ieri erano una voce di primo livello, sono diventate un blocco qui dentro:
+erano l'altra voce che non parlava di righe legate a un'asta, e una accanto all'altra erano un
+pannello cresciuto per accumulo. Il Centro dati ha invece una pagina sua, perché cinquecento righe
+con una casella di ricerca non stanno sotto un modulo di caricamento — e perché è una pagina che si
+apre per consultare, non per agire.
+
+La richiesta originale chiedeva che **entrambe** le sottosezioni restassero inerti finché il listone
+non fosse caricato. È stata accolta per una sola delle due, ed è una scelta che vale la pena
+spiegare. Le caricature hanno una dipendenza vera: senza un elenco di identificativi non c'è niente
+da scaricare, quindi il pulsante spento *dice* qualcosa. Gli insight no: le loro due fonti creano
+righe con la propria chiave e non sanno che il nostro listone esista, quindi bloccarle bloccherebbe
+un aggiornamento che **riuscirebbe**. Un pulsante disabilitato che funzionerebbe è una bugia
+dell'interfaccia. E fra i due c'è già un gate vero, che nessuno ha dovuto inventare: «aggiorna i
+designati» è spento finché la tabella degli insight è vuota, perché la seconda fonte aggiorna righe
+che nascono dalla prima.
+
+### La copertura, che finalmente ha un denominatore
+
+Con un listone a sistema esiste per la prima volta il numero che si vorrebbe leggere: *quanti dei
+giocatori di quest'anno hanno qualcosa da dire?* Sta nel pannello, accanto ai tre timestamp.
+
+Ed è un'informazione, non una guardia — la distinzione conta. La prima versione del controllo sugli
+insight, quella scartata, sbarrava l'import sotto una soglia di copertura, e si è rivelata
+**avvelenabile**: un'asta simulata con identificativi finti portava la copertura a zero su dati
+perfetti. Al suo posto c'è il controllo di continuità, che confronta la fonte con sé stessa.
+Trasformare la copertura globale in una soglia rimetterebbe in piedi esattamente quel problema, con
+un veleno nuovo: un file caricato per sbaglio. Le due domande, del resto, sono diverse — «il *mio*
+listone è coperto?» e «la fonte copre il listone di quest'anno?» — e per questo il pannello le
+mostra tutte e due.
+
+### Il Centro dati
+
+È una tabella e basta: tutto il listone a sistema, con gli insight accanto in `LEFT JOIN`. Chi non
+ha una riga di insight compare lo stesso, con un trattino al posto dei numeri; chi ha insight ma non
+è nel listone non compare affatto, perché il listone è il denominatore.
+
+Ricerca, filtri e ordinamento girano **nel browser**, su un carico solo: cinquecento righe con gli
+insight dentro sono un paio di centinaia di kilobyte, un numero che conosciamo perché è già pagato
+una volta a serata da ogni telefono collegato al portale. Niente paginazione, niente ricerca lato
+server, niente attesa fra un tasto e il successivo. Se un giorno il listone avesse cinquemila righe
+sarà il momento di cambiare, e non prima.
+
+Le intestazioni si cliccano per ordinare, e la lista si apre sulla quotazione dal più alto al più
+basso. La logica sta in un file di funzioni pure con i suoi test, e non dentro il componente, per una
+ragione che vale la pena dire: **una lista ordinata male non dà nessun errore.** Dà una lista
+plausibile, e nessuno se ne accorge finché non cerca un nome che dovrebbe stare in cima. Due regole
+lì dentro non sono ovvie: chi non ha il valore di quella colonna finisce in fondo *in entrambe le
+direzioni* — invertire «titolarità» non deve portare in cima trecento trattini, perché l'assenza di
+un dato non è uno zero — e a parità si ordina per nome, altrimenti duecento quotazioni uguali si
+riordinano a ogni click e sembrano un difetto.
+
+C'è poi un filtro «rigori e piazzati», e costruirlo ha fatto emergere una distinzione che prima era
+rimasta implicita. Il gate stagionale — quello che nasconde i numeri di chi ha giocato solo il
+campionato scorso — esiste per **i numeri della stagione**: presenze, partenze da titolare, minuti,
+dove un dato dell'anno scorso accanto a uno di quest'anno è un confronto falso. Ma le due posizioni
+di rigorista e battitore di piazzati non sono numeri di stagione: vengono dall'altra fonte, che
+pubblica la gerarchia *di adesso*. Applicare loro lo stesso gate significa perderne una fetta
+consistente — misurata: **22 designati su 92** — e un filtro che si chiama «solo chi batte» e ne
+nasconde un quarto è peggio di nessun filtro. Nel Centro dati, dove le due informazioni stanno in
+due colonne separate e non c'è nessun confronto da falsare, le posizioni si mostrano sempre.
+
+⚠ Il portale, invece, non è cambiato: in `/play` e nel modale d'offerta quei ventidue continuano a
+non avere il badge blu. È una differenza deliberata fra una pagina di consultazione e una schermata
+di gioco, ed è annotata come tale — non è una svista da uniformare senza chiederlo.
+
+La pagina sta dietro la guardia dell'amministrazione, e per questo non contiene nessun controllo sul
+permesso di vedere gli insight: un amministratore li vede per costruzione, e aggiungere il predicato
+qui darebbe l'impressione che ci sia una seconda regola da tenere allineata alla prima.
+
+### La cosa che non si rompe, ed è quella da ricordare
+
+La tabella nasce **vuota**. Finché nessuno carica il file: le caricature non si scaricano, il Centro
+dati dice di essere vuoto, e chi crea un'asta non trova nessuna proposta — carica il suo file come
+ha sempre fatto. **Niente si rompe**, ed è precisamente ciò che rende quel passo facile da
+dimenticare dopo un rilascio. È lo stesso inciampo dell'archivio delle figurine e della tabella
+degli insight, con la stessa cura: il numero grande in cima alla pagina *è* l'allarme.
+
+---
+
+## Il giudizio di un umano: da dove viene, e perché non è una misura
+
+Il capitolo sugli insight si riapre qui, e non per aggiungere un'altra fonte: per aggiungere un
+**tipo diverso di informazione**. Fino a v1.10.0 tutto ciò che l'applicazione sapeva di un calciatore
+era una misura — quante partite, quanti minuti, quanti rigori, quale posizione nella gerarchia dei
+battitori. Numeri veri, letti da fonti pubbliche, che rispondono a una domanda sola: *cosa è
+successo l'anno scorso.*
+
+Solo che all'asta la domanda è un'altra, ed è **quanto giocherà quest'anno**. Le due non coincidono, e
+non coincidono per ragioni che nessun dato pubblico contiene: dipende da chi lo ha comprato, da che
+modulo gioca il suo allenatore nuovo, da chi gli è arrivato davanti. Un difensore con trentaquattro
+partenze da titolare che a luglio è finito in una squadra dove il suo posto è occupato non è un
+titolare, e il numero non lo sa. La sessione che ha aperto questa strada ha provato a modellarlo — pesi
+diversi fra inizio e fine stagione, giornate di infortunio da sottrarre, probabili formazioni — e si è
+fermata su un fatto banale: **il dato per giornata non esiste in nessuna fonte pubblica**, e
+ricostruirlo voleva dire cinquecento richieste HTTP e una tabella da diciannovemila righe per ottenere
+un'approssimazione di qualcosa che una persona sa già.
+
+Perché quella ponderazione, in effetti, **qualcuno l'ha già fatta**. Un foglio compilato a mano,
+giocatore per giocatore, con tre giudizi su una scala da 1 a 5 — quanto è titolare, quanto è
+affidabile, quanto tiene fisicamente — più una fascia di prezzo, un prezzo consigliato e delle
+etichette brevi: `rigorista`, `rischio infortuni`, `subentrante`, `scommessa`. Si carica dal pannello
+come il listone, circa una volta al giorno.
+
+Il tema di questo capitolo, in una riga: **smettere di dedurre la titolarità e cominciare a leggerla,
+senza smettere di mostrare il numero che la rende verificabile.**
+
+### La misura che giustifica tutto il resto
+
+Prima di costruirci sopra, una domanda andava chiusa: quel giudizio è informazione vera, o è la
+statistica dell'anno scorso riscritta a mano? Perché se fosse la seconda, tutto questo capitolo
+sarebbe una preferenza estetica.
+
+La correlazione fra il voto di titolarità e la quota di partenze dell'anno scorso è **0,65** su 466
+giocatori confrontabili. Correlata — un titolare tende a restare titolare — ma lontanissima
+dall'essere una copia. E soprattutto: **i disaccordi sono esattamente i casi che la domanda voleva
+catturare.** Undici giocatori sono giudicati titolari pieni pur avendo giocato dieci partite o meno:
+un attaccante appena comprato da una squadra dove sarà il centravanti, un ragazzo promosso, due
+difensori arrivati in una squadra che si è svuotata. Tredici sono giudicati panchinari pur avendo
+trentaquattro partenze alle spalle: gente che ha cambiato squadra in peggio, o a cui è arrivato
+davanti qualcuno.
+
+Nuovo arrivo, cambio di modulo, cambio di allenatore, gerarchia nuova. La ponderazione che si voleva
+costruire con un modello **era già una colonna**, e non ha bisogno di essere difesa: ha bisogno di
+essere attribuita.
+
+E c'è il rovescio della misura, che è la ragione per cui questa non è diventata *la* fonte. Delle
+quindici colonne di statistiche del foglio, **undici sono identiche byte per byte** a quelle che
+importiamo già: presenze, partite da titolare, minuti, quotazione, rigori, cartellini — 497 righe su
+497. Il foglio non porta **nessuna statistica nuova**. Porta un giudizio, e solo per quello vale la
+pena caricarlo. Sostituire con lui le due `GET` vorrebbe dire prendere gli stessi numeri da un file
+caricato a mano invece che da una fonte che si aggiorna da sé, e perdere la gerarchia dei rigoristi —
+che il foglio ha come etichetta su diciotto giocatori, contro i novantadue designati **con la loro
+posizione** della fonte pubblica. La posizione *è* l'informazione. Quindi è una **terza fonte
+sovrapposta**, non un rimpiazzo.
+
+C'è anche una trappola, e va lasciata scritta perché il suo nome è convincente. Il foglio ha una
+colonna che si chiama `Pt. Inf.`, e sembra la risposta a «togli le giornate di infortunio dal
+calcolo». Non lo è: è identica al campo «infortunato» della fonte pubblica, va da 0 a 5, e
+`presenze + Pt. Inf.` non fa 38 — arriva a 42, perché le presenze sommano più competizioni. È un
+**conteggio di episodi**, non di giornate saltate. Quel punto resta senza dato, e questa colonna
+sembra risolverlo senza risolverlo: se un giorno servisse, si chiede a chi compila il foglio invece di
+dedurlo dal nome della colonna.
+
+### Il join per nome, che è la parte fragile
+
+Il foglio non ha identificativi. Ha un nome e una sigla di tre lettere per la squadra, e le due cose
+insieme non bastano: `ROM` non è `Roma`, e agganciare su `(nome, squadra)` senza tradurre le sigle dà
+**zero** su 497 — il genere di zero che fa sospettare il file invece della mappa.
+
+Si aggancia quindi **sul solo nome, normalizzato**, contro il listone a sistema. Il risultato misurato
+è 487 su 497, il 98%, e il fatto che lo rende sicuro non è la percentuale: è che **nel listone non c'è
+un solo nome ripetuto**, quindi il nome è una chiave non ambigua. I dieci che restano fuori sono
+acquisti più recenti del listone caricato — gente che quel file non aveva ancora.
+
+Il listone è il denominatore giusto per la stessa ragione per cui lo è nel Centro dati: è la lista di
+chi si può comprare, e un giudizio su qualcuno che non è in vendita non serve a nessuno. La sigla della
+squadra non è la chiave, ma **il controllo**: si traduce con una mappa di venti righe scritte in chiaro
+e si confronta, e una discordanza **si segnala per nome** invece di essere ingoiata. Sul file vero sono
+tre, e sono tre trasferimenti veri: il giudizio si importa comunque, perché un giocatore che ha cambiato
+squadra è lo stesso giocatore.
+
+Venti righe in chiaro e non un algoritmo di somiglianza, e la ragione è la stessa di sempre in questo
+progetto: `ROM → Roma` lo indovinerebbe qualunque prefisso, ma `MON` sta per Monza e non per Modena, e
+una funzione che sbaglia in silenzio su una squadra sola sposta il giudizio di un giocatore addosso a
+un altro. Venti righe che qualcuno rilegge ad agosto sono più oneste. Vanno rigenerate a ogni
+promozione, e c'è un test che se ne accorge.
+
+Sotto il **90%** di nomi agganciati l'import **rifiuta e non scrive niente**. Vale la pena dire perché
+questa guardia è sana, quando M8 aveva smontato un controllo che somigliava a questo: quello là
+misurava la copertura contro il listone di *un'asta*, e un'asta simulata con identificativi finti la
+portava a zero su dati perfetti — era **avvelenabile**. Qui il denominatore è il listone globale, che
+non appartiene a nessuna asta: nessuna simulazione lo può inquinare, e l'unica cosa che può abbassare
+quella quota è che il foglio e il listone abbiano davvero cominciato a divergere. Di solito perché il
+listone è vecchio, ed è quello che il messaggio d'errore dice di fare.
+
+### Una tabella sua, e non tre colonne accanto alle altre
+
+I giudizi stanno in `carmy_players`, non in tre colonne di `player_insights` — che pure ospita già due
+fonti diverse. La differenza non è di gusto, è di **semantica della scrittura**: le due fonti pubbliche
+si aggiornano *per colonna, con un upsert* — una scrive le statistiche, l'altra i due rank, e nessuna
+tocca le colonne dell'altra — mentre questa si **sostituisce per intero** a ogni caricamento, come il
+listone.
+
+Mescolarle vorrebbe dire che un refresh automatico e l'upload di un file umano scrivono nella stessa
+riga con due regole diverse, ed è il punto esatto in cui qualcuno, fra sei mesi, cancellerebbe i
+giudizi con una `GET`. La sostituzione integrale serve anche a una cosa che l'upsert non farebbe: **un
+giudizio ritirato deve poter sparire**. Un `titolarissimo` messo a luglio e tolto ad agosto, con un
+merge, resterebbe in tabella per sempre.
+
+Il foglio invecchia in fretta — un giudizio sulla titolarità cambia con un infortunio — quindi il
+pannello dice **quando** è stato caricato e lo segnala se è più vecchio di un giorno. È l'unico dei
+quattro timestamp con un avviso sopra: gli altri tre vengono da fonti che si aggiornano da sé, questo
+lo carica una persona, e nessun refresh automatico potrà mai occuparsene.
+
+### Il giudizio vince, ma il numero resta accanto
+
+Da qui in avanti la titolarità dell'applicazione **è** quella del foglio. Si smette di dedurla dalle
+partenze dell'anno scorso, e la soglia del verde si sposta sulla scala 1–5: da 4 in su.
+
+Il rapporto grezzo però **non si perde**. Resta accanto al badge, in grigio, e non è nostalgia: è ciò
+che rende il giudizio verificabile. Un «5 su 5» da solo è un'affermazione che nessuno può controllare;
+un «5 su 5» accanto a «3 partite su 38» è un'affermazione con la sua prova — e quando i due divergono,
+**quella divergenza è l'informazione più preziosa della riga**. È letteralmente il caso che giustifica
+il capitolo: l'attaccante giudicato titolare pieno che l'anno scorso ha giocato tre partite non è un
+errore del foglio, è una notizia.
+
+Con una precisazione che vale la pena capire, perché sembra un'incoerenza e non lo è. Il numero grezzo
+compare **solo se è di quest'anno**: chi ha le statistiche del campionato precedente porta il giudizio
+da solo, senza rapporto accanto. Il motivo è che le presenze sono un numero *di stagione*, e uno di due
+campionati fa accanto a un giudizio scritto oggi non è una prova ma un confronto falso. Il giudizio
+invece non ha stagione: è un'opinione su quest'anno, scritta oggi, e non cambia significato per quanto
+ha giocato chi la porta. Se fosse passato dallo stesso filtro, i centosessantotto giocatori con le
+statistiche vecchie avrebbero perso l'informazione più recente che abbiamo su di loro.
+
+E quando il foglio non c'è? **Si torna al badge di prima**, calcolato dalle presenze. Questo è il
+punto in cui l'architettura ha fatto una scelta che vale più di quanto sembri: la decisione «da dove
+viene la titolarità» sta in **una funzione sola**, in `lib/domain.ts`, e restituisce una delle due
+forme — mai un misto. I tre posti che disegnano un badge non sanno quale delle due ha vinto. Se quella
+scelta fosse sparsa nei componenti, il giorno in cui la lista di chiamata e il modale d'offerta la
+applicassero in due modi diversi lo stesso giocatore sarebbe verde in una schermata e grigio
+nell'altra — e nessuna delle due schermate sbaglierebbe *da sola*, che è il genere di bug che non si
+trova. Per la stessa ragione il badge è **un** componente e non due: tenerne uno per fonte voleva dire
+che ogni chiamante decideva quale disegnare, cioè riportare la decisione dove non deve stare.
+
+### Un numero che propone un'azione, e per questo sta in un posto solo
+
+Fra tutto ciò che il foglio porta, il prezzo consigliato è diverso dagli altri, e la differenza va
+detta perché è la ragione della forma che ha preso: **non descrive un giocatore, propone un'azione.**
+Una cifra suggerita accanto a una cifra da digitare è un suggerimento che qualcuno segue senza
+pensarci.
+
+C'è anche un effetto sull'asta, non sull'interfaccia. Se otto persone su otto hanno il file, il prezzo
+consigliato smette di essere un vantaggio informativo e diventa **un prezzo di listino**: l'asta
+converge lì, e la contesa che rende interessante la serata si sposta sui pochi nomi in cui qualcuno
+decide di scostarsene.
+
+Per questo vive in un componente suo, con **un posto solo** da cui si decide se e dove compare, e
+quattro posizioni tutte scritte: accanto al campo dell'offerta, fra gli altri giudizi, dietro un tocco,
+oppure spento. Oggi sta fra gli altri giudizi — dove si legge come *un giudizio fra i giudizi* invece
+che come un'istruzione a due centimetri dalla cifra da scrivere — e spegnerlo in tutta l'applicazione
+è cambiare una parola, non togliere del codice: i due punti d'innesto restano al loro posto e tacciono
+da sé.
+
+### La riga della lista di chiamata, e la densità che si è scelta di pagare
+
+La schermata in cui si sceglie chi chiamare è quella con più informazione dell'applicazione, e il
+motivo è che è l'unica in cui si **confronta**: quaranta nomi, trenta secondi, e la domanda non è
+«quanto vale questo?» ma «quale di questi?». Il capitolo su M8 aveva fissato una regola per quella
+riga — «tre informazioni, non dieci» — e questa macro l'ha allargata: accanto al nome ci sono ora la
+titolarità giudicata, il rapporto grezzo, i minuti medi, i badge dei piazzati, la fascia, la
+fantamedia attesa, il `PMA` e le note.
+
+È una scelta esplicita e va detta come tale, perché va contro la regola precedente. La spec di questa
+macro aveva deciso «la titolarità e al più un tag», e guardando la pagina vera la decisione è stata
+rovesciata: in una schermata di confronto, l'informazione che non c'è è un giocatore che non si
+considera. Il prezzo si paga sulla densità, e per pagarlo il meno possibile la riga è **su due
+righe**: sopra i numeri di stagione, sotto il giudizio del foglio. Due blocchi da tre o quattro voci
+si scorrono; uno da otto si guarda e non si legge.
+
+Due cose sono rimaste fuori, e sono le stesse due che nessuno confronterebbe con un pollice sotto un
+countdown: **affidabilità e integrità**, che vivono nel modale d'offerta insieme al prezzo consigliato
+in crediti. Il modale è il posto in cui si è già scelto il giocatore e si sta scegliendo la cifra, e
+là la domanda è un'altra.
+
+Un dettaglio di nomi che sembra pedanteria e non lo è: la fantamedia attesa si scrive **`attesa
+7.36`**, non con la sua sigla. In questo progetto `fvm` è il *Fantavalore di Mercato* — un indice di
+prezzo che vale 300 — e sta **sulla stessa riga**, a destra. `FMV Exp.` è la *fantamedia attesa*, e
+vale 7.36. Due sigle quasi identiche per due cose che non si somigliano: scritte accanto, l'una si
+legge per l'altra, e il numero sbagliato letto sotto un countdown è un giocatore comprato male.
+
+### Il vincolo che non è un invariante, e che era il più facile da rompere
+
+Sopra la lista di chiamata, per chi ha il permesso, ci sono dei filtri: titolarità minima e fascia.
+Servono a quello per cui esistono — trovare in mezzo a quaranta nomi i pochi che vale la pena
+chiamare — e sono, tecnicamente, una banalità: un `filter` su un array che è già in memoria.
+
+Solo che quella lista **non era ordinata per caso**. È ordinata come l'auto-pick, ed è per questo che
+il suo primo nome ha sempre avuto un significato preciso: *quello che il timer comprerebbe al posto
+tuo se lasci scadere la chiamata*. Saperlo cambia la fretta con cui si guarda il countdown.
+
+Un filtro cambia quali righe si vedono e **non cambia di una virgola chi il timer sceglie** — quello
+pesca dal pool intero, dentro la macchina a stati, e del foglio non sa niente né deve saperne. Con un
+filtro acceso il primo nome della lista **non è più** quello che verrebbe comprato allo scadere, e chi
+ha imparato a fidarsi di quella riga si ritroverebbe comprato qualcun altro. Nessun invariante si
+rompe: si rompe una promessa che l'interfaccia aveva fatto senza scriverla.
+
+Va risolto **in pagina e in modo esplicito**, non con un commento nel codice. Sopra l'elenco c'è una
+riga che dice chi comprerebbe il timer, e c'è **sempre** — filtro o no. Diventa ambrata quando il primo
+della lista non è più quello. Il «sempre» non è pigrizia: se comparisse solo a filtro acceso, chi non
+filtra continuerebbe a fidarsi dell'ordinamento e chi filtra la leggerebbe come un avviso d'errore
+invece che come un'informazione.
+
+L'altra strada — tenere quel giocatore fisso in cima anche quando il filtro lo escluderebbe — è
+scritta e disattivata, perché risolve il problema introducendone un altro: un elenco che contiene una
+riga che il filtro dichiara di aver tolto mente su sé stesso in un altro modo.
+
+Quello che protegge davvero il motore, comunque, non è nessuna di queste due righe di interfaccia: è
+un test che gioca **un'asta intera** con la tabella dei giudizi piena — messi apposta *contro* l'ordine
+dell'auto-pick, il migliore per il foglio è l'ultimo per il motore — e verifica che compri esattamente
+gli stessi giocatori, nello stesso ordine, di un'asta identica giocata con la tabella vuota.
+
+### Chi li vede, e la cosa che non si rompe
+
+Come per gli insight, il permesso decide **una query e non un `className`**: la chiave con i giudizi è
+*assente* dal payload di chi non ce l'ha — non `null`, assente — perché quel dato viaggia dentro le
+prop di un componente client, cioè finisce nel browser di chi apre la pagina. I filtri sopra la lista
+di chiamata **non sono la protezione**: sono l'interfaccia sopra un dato che a chi non ha il permesso
+non arriva affatto. Se un giorno il filtro si vedesse e i dati non ci fossero, il bug è nella query.
+Nel Centro dati il discorso non si pone: quella pagina è dietro il permesso di amministratore, e un
+amministratore li vede per costruzione.
+
+E la solita cosa da ricordare, la quarta di fila. **La tabella nasce vuota.** Finché nessuno carica il
+foglio, i giudizi non compaiono da nessuna parte, il badge della titolarità è quello calcolato dalle
+presenze e il portale è identico a quello della versione precedente. **Niente si rompe** — ed è
+precisamente ciò che rende quel passo facile da dimenticare dopo un rilascio. I due file vanno caricati
+**in quest'ordine**: prima il listone, poi il foglio, perché il secondo si aggancia al primo per nome.
+L'ordine non è una preferenza, ed è la ragione per cui il pulsante del secondo è spento finché il primo
+non c'è.
 
 ---
 

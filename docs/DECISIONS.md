@@ -1903,3 +1903,327 @@ aggiornamento.
 **`listUserAuctions` sopravvive al banner.** Il task diceva di togliere «la query che serviva solo a
 lui»: la **chiamata** nel layout radice è quella, e se ne va, ma la funzione resta perché il suo
 chiamante vero è la dashboard — che dopo M9 è l'unica strada di rientro e quindi la usa più di prima.
+
+---
+
+## 2026-08-12 — M10, il listone a sistema
+
+Le scelte prese implementando `docs/features/10-listone-a-sistema.md`. Le decisioni di
+pianificazione — i due file che si chiamano «listone», il taglio M10/M11, il gate solo su Caricature
+— stanno nella sezione «Pianificazione di M9–M12» e non si riscrivono qui: qui c'è solo ciò che è
+stato deciso **scrivendo il codice**.
+
+**`fvm` resta nella tabella globale, anche se il Centro dati non lo mostra.** La decisione dell'owner
+(«FMV togli») riguardava una colonna a schermo. `players_autopick_idx` ordina per `fvm` DESC, `quot`
+DESC, `ext_id` ASC, e quell'ordinamento **è** l'auto-pick allo scadere di una chiamata: una copia
+verso `players` senza `fvm` cambierebbe chi viene comprato, per una scelta di layout. Il test che lo
+difende confronta riga per riga i `players` prodotti dalle due strade — file dentro l'asta, e
+sistema copiato dentro l'asta — `fvm` e `out_of_list` compresi.
+
+**La parte condivisa dei due import è stata estratta solo adesso** (`replacePlayers` in `setup.ts`),
+ed è la regola 8 applicata alla lettera: fino a v1.10.0 le righe potevano venire da una sorgente
+sola, e un'astrazione l'avrebbe preceduta di quattro mesi. Ciò che resta diverso fra i due import è
+**da dove arrivano le righe**, e nient'altro — che è anche il motivo per cui le due strade producono
+righe identiche per costruzione, non per attenzione.
+
+**La proposta alla creazione è una coppia di alternative esplicite, non una casella spuntata**
+(owner, in sessione, scegliendo fra tre mockup). «Il listone a sistema · N giocatori · caricato il
+…» preselezionato, e «lo carico io» accanto. Costa una domanda in più su una schermata che ne fa
+già nove, e in cambio rende visibile che una seconda strada esiste — che è precisamente ciò che
+l'upload nel setup deve restare a garantire. ⚠ Se a sistema non c'è niente, la scelta **non compare
+affatto**: non compare disabilitata. Una scelta fra due opzioni di cui una non esiste non è una
+domanda.
+
+**Il motivo del fallimento della copia viaggia in un parametro dell'URL.** Creare un'asta finisce
+con un `redirect`, e la `FormState` muore con la pagina che l'ha prodotta: l'URL è l'unico canale
+che sopravvive. La costante `LISTONE_NOTICE_PARAM` vive in `app/auctions/form-state.ts` e non
+accanto alle action, perché **da un modulo `"use server"` non esce niente che non sia una funzione
+async** — è scritto in cima a quel file, ed è già costato una volta.
+
+**`activeAdminSection` sceglie il match più lungo.** Con la prima voce annidata dell'applicazione
+(`/admin/listone/dati`) la vecchia riga — `parts[1]` e basta — avrebbe acceso «Listone» e scritto in
+cima alla pagina il titolo sbagliato. Una sotto-pagina sconosciuta di una sezione resta **dentro**
+quella sezione, invece di spegnere la sidebar: appartiene lì, e una sidebar spenta sarebbe peggio.
+
+**`when()` è uscita dalla pagina del pannello e vive in `lib/when.ts`.** I chiamanti sono tre — il
+pannello, la proposta alla creazione, il pulsante nel setup — e `Europe/Rome` esplicito è la ragione
+per cui esiste: il server gira in UTC, e un caricamento delle 23:30 senza fuso comparirebbe come del
+giorno prima, cioè farebbe scartare un listone buono. La data di ultimo aggiornamento *è* il punto
+della richiesta.
+
+**`uploadListone` non rilegge `is_admin` dal database**, a differenza delle mutazioni di
+`lib/engine/admin.ts`. Il precedente è M8: `refreshListoneInsights` e `refreshSetPieces` non lo
+fanno neanche loro. La ragione è che quelle di `admin.ts` cambiano **permessi di persone** — dove
+chi è stato appena declassato non deve poter comandare fino alla scadenza del suo JWT — mentre qui
+si sostituisce un elenco di calciatori di Serie A. La guardia in cima alla server action, che il
+test di M6 enumera e verifica una per una, è la difesa, ed è la stessa che protegge i due pulsanti
+degli insight da v1.9.0.
+
+**Il test M10 non scrive mai su `player_insights`.** Quella tabella è globale e
+`tests/db/insights.test.ts` la svuota nel suo `beforeEach`; vitest gira i file in worker paralleli,
+quindi una riga scritta da qui potrebbe sparire a metà di un test di lì — o, peggio, comparire in
+mezzo a un suo conteggio e rompere un test che non c'entra niente. È la stessa cicatrice del
+parametro `auctionIds` di `insightsCoverage` («verde da solo, rosso nella suite»). Il `LEFT JOIN` del
+Centro dati si prova quindi solo dal lato deterministico: `ext_id` sintetici che nessuna fonte ha.
+
+**Le figurine perdono la voce di primo livello e il campo file.** Gli `ext_id` arrivano dalla
+tabella, e a tabella vuota l'azione **rifiuta dicendo dove si carica** invece di scaricare zero
+figurine e dichiarare successo. Il messaggio «il file è ancora selezionato» è stato riscritto: di
+file non ce n'è più uno, ma il «riprende da dov'era» resta vero per la ragione di sempre — lo stato
+è il disco.
+
+**Il Centro dati ordina, e i badge blu smettono di sparire** (owner, 2026-08-12, a macro già
+mergiata su `dev`: intestazioni cliccabili, filtro «rigori e piazzati», e come default la lista
+ordinata per valore dal più alto al più basso). Tre scelte dentro una richiesta che sembrava
+meccanica:
+
+- **«Valore» è la quotazione**, non `FVM/1000`. È l'unica colonna di valore che quella pagina
+  mostra — l'altra resta fuori per decisione dell'owner, pur restando a database perché decide
+  l'auto-pick — e aprire la lista ordinata per una colonna invisibile darebbe una lista in un
+  ordine inspiegabile.
+- ⚠ **Il filtro sui piazzati non passa da `showableInsights`, e questa è la scelta di sostanza.**
+  Quel gate esiste per i numeri **della stagione** — presenze, partenze da titolare, minuti — dove
+  un dato del campionato scorso accanto a uno di quest'anno è un confronto falso. I due rank non
+  sono numeri di stagione: vengono dalla fonte B, che pubblica la gerarchia **di adesso**. La
+  misura dice quanto pesa la differenza: dei **92 designati, 22 hanno le statistiche della stagione
+  precedente** — quasi un quarto — e un filtro «solo chi batte» costruito sul gate li avrebbe persi
+  tutti, in silenzio, proprio dentro lo strumento che serve a trovarli. La regola sta in un posto
+  solo, `bestSetPieceRank` in `lib/domain.ts`, accanto a quella che continua a valere per la
+  titolarità.
+  ⚠ **Il portale non è stato toccato.** In `/play` e nel modale d'offerta quei 22 continuano a non
+  avere il badge blu: è il comportamento di M9, e cambiarlo è una decisione dell'owner, non un
+  effetto collaterale di un filtro amministrativo.
+- **L'ordinamento vive in `lib/centro-dati.ts`, non nel componente.** È l'unica parte di quella
+  pagina che può sbagliarsi **in silenzio**: cinquecento righe ordinate male non danno nessun
+  errore, danno una lista plausibile. Due regole che non sono ovvie e hanno un test ciascuna: chi
+  non ha il valore finisce in fondo **in entrambe le direzioni** (invertire «titolarità» non deve
+  portare in cima trecento trattini), e a parità si ordina per nome (duecento quotazioni uguali che
+  si riordinano a ogni click sembrano un bug). E il rank **migliore è il più basso**: «dal più
+  alto» sui piazzati deve mettere in cima i primi rigoristi, cioè invertire il segno rispetto a una
+  colonna numerica qualunque.
+
+⚠ **E una cicatrice da non ripetere: gli `ext_id` sintetici dei test devono essere davvero alti.**
+`syntheticListone` di `game-helpers.ts` numera da 1, e i test di M10 lo usavano dando per scontato
+che quegli identificativi non esistessero in nessuna fonte. **È falso**: gli `ext_id` veri di
+Fantacalcio.it vanno da 4 a 7548, quindi due righe sintetiche si agganciavano a due righe di insight
+vere. Il test passava solo quando `player_insights` era vuota — cioè quando un altro file di test
+l'aveva appena svuotata — ed è lo stesso «verde da solo, rosso nella suite» del parametro
+`auctionIds` di `insightsCoverage`. I test di M10 hanno adesso un generatore loro, con base
+`10_000_000`.
+
+---
+
+## 2026-08-12 — M10B, gli insight che vengono da un umano
+
+Sessione di sola analisi sul foglio `fixtures/carmy.xlsx`, a valle di M10. **Nessuna macro aperta e
+nessuna riga di codice**: la spec è `docs/features/10b-insight-da-carmy.md`, qui stanno le scelte,
+perché sono scelte.
+
+**Carmy è una terza fonte sovrapposta, non un rimpiazzo delle due di M8.** La misura lo impone: **11
+colonne su 15 sono identiche byte per byte** alla fonte A (497/497 su presenze, partite da titolare,
+minuti, quotazione, rigori, cartellini). Carmy **non porta nessuna statistica nuova**; porta un
+giudizio. Sostituire le due `GET` vorrebbe dire prendere gli stessi numeri da un file caricato a mano
+invece che da una fonte che si aggiorna da sé — e **perdere la gerarchia dei rigoristi**, che Carmy
+ha come tag su 18 giocatori contro i 92 designati con la posizione della fonte B. La posizione *è*
+l'informazione (M9).
+
+**Il giudizio non è la statistica travestita, e c'è la misura.** Correlazione fra `Titolarità` 1–5 e
+`Pt. Tit. / 38`: **0,650** su 466 giocatori. I disaccordi sono esattamente i casi che la richiesta
+voleva modellare — 11 giudicati titolari con ≤10 partite da titolare (Dovbyk al Bologna 5 con 3, Kouadio
+5 con 0, Raspadori all'Atalanta 4 con 7) e 13 giudicati panchinari con ≥25 (Stankovic A. all'Inter 2
+con 34). Nuovo arrivo, cambio di modulo, cambio di allenatore: **la ponderazione che si voleva
+costruire con un modello è già una colonna.**
+
+⚠ **`Pt. Inf.` non è «partite saltate per infortunio», malgrado il nome.** Identica a `injured`
+(497/497), va da 0 a 5, e `Presenze + Pt. Inf.` non converge a 38. È il conteggio di episodi che M8
+§9 aveva già scartato. **Il punto «togliere le giornate di infortunio dal calcolo» resta senza dato**,
+e questa colonna sembra risolverlo senza risolverlo: se un giorno servisse, si chiede a chi compila
+il foglio invece di dedurlo dal nome della colonna.
+
+**Il join è per nome, e la soglia di aggancio qui è una guardia sana.** Carmy non ha `ext_id`: ha
+`Nome` e una sigla di tre lettere per la squadra. Misure: sul solo nome **487/497 = 98%** contro il
+listone (**zero omonimi**), 497/497 contro la fonte A; su `(nome, squadra)` **0%**, perché `ROM` non
+è `Roma`. Si aggancia a `listone_players` — la tabella di M10, che è il denominatore giusto per la
+stessa ragione per cui lo è nel Centro dati — con la sigla come **controllo** e non come chiave.
+⚠ Sotto il 90% l'import rifiuta senza scrivere, e **questo non ripete l'errore che M8 aveva smontato**:
+là il denominatore era il listone di un'asta, avvelenabile da una simulazione con `ext_id` sintetici;
+qui è il listone globale, che nessuna asta può inquinare. La continuità all'85% resta dov'è.
+
+**Tabella separata `carmy_players`, non tre colonne su `player_insights`.** Le due fonti di M8 si
+aggiornano **per colonna con un `upsert`**; questa si sostituisce **per intero** a ogni caricamento,
+come `listone_players`. Mescolarle è il punto in cui, fra sei mesi, il refresh giornaliero di M11
+cancella i giudizi con una `GET`.
+
+**La soglia del verde è `Titolarità >= 4`** (owner). ⚠ Va ricordato cosa comporta, perché tocca una
+regola che M9 aveva messo per iscritto contando: con `>= 4` si colorano **168/497 = 33,8%** del
+listone, cioè **un nome su tre** — in una lista di chiamata da quaranta ne colora tredici o quindici.
+M9 §1 aveva scritto che «uno su cinque è il punto in cui un colore smette di essere un segnale e
+diventa decorazione», e `>= 5` cade esattamente lì (103/497 = 20,7%). La scelta resta `>= 4` perché è
+dell'owner; la misura sta accanto alla soglia così che, guardando la pagina di prova, la riga da
+cambiare sia una sola.
+
+**Il prezzo consigliato si scrive** (owner: «scrivila comunque, poi io decido come gestirla»). La
+ragione per cui è delicato resta scritta: a differenza di ogni altro numero della macro **non descrive
+un giocatore, propone un'azione**, e se tutti hanno il file smette di essere un vantaggio informativo
+e diventa un prezzo di listino — l'asta converge lì. Perciò va scritto in **un componente suo, con un
+posto solo** da cui si decide se e dove compare: le tre forme fra cui si sceglierà guardando (accanto
+al campo, fra le macro, dietro un tocco) non devono costare tre riscritture.
+
+⚠ **E il vincolo più facile da rompere non è un invariante.** La lista di chiamata è ordinata `fvm
+DESC, quot DESC`, che **è** l'ordine dell'auto-pick: un filtro per fascia o titolarità cambia quali
+righe si vedono ma **non cambia chi il timer sceglie**, perché quello pesca dal pool intero dentro
+`machine.ts`. Con un filtro acceso il primo nome della lista non è più quello che verrebbe comprato
+allo scadere, e chi ha imparato a fidarsi di quella riga si ritroverebbe un altro giocatore. Va
+risolto nell'interfaccia in modo esplicito — non con un commento nel codice.
+
+**Le probabili formazioni sono pubbliche, complete, e restano fuori.** Misura del 2026-08-12, che
+**corregge M8 §9**: `fantacalcio.it/probabili-formazioni-serie-a` ha 20 moduli, **220 titolari tutti
+con `ext_id` e con la percentuale di ballottaggio** (90% su 116, 85% su 19, 80% su 34, 75% su 16, 70%
+su 35), 22 infortunati e 5 dubbi con la prosa e la data di rientro, e aggancia al **100%** con i
+nostri identificativi. M8 l'aveva misurata vuota l'11 agosto e ne aveva concluso che i ballottaggi
+stessero solo dietro il JWT di Fantalab: **non è così**. Resta fuori perché Carmy risponde alla stessa
+domanda con un caricamento invece che con un parser e uno scheduler — ma è una strada misurata, non
+chiusa, ed è la risposta pronta il giorno in cui il foglio non arrivasse.
+
+---
+
+## 2026-08-12 — M10B, quello che è cambiato scrivendola
+
+Le scelte della sessione di analisi restano dov'erano, nella voce qui sopra: non si riscrivono. Qui
+c'è **solo ciò che la spec non sapeva**, deciso mentre il codice si scriveva.
+
+**Lo `0` del foglio non è un voto, e il foglio scrive l'assenza in tre modi.** Rifatta la misura sui
+byte del giorno di apertura, la spec regge quasi per intero — 497 righe, 487/497 di aggancio, `Pt.
+Inf.` identica a `injured`, correlazione 0,649, 168 verdi a `>= 4` — ma **§1 dice «1–5» e nel file
+c'è uno zero**: un giocatore (Aurelio) ha titolarità, affidabilità, integrità, prezzo e `MV` tutti a
+zero, `PMA` a `"0%"` e la fantamedia vuota. È una **riga non compilata**, non un giudizio basso, e
+letta come un voto lo farebbe passare per il peggior giocatore del listone. Lo stesso vale per
+`Prezzo = 0`, che sono **73 giocatori su 497** — riserve e terzi portieri, tutti con `PMA` a zero — e
+per `Fascia = "Non Impostata"`, che sono **84** e sono l'unico modo in cui il file scrive «nessuna
+fascia» (nessuna cella è vuota). Decisione: **tutti e tre diventano `null` nel parser**, così
+l'applicazione scrive l'assenza in un modo solo. Sul prezzo la ragione è anche più stringente:
+**zero non è nemmeno un'offerta valida**, quindi un «prezzo consigliato: 0» accanto al campo sarebbe
+un suggerimento impossibile da seguire.
+
+**La colonna `Obiett.` non si importa, e va detto perché.** Vale `Sí` su **tre** giocatori
+(McTominay, Baturina, Rowe) ed è la **lista della spesa di chi compila il foglio**: portarla
+nell'app vorrebbe dire mostrare a dodici persone chi punta a comprare l'autore del file, che gioca
+la stessa asta. Sta scritto in testa a `parseCarmy.ts` perché è la colonna che qualcuno vorrà
+aggiungere. Non si importano nemmeno `PMA` (è `Prezzo` diviso il budget, un dato derivato, e per di
+più una stringa) e `Ruolo` (ridondante col nome del foglio: 0 discordanze su 497).
+
+**L'ordine delle fasce è quello del foglio, non uno nostro.** Tutti e quattro i fogli raggruppano le
+righe nella stessa sequenza — `Top > Semi-Top > Terza > Quarta > Scomm. > Titolare "Scarso" >
+Outsider` — e la mediana del `Prezzo` la conferma (47 → 26 → 13 → 3 → 2 → 1 → 1). L'unico punto in
+cui servirebbe indovinare è `Titolare "Scarso"` contro `Outsider`, che hanno la stessa mediana: lì si
+tiene l'ordine in cui li mette il file, che è l'unica fonte che ne sa qualcosa.
+
+**La forma del badge è `parola` (owner, guardandola), e ha comportato due conseguenze.** «Titolarissimo»
+per chi sta a 5, «Titolare» per chi sta a 4. Le due conseguenze non sono dettagli di resa:
+1. **Sotto soglia la parola non si inventa.** Il foglio dice «3 su 5», non «panchinaro»: chiamarlo
+   così sarebbe attribuire a chi compila il file un giudizio che non ha scritto. Quei badge portano
+   quindi la scala — `Titolarità 3/5` — che è anche ciò che tiene in piedi la regola di M9 «il colore
+   non è mai l'unica informazione».
+2. **Il tag `titolarissimo` sparisce dalla riga quando il badge lo dice già.** È un tag vero del
+   foglio, su **106 giocatori**: senza questa regola la stessa parola comparirebbe **due volte sulla
+   stessa riga** di un telefono — una verde e una grigia — e il posto che ruba è quello del secondo
+   tag, cioè di un'informazione che non c'è altrove. Il filtro per tag continua a offrirlo, perché
+   lavora sui dati e non sulla resa.
+
+**Il prezzo consigliato sta `macro`, e le posizioni scritte sono quattro.** Fra fascia, affidabilità
+e integrità — dove si legge come **un giudizio fra i giudizi** invece che come un'istruzione a due
+centimetri dalla cifra da digitare. La quarta posizione è **`spento`**, che la spec chiedeva senza
+nominarla («poter essere spostato o spento senza rifare niente»): spegnerlo in tutta l'applicazione
+è scrivere una parola in `POSIZIONE_PREZZO`, non togliere del codice — i due punti d'innesto restano
+scritti e tacciono da sé.
+
+**La riga dell'auto-pick: `riga`, su delega dell'owner.** «Non importa, l'importante è che la
+dinamica di auto estrazione del lotto esista — la pagina di visualizzazione è più una utility per
+l'utente.» Fra le due strade di §6 si è preso «una riga che lo dice sempre» perché è l'unica che non
+fa mentire l'elenco una seconda volta: tenere il giocatore fisso in cima risolve «il primo nome non è
+quello giusto» introducendo una riga presente in un elenco che dichiara di averla filtrata. La riga
+c'è **sempre**, filtro o no, e diventa ambrata quando il primo della lista non è più quello — se
+comparisse solo a filtro acceso, chi non filtra continuerebbe a fidarsi dell'ordinamento e chi filtra
+la leggerebbe come un avviso d'errore. ⚠ La delega è sulla **forma**: che l'auto-pick resti quello di
+prima è ciò che la macro non ha toccato, e c'è un test che lo verifica con la tabella dei giudizi
+piena.
+
+**La titolarità nel Centro dati è una colonna sola, non due.** §6 la elencava fra le «colonne nuove»,
+ma quella pagina ne aveva già una: due colonne che dicono la stessa cosa con due scale sono due
+colonne che nessuno confronta. Ordinare una colonna con due fonti dentro ha richiesto una scelta,
+scritta in `valueOf`: i due valori si riportano a **0–1** — `voto / 5` da un lato, `quotaTitolare`
+dall'altro — perché rispondono alla stessa domanda, e un `5` di Carmy finisce sopra un `34/38`, che è
+l'ordine giusto (il giudizio parla di quest'anno, il rapporto dell'anno scorso).
+
+**Un componente in meno, non uno in più.** `TitolaritaBadge` di M9 non esiste più: al suo posto c'è
+`TitolaritaAnyBadge`, che prende le due chiavi e non sa quale vince — la scelta la fa `titolarita()`
+in `lib/domain.ts`. Tenerne due voleva dire che ogni chiamante decideva quale disegnare, cioè tre
+copie della regola che quella funzione esiste per centralizzare, e la prima stesura l'aveva fatto
+davvero duplicando la resa del badge di M9 in due punti.
+
+**⚠ Una tabella globale, un file di test che la possiede.** I test con Postgres di M10B erano in
+`tests/db/carmy.test.ts`, verdi da soli, e hanno reso **rossa la suite in dieci test** con un
+`duplicate key value violates unique constraint "listone_players_pkey"`. La ragione: `uploadListone`
+fa `DELETE` sulla tabella, il join di M10B ha bisogno di un listone caricato, e vitest gira i file in
+worker **paralleli**. È la stessa cicatrice che il file di M10 aveva già documentato per
+`player_insights` («verde da solo, rosso nella suite»), e la regola che ne esce vale da qui in avanti:
+**una tabella globale, un file di test che la possiede.** `tests/db/listone.test.ts` possiede
+`listone_players` **e** `carmy_players`. L'alternativa — serializzare i file con
+`fileParallelism: false` — costerebbe secondi a ogni `pnpm test` per un problema che riguarda due
+file, e lascerebbe la trappola aperta per il terzo.
+
+**La previsione che la spec aveva sbagliato.** Il task M10B-01 diceva «i test di M9 su `quotaTitolare`
+si romperanno, e va saputo perché». **Non si è rotto niente**: 659 verdi prima, 659 dopo. Il ripiego
+di §4 *è* il codice di M9 lasciato intatto — `quotaTitolare`, `titolareForte` e `SOGLIA_TITOLARE` non
+sono stati toccati — e portare la titolarità su Carmy è stato **additivo**. Vale come promemoria sul
+genere di previsione da non mettere in una spec: quella riga avrebbe fatto cercare per mezz'ora un
+rosso che non doveva esserci.
+
+---
+
+## 2026-08-12 — M10B, le note dell'owner dopo averla guardata
+
+Tre richieste arrivate a macro **chiusa su `dev` e non rilasciata**, quindi lavorate dentro M10B
+riaprendo il suo branch: non è una macro nuova, è la stessa che si aggiusta guardandola.
+
+**⚠ `PMA` entra, e la ragione per cui era stata scartata era sbagliata.** La spec di M10B §1 la
+liquidava come «`Prezzo` in percentuale del budget, cioè un dato derivato». **Misurato: è falso.**
+Solo **132 righe su 385** coincidono con `round(prezzo / 5, 1)`. La correlazione con `prezzo` è alta
+— **0,969**, perché entrambe seguono il valore di un giocatore — e il rapporto `prezzo / pma` ha
+mediana **esattamente 5**, ma quella mediana la fanno i **166 giocatori da un credito**, dove `0,2%`
+è l'unico valore scrivibile. Fuori da quelli le due colonne dicono cose diverse: Di Gregorio costa 41
+con `PMA` 2,5% (da `prezzo` verrebbe 8,2), De Gea costa 24 con 6,4% (verrebbe 4,8), Mkhitaryan costa
+14 con 0,2%. **Sono due numeri indipendenti**, e i due zeri lo confermano: 67 righe hanno `PMA` a
+zero, 73 hanno `prezzo` a zero, in comune 28.
+
+Da cui due conseguenze scritte nel codice: **non si ricalcola** (ricalcolarla vorrebbe dire
+sostituire il dato di chi compila il foglio con una nostra stima), e **cosa significhi esattamente
+non si indovina** — la cella è testo battuto a mano, senza formula, e la domanda giusta è a chi
+compila il foglio. Il codice ha bisogno di sapere solo che è un numero suo.
+
+⚠ **La lezione di metodo, che è più importante del dato.** Una colonna è stata esclusa da una macro
+sulla base di una relazione **assunta e non misurata**, e la frase «è un dato derivato» in una spec ha
+l'aria di un fatto. Era l'unica affermazione di §1 senza un numero accanto — tutte le altre ne
+avevano uno — e infatti è l'unica che si è rivelata falsa. **Se una colonna si scarta, si scarta con
+una misura.**
+
+**Il prezzo consigliato in crediti esce dal Centro dati** (owner). Al suo posto `PMA` e la
+**fantamedia attesa**. Non è un rimpiazzo per equivalenza — le due colonne non sono lo stesso numero,
+vedi sopra — è una preferenza su cosa guardare in una tabella di consultazione. `prezzo` resta a
+database e nel modale d'offerta, dove serve a proporre una cifra; la sua chiave di ordinamento è
+sparita da `SORT_KEYS`, così chi rimettesse la colonna deve rimettere anche quella e se ne accorge.
+
+**⚠ La lista di chiamata prende cinque cose, contro quello che §6 aveva deciso.** La spec diceva «la
+titolarità di Carmy e, **al più, un tag**», con la ragione giusta: la riga è larga quanto un telefono
+e la regola di M9 §4 è «tre informazioni, non dieci». L'owner ha chiesto il contrario **dopo averla
+guardata**: nella schermata in cui si *scegli* chi chiamare servono **fascia, fantamedia attesa, PMA,
+titolarità e note**. La decisione è sua e la densità si paga; per pagarla il meno possibile la riga è
+diventata **due righe** — sopra i numeri di stagione (titolarità, rapporto grezzo, minuti, piazzati),
+sotto il giudizio del foglio (fascia, attesa, PMA, note). Due blocchi da tre o quattro cose si
+scorrono, uno da otto no. **Affidabilità e integrità restano fuori**: non sono state chieste, e sono i
+due numeri che nessuno confronterebbe sotto un countdown.
+
+**«Attesa», non «FMV».** La fantamedia attesa si scrive `attesa 7.36` in tutte e due le schermate, e
+non con la sua sigla, perché in questo progetto `fvm` è il **Fantavalore di Mercato** — un indice di
+prezzo, 300 — e sta **sulla stessa riga**, a destra, nella lista di chiamata. Due sigle quasi
+identiche per due cose che non si somigliano: scritte accanto, l'una si legge per l'altra.

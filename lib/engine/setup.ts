@@ -22,13 +22,19 @@ import {
   isAppAdmin,
   strategyFor,
 } from "@/lib/domain";
-import { countPool, parseListone } from "@/lib/import/parseListone";
+import {
+  type ParsedPlayer,
+  countPool,
+  parseListone,
+} from "@/lib/import/parseListone";
 import type { PoolPlayer } from "@/lib/realtime/types";
 
 import { ensureBotUsers } from "./bots";
 import { type Result, fail, ok } from "./errors";
+import { carmyForExtIds } from "./carmy";
 import { insightsForExtIds } from "./insights";
 import { isUuid } from "./ids";
+import { readListoneForCopy } from "./listone";
 import {
   type AuctionConfig,
   type AuctionConfigInput,
@@ -451,7 +457,58 @@ export type ImportSummary = {
 };
 
 /**
- * Sostituisce lo snapshot del listone dell'asta.
+ * Ciò che i due import hanno in comune: **validare I9, sostituire le righe,
+ * ricalcolare lo stato**.
+ *
+ * ⚠ **Estratta in M10 perché il secondo chiamante è arrivato davvero** (regola
+ * 8): fino a v1.10.0 le righe potevano venire solo da un `.xlsx`, adesso anche
+ * da una `SELECT` sul listone a sistema. Quello che resta diverso fra i due
+ * import è **da dove arrivano le righe**, e nient'altro — che è la ragione per
+ * cui la copia dal sistema produce esattamente gli stessi `players` dell'upload
+ * dello stesso file, `fvm` e `out_of_list` compresi.
+ *
+ * Il tipo del parametro è strutturale apposta: accetta sia le righe di
+ * `parseListone` sia quelle di `readListoneForCopy`, senza che nessuno dei due
+ * mondi debba conoscere l'altro.
+ */
+async function replacePlayers(
+  tx: Tx,
+  auction: Auction,
+  rows: ParsedPlayer[],
+): Promise<Result<ImportSummary>> {
+  const counts = countPool(rows, auction.includeOutOfList);
+  const poolOk = validateRolePool({
+    counts,
+    slots: slotsOf(auction),
+    seats: auction.seats,
+  });
+  if (!poolOk.ok) return poolOk;
+
+  await tx.delete(players).where(eq(players.auctionId, auction.id));
+  await tx.insert(players).values(
+    rows.map((row) => ({
+      auctionId: auction.id,
+      extId: row.extId,
+      name: row.name,
+      team: row.team,
+      role: row.role,
+      roleMantra: row.roleMantra,
+      fvm: row.fvm,
+      quot: row.quot,
+      outOfList: row.outOfList,
+    })),
+  );
+
+  await recomputeStatus(tx, auction);
+  return ok({
+    imported: rows.length,
+    counts,
+    outOfList: rows.filter((row) => row.outOfList).length,
+  });
+}
+
+/**
+ * Sostituisce lo snapshot del listone dell'asta, da file.
  *
  * Il file non viene conservato (P6): ne estraiamo i dati e lo buttiamo.
  * L'export di Fase 7 rigenererà il layout Fantacalcio.it da questi dati.
@@ -460,6 +517,11 @@ export type ImportSummary = {
  * quello che rende ripetibile la correzione di un file sbagliato senza dover
  * ricreare l'asta. In DRAFT/READY non esistono ancora assegnazioni, quindi
  * cancellare le righe vecchie non distrugge niente (regola 5).
+ *
+ * ⚠ **Resta anche dopo M10**, su richiesta esplicita dell'owner (2026-08-12:
+ * «lasciamo comunque la possibilità di importare l'attuale listone al cliente»).
+ * Serve a due cose che non spariscono: correggere un file sbagliato, e preparare
+ * un'asta il giorno in cui a sistema non c'è niente — cioè il giorno del deploy.
  */
 export async function importPlayers(
   actorUserId: string,
@@ -475,36 +537,51 @@ export async function importPlayers(
     const wrongStatus = requireSetupPhase<ImportSummary>(auction);
     if (wrongStatus) return wrongStatus;
 
-    const rows = parsed.value;
-    const counts = countPool(rows, auction.includeOutOfList);
-    const poolOk = validateRolePool({
-      counts,
-      slots: slotsOf(auction),
-      seats: auction.seats,
-    });
-    if (!poolOk.ok) return poolOk;
+    return replacePlayers(tx, auction, parsed.value);
+  });
+}
 
-    await tx.delete(players).where(eq(players.auctionId, auction.id));
-    await tx.insert(players).values(
-      rows.map((row) => ({
-        auctionId: auction.id,
-        extId: row.extId,
-        name: row.name,
-        team: row.team,
-        role: row.role,
-        roleMantra: row.roleMantra,
-        fvm: row.fvm,
-        quot: row.quot,
-        outOfList: row.outOfList,
-      })),
-    );
+/**
+ * Copia dentro l'asta il listone a sistema (M10 §3).
+ *
+ * ⚠ **Copia, non legge.** `players.auction_id` continua a congelare la lista al
+ * momento dell'import, ed è una scelta di dominio prima che di architettura:
+ * un'asta preparata lunedì non può cambiare listone perché martedì un
+ * amministratore ne ha caricato uno aggiornato — le rose, i prezzi e le regole
+ * di quella serata sono appesi a quelle righe. Da qui in poi
+ * `listone_players` non c'entra più niente con quest'asta.
+ *
+ * ⚠ **I9 si valida alla copia**, con lo stesso `validateRolePool` dell'upload da
+ * file: lo stesso listone globale può passare per un'asta a 8 e fallire per una
+ * a 12, **ed è giusto che fallisca**. Il messaggio d'errore è quello che c'è già.
+ *
+ * **Chi può chiamarla: chi possiede l'asta**, non solo un amministratore. Il
+ * listone a sistema lo carica un admin, ma è un elenco di calciatori di Serie A:
+ * legarne l'uso a `is_admin` vorrebbe dire che un amico che si crea la sua asta
+ * deve chiedere il permesso per non caricare un file.
+ *
+ * La lettura passa da `lib/engine/listone.ts` e avviene **dentro il lock**: la
+ * copia e la validazione di I9 devono vedere la stessa tabella.
+ */
+export async function importPlayersFromListone(
+  actorUserId: string,
+  auctionId: string,
+): Promise<Result<ImportSummary>> {
+  return withSetupLock(auctionId, async (tx, auction) => {
+    const forbidden = requireOwner<ImportSummary>(auction, actorUserId);
+    if (forbidden) return forbidden;
+    const wrongStatus = requireSetupPhase<ImportSummary>(auction);
+    if (wrongStatus) return wrongStatus;
 
-    await recomputeStatus(tx, auction);
-    return ok({
-      imported: rows.length,
-      counts,
-      outOfList: rows.filter((row) => row.outOfList).length,
-    });
+    const rows = await readListoneForCopy(tx);
+    if (rows.length === 0) {
+      return fail<ImportSummary>(
+        "LISTONE_EMPTY",
+        "A sistema non c'è nessun listone: caricane uno da Amministrazione → Listone, oppure importa il file qui sotto.",
+      );
+    }
+
+    return replacePlayers(tx, auction, rows);
   });
 }
 
@@ -1165,6 +1242,13 @@ export async function listPlayers(
  * risultato finisce nel payload RSC di un client component, cioè nel browser di
  * chi apre la pagina, e ciò che non deve leggere non deve arrivargli. È la regola
  * 6 applicata alla lettura invece che alla scrittura.
+ *
+ * ⚠ **Da M10B il flag decide anche `carmy`, e con lo stesso `canSeeInsights`.**
+ * Il giudizio di chi compila il foglio segue esattamente la strada degli insight,
+ * senza nessuna eccezione: un secondo permesso per un secondo dato vorrebbe dire
+ * due regole da tenere allineate, e i filtri della lista di chiamata — che si
+ * vedono solo agli `is_pro` — sono l'**interfaccia** sopra questo dato, non la sua
+ * protezione (M10B §7).
  */
 export async function listPickPool(
   auctionId: string,
@@ -1209,17 +1293,29 @@ export async function listPickPool(
     }));
   }
 
-  const insights = await insightsForExtIds(rows.map((r) => r.extId));
+  const extIds = rows.map((r) => r.extId);
+  // ⚠ Due letture e non un `JOIN`: le due tabelle sono globali e indipendenti, e
+  // il foglio di Carmy può essere vuoto mentre gli insight ci sono (e viceversa).
+  // Chi ha l'uno e non l'altro deve arrivare comunque, con la sola chiave che ha.
+  const [insights, carmy] = await Promise.all([
+    insightsForExtIds(extIds),
+    carmyForExtIds(extIds),
+  ]);
 
   return rows.map(({ extId, ...player }) => {
     const found = insights.get(extId);
+    const judged = carmy.get(extId);
     // ⚠ Niente `insights: undefined`: la chiave si aggiunge **solo** se c'è
     // qualcosa. Un `undefined` esplicito sparirebbe comunque nella
     // serializzazione, ma il tipo direbbe una cosa diversa da quella che il test
     // asserisce — e quel test è la differenza fra un dato protetto e uno nascosto.
-    if (!found) return player;
+    // Le due chiavi si aggiungono **una per una e solo se ci sono**: un giocatore
+    // giudicato da Carmy ma senza riga di insight arriva con `carmy` e senza
+    // `insights`, e la UI di M10B sa già trattarlo (è il ripiego di `titolarita`).
+    const withCarmy = judged ? { ...player, carmy: judged } : player;
+    if (!found) return withCarmy;
     return {
-      ...player,
+      ...withCarmy,
       insights: {
         extId: found.extId,
         fullName: found.fullName,

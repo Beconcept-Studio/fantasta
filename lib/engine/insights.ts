@@ -345,6 +345,7 @@ async function writeListoneRows(
         set: {
           fantalabId: sql`excluded.fantalab_id`,
           fullName: sql`excluded.full_name`,
+          name: sql`excluded.name`,
           team: sql`excluded.team`,
           statsSeason: sql`excluded.stats_season`,
           presenze: sql`excluded.presenze`,

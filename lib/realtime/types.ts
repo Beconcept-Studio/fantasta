@@ -1,6 +1,7 @@
 import type {
   AuctionPhase,
   AuctionStatus,
+  CarmyJudgement,
   PlayerInsights,
   Role,
 } from "@/lib/domain";
@@ -197,6 +198,20 @@ export type PoolPlayer = {
    * `undefined` non si renderizza, senza nessun `if (isPro)` nei componenti.
    */
   insights?: PlayerInsights;
+  /**
+   * Il giudizio di chi compila il foglio: fascia, titolarità, prezzo, tag (M10B).
+   *
+   * ⚠ **`?` per la stessa ragione di `insights`, e senza nessuna eccezione**
+   * (M10B §7): la chiave è *assente* per chi non ha `is_pro`, non `null`. **I
+   * filtri per `is_pro` della lista di chiamata non sono la protezione** — sono
+   * l'interfaccia sopra un dato che a chi non è pro non arriva affatto. Se un
+   * giorno il filtro si vedesse e i dati non ci fossero, il bug è nella query.
+   *
+   * ⚠ **E non entra in `serializeSnapshot`.** Viaggia su `listPickPool`, che è la
+   * lettura del listone e non lo stato del gioco: la regola 3 protegge gli importi
+   * delle buste durante `LOT_OPEN`, e qui non c'è nessuna offerta da sanificare.
+   */
+  carmy?: CarmyJudgement;
 };
 
 export type Snapshot = {

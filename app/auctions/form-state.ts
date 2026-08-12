@@ -15,3 +15,13 @@ export type FormState = {
 };
 
 export const EMPTY_FORM_STATE: FormState = { error: null };
+
+/**
+ * Il parametro con cui la creazione di un'asta racconta alla configurazione
+ * perché il listone a sistema **non** è stato copiato (M10 §4).
+ *
+ * ⚠ Sta qui per la ragione scritta qui sopra, che è già costata una volta: la
+ * creazione finisce con un `redirect`, quindi la `FormState` muore con la pagina
+ * che l'ha prodotta e l'URL è l'unico canale che sopravvive.
+ */
+export const LISTONE_NOTICE_PARAM = "listone";
