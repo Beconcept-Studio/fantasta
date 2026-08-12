@@ -41,9 +41,6 @@ import { type Result, fail, ok } from "@/lib/engine/errors";
  * trappola numero uno del file. Se un giorno servisse davvero, si chiede a chi
  * compila il foglio — non si deduce dal nome della colonna.
  *
- * **`PMA`**, che è `Prezzo` in percentuale del budget: un dato derivato, e per di
- * più una stringa (`"10.5%"`).
- *
  * **`Ruolo`**, ridondante col nome del foglio: verificato, 0 discordanze su 497.
  *
  * **`Obiett.`**, valorizzata `Sí` su tre giocatori. ⚠ È la **lista della spesa di
@@ -71,6 +68,7 @@ const COLUMNS = {
   team: "Team",
   fascia: "Fascia",
   prezzo: "Prezzo",
+  pma: "PMA",
   titolarita: "Titolarità",
   affidabilita: "Affidabilità",
   integrita: "Integrità",
@@ -106,6 +104,8 @@ export type CarmyRow = {
   role: Role;
   fascia: string | null;
   prezzo: number | null;
+  /** Il `PMA`, in punti percentuali: `10.5` sta per «10,5%». */
+  pma: number | null;
   titolarita: number | null;
   affidabilita: number | null;
   integrita: number | null;
@@ -130,6 +130,27 @@ function asNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+/**
+ * Il `PMA`, che nel foglio è **una stringa** con il segno di percentuale dentro
+ * (`"10.5%"`, `"9%"`), non un numero: la cella è testo battuto a mano, con un
+ * formato percentuale applicato sopra.
+ *
+ * Torna i **punti percentuali** (`10.5`), non la frazione: è ciò che si scrive a
+ * schermo, e tenere la frazione vorrebbe dire moltiplicare per cento in ogni
+ * chiamante. Lo `0%` diventa `null`, come lo zero del prezzo.
+ */
+function percent(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value !== 0 ? value : null;
+  }
+  if (typeof value !== "string") return null;
+  const cleaned = value.trim().replace("%", "").replace(",", ".");
+  if (cleaned === "") return null;
+  const parsed = Number(cleaned);
+  if (!Number.isFinite(parsed) || parsed === 0) return null;
+  return parsed;
 }
 
 /**
@@ -255,6 +276,11 @@ export function parseCarmy(file: ArrayBuffer | Uint8Array): Result<CarmyRow[]> {
         fascia: fascia === "" || fascia === CARMY_FASCIA_ASSENTE ? null : fascia,
         // Zero non è un prezzo: non è nemmeno un'offerta valida.
         prezzo: prezzoRaw === null || prezzoRaw === 0 ? null : prezzoRaw,
+        // ⚠ Come la scrive il foglio, **non** ricalcolata da `prezzo`: sono due
+        // numeri diversi — solo 132 righe su 385 coincidono con `prezzo / 5` — e
+        // ricalcolarla vorrebbe dire sostituire il dato di qualcun altro con una
+        // nostra stima (vedi lo schema).
+        pma: percent(raw[COLUMNS.pma]),
         titolarita: grades.titolarita as number | null,
         affidabilita: grades.affidabilita as number | null,
         integrita: grades.integrita as number | null,

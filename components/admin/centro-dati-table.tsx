@@ -7,6 +7,7 @@ import {
   FasciaBadge,
   SetPieceBadges,
   TitolaritaAnyBadge,
+  formatPma,
 } from "@/components/auction/insights";
 import { Input } from "@/components/ui/input";
 import {
@@ -207,8 +208,26 @@ export function CentroDatiTable({
                 <Th sortKey="fascia" sort={sort} onSort={sortBy}>
                   Fascia
                 </Th>
-                <Th sortKey="prezzo" sort={sort} onSort={sortBy} align="right">
-                  Consigl.
+                {/*
+                  ⚠ **La fantamedia attesa si chiama «attesa» e non «FMV»**, e non è
+                  pignoleria: in questo progetto `fvm` è il *Fantavalore di Mercato*
+                  (un indice di prezzo, 300) e `FMV Exp.` è la *fantamedia attesa*
+                  (7,36). Due sigle quasi identiche per due cose che non si
+                  somigliano: scritte accanto sarebbero l'una letta per l'altra.
+                */}
+                <Th sortKey="fmvExp" sort={sort} onSort={sortBy} align="right">
+                  Attesa
+                </Th>
+                {/*
+                  ⚠ **Il `PMA` al posto del prezzo consigliato in crediti** (owner,
+                  2026-08-12): è lo stesso numero — correlazione 0,969, rapporto
+                  mediano esattamente 5 — ma in percentuale, e la percentuale è
+                  l'unica delle due che resta vera se un'asta ha un budget diverso
+                  da 500. Il prezzo in crediti vive nel modale d'offerta, dove
+                  serve a proporre una cifra.
+                */}
+                <Th sortKey="pma" sort={sort} onSort={sortBy} align="right">
+                  PMA
                 </Th>
                 <Th
                   sortKey="affidabilita"
@@ -300,7 +319,14 @@ export function CentroDatiTable({
                       )}
                     </Td>
                     <Td className="text-right tabular-nums">
-                      {row.carmy?.prezzo ?? <Missing />}
+                      {row.carmy?.fmvExp?.toFixed(2) ?? <Missing />}
+                    </Td>
+                    <Td className="text-right tabular-nums">
+                      {row.carmy?.pma == null ? (
+                        <Missing />
+                      ) : (
+                        `${formatPma(row.carmy.pma)}%`
+                      )}
                     </Td>
                     <Td className="text-right tabular-nums">
                       {row.carmy?.affidabilita ?? <Missing />}

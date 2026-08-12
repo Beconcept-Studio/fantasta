@@ -684,3 +684,37 @@ cui questa macro poteva far perdere un giocatore a qualcuno. Non perché rompe i
 **una promessa che l'interfaccia aveva fatto senza scriverla**. Vale la pena tenerlo a mente per le
 prossime: i vincoli peggiori non sono negli invarianti, sono nelle abitudini che l'applicazione ha
 insegnato.
+
+---
+
+## Dopo la chiusura, guardandola
+
+⚠ **Tre note dell'owner arrivate a macro chiusa su `dev` e non rilasciata**, lavorate riaprendo
+`feature/10b-insight-da-carmy` e rientrate con un secondo merge `--no-ff`. Non è una macro nuova: è
+la stessa, aggiustata guardandola. Le scelte stanno in `docs/DECISIONS.md`, «M10B, le note dell'owner
+dopo averla guardata».
+
+**1. `PMA` entra a database, e la ragione per cui l'avevo scartata era sbagliata.** §1 la liquidava
+come «`Prezzo` in percentuale del budget, cioè un dato derivato». Misurato quando è servita: **solo
+132 righe su 385 coincidono con `round(prezzo / 5, 1)`**. La correlazione è alta (0,969) e il rapporto
+ha mediana esattamente 5 — ma quella mediana la fanno i **166 giocatori da un credito**, dove `0,2%` è
+l'unico valore scrivibile. Fuori da quelli sono due numeri diversi: Di Gregorio costa 41 con `PMA`
+2,5%, De Gea costa 24 con 6,4%. ⚠ **Era l'unica affermazione di §1 senza un numero accanto, e
+l'unica falsa.** Se una colonna si scarta, si scarta con una misura.
+
+**2. Il prezzo consigliato in crediti esce dal Centro dati**, e al suo posto entrano `PMA` e la
+fantamedia **attesa**. Non è un rimpiazzo per equivalenza — vedi sopra — è una preferenza su cosa
+guardare in una tabella di consultazione. `prezzo` resta a database e nel modale d'offerta; la sua
+chiave è sparita da `SORT_KEYS`, così chi rimettesse la colonna deve rimettere anche quella.
+
+**3. La lista di chiamata prende cinque cose, contro quello che §6 aveva deciso.** §6 diceva «la
+titolarità di Carmy e, **al più, un tag**», con la ragione giusta — la riga è larga quanto un telefono
+e la regola di M9 §4 è «tre informazioni, non dieci». L'owner ha chiesto il contrario dopo averla
+guardata: **fascia, attesa, PMA, titolarità, note**. Per pagare la densità il meno possibile la riga è
+diventata **due righe** — sopra i numeri di stagione, sotto il giudizio del foglio. **Affidabilità e
+integrità restano fuori**: non sono state chieste, e sono i due numeri che nessuno confronterebbe
+sotto un countdown.
+
+⚠ **Il rilascio non cambia forma**: sempre **un solo** `pnpm db:push` (la colonna `pma` è il terzo
+cambio additivo, e ci sta dentro), sempre **due file nell'ordine**. E la nota su `Obiett.` resta:
+quella colonna non si importa.

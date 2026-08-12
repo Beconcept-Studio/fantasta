@@ -451,6 +451,15 @@ export type CarmyJudgement = {
   fascia: string | null;
   /** `null` anche quando il foglio scrive `0`: zero non è un'offerta valida. */
   prezzo: number | null;
+  /**
+   * Il `PMA` del foglio, in **punti percentuali**: `10.5` sta per «10,5%».
+   *
+   * ⚠ **Non è `prezzo` in un'altra unità**, malgrado la correlazione alta: solo 132
+   * righe su 385 coincidono con `prezzo / 5`. È un numero **suo**, e non si
+   * ricalcola — il perché per esteso, con la misura, sta sulla colonna in
+   * `lib/db/schema.ts`.
+   */
+  pma: number | null;
   /** 1–5, oppure `null` su una riga che nel foglio non è compilata. */
   titolarita: number | null;
   affidabilita: number | null;

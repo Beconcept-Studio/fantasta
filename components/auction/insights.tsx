@@ -330,11 +330,21 @@ export function FasciaBadge({
  * La riga densa, per la lista di chiamata: si legge in mezzo secondo, con quaranta
  * nomi sotto e un countdown che scorre.
  *
- * ⚠ **Da M10B guadagna la titolarità di Carmy e, al più, un tag** (§6). La riga era
- * già larga quanto un telefono: la fascia, l'affidabilità, l'integrità e il prezzo
- * consigliato **restano fuori** e vivono nel modale d'offerta, dove ci sono i
- * secondi per leggerli. Tre numeri da 1 a 5 accanto a un countdown sono tre numeri
- * che non vengono letti (è la regola di M9 §4).
+ * ## ⚠ Cosa ci sta, e come ci è arrivato
+ *
+ * M10B §6 aveva scritto «la titolarità di Carmy e, **al più, un tag**», con la
+ * ragione giusta: la riga è larga quanto un telefono, e la regola di M9 §4 dice
+ * «tre informazioni, non dieci». L'owner ha chiesto il contrario **dopo averla
+ * guardata** (2026-08-12): nella schermata in cui si *scegli* chi chiamare servono
+ * **fascia, fantamedia attesa, PMA, titolarità e note** — cioè quasi tutto il
+ * foglio.
+ *
+ * La densità si paga, e per pagarla il meno possibile la riga è **su due righe
+ * invece di una**: sopra i numeri di stagione (titolarità, rapporto grezzo, minuti,
+ * piazzati), sotto il giudizio del foglio (fascia, attesa, PMA, note). Due blocchi
+ * da tre o quattro cose si scorrono; uno da otto no. ⚠ **Affidabilità e integrità
+ * restano comunque fuori** — non sono state chieste, e sono i due numeri che
+ * nessuno confronterebbe sotto un countdown: vivono nel modale d'offerta.
  */
 export function InsightsLine({
   insights,
@@ -346,26 +356,60 @@ export function InsightsLine({
   const i = showableInsights(insights);
   const t = titolarita(insights, carmy);
   // Niente da dire affatto: né un giudizio, né i numeri di quest'anno.
-  if (t === null && i === null) return null;
+  if (t === null && i === null && !carmy) return null;
 
   const minuti = i === null ? null : minutiMedi(i);
+  // La seconda riga esiste solo se ha qualcosa dentro: senza il foglio caricato la
+  // lista di chiamata resta identica a quella di v1.10.0, altezza compresa.
+  const conGiudizio =
+    carmy !== undefined &&
+    (carmy.fascia !== null ||
+      carmy.fmvExp !== null ||
+      carmy.pma !== null ||
+      carmy.tags.length > 0);
 
   return (
-    <span className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs tabular-nums">
-      <TitolaritaAnyBadge insights={insights} carmy={carmy} compact />
-      {/* Il rapporto grezzo accanto al giudizio: è la sua prova, e la divergenza
-          è l'informazione. Solo quando il badge viene da Carmy — altrimenti il
-          badge già dice la percentuale, e ripeterla due volte è rumore. */}
-      {t?.fonte === "carmy" && t.quota !== null && (
-        <span>
-          {t.quota.starts}/{t.quota.giornate}
+    <span className="text-muted-foreground block space-y-0.5 text-xs tabular-nums">
+      <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <TitolaritaAnyBadge insights={insights} carmy={carmy} compact />
+        {/* Il rapporto grezzo accanto al giudizio: è la sua prova, e la divergenza
+            è l'informazione. Solo quando il badge viene da Carmy — altrimenti il
+            badge già dice la percentuale, e ripeterla due volte è rumore. */}
+        {t?.fonte === "carmy" && t.quota !== null && (
+          <span>
+            {t.quota.starts}/{t.quota.giornate}
+          </span>
+        )}
+        {minuti !== null && <span>{Math.round(minuti)}′</span>}
+        {i !== null && <SetPieceBadges insights={i} compact />}
+      </span>
+
+      {conGiudizio && (
+        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          {carmy.fascia !== null && <FasciaBadge fascia={carmy.fascia} compact />}
+          {/* ⚠ «attesa» e non «FMV»: in questo progetto `fvm` è il Fantavalore di
+              Mercato — che sta sulla **stessa riga**, a destra, come `fvm 300` — e
+              `FMV Exp.` è la fantamedia attesa, 7.36. Due sigle quasi identiche per
+              due cose che non si somigliano: accanto, l'una si legge per l'altra. */}
+          {carmy.fmvExp !== null && <span>attesa {carmy.fmvExp.toFixed(2)}</span>}
+          {carmy.pma !== null && <span>{formatPma(carmy.pma)}%</span>}
+          <CarmyTags tags={carmy.tags} compact />
         </span>
       )}
-      {minuti !== null && <span>{Math.round(minuti)}′</span>}
-      {i !== null && <SetPieceBadges insights={i} compact />}
-      {carmy && <CarmyTags tags={carmy.tags} max={1} compact />}
     </span>
   );
+}
+
+/**
+ * Il `PMA` come lo scrive il foglio: una cifra decimale quando serve, nessuna
+ * quando è tonda — `9%`, non `9.0%`.
+ *
+ * ⚠ **Non porta il `%` dentro**, perché nella lista di chiamata il simbolo è
+ * l'unica cosa che distingue questo numero da una quotazione, e va attaccato al
+ * numero dal chiamante che decide anche l'etichetta.
+ */
+export function formatPma(pma: number): string {
+  return Number.isInteger(pma) ? String(pma) : pma.toFixed(1);
 }
 
 /**

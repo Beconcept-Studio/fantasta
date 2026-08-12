@@ -330,6 +330,7 @@ describe("i filtri di Carmy sulla lista di chiamata", () => {
       sourceTeam: "INT",
       fascia: null,
       prezzo: null,
+      pma: null,
       titolarita: null,
       affidabilita: null,
       integrita: null,

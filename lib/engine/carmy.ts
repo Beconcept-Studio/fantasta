@@ -195,6 +195,7 @@ export async function uploadCarmy(
           sourceTeam: row.team,
           fascia: row.fascia,
           prezzo: row.prezzo,
+          pma: row.pma,
           titolarita: row.titolarita,
           affidabilita: row.affidabilita,
           integrita: row.integrita,
@@ -286,6 +287,7 @@ export function toJudgement(row: {
   sourceTeam: string;
   fascia: string | null;
   prezzo: number | null;
+  pma: number | null;
   titolarita: number | null;
   affidabilita: number | null;
   integrita: number | null;
@@ -299,6 +301,7 @@ export function toJudgement(row: {
     sourceTeam: row.sourceTeam,
     fascia: row.fascia,
     prezzo: row.prezzo,
+    pma: row.pma,
     titolarita: row.titolarita,
     affidabilita: row.affidabilita,
     integrita: row.integrita,

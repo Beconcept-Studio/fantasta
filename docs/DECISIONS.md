@@ -2178,3 +2178,52 @@ di §4 *è* il codice di M9 lasciato intatto — `quotaTitolare`, `titolareForte
 sono stati toccati — e portare la titolarità su Carmy è stato **additivo**. Vale come promemoria sul
 genere di previsione da non mettere in una spec: quella riga avrebbe fatto cercare per mezz'ora un
 rosso che non doveva esserci.
+
+---
+
+## 2026-08-12 — M10B, le note dell'owner dopo averla guardata
+
+Tre richieste arrivate a macro **chiusa su `dev` e non rilasciata**, quindi lavorate dentro M10B
+riaprendo il suo branch: non è una macro nuova, è la stessa che si aggiusta guardandola.
+
+**⚠ `PMA` entra, e la ragione per cui era stata scartata era sbagliata.** La spec di M10B §1 la
+liquidava come «`Prezzo` in percentuale del budget, cioè un dato derivato». **Misurato: è falso.**
+Solo **132 righe su 385** coincidono con `round(prezzo / 5, 1)`. La correlazione con `prezzo` è alta
+— **0,969**, perché entrambe seguono il valore di un giocatore — e il rapporto `prezzo / pma` ha
+mediana **esattamente 5**, ma quella mediana la fanno i **166 giocatori da un credito**, dove `0,2%`
+è l'unico valore scrivibile. Fuori da quelli le due colonne dicono cose diverse: Di Gregorio costa 41
+con `PMA` 2,5% (da `prezzo` verrebbe 8,2), De Gea costa 24 con 6,4% (verrebbe 4,8), Mkhitaryan costa
+14 con 0,2%. **Sono due numeri indipendenti**, e i due zeri lo confermano: 67 righe hanno `PMA` a
+zero, 73 hanno `prezzo` a zero, in comune 28.
+
+Da cui due conseguenze scritte nel codice: **non si ricalcola** (ricalcolarla vorrebbe dire
+sostituire il dato di chi compila il foglio con una nostra stima), e **cosa significhi esattamente
+non si indovina** — la cella è testo battuto a mano, senza formula, e la domanda giusta è a chi
+compila il foglio. Il codice ha bisogno di sapere solo che è un numero suo.
+
+⚠ **La lezione di metodo, che è più importante del dato.** Una colonna è stata esclusa da una macro
+sulla base di una relazione **assunta e non misurata**, e la frase «è un dato derivato» in una spec ha
+l'aria di un fatto. Era l'unica affermazione di §1 senza un numero accanto — tutte le altre ne
+avevano uno — e infatti è l'unica che si è rivelata falsa. **Se una colonna si scarta, si scarta con
+una misura.**
+
+**Il prezzo consigliato in crediti esce dal Centro dati** (owner). Al suo posto `PMA` e la
+**fantamedia attesa**. Non è un rimpiazzo per equivalenza — le due colonne non sono lo stesso numero,
+vedi sopra — è una preferenza su cosa guardare in una tabella di consultazione. `prezzo` resta a
+database e nel modale d'offerta, dove serve a proporre una cifra; la sua chiave di ordinamento è
+sparita da `SORT_KEYS`, così chi rimettesse la colonna deve rimettere anche quella e se ne accorge.
+
+**⚠ La lista di chiamata prende cinque cose, contro quello che §6 aveva deciso.** La spec diceva «la
+titolarità di Carmy e, **al più, un tag**», con la ragione giusta: la riga è larga quanto un telefono
+e la regola di M9 §4 è «tre informazioni, non dieci». L'owner ha chiesto il contrario **dopo averla
+guardata**: nella schermata in cui si *scegli* chi chiamare servono **fascia, fantamedia attesa, PMA,
+titolarità e note**. La decisione è sua e la densità si paga; per pagarla il meno possibile la riga è
+diventata **due righe** — sopra i numeri di stagione (titolarità, rapporto grezzo, minuti, piazzati),
+sotto il giudizio del foglio (fascia, attesa, PMA, note). Due blocchi da tre o quattro cose si
+scorrono, uno da otto no. **Affidabilità e integrità restano fuori**: non sono state chieste, e sono i
+due numeri che nessuno confronterebbe sotto un countdown.
+
+**«Attesa», non «FMV».** La fantamedia attesa si scrive `attesa 7.36` in tutte e due le schermate, e
+non con la sua sigla, perché in questo progetto `fvm` è il **Fantavalore di Mercato** — un indice di
+prezzo, 300 — e sta **sulla stessa riga**, a destra, nella lista di chiamata. Due sigle quasi
+identiche per due cose che non si somigliano: scritte accanto, l'una si legge per l'altra.
