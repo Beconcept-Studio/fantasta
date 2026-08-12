@@ -101,8 +101,13 @@ sulla stessa asta.
 **Il server gira in UTC**, processo compreso: `Europe/Rome` è solo rendering. **Dopo una modifica
 di `.env`** serve `pm2 reload deploy/ecosystem.config.cjs --update-env`, **non** `pm2 restart asta`.
 
-**La sera dell'asta non si pusha su `main`.** Il deploy si rifiuta di partire con un'asta `LIVE`
-o `PAUSED`, ma la fase di setup non è protetta.
+**La sera dell'asta non si pusha su `main`.** Il deploy si rifiuta di partire con un'asta **reale**
+`LIVE` o `PAUSED`, ma la fase di setup non è protetta. Le **simulate** non bloccano più — le dice e
+tira avanti (`DECISIONS.md`, 2026-08-12): una simulazione lasciata in pausa bloccava ogni deploy senza
+che ci fosse modo di chiuderla, e l'unico rimedio era ricordarsi ogni volta
+`DEPLOY_DURING_AUCTION=1`, cioè abituarsi a scavalcare la guardia. ⚠ **La guardia gira prima del
+`git reset`**, quindi una modifica a quella riga entra in vigore dal deploy *successivo* a quello che
+la installa.
 
 **La macchina, in breve.** Hetzner CX22 (`46.225.231.138`), Ubuntu 26.04, Ploi; Postgres 16 sulla
 stessa macchina; un solo processo Node sotto pm2 (`asta`) su `127.0.0.1:3000`, nginx davanti con
