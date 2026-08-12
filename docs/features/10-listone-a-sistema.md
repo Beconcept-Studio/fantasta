@@ -440,7 +440,8 @@ Due passi sul server, e nessuno te li ricorda:
       azione del pannello con un utente qualunque e ne pretende il rifiuto.
 - [x] **M10-11** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
       spento)
-      → 643 test in 42 file. `pnpm build` dato con il dev server spento, su richiesta all'owner.
+      → 643 test in 42 file. `pnpm build` dato con il dev server spento, su richiesta all'owner, e
+      passata al primo tentativo: il falso allarme su `/api/auctions/[id]/stream` non si è presentato.
 - [x] **M10-12** — `docs/ARCHITECTURE.md`: il capitolo sui **due listoni** e sul perché uno resta
       copiato dentro l'asta. `docs/DECISIONS.md`: la tabella globale con `fvm` tenuto pur non essendo
       mostrato, il gate solo su Caricature con le quattro ragioni, la copertura globale che resta
