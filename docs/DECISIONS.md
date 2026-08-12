@@ -1713,3 +1713,140 @@ installa. Il primo, se una simulata è in pausa, vuole ancora la variabile d'amb
 Fatta direttamente su `dev` senza aprire una macro, su richiesta esplicita dell'owner — è una riga di
 uno script di rilascio, non una feature.
 
+---
+
+## 2026-08-12 — Pianificazione di M9–M12
+
+Sessione di analisi delle quattro richieste scritte nel quaderno dopo v1.9.1. **Nessuna macro aperta e
+nessuna riga di codice scritta**: qui stanno le scelte prese pianificando, perché sono scelte, e
+`DECISIONS.md` si aggiorna al momento della scelta e non al momento dell'implementazione. Le spec
+stanno in `docs/features/09-badge-insight.md`, `10-listone-a-sistema.md`, `11-refresh-giornaliero.md`,
+`12-cancellazione-aste.md`.
+
+**Quattro macro invece di una, per profilo di rischio.** Le richieste sembravano un tema solo
+(«sistemiamo il pannello»). Sono quattro: **M9** è tutta UI (zero schema, zero motore); **M10** tocca
+la strada dell'import, cioè l'unica cosa che se si rompe rende impossibile *preparare* un'asta, e vuole
+un `db:push` più un file caricato a mano in produzione; **M11** è l'unico codice che gira **senza che
+nessuno guardi** dentro il processo che conduce l'asta; **M12** è l'unico irreversibile — un suo errore
+si corregge con un `pg_dump`, non con un `git reset`. È lo stesso criterio del taglio M5/M6 del
+2026-08-10: quattro tag, quattro punti di rollback. Scartato l'accorpamento M9+M12 («sono le due
+piccole»): una è un `className`, l'altra un `DELETE` su i dati di una serata vera.
+
+**«Listone» nel pannello sono due file, e solo uno si può chiedere da sé.** L'export **Leghe** in
+`.xlsx` definisce l'asta e porta `Fuori lista`, da cui dipendono I9 e il toggle P7; il pulsante di M8
+chiamato «Importa il listone» è la `GET` pubblica di Fantalab e porta gli insight. Il refresh
+automatico giornaliero (M11) riguarda **le due fonti pubbliche di M8**; il listone d'asta **resta un
+upload a mano** perché l'export passa da un login (owner, 2026-08-12: «l'export passa da un login,
+quindi non creiamo collegamenti»). Il file *Quotazioni*, pubblico, resta scartato per la ragione già
+scritta nella voce di M8: non ha `Fuori lista`. È da questa distinzione che nasce la separazione fra
+M10 e M11, e non da una comodità di taglio.
+
+**Il badge «Infortunato (ora)» è ritirato.** Era nella richiesta, in rosso. La misura di M8 §9 dice che
+il dato non è disponibile **nel momento in cui servirebbe**: `infortunati-serie-a` serve i dati lato
+client (da server non c'è niente da leggere) e `probabili-formazioni-serie-a`, che li serve pubblici con
+l'`ext_id` dentro, interrogata l'11 agosto conteneva 0 titolari, 0 riserve, 4 infortunati e 1 dubbio in
+tutta la Serie A. Si popola a campionato in corso, **e l'asta si fa ad agosto**: un badge rosso che non
+compare mai la sera per cui esiste l'applicazione, e che se comparisse su dati di tre settimane prima
+sarebbe una bugia. Ritirato dall'owner in sessione. ⚠ E non si ripiega sul campo `injured` della fonte
+A, che è un conteggio stagionale e correla al contrario.
+
+**Si scrive «Piazzati», non «Punizioni».** La richiesta diceva «Punizioni». La fonte ha due liste per
+squadra — `Rigori` e `Calci piazzati` — e la parola «Punizioni» compare **zero volte** nell'HTML (M8
+§1, smentita 2). «Calci piazzati» include le punizioni **e i corner**: un badge «Punizioni» sull'uomo
+dei corner direbbe una cosa falsa nel momento esatto in cui nessuno va a controllare. Non è una
+preferenza di stile, è la differenza fra un'etichetta e un'affermazione.
+
+**La soglia del verde è 80%, e la misura c'era prima della spec.** Contata sulla fixture della fonte A
+(i byte del 2026-08-11) con la `quotaTitolare` vera: **61 giocatori su 497 sopra l'80%** (12,3%), di cui
+25 difensori, 22 centrocampisti, 8 portieri e **6 attaccanti** — gli attaccanti ruotano. A 70% sarebbero
+101, cioè un nome su cinque, che è il punto in cui un colore smette di essere un segnale. ⚠ La soglia
+cade in una zona densa (un grumo a 32/38 = 84%, e 30/38 = 79% resta grigio) e regge **solo perché la
+percentuale è scritta dentro il badge**: se un giorno il numero uscisse dal badge, la soglia diventerebbe
+una bugia.
+
+**`PLAN §8bis` punto 1 è abbandonato di proposito.** Il banner globale «Asta in corso» — «il modo con
+cui un utente rientrato trova la strada da solo» — viene rimosso da tutte le pagine e per tutte le aste
+(owner, 2026-08-12: «via del tutto, in ogni asta»). Non è un invariante I1–I10, quindi si può; ma quel
+punto del piano ha smesso di valere, e un archivio vincolante che dice una cosa diversa
+dall'applicazione è peggio di un archivio senza quella riga. Al suo posto resta **la dashboard**. Non
+cambia nulla di I10: la UI continua a essere funzione dello snapshot, e la lobby che porta su `/play`
+all'avvio — l'unica navigazione automatica dell'applicazione, decisa dallo snapshot e non da un evento
+— non si tocca. Guadagno collaterale: il layout radice smette di chiamare `listUserAuctions` a ogni
+richiesta di ogni utente autenticato.
+
+**Il gate del pannello sta solo su «Caricature», non su «Insight».** La richiesta chiedeva entrambe le
+sottosezioni inerti finché il listone non è caricato; la decisione è stata delegata in sessione. Le
+caricature hanno una dipendenza vera (hanno bisogno dell'elenco degli `ext_id`, che oggi arriva da un
+`.xlsx` ricaricato ogni volta). Gli insight no: le due fonti creano righe con chiave `ext_id` e non
+sanno che esistiamo, quindi un pulsante disabilitato **che funzionerebbe** è una bugia
+dell'interfaccia — la stessa che M8 §6 ha rifiutato quando ha messo la protezione nella query invece
+che nel CSS. E il gate che serve dentro quel blocco esiste già ed è vero: «Aggiorna i designati» è
+spento finché la tabella è vuota, perché la fonte B aggiorna righe che nascono dalla A. ⚠ La ragione
+decisiva è M11: il refresh partirà da sé ogni giorno, e un pulsante bloccato accanto a «aggiornato
+automaticamente tre ore fa» sarebbe incoerente — lo scriveremmo in M10 per cancellarlo in M11.
+
+**Il Centro dati resta in admin, e senza `FVM/1000`** (owner). Quindi `canSeeInsights` non entra in
+quella pagina: un amministratore vede gli insight per costruzione, e aggiungere il predicato darebbe
+l'impressione di una seconda regola da tenere allineata. ⚠ **Ma `fvm` resta nella tabella
+`listone_players`**: la decisione riguarda una colonna a schermo, non il dato. `players_autopick_idx`
+ordina per `fvm` DESC, `quot` DESC, `ext_id` ASC, e quell'ordinamento *è* l'auto-pick — una copia verso
+`players` senza `fvm` cambierebbe chi viene scelto allo scadere di una chiamata, per una decisione di
+layout.
+
+**Il listone a sistema è una sorgente da cui si copia, mai una tabella da cui l'asta legge.**
+`players.auction_id` continua a congelare la lista: un'asta preparata lunedì non può cambiare listone
+perché martedì l'admin ha caricato un file nuovo. I9 continua a essere validato **per asta**, al momento
+della copia, con lo stesso `validateRolePool` — lo stesso listone globale può passare per un'asta a 8 e
+fallire per una a 12, ed è giusto che fallisca. L'upload nel setup dell'asta **resta** (owner:
+«lasciamo comunque la possibilità di importare l'attuale listone al cliente»): serve a correggere un
+file sbagliato e a preparare un'asta il giorno in cui a sistema non c'è ancora niente.
+
+**La copertura degli insight resta un'informazione, non diventa una guardia.** Con un listone a sistema
+la copertura ha finalmente un denominatore vero, e va nel pannello. Ma la **continuità all'85%** resta
+l'unico controllo che sbarra un import: sostituirla con una soglia di copertura sul listone a sistema
+rimetterebbe in piedi il controllo avvelenabile che M8 aveva smontato — questa volta avvelenabile da un
+file caricato per sbaglio invece che da un'asta simulata.
+
+**La regola 5 non è in mezzo alla cancellazione forzata di un'asta**, e non è
+un'interpretazione: è già ratificato nella voce del 2026-08-07 (Fase 1) che ha messo
+`ON DELETE CASCADE` su tutte le chiavi verso `auctions`, `assignments` e `ledger` compresi — *«la
+regola 5 vieta `DELETE` e `UPDATE` distruttivi **come correzione** dentro un'asta viva … cancellare
+un'asta intera è un'altra cosa»*. Le cascate esistono per rendere possibile questo. E «solo gli utenti
+non si cancellano» è già vero per direzione delle chiavi: è `members.user_id` che punta a `users`, non
+il contrario. Quindi M12 è **una riga di condizione** — il rifiuto su `LIVE`/`PAUSED`, che resta per
+tutti e cade solo per un amministratore (owner) — più tutto il lavoro di §2–§3 del suo file, che è la
+parte vera.
+
+**Il caso che `PLAN §8bis` non contempla: l'asta non esiste più.** Letto nel codice, non ipotizzato.
+`resolveViewer` gira **una volta sola**, all'apertura dello stream: dopo un `DELETE` la connessione
+resta nel registro, i `: ping` continuano ad arrivare e **nessuno snapshot arriva mai più** — il
+portale resta fermo sull'ultimo, con il countdown congelato, e sembra *lento* invece che rotto. Chi
+ricarica trova un errore su cui l'`EventSource` **riprova all'infinito** da sé. Il timer armato invece è
+innocuo: `withAuctionLock` su un'asta assente restituisce un `NOT_FOUND` tipizzato, non un'eccezione.
+Serve quindi un **evento terminale** sul canale, mandato via **hook settabile** (come `setBroadcastHook`
+— il motore non deve sapere che esiste un canale verso i client), e sul client `source.close()`
+**prima** della navigazione: senza quel `close()` esplicito il congedo diventa un ciclo di riconnessioni.
+
+**La guardia del deploy resta com'è, anche quando le simulate si potranno cancellare.** M12 rimuove la
+*causa* della voce di ieri («una simulazione in pausa non si può chiudere»), quindi la domanda «la
+rimettiamo a contare tutte le aste?» andava posta. Risposta: **no** (owner). Il secondo motivo di quella
+voce regge da solo — in una simulazione aspettano dei bot, e il boot recovery li rimette in moto — e
+riaprire una guardia appena chiusa riporterebbe l'abitudine a scavalcarla, che è il modo in cui una
+guardia smette di proteggere il giorno che serve davvero.
+
+**Un timer che chiede a un sito se ha numeri nuovi non viola la regola 1.** «Mai un timer che decide»
+parla della **macchina a stati dell'asta**: il loop di M11 non chiama `transition`, non prende il lock,
+non tocca `auctions`/`lots`/`bids`/`assignments`/`ledger`, non incrementa `state_version` e non fa
+broadcast. Ha due precedenti letterali in casa — lo sweep dello scheduler e il tick dei bot — e poggia
+sulla stessa garanzia (`exec_mode: "fork"`, `instances: 1`) senza aggiungerne di nuove; il singleton va
+su `globalThis` come gli altri due. La domanda da farsi la prossima volta che qualcuno vorrà «un timer
+per…» è quella: **tocca lo stato dell'asta?**
+
+⚠ **E la scadenza di quel timer si conta dall'ultimo *tentativo*, non dall'ultimo *successo*.** È
+l'errore che sembrerebbe naturale — «se `listone_updated_at` è vecchio di un giorno, aggiorna» — e
+produce **novantasei richieste al giorno** verso un sito di terzi quando la fonte è giù, perché il
+timestamp di successo non avanza mai. Da qui: una riga di `source_runs` per fonte con l'esito
+dell'ultimo tentativo, e un backoff esponenziale (1h, 2h, 4h… fino a 24h). La tabella serve anche alla
+cosa più importante di M11: **rendere visibile un fallimento silenzioso**, perché con il pulsante
+l'errore lo legge chi l'ha premuto, e automatico finirebbe in `console.error` e in nessun altro posto.
+
