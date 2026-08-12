@@ -9,9 +9,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { LISTONE_NOTICE_PARAM } from "@/app/auctions/form-state";
 import { requireUser } from "@/lib/auth";
 import { isAppAdmin } from "@/lib/domain";
 import { realAuctionRunning } from "@/lib/engine/bots";
+import { listoneStatus } from "@/lib/engine/listone";
 import { getAuctionOverview } from "@/lib/engine/setup";
 
 import { BotsPanel } from "./bots-panel";
@@ -33,8 +35,10 @@ export const metadata = { title: "Configurazione dell'asta — Asta Fantacalcio"
  */
 export default async function SetupPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requireUser();
   const { id } = await params;
@@ -45,6 +49,19 @@ export default async function SetupPage({
 
   const { auction } = overview;
   const editable = auction.status === "DRAFT" || auction.status === "READY";
+
+  // Il listone a sistema (M10): il pulsante che lo copia esiste solo se c'è
+  // qualcosa da copiare, e la data è quella che si legge per decidere.
+  const listone = await listoneStatus();
+  const systemListone =
+    listone.rows > 0 && listone.uploadedAt !== null
+      ? { rows: listone.rows, uploadedAt: listone.uploadedAt }
+      : null;
+
+  // ⚠ Perché la copia **alla creazione** non è passata: l'asta è nata comunque,
+  // in DRAFT, e questa è l'unica frase che lo spiega (M10 §4).
+  const noticeRaw = (await searchParams)[LISTONE_NOTICE_PARAM];
+  const notice = typeof noticeRaw === "string" ? noticeRaw : null;
 
   // Solo per spiegare i bot fermi: la domanda si fa una volta sola, e solo
   // dove serve dirlo.
@@ -161,6 +178,8 @@ export default async function SetupPage({
             seats={auction.seats}
             poolProblem={overview.poolProblem}
             editable={editable}
+            systemListone={systemListone}
+            notice={notice}
           />
         </CardContent>
       </Card>

@@ -24,6 +24,13 @@ import { cn } from "@/lib/utils";
  * badge grigio a zero: `—` e `0` non si scrivono allo stesso modo, e un badge
  * disegnato vuoto per tutti sarebbe il modo esatto di rendere invisibile la
  * protezione di M8. Vedi `lib/domain.ts`.
+ *
+ * ⚠ **`TitolaritaBadge` e `SetPieceBadges` sono esportati da M10**, che è il
+ * terzo chiamante e quello che li rende un componente invece di tre `className`:
+ * il Centro dati li usa in due colonne separate, quindi non gli servono le due
+ * composizioni pronte (`InsightsLine`, `InsightsMacro`) ma i due pezzi. Il tono,
+ * la soglia e la regola «il colore non è mai l'unica informazione» restano
+ * decisi qui dentro, in un posto solo.
  */
 
 /**
@@ -108,7 +115,7 @@ function InsightBadge({
  * perché il numero è leggibile accanto al colore. Il perché per esteso, con la
  * misura, sta su `SOGLIA_TITOLARE` in `lib/domain.ts`.
  */
-function TitolaritaBadge({
+export function TitolaritaBadge({
   insights,
   compact = false,
 }: {
@@ -190,7 +197,7 @@ export function InsightsMacro({
  * il suo uomo dei corner, e un badge «Punizioni» su di lui direbbe una cosa falsa
  * esattamente nel momento in cui nessuno va a controllare.
  */
-function SetPieceBadges({
+export function SetPieceBadges({
   insights,
   compact = false,
 }: {

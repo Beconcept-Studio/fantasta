@@ -133,6 +133,14 @@ suite("ogni server action del pannello rifiuta chi non è amministratore", () =>
       "setUserAdminAction",
       "setUserDisplayNameAction",
       "setUserProAction",
+      // M10 — il caricamento del listone a sistema. Come per M7 e M8, la riga è
+      // stata aggiunta **dopo** aver visto il test rompersi, insieme alla
+      // guardia in cima all'azione. ⚠ La spec di M10 §5 diceva che questo test
+      // non si sarebbe rotto: si riferiva alla modifica di
+      // `downloadCampionciniAction`, che infatti non cambia nome né firma
+      // rispetto all'elenco — ma la macro **un'azione la aggiunge**, ed è
+      // questa. Il test ha fatto il suo lavoro anche stavolta.
+      "uploadListoneAction",
     ]);
   });
 

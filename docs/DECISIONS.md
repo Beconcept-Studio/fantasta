@@ -1903,3 +1903,71 @@ aggiornamento.
 **`listUserAuctions` sopravvive al banner.** Il task diceva di togliere «la query che serviva solo a
 lui»: la **chiamata** nel layout radice è quella, e se ne va, ma la funzione resta perché il suo
 chiamante vero è la dashboard — che dopo M9 è l'unica strada di rientro e quindi la usa più di prima.
+
+---
+
+## 2026-08-12 — M10, il listone a sistema
+
+Le scelte prese implementando `docs/features/10-listone-a-sistema.md`. Le decisioni di
+pianificazione — i due file che si chiamano «listone», il taglio M10/M11, il gate solo su Caricature
+— stanno nella sezione «Pianificazione di M9–M12» e non si riscrivono qui: qui c'è solo ciò che è
+stato deciso **scrivendo il codice**.
+
+**`fvm` resta nella tabella globale, anche se il Centro dati non lo mostra.** La decisione dell'owner
+(«FMV togli») riguardava una colonna a schermo. `players_autopick_idx` ordina per `fvm` DESC, `quot`
+DESC, `ext_id` ASC, e quell'ordinamento **è** l'auto-pick allo scadere di una chiamata: una copia
+verso `players` senza `fvm` cambierebbe chi viene comprato, per una scelta di layout. Il test che lo
+difende confronta riga per riga i `players` prodotti dalle due strade — file dentro l'asta, e
+sistema copiato dentro l'asta — `fvm` e `out_of_list` compresi.
+
+**La parte condivisa dei due import è stata estratta solo adesso** (`replacePlayers` in `setup.ts`),
+ed è la regola 8 applicata alla lettera: fino a v1.10.0 le righe potevano venire da una sorgente
+sola, e un'astrazione l'avrebbe preceduta di quattro mesi. Ciò che resta diverso fra i due import è
+**da dove arrivano le righe**, e nient'altro — che è anche il motivo per cui le due strade producono
+righe identiche per costruzione, non per attenzione.
+
+**La proposta alla creazione è una coppia di alternative esplicite, non una casella spuntata**
+(owner, in sessione, scegliendo fra tre mockup). «Il listone a sistema · N giocatori · caricato il
+…» preselezionato, e «lo carico io» accanto. Costa una domanda in più su una schermata che ne fa
+già nove, e in cambio rende visibile che una seconda strada esiste — che è precisamente ciò che
+l'upload nel setup deve restare a garantire. ⚠ Se a sistema non c'è niente, la scelta **non compare
+affatto**: non compare disabilitata. Una scelta fra due opzioni di cui una non esiste non è una
+domanda.
+
+**Il motivo del fallimento della copia viaggia in un parametro dell'URL.** Creare un'asta finisce
+con un `redirect`, e la `FormState` muore con la pagina che l'ha prodotta: l'URL è l'unico canale
+che sopravvive. La costante `LISTONE_NOTICE_PARAM` vive in `app/auctions/form-state.ts` e non
+accanto alle action, perché **da un modulo `"use server"` non esce niente che non sia una funzione
+async** — è scritto in cima a quel file, ed è già costato una volta.
+
+**`activeAdminSection` sceglie il match più lungo.** Con la prima voce annidata dell'applicazione
+(`/admin/listone/dati`) la vecchia riga — `parts[1]` e basta — avrebbe acceso «Listone» e scritto in
+cima alla pagina il titolo sbagliato. Una sotto-pagina sconosciuta di una sezione resta **dentro**
+quella sezione, invece di spegnere la sidebar: appartiene lì, e una sidebar spenta sarebbe peggio.
+
+**`when()` è uscita dalla pagina del pannello e vive in `lib/when.ts`.** I chiamanti sono tre — il
+pannello, la proposta alla creazione, il pulsante nel setup — e `Europe/Rome` esplicito è la ragione
+per cui esiste: il server gira in UTC, e un caricamento delle 23:30 senza fuso comparirebbe come del
+giorno prima, cioè farebbe scartare un listone buono. La data di ultimo aggiornamento *è* il punto
+della richiesta.
+
+**`uploadListone` non rilegge `is_admin` dal database**, a differenza delle mutazioni di
+`lib/engine/admin.ts`. Il precedente è M8: `refreshListoneInsights` e `refreshSetPieces` non lo
+fanno neanche loro. La ragione è che quelle di `admin.ts` cambiano **permessi di persone** — dove
+chi è stato appena declassato non deve poter comandare fino alla scadenza del suo JWT — mentre qui
+si sostituisce un elenco di calciatori di Serie A. La guardia in cima alla server action, che il
+test di M6 enumera e verifica una per una, è la difesa, ed è la stessa che protegge i due pulsanti
+degli insight da v1.9.0.
+
+**Il test M10 non scrive mai su `player_insights`.** Quella tabella è globale e
+`tests/db/insights.test.ts` la svuota nel suo `beforeEach`; vitest gira i file in worker paralleli,
+quindi una riga scritta da qui potrebbe sparire a metà di un test di lì — o, peggio, comparire in
+mezzo a un suo conteggio e rompere un test che non c'entra niente. È la stessa cicatrice del
+parametro `auctionIds` di `insightsCoverage` («verde da solo, rosso nella suite»). Il `LEFT JOIN` del
+Centro dati si prova quindi solo dal lato deterministico: `ext_id` sintetici che nessuna fonte ha.
+
+**Le figurine perdono la voce di primo livello e il campo file.** Gli `ext_id` arrivano dalla
+tabella, e a tabella vuota l'azione **rifiuta dicendo dove si carica** invece di scaricare zero
+figurine e dichiarare successo. Il messaggio «il file è ancora selezionato» è stato riscritto: di
+file non ce n'è più uno, ma il «riprende da dov'era» resta vero per la ragione di sempre — lo stato
+è il disco.

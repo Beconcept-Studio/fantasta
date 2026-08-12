@@ -334,6 +334,67 @@ export const players = pgTable(
   ],
 );
 
+// ─── Il listone a sistema (globale, non per asta) ────────────────────────────
+
+/**
+ * Il listone dell'applicazione: l'export **Leghe** di Fantacalcio.it caricato una
+ * volta sola dal pannello, da cui si copia dentro le aste (M10).
+ *
+ * ⚠ **Si chiama `listone_players` e non `listone`, ed è deliberato.** Nel
+ * pannello la parola «listone» indica **due file diversi** (M10 §1): questo, che
+ * definisce un'asta e si carica a mano perché l'export passa da un login, e la
+ * `GET` pubblica di Fantalab che riempie `player_insights`. Una tabella che si
+ * chiama come un concetto ambiguo è una tabella che qualcuno userà per la cosa
+ * sbagliata. Il menu dice `Listone`, lo schema dice di quali righe si tratta.
+ *
+ * ⚠ **È una sorgente da cui si copia, mai una tabella da cui l'asta legge**
+ * (M10 §3). `players.auction_id` continua a congelare il listone al momento
+ * dell'import, e un'asta preparata lunedì non cambia perché martedì qualcuno ha
+ * caricato un file nuovo. Se un `JOIN` verso questa tabella compare in
+ * `lib/engine/machine.ts`, `rules.ts`, `snapshot.ts` o in `listPickPool`, il
+ * lavoro è fuori posto. Conseguenza che il codice deve rispettare: **un'asta si
+ * crea, si prepara e arriva a `COMPLETED` con questa tabella vuota.**
+ *
+ * Un upload **sostituisce l'intera tabella** (`DELETE` + `INSERT` in
+ * transazione), come `importPlayers` sostituisce lo snapshot di un'asta. Non
+ * viola la regola 5: qui non ci sono assegnazioni né ledger, è un elenco di
+ * calciatori di Serie A, e sostituirlo è l'unico modo di correggere un file
+ * sbagliato senza inventare un merge fra due listoni.
+ */
+export const listonePlayers = pgTable("listone_players", {
+  /** La colonna `#` del file: la stessa chiave di `players.ext_id` e di `player_insights.ext_id`. */
+  extId: integer("ext_id").primaryKey(),
+  name: text("name").notNull(),
+  team: text("team").notNull(),
+  role: text("role").$type<Role>().notNull(),
+  roleMantra: text("role_mantra"),
+  /**
+   * ⚠ **C'è anche se il Centro dati non lo mostra** (M10 §2), e questa è la
+   * trappola numero uno della macro. La decisione dell'owner («FVM togli»)
+   * riguarda una colonna di una tabella a schermo, non il dato:
+   * `players_autopick_idx` ordina per **`fvm` DESC, `quot` DESC, `ext_id` ASC**,
+   * e quell'ordinamento *è* l'auto-pick. Una copia verso `players` senza `fvm`
+   * cambierebbe chi viene scelto allo scadere di una chiamata, per una scelta di
+   * layout.
+   */
+  fvm: integer("fvm").notNull(),
+  quot: integer("quot").notNull(),
+  /**
+   * ⚠ **Obbligatorio, ed è l'altro campo da non perdere.** Senza,
+   * `validateRolePool` conta i giocatori sbagliati (I9) e il toggle
+   * `include_out_of_list` (P7) non ha niente su cui lavorare. È anche il campo
+   * che **impedisce** di costruire questa tabella dal file *Quotazioni*, che è
+   * pubblico ma non ce l'ha (M10 §1, DECISIONS 2026-08-12).
+   */
+  outOfList: boolean("out_of_list").notNull().default(false),
+  /**
+   * Quando è stato caricato il file da cui viene questa riga. Uguale su tutte le
+   * righe di uno stesso upload: è la data che l'owner legge alla creazione di
+   * un'asta per decidere se usare questo listone o caricarne uno suo.
+   */
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull(),
+});
+
 // ─── Insight sul listone (globale, non per asta) ──────────────────────────────
 
 /**

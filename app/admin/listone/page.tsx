@@ -1,64 +1,152 @@
+import Link from "next/link";
+
+import { CampionciniPanel } from "@/components/admin/campioncini-panel";
 import { InsightsPanel } from "@/components/admin/insights-panel";
+import { ListoneUpload } from "@/components/admin/listone-upload";
 import { requireAppAdmin } from "@/lib/auth";
+import {
+  campioncinoEdition,
+  campionciniDir,
+  countArchive,
+} from "@/lib/campioncini";
 import { insightsStatus } from "@/lib/engine/insights";
+import { listoneStatus } from "@/lib/engine/listone";
+import { when } from "@/lib/when";
 
 /**
- * Gli insight sul listone (M8 §7): due pulsanti, due date e la copertura.
+ * La sezione «Listone» (M10 §5): l'upload, lo stato, e le due azioni che si
+ * fanno **con** un listone appena caricato.
+ *
+ * ⚠ **Una pagina per la sezione, non quattro.** In cima l'upload e lo stato;
+ * sotto, i due blocchi d'azione — Caricature e Insight — che stanno insieme
+ * perché si leggono insieme: sono la sequenza «carico, scarico i volti, aggiorno
+ * i numeri», che è la sequenza per cui questa sezione esiste. Quattro pagine
+ * separate l'avrebbero moltiplicata per quattro in clic. Il Centro dati ha una
+ * pagina sua perché cinquecento righe con una casella di ricerca non stanno
+ * sotto un form di upload, e perché si apre per consultare, non per agire.
+ *
+ * ⚠ **Il gate sta solo su Caricature, e Insight resta sempre attivo** — contro
+ * la lettera della richiesta, su delega dell'owner (2026-08-12). Caricature ha
+ * una dipendenza vera: senza `ext_id` non c'è niente da scaricare. Le due fonti
+ * degli insight non ne hanno nessuna — creano righe con chiave `ext_id` e non
+ * sanno che esistiamo — quindi bloccarle bloccherebbe un aggiornamento che
+ * *riuscirebbe*: un pulsante disabilitato che funzionerebbe è una bugia
+ * dell'interfaccia, come lo era nascondere gli insight in CSS (M8 §6). Il gate
+ * che serve, lì dentro, esiste già ed è vero: «Aggiorna i designati» è spento
+ * finché la tabella degli insight è vuota. E **M11 farà partire quel refresh da
+ * sé ogni giorno**: un pulsante bloccato accanto a «aggiornato automaticamente
+ * tre ore fa» sarebbe da smontare alla macro dopo.
  *
  * ⚠ **La guardia sta qui e non solo nel layout**: la regola di M6 §5 vale anche
- * per le pagine, che sono endpoint come le altre. Costa una riga e non dipende
- * dall'albero delle cartelle.
+ * per le pagine, che sono endpoint come le altre.
  *
- * ⚠ **In produzione la tabella nasce vuota**, e finché non si premono i pulsanti
- * `/play` è identica a prima — nessuno se ne accorge, che è precisamente ciò che
- * rende il passo facile da dimenticare (stesso inciampo dell'archivio figurine di
- * M7). Per questo il numero delle righe è la prima cosa scritta in pagina.
- *
- * **I due timestamp sono separati** perché le fonti sono due e si aggiornano
- * quando vogliono: un pannello che ne mostrasse uno solo non saprebbe dire quale
- * delle due è ferma da tre mesi.
+ * ⚠ **In produzione la tabella nasce vuota**, e finché non si carica il file non
+ * si rompe niente — semplicemente le caricature non si scaricano, il Centro dati
+ * è vuoto e chi crea un'asta non trova nessuna proposta. È precisamente ciò che
+ * rende il passo facile da dimenticare (stesso inciampo di M7 e M8), ed è per
+ * questo che il numero delle righe è la prima cosa scritta in pagina.
  */
 export default async function AdminListonePage() {
   await requireAppAdmin();
 
-  const status = await insightsStatus();
+  const listone = await listoneStatus();
+  const insights = await insightsStatus();
+  const archived = await countArchive(campionciniDir());
 
   return (
     <section className="space-y-6">
       <div className="space-y-1">
-        <p className="text-3xl font-semibold tabular-nums">{status.rows}</p>
+        <p className="text-3xl font-semibold tabular-nums">{listone.rows}</p>
         <p className="text-muted-foreground text-sm">
-          {status.rows === 1 ? "giocatore con insight" : "giocatori con insight"}
-          {status.rows === 0
-            ? " — la tabella è vuota: premi il primo pulsante qui sotto, e nessuno vedrà niente finché non lo fai."
-            : ` · ${status.current} con i numeri della stagione corrente · ${status.designated} designati sui piazzati`}
+          {listone.rows === 1 ? "giocatore a sistema" : "giocatori a sistema"}
+          {listone.rows === 0
+            ? " — carica il file qui sotto: finché non lo fai, le caricature non si scaricano, il Centro dati è vuoto e chi crea un'asta non trova nessuna proposta."
+            : ` · ${listone.outOfList} fuori lista · caricato il ${when(listone.uploadedAt)}`}
         </p>
       </div>
 
-      <InsightsPanel rows={status.rows} />
+      <ListoneUpload rows={listone.rows} />
 
-      <dl className="grid max-w-3xl gap-4 border-t pt-4 text-sm sm:grid-cols-2">
+      <div className="grid max-w-3xl gap-6 border-t pt-6 sm:grid-cols-2">
+        <CampionciniPanel archived={archived} listoneRows={listone.rows} />
+        <InsightsPanel rows={insights.rows} />
+      </div>
+
+      <dl className="grid max-w-3xl gap-4 border-t pt-4 text-sm sm:grid-cols-3">
         <div>
-          <dt className="text-muted-foreground text-xs">Listone aggiornato</dt>
-          <dd>{when(status.listoneUpdatedAt)}</dd>
+          <dt className="text-muted-foreground text-xs">Listone caricato</dt>
+          <dd>{when(listone.uploadedAt)}</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground text-xs">Designati aggiornati</dt>
-          <dd>{when(status.setPiecesUpdatedAt)}</dd>
+          <dt className="text-muted-foreground text-xs">
+            Titolarità e rigori storici
+          </dt>
+          <dd>{when(insights.listoneUpdatedAt)}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground text-xs">
+            Designati sui piazzati
+          </dt>
+          <dd>{when(insights.setPiecesUpdatedAt)}</dd>
         </div>
       </dl>
 
-      {status.coverage.length > 0 && (
+      <div className="max-w-3xl space-y-4 border-t pt-4">
+        <div className="space-y-1">
+          <p className="text-sm">
+            <strong className="tabular-nums">{archived}</strong>{" "}
+            {archived === 1 ? "caricatura" : "caricature"} nell&apos;archivio ·{" "}
+            <strong className="tabular-nums">{insights.rows}</strong>{" "}
+            {insights.rows === 1
+              ? "giocatore con insight"
+              : "giocatori con insight"}
+            {insights.rows > 0 &&
+              `, ${insights.current} con i numeri di quest'anno`}
+          </p>
+          {/*
+            ⚠ La **copertura globale**, che con un listone a sistema ha per la
+            prima volta un denominatore vero. Resta un'informazione e non
+            diventa una guardia: farne una soglia rimetterebbe in piedi il
+            controllo avvelenabile che M8 aveva smontato, questa volta
+            avvelenabile da un file caricato per sbaglio (M10 §7). Quello che
+            protegge davvero è la continuità all'85%, e non si tocca.
+          */}
+          {listone.rows > 0 && (
+            <p className="text-muted-foreground text-sm">
+              Del listone a sistema,{" "}
+              <span className="tabular-nums">
+                {listone.coverage.matched}/{listone.rows}
+              </span>{" "}
+              hanno una riga di insight (
+              <span className="tabular-nums">
+                {Math.round((listone.coverage.matched / listone.rows) * 100)}%
+              </span>
+              ), e{" "}
+              <span className="tabular-nums">{listone.coverage.showable}</span>{" "}
+              hanno i numeri di quest&apos;anno, cioè quelli che si vedono
+              davvero.{" "}
+              <Link href="/admin/listone/dati" className="underline">
+                Guardali uno per uno nel Centro dati
+              </Link>
+              .
+            </p>
+          )}
+        </div>
+      </div>
+
+      {insights.coverage.length > 0 && (
         <div className="max-w-3xl space-y-3 border-t pt-4">
-          <h2 className="font-medium">Copertura dei listoni</h2>
+          <h2 className="font-medium">Copertura dei listoni delle aste</h2>
           <p className="text-muted-foreground text-xs">
-            Quanti giocatori <em>chiamabili</em> hanno qualcosa da dire. Non
-            arriverà mai al 100%: i due elenchi non coincidono — sul listone di
-            prova sono 487 su 495 — e un&apos;asta simulata, che ha un listone
+            Quanti giocatori <em>chiamabili</em> hanno qualcosa da dire. È una
+            domanda diversa da quella qui sopra — «il <em>mio</em> listone è
+            coperto?» invece di «la fonte copre il listone di quest&apos;anno?» —
+            e per questo restano tutte e due. Non arriverà mai al 100%: i due
+            elenchi non coincidono, e un&apos;asta simulata, che ha un listone
             finto, sta vicino allo zero ed è giusto così.
           </p>
           <ul className="space-y-3">
-            {status.coverage.map((c) => (
+            {insights.coverage.map((c) => (
               <li key={c.auctionId} className="text-sm">
                 <p>
                   <span className="font-medium">{c.auctionName}</span>{" "}
@@ -84,8 +172,26 @@ export default async function AdminListonePage() {
 
       <div className="text-muted-foreground max-w-2xl space-y-2 border-t pt-4 text-xs">
         <p>
-          <strong>Chi li vede.</strong> Solo chi ha il permesso, che si dà dalla
-          lista utenti, più gli amministratori — che li vedono comunque,
+          <strong>«Listone» qui sono due file.</strong> Quello che si carica
+          sopra è l&apos;export <strong>Leghe</strong> in{" "}
+          <span className="font-mono">.xlsx</span>: definisce le aste, porta la
+          colonna <span className="font-mono">Fuori lista</span>, e si scarica a
+          mano perché l&apos;area riservata vuole un login. Quello che scarica il
+          pulsante «Importa il listone» è la <span className="font-mono">GET</span>{" "}
+          pubblica di <span className="font-mono">api.fantalab.it</span>, e porta
+          i numeri. Sono nella stessa pagina perché è il posto giusto per
+          guardarli insieme, non perché siano la stessa cosa.
+        </p>
+        <p>
+          <strong>Il listone si copia dentro l&apos;asta.</strong> Chi crea
+          un&apos;asta se lo trova proposto, con la data qui sopra; da quel
+          momento quell&apos;asta ha la <em>sua</em> copia e un caricamento nuovo
+          non la tocca più. Le rose, i prezzi e le regole di quella serata sono
+          appesi a quelle righe.
+        </p>
+        <p>
+          <strong>Chi vede gli insight.</strong> Solo chi ha il permesso, che si
+          dà dalla lista utenti, più gli amministratori — che li vedono comunque,
           altrimenti dovrebbero accendersi un flag per guardare i dati che hanno
           appena importato. Chi non ce l&apos;ha non li riceve affatto: non
           arrivano nel suo browser, non sono nascosti con il CSS.
@@ -101,25 +207,24 @@ export default async function AdminListonePage() {
         <p>
           <strong>Se una fonte cambia forma, l&apos;import si rifiuta</strong> e
           te lo dice, invece di riempire la tabella di righe vuote. Vale anche
-          quando la lista nuova non somiglia più a quella di prima: sotto l&apos;85%
-          di identificativi in comune non viene scritto niente.
+          quando la lista nuova non somiglia più a quella di prima: sotto
+          l&apos;85% di identificativi in comune non viene scritto niente.
+        </p>
+        <p>
+          <strong>Edizione {campioncinoEdition()}</strong> per le caricature. È
+          l&apos;unica parte del loro indirizzo che invecchia: è la stagione, e ad
+          agosto prossimo cambierà. Si cambia in{" "}
+          <span className="font-mono">CAMPIONCINI_EDITION</span> nel{" "}
+          <span className="font-mono">.env</span> del server, seguita da{" "}
+          <span className="font-mono">
+            pm2 reload deploy/ecosystem.config.cjs --update-env
+          </span>
+          . L&apos;archivio sta in{" "}
+          <span className="font-mono">{campionciniDir()}</span>, fuori da git e
+          fuori da <span className="font-mono">public/</span>: sopravvive a ogni
+          rilascio e anche a un ritorno a una versione precedente.
         </p>
       </div>
     </section>
   );
-}
-
-/**
- * La data in italiano, o «mai».
- *
- * `Europe/Rome` è esplicito perché **il server gira in UTC**, processo compreso:
- * senza il fuso, un import delle 23:30 comparirebbe come del giorno prima.
- */
-function when(value: Date | null): string {
-  if (value === null) return "mai";
-  return new Intl.DateTimeFormat("it-IT", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Europe/Rome",
-  }).format(value);
 }
