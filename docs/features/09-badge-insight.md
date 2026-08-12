@@ -258,7 +258,9 @@ dall'utente: una soglia che si può cambiare è una soglia di cui nessuno conosc
       testo resta dentro ogni badge (§2)
       → `badge.tsx` non toccato. I colori scelti **guardandoli** su una pagina di prova coi valori
       veri della Tailwind installata: **`blue-600` e non `sky-600`** (owner), tinta tenue e non
-      pieno. Tre differenze dalla spec: **la §2 conta quattro colori e il codice ne rende tre**
+      pieno. ⚠ **I token per il tema scuro sono stati scritti e poi tolti** (owner): il tema scuro
+      non esiste, e adesso «niente `dark:`» è una regola in `CLAUDE.md`. Tre differenze dalla spec:
+      **la §2 conta quattro colori e il codice ne rende tre**
       (grigio sotto soglia e neutro riservato sono la stessa `secondary` — vedi «Com'è andata»); il
       rapporto grezzo del modale **resta fuori** dal badge invece di sparire (owner); e i badge sono
       un `InsightBadge` con un tono, non tre `className`, perché il terzo chiamante è già annunciato
@@ -356,14 +358,23 @@ e la scoperta utile è che con `starts_eleven` intero **nessun giocatore cade su
 direzione del confronto non colora nessuno. Chi un giorno guarderà quel `>=` chiedendosi se sia giusto
 troverà la risposta accanto.
 
-**I colori del tema scuro sono scritti per un tema che l'applicazione non mostra.** `.dark` è applicato
-in **un solo punto** dell'intera codebase — `app/tv/[publicToken]/tv-view.tsx` — e la vista TV non
-mostra insight: non esiste nessun interruttore di tema, quindi questi badge girano sempre in chiaro.
-I `dark:` sono stati scritti comunque, perché il giorno che un tema scuro arriva nessuno andrà a
-ripassare i colori dei badge. Ma la verifica 6 va letta per quello che è: **i colori scuri sono stati
-guardati sulla pagina di prova, non nell'applicazione, perché nell'applicazione non c'è modo di
-vederli.** §6 chiedeva di verificare che la TV non fosse interessata: è vero, e per una ragione più
-forte di quella prevista — è l'unico posto dove il tema scuro esiste.
+**§6 chiedeva i token per tema chiaro e scuro, e il tema scuro non esiste.** I `dark:` sono stati
+scritti come chiedeva la spec, e poi **tolti su richiesta dell'owner** («non hanno senso, se un giorno
+li inseriremo poi li tratteremo»). La misura che ha deciso: `.dark` è attivo in **un solo punto**
+dell'intera codebase — il `className="dark"` di `app/tv/[publicToken]/tv-view.tsx` — non c'è nessun
+interruttore né lettura della preferenza di sistema, e la vista TV **non mostra insight**. Quei
+`dark:` erano quindi colori che nessuno può guardare, cioè che nessuno può verificare: si scrivono
+convinti di aver coperto un caso e restano sbagliati per mesi senza che si veda.
+
+Con loro sono andati via anche i **sei `dark:text-emerald-400` che c'erano già** — in
+`form-feedback`, `reveal-panel`, `lot-closed-card`, `bid-modal`, `user-row`, `auction-delete` — dopo
+aver verificato che nessuno di quei componenti è mai renderizzato dentro il sottoalbero della TV (che
+importa soltanto `campioncino`, `countdown` e `statusLabel`). Erano morti anche loro. E la cosa è
+diventata **una regola in `CLAUDE.md`**, perché una decisione del genere sopravvive solo se è scritta
+dove qualcuno la incontra prima di scrivere il prossimo `className`. §6 chiedeva anche di verificare
+che la TV non fosse interessata: è vero, e per una ragione più forte di quella prevista — è l'unico
+posto dove il tema scuro esiste, e per questo `globals.css` e il `className="dark"` della TV restano
+intoccabili.
 
 **Un colore in più era da decidere e non da dedurre, e la pagina di prova è stata il modo.** Non un
 mockup a parole: un file HTML con i valori veri della Tailwind installata, la geometria vera di
@@ -381,7 +392,7 @@ sembra un guasto invece di una soglia, il problema non è il colore. Scelta: tin
 | 3 · cinque o sei verdi in quaranta nomi | ⏳ **owner**: si rivede a schermo su un'asta col listone vero |
 | 4 · chi non ha dati mostrabili non ha nessun badge | ✅ `showableInsights` non toccata, e il commento dice perché non esiste un badge «vuoto» |
 | 5 · il pool senza permesso non ha la chiave `insights` | ✅ già provato da M8 (`tests/db/insights.test.ts`), e la query non è stata sfiorata |
-| 6 · i badge si leggono in chiaro e in scuro | ⚠ **chiaro sì, scuro solo sulla pagina di prova**: l'app non ha un tema scuro (sopra) |
+| 6 · i badge si leggono in chiaro e in scuro | ⚠ **la verifica è decaduta**: i `dark:` sono stati tolti, l'app non ha un tema scuro (sopra). Resta «si leggono in chiaro», che è ⏳ **owner** |
 | 7 · nessuna striscia verde da nessuna parte | ✅ per costruzione — il componente non esiste più — e le rotte pubbliche rispondono 200 senza di lui |
 | 8 · chi rientra a metà lotto ritrova la sua schermata | ⏳ **owner**: `portal.test.ts` prova che dipende dallo snapshot, ma il rientro vero si fa col telefono |
 | 9 · un'asta si gioca ancora, coi badge in pagina | ⏳ **owner**: una simulata a 8 fino a `COMPLETED` |
