@@ -1,10 +1,10 @@
 # M10 — Il listone a sistema
 
-> **Stato:** **chiusa** su `dev` il 2026-08-12 · Aperta e chiusa su `feature/10-listone-a-sistema` ·
-> Pianificata il 2026-08-12 · ⚠ **Il rilascio non è suo**: M10 esce **insieme a M10B**, in un
-> rilascio solo con un tag solo — `v1.11.0` — deciso dall'owner il 2026-08-12. Fino ad allora `dev`
-> resta avanti a `main`, ed è la decisione, non una dimenticanza. I due passi a mano di §9 restano
-> dovuti e finiscono nel `CHANGELOG.md` di quel rilascio, insieme a quelli di M10B · Dipende da
+> **Stato:** **rilasciata in `v1.11.0`** il 2026-08-12, **insieme a M10B** — un tag solo per due
+> macro, deciso dall'owner. Aperta e chiusa su `feature/10-listone-a-sistema`, pianificata lo stesso
+> giorno · ⚠ **I passi a mano di §9 restano dovuti dopo il deploy** e stanno nel `CHANGELOG.md` di
+> `v1.11.0` insieme a quelli di M10B: un solo `pnpm db:push`, poi **due file nell'ordine** — prima il
+> listone, poi il foglio di Carmy · Dipende da
 > **M9** solo per un componente: il Centro dati (§6) mostra i badge colorati, ed è il loro terzo
 > chiamante. Se per qualche ragione M9 slittasse, il Centro dati nasce con i due grigi di M8 e i badge
 > arrivano dopo — non è un blocco, è un ordine preferibile.

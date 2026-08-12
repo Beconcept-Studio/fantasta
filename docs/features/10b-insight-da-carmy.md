@@ -1,9 +1,11 @@
 # M10B — Gli insight che vengono da un umano
 
-> **Stato:** **chiusa su `dev`** il 2026-08-12, merge `--no-ff` da
-> `feature/10b-insight-da-carmy` · ⚠ **Non ancora rilasciata**: esce con M10 in un tag solo,
-> `v1.11.0`, **su richiesta esplicita dell'owner** (task M10B-16) · Spec scritta lo stesso giorno in
-> una sessione di sola analisi, a valle di M10.
+> **Stato:** **rilasciata in `v1.11.0`** il 2026-08-12, **insieme a M10** — un tag solo per due
+> macro, deciso dall'owner. Due merge `--no-ff` da `feature/10b-insight-da-carmy`: il primo a gate
+> verde, il secondo con le tre note dell'owner dopo averla guardata (vedi «Dopo la chiusura») · Spec
+> scritta lo stesso giorno in una sessione di sola analisi, a valle di M10 · ⚠ **Dopo il deploy
+> restano tre passi a mano**: `pnpm db:push` sul server, poi il listone e **poi** il foglio di Carmy —
+> il secondo si aggancia al primo per nome. Sono nel `CHANGELOG.md` di `v1.11.0`, per esteso.
 >
 > ⚠ **Cosa è cambiato rispetto a questa spec sta in «Com'è andata», in fondo**, e sotto ogni task con
 > la freccia `→`. Le tre decisioni che l'owner ha preso guardando — la forma del badge, la riga

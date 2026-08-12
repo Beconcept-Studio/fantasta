@@ -12,58 +12,52 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M10 e M10B sono chiuse su `dev`** e ⚠ **non sono ancora in produzione**.
+Nessuna aperta. **M10 e M10B sono in produzione da `v1.11.0`** (2026-08-12), uscite **insieme in un
+rilascio solo con un tag solo**, per decisione dell'owner.
 
-⚠ **Escono insieme, per decisione dell'owner del 2026-08-12**, in un rilascio solo, **su sua
-richiesta esplicita**. Tre conseguenze da non riscoprire:
+⚠ **Un tag solo vuol dire un punto di rollback solo**, e va saputo prima di trovarsi a farlo alle nove
+di sera: il ciclo di `CLAUDE.md` dà a ogni macro il suo tag proprio per poter tornare indietro su una
+senza portarsi via l'altra, e qui tornare indietro su M10B riporta indietro anche il listone a sistema.
+È il prezzo della scelta, accettabile perché M10 in produzione da sola non c'è mai stata.
 
-1. **`dev` resta avanti a `main` finché il rilascio non viene chiesto.** Non è una dimenticanza: è la
-   decisione. Chi apre una sessione e trova `dev` con roba non rilasciata non deve «sistemare».
-2. **Il `CHANGELOG.md` dovrà portare i passi a mano di *entrambe*.** Un solo `pnpm db:push` copre i
-   due cambi di schema, ma i **file da caricare sono due** — il listone da Admin → Listone, e poi il
-   foglio di Carmy — e vanno scritti nell'ordine, perché il secondo si aggancia al primo.
-3. **Un tag solo: `v1.11.0`, con dentro tutte e due** (owner, 2026-08-12, scelto fra questa e due tag
-   consecutivi). ⚠ Vuol dire **un punto di rollback solo**: il ciclo di `CLAUDE.md` dà a ogni macro il
-   suo tag proprio per poter tornare indietro su una senza portarsi via l'altra, e uscendo insieme,
-   tornare indietro su M10B riporta indietro anche il listone a sistema. È il prezzo della scelta, ed
-   è accettabile perché M10 in produzione da sola non ci è mai stata — ma va saputo **prima** di
-   trovarsi a fare un rollback alle nove di sera. La versione la scrive M10B alla sua chiusura: M10
-   non ne alza nessuna per conto suo.
+⚠ **E il rilascio non finisce col deploy: ci sono tre passi a mano**, scritti per esteso nel
+`CHANGELOG.md` di `v1.11.0`. Uno è sul server:
 
-⚠ **E quando ci andrà, il rilascio non finirà col deploy**: entrambe toccano lo schema **e** entrambe
-hanno un backfill. Sul server serve **un solo** `pnpm db:push` — copre i due cambi, che sono additivi:
-una tabella nuova (`carmy_players`) e una colonna (`player_insights.name`), niente di distruttivo — più
-`pm2 reload deploy/ecosystem.config.cjs --update-env`. E poi **due file da caricare, in
-quest'ordine**: prima il listone da **Admin → Listone**, poi il **foglio di Carmy** sotto di lui,
-perché il secondo si aggancia al primo **per nome** e senza il primo il suo pulsante è spento. Senza
-quei due caricamenti le tabelle restano vuote — niente caricature nuove, Centro dati vuoto, nessuna
-proposta a chi crea un'asta, e nessun giudizio in `/play`. **Niente si rompe**, ed è precisamente ciò
-che rende quel passo facile da dimenticare: è il quarto di fila. I comandi per esteso stanno in testa a
-`10-listone-a-sistema.md` e a `10b-insight-da-carmy.md`.
+```bash
+cd /home/ploi/fantasta.rggndr.it && pnpm db:push
+pm2 reload deploy/ecosystem.config.cjs --update-env
+```
 
-Prima di M10 la produzione non aveva nessun passo a mano pendente: M9 non tocca lo schema — il suo
-rilascio è finito col deploy, il primo da tre versioni di cui si potesse dire. I tre passi di M8
-(`pnpm db:push`, i due import dal pannello, `is_pro`) e i due di M7 (`CAMPIONCINI_EDITION` nel `.env`,
-l'archivio figurine riempito) sono stati **dati e confermati dall'owner il 2026-08-12**. Se un giorno
-un dato di M7 o M8 sembra assente in produzione, non è quello il sospetto da coltivare per primo.
+Un solo `pnpm db:push` copre entrambe le macro — i cambi sono additivi: `listone_players`,
+`carmy_players`, e la colonna `player_insights.name`. Gli altri due sono **file da caricare, in
+quest'ordine**: prima il listone da **Admin → Listone**, **poi** il foglio di Carmy sotto di lui, perché
+il secondo si aggancia al primo **per nome** e senza il primo il suo pulsante è spento. Senza quei due
+caricamenti le tabelle restano vuote — niente caricature nuove, Centro dati vuoto, nessuna proposta a
+chi crea un'asta, e nessun giudizio in `/play`. **Niente si rompe**, ed è precisamente ciò che rende
+quel passo facile da dimenticare: è il **quarto di fila**.
 
-⚠ **In locale invece i dati vanno riempiti, e la loro assenza somiglia a un guasto.** `player_insights`
-nasce vuota anche sul database di sviluppo: senza i due import da Admin → Listone **nessun badge di M9
-compare**, per nessun utente, e il sintomo è «non vedo niente in `/play`» — cioè lo stesso che darebbe
-un bug. È successo il 2026-08-12, subito dopo la chiusura di M9. Da M10 vale lo stesso per
-`listone_players`, con una differenza che conviene sapere: **quella tabella non fa sparire niente che
-prima si vedesse** — semplicemente le caricature non si scaricano, il Centro dati è vuoto e alla
-creazione di un'asta non compare nessuna proposta. Da M10B la stessa cosa vale per `carmy_players`, e
-di nuovo **senza far sparire niente**: il badge della titolarità torna quello calcolato dalle presenze,
-che è il ripiego dichiarato. ⚠ **E in locale l'ordine dei caricamenti conta**: listone → Carmy →
-caricature, perché il foglio si aggancia al listone per nome. La procedura per tutte sta in
+I tre passi di M8 (`pnpm db:push`, i due import dal pannello, `is_pro`) e i due di M7
+(`CAMPIONCINI_EDITION` nel `.env`, l'archivio figurine riempito) sono stati **dati e confermati
+dall'owner il 2026-08-12**. M9 non toccava lo schema. Se un giorno un dato di M7 o M8 sembra assente in
+produzione, non è quello il sospetto da coltivare per primo.
+
+⚠ **In locale i dati vanno riempiti, e la loro assenza somiglia a un guasto.** `player_insights` nasce
+vuota anche sul database di sviluppo: senza i due import da Admin → Listone **nessun badge compare**,
+per nessun utente, e il sintomo è «non vedo niente in `/play`» — cioè lo stesso che darebbe un bug. È
+successo il 2026-08-12. Da M10 vale lo stesso per `listone_players`, con una differenza che conviene
+sapere: **quella tabella non fa sparire niente che prima si vedesse** — semplicemente le caricature non
+si scaricano, il Centro dati è vuoto e alla creazione di un'asta non compare nessuna proposta. Da M10B
+la stessa cosa vale per `carmy_players`, e di nuovo senza far sparire niente: il badge della titolarità
+torna quello calcolato dalle presenze, che è il ripiego dichiarato. ⚠ **E in locale l'ordine dei
+caricamenti conta**: listone → Carmy → caricature. La procedura per tutte sta in
 `docs/HOWTO-PROVA-LOCALE.md`, §6 e §7.
 
 ## Da pianificare
 
 **Quattro macro, pianificate insieme il 2026-08-12** da una sessione di analisi sola, a partire dalle
 quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1. **Le prime due
-sono chiuse**; le altre due si aprono **su richiesta esplicita**, una alla volta.
+sono rilasciate** (v1.10.0 e v1.11.0, con M10B dentro l'ultima); le altre due si aprono **su richiesta
+esplicita**, una alla volta.
 
 | Macro | Tema | Schema | Ordine |
 |---|---|---|---|
@@ -120,8 +114,8 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
-| [M10B](10b-insight-da-carmy.md) | Gli insight che vengono da un umano: il foglio di Carmy, la titolarità letta invece che dedotta, i filtri per chi ha `is_pro` | ⚠ chiusa su `dev`, **non ancora rilasciata** (sarà v1.11.0) |
-| [M10](10-listone-a-sistema.md) | Il listone a sistema: la sezione admin, il Centro dati, la proposta alla creazione di un'asta | ⚠ chiusa su `dev`, **non ancora rilasciata** (sarà v1.11.0) |
+| [M10B](10b-insight-da-carmy.md) | Gli insight che vengono da un umano: il foglio di Carmy, la titolarità letta invece che dedotta, i filtri per chi ha `is_pro` | v1.11.0 — 2026-08-12 |
+| [M10](10-listone-a-sistema.md) | Il listone a sistema: la sezione admin, il Centro dati, la proposta alla creazione di un'asta | v1.11.0 — 2026-08-12 |
 | [M9](09-badge-insight.md) | I badge degli insight, e la striscia verde via | v1.10.0 — 2026-08-12 |
 | [M8](08-insight-listone.md) | Insight sul listone — titolarità, rigoristi, calci piazzati | v1.9.0 — 2026-08-12 |
 | [M7](07-caricature.md) | Le caricature dei calciatori — la figurina scaricata una volta e guardata per tutta la serata | v1.8.0 — 2026-08-11 |
