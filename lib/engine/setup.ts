@@ -27,6 +27,7 @@ import type { PoolPlayer } from "@/lib/realtime/types";
 
 import { ensureBotUsers } from "./bots";
 import { type Result, fail, ok } from "./errors";
+import { insightsForExtIds } from "./insights";
 import { isUuid } from "./ids";
 import {
   type AuctionConfig,
@@ -1156,8 +1157,19 @@ export async function listPlayers(
  * Chi sia già stato comprato **non** si chiede qui: quello sta nelle rose dello
  * snapshot, e il client lo sottrae da questa lista (regola 7, I10). Una query
  * per lotto sarebbe una seconda fonte di verità sullo stesso fatto.
+ *
+ * ⚠ **`withInsights` è l'unico punto in cui si decide chi vede gli insight**
+ * (M8 §6), e i chiamanti sono **due**: il portale e la regia, entrambi con
+ * `canSeeInsights(user)`. Con `false` la chiave `insights` non esiste affatto
+ * nell'oggetto restituito — non è un `null` da nascondere in pagina: questo
+ * risultato finisce nel payload RSC di un client component, cioè nel browser di
+ * chi apre la pagina, e ciò che non deve leggere non deve arrivargli. È la regola
+ * 6 applicata alla lettura invece che alla scrittura.
  */
-export async function listPickPool(auctionId: string): Promise<PoolPlayer[]> {
+export async function listPickPool(
+  auctionId: string,
+  withInsights = false,
+): Promise<PoolPlayer[]> {
   if (!isUuid(auctionId)) return [];
 
   const auction = await db.query.auctions.findFirst({
@@ -1166,9 +1178,10 @@ export async function listPickPool(auctionId: string): Promise<PoolPlayer[]> {
   });
   if (!auction) return [];
 
-  return db
+  const rows = await db
     .select({
       id: players.id,
+      extId: players.extId,
       name: players.name,
       team: players.team,
       role: players.role,
@@ -1182,6 +1195,49 @@ export async function listPickPool(auctionId: string): Promise<PoolPlayer[]> {
         : and(eq(players.auctionId, auctionId), eq(players.outOfList, false)),
     )
     .orderBy(sql`${players.fvm} DESC`, sql`${players.quot} DESC`);
+
+  if (!withInsights) {
+    // `extId` esce di scena insieme agli insight: serviva solo ad agganciarli, e
+    // il pool non l'ha mai avuto (le figurine di M7 passano dallo snapshot).
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      team: row.team,
+      role: row.role,
+      fvm: row.fvm,
+      quot: row.quot,
+    }));
+  }
+
+  const insights = await insightsForExtIds(rows.map((r) => r.extId));
+
+  return rows.map(({ extId, ...player }) => {
+    const found = insights.get(extId);
+    // ⚠ Niente `insights: undefined`: la chiave si aggiunge **solo** se c'è
+    // qualcosa. Un `undefined` esplicito sparirebbe comunque nella
+    // serializzazione, ma il tipo direbbe una cosa diversa da quella che il test
+    // asserisce — e quel test è la differenza fra un dato protetto e uno nascosto.
+    if (!found) return player;
+    return {
+      ...player,
+      insights: {
+        extId: found.extId,
+        fullName: found.fullName,
+        team: found.team,
+        statsSeason: found.statsSeason,
+        presenze: found.presenze,
+        startsEleven: found.startsEleven,
+        minPlayingTime: found.minPlayingTime,
+        rigoriFatti: found.rigoriFatti,
+        rigoriSbagliati: found.rigoriSbagliati,
+        rigoriParati: found.rigoriParati,
+        fmvHome: found.fmvHome,
+        fmvAway: found.fmvAway,
+        rigoristaRank: found.rigoristaRank,
+        piazzatiRank: found.piazzatiRank,
+      },
+    };
+  });
 }
 
 export { DEFAULT_CONFIG, type AuctionConfig };

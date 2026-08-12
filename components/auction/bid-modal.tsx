@@ -4,6 +4,7 @@ import { Dialog } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
 
 import { Campioncino } from "@/components/auction/campioncino";
+import { InsightsMacro } from "@/components/auction/insights";
 import { Countdown, CountdownBar } from "@/components/auction/countdown";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
@@ -15,7 +16,7 @@ import {
   haveWithdrawn,
   parseAmount,
 } from "@/lib/realtime/portal";
-import type { Snapshot } from "@/lib/realtime/types";
+import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -59,6 +60,7 @@ export function BidModal({
   open,
   onOpenChange,
   snapshot,
+  pool,
   myMemberId,
   offset,
   onBid,
@@ -67,6 +69,16 @@ export function BidModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   snapshot: Snapshot;
+  /**
+   * Il listone, per gli insight del giocatore a lotto (M8 §7).
+   *
+   * ⚠ **Arriva da qui e non dallo snapshot**, ed è la ragione per cui M8 non
+   * aggiunge un solo campo a `serializeSnapshot`: lo snapshot è **uno**, mandato
+   * in broadcast a tutti, quindi metterci gli insight vorrebbe dire mandarli
+   * anche a chi non li può vedere. Il pool invece è caricato dalla pagina per
+   * quel viewer, e chi non ha il permesso ha ricevuto un pool senza insight.
+   */
+  pool: PoolPlayer[];
   myMemberId: string | null;
   offset: number;
   onBid: (amount: number) => Promise<ActionResult>;
@@ -79,6 +91,11 @@ export function BidModal({
   const withdrawn = haveWithdrawn(snapshot);
   const closing = snapshot.auction.phase !== "LOT_OPEN";
   const frozen = snapshot.auction.status === "PAUSED";
+  // ⚠ `?.insights` è `undefined` in tre casi che non serve distinguere: chi non
+  // ha il permesso, la tabella ancora vuota, e un giocatore che il pool non ha
+  // (i fuori lista, se l'asta li esclude). In tutti e tre il blocco non si
+  // renderizza da sé — nessun `if` da scrivere qui.
+  const insights = pool.find((p) => p.id === lot?.player.id)?.insights;
 
   const [raw, setRaw] = useState("");
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle" });
@@ -228,6 +245,15 @@ export function BidModal({
               />
             </div>
           </div>
+
+          {/*
+            Le sole macro (M8 §7): quanto è titolare, e se batte i rigori o i
+            piazzati. Non i minuti medi, non le presenze, non le fmv per contesto:
+            qui non si confronta, si decide una cifra — e ogni riga in più ruba
+            altezza al campo dell'offerta, che con la tastiera aperta è la risorsa
+            scarsa. La lista di chiamata, dove invece si confronta, mostra di più.
+          */}
+          <InsightsMacro insights={insights} />
 
           {/* ── Il campo e i suoi appigli ── */}
           <div className="flex items-center gap-2">

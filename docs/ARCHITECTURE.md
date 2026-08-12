@@ -2075,6 +2075,157 @@ login: qui il passo mancante non rompe niente, si vede e basta.
 
 ---
 
+## Gli insight sul listone: titolarità, rigoristi, piazzati
+
+`fvm` è una quotazione: dice quanto **costa** un giocatore sul mercato, non se gioca. Fino a v1.8.0
+era l'unico numero che l'applicazione sapeva dire, e le domande che si fanno davvero a un'asta —
+*parte titolare? tira i rigori? batte le punizioni?* — si risolvevano con un telefono in mano e
+un'altra app aperta. In una fase a tempo di dieci secondi, questo vuol dire che non si risolvevano.
+
+Da M8 quelle risposte stanno dentro l'applicazione, e arrivano da **due `GET` pubbliche** che il
+server interroga da sé: nessun token, nessuna credenziale di terze parti, nessun file da caricare.
+La prima, `api.fantalab.it/v2/listone`, porta 497 giocatori con quante volte ognuno è **partito
+titolare**, i minuti giocati e i rigori tirati. La seconda, la pagina dei rigoristi di
+Fantacalcio.it, porta per ogni squadra chi batte i rigori e chi i calci piazzati, **in ordine di
+gerarchia** — che è l'informazione vera: «secondo rigorista» vale molto meno di «primo».
+
+### Il collaudo, di nuovo prima della spec — e di nuovo ha tolto roba
+
+Il metodo è quello delle figurine, applicato una seconda volta: prima di congelare la specifica le
+due fonti sono state chiamate per davvero, con la stessa `fetch` di Node che usa l'applicazione.
+Rispondono entrambe `200` senza autenticazione, in poco più di due secondi in tutto, e si agganciano
+fra loro perfettamente — 92 giocatori designati su 92, zero squadre discordanti, le stesse venti
+squadre scritte allo stesso modo in entrambe le fonti **e** nella colonna `Sq.` del listone d'asta.
+Nessuna mappa di sigle da mantenere, da nessuna parte.
+
+Ma quelle due chiamate hanno anche **smentito quattro cose** che la prima stesura della spec dava
+per certe, e ognuna ha tolto una colonna o un pezzo di interfaccia. La spec diceva che i numeri
+erano tutti della stagione conclusa: in realtà nella stessa risposta convivono **due stagioni** —
+329 giocatori con i dati di quest'anno, 168 con quelli dell'anno prima. Diceva tre gerarchie
+(rigori, punizioni, corner): la pagina ne ha **due**, e la parola «punizioni» non compare nel suo
+HTML. Prevedeva una colonna `fmv_subin`, che nella risposta vale **zero per tutti e 497**. E soprattutto
+prometteva di rispondere a «si rompe?» usando un campo `injured` che **non dice quello**: vale da 0 a
+5 e correla *al contrario* — chi gioca di più si fa male di più — perché conta gli infortuni della
+stagione, non lo stato di adesso.
+
+Quel quarto punto è l'unico che ha tolto una promessa invece che una colonna, ed è stato deciso con
+una misura. Lo stato «infortunato adesso» esiste davvero in chiaro: la pagina delle probabili
+formazioni di Fantacalcio.it lo serve senza autenticazione, con l'identificativo del giocatore già
+dentro. Solo che **si popola quando serve a schierare, e l'asta si fa ad agosto**: interrogata a
+campionato fermo, quella pagina contiene zero titolari e quattro infortunati in tutta la Serie A.
+Un numero che sembra rispondere a una domanda a cui non risponde è peggio di un numero assente,
+quindi `injured` è rimasto fuori — e la strada è annotata come l'aggiornamento più ovvio del giorno
+in cui questa parte servisse a campionato in corso.
+
+### Una tabella che non appartiene a nessuna asta
+
+`players` è un **listone per asta**: `auction_id` congela la lista al momento dell'import, e le
+righe muoiono in cascata quando l'asta si cancella. `player_insights` no. La sua chiave è l'`ext_id`
+del giocatore e nient'altro: un aggiornamento dal pannello serve **tutte** le aste, e i dati
+sopravvivono alla cancellazione di qualunque asta. È la stessa scelta dell'archivio delle figurine,
+per la stessa ragione — un dato di mercato non è un fatto dell'asta.
+
+Da questo discende un vincolo che vale la pena dire per esteso, perché è la difesa più importante
+del capitolo: **l'asta deve funzionare con quella tabella vuota.** Si legge sempre in `LEFT JOIN`,
+mai in `INNER JOIN`, e nessun percorso critico la attraversa. In produzione nasce vuota e resta
+vuota finché qualcuno non preme i pulsanti del pannello — e finché non lo fa, la sera dell'asta
+funziona esattamente come prima. C'è un test che percorre un'asta intera con la tabella vuota, e
+serve solo a dimostrare questo.
+
+I due elenchi, del resto, non coincidono e non coincideranno mai: dei 495 giocatori del listone di
+prova, **487 trovano una riga** nella fonte, e la fonte ne ha dieci che il listone non ha. Gli otto
+mancanti sono giocatori veri, con nome e cognome. Il pannello li mostra per nome invece di
+nasconderli, perché «487 su 495» è un'informazione e «tutto a posto» no.
+
+### Cosa succede quando una fonte cambia forma
+
+Questa è la domanda attorno a cui è costruita l'intera parte, perché le due fonti sono **fuori dal
+nostro controllo**: un giorno cambieranno, senza avvisare nessuno. Il modo sbagliato di reagire è
+scrivere 497 righe di `null` sopra dati buoni e accorgersene la sera dell'asta. Le difese sono
+quattro, e sono tutte della stessa forma — *fallire, invece di scrivere*.
+
+I due parser **rifiutano invece di scartare**. Non esiste da nessuna parte un «questa riga non la
+capisco, tiro avanti»: un envelope che dichiara un numero di giocatori diverso da quelli che manda,
+una riga senza identificativo, una stagione con un nome mai visto, diciannove squadre invece di
+venti, una lista senza nessun link a un giocatore — sono tutti errori, con un messaggio in italiano
+che il pannello mostra. Una lista corta somiglia troppo a una lista giusta.
+
+La scrittura sta **dentro una transazione**, perché una tabella riempita a metà è peggio di una
+vuota: vuota si vede, a metà si crede.
+
+Ogni fonte tocca **solo le proprie colonne**. Aggiornare il listone non cancella i rigoristi
+importati ieri, e viceversa; per questo i timestamp sono due e il pannello li mostra separati —
+altrimenti non saprebbe dire *quale* delle due fonti è ferma da tre mesi.
+
+E c'è un **controllo di continuità**: se la lista che arriva ha in comune con quella precedente meno
+dell'85% degli identificativi, non viene scritto niente. La forma di questo controllo è cambiata
+scrivendo i test, e vale la pena raccontarlo perché l'errore era sottile. La prima versione
+confrontava la copertura con i listoni delle aste: sotto soglia, rifiuta. Sembrava ragionevole
+finché non si è visto che **una singola asta simulata la avvelena** — il suo listone sintetico ha
+identificativi da 1 a 40, che nella fonte non esistono, quindi bastava una prova nel database per
+far fallire l'import su dati perfetti. Un controllo che si può far scattare da un'altra parte
+dell'applicazione non è un controllo, è una trappola. Confrontarsi con l'import precedente invece
+misura esattamente ciò che si vuole sapere — *la fonte parla ancora la stessa lingua?* — e al primo
+import, non avendo niente con cui confrontarsi, si salta: non si deduce un cambiamento dal nulla.
+
+### Chi li vede: il server omette, la UI non nasconde
+
+Gli insight non li vedono tutti. È una scelta di prodotto e non una necessità di licenza — le fonti
+sono pubbliche — e va detto così, perché non venga difesa un giorno con un argomento che non ha: è
+un vantaggio informativo che si riserva a chi ha il permesso, più gli amministratori, che li vedono
+comunque (altrimenti dovrebbero accendersi un flag da soli per guardare i dati che hanno appena
+importato).
+
+Il **come** è la parte che conta. Il listone arriva al browser come proprietà di un componente
+client: tutto ciò che ci sta dentro è nel browser di chi apre la pagina, leggibile negli strumenti
+di sviluppo in tre click. Nasconderlo con un `if` nel JSX o con una regola CSS non sarebbe una
+protezione, sarebbe una decorazione — è la regola «mai fidarsi della validazione client» applicata
+alla lettura invece che alla scrittura. Quindi la decisione si prende **una volta sola, nella
+query**: chi non ha il permesso riceve un listone in cui la chiave degli insight *non esiste*. Non
+un valore vuoto da nascondere: proprio niente.
+
+Il resto discende da sé. Nei componenti non c'è nessun `if (puoi vedere)`: il campo assente non si
+renderizza, e lo stesso codice regge senza saperlo anche gli altri due casi in cui non c'è niente da
+mostrare — la tabella ancora vuota, e il giocatore che la fonte non conosce. Il test che protegge
+tutto questo guarda **l'oggetto** restituito dalla query, non ciò che si vede a schermo: un test che
+guardasse il render passerebbe anche con il dato addosso.
+
+Per la stessa ragione **lo snapshot dell'asta non è stato toccato di una riga**. Lo snapshot è uno
+solo, mandato in trasmissione a tutti i partecipanti insieme: metterci gli insight vorrebbe dire
+mandarli anche a chi non li può vedere. Viaggiano nel listone, che è caricato dalla pagina per quel
+singolo spettatore — ed è per questo che l'invariante sulla segretezza delle offerte attraversa
+questa macro senza che una sola riga del motore cambi.
+
+### Dove si vede, e perché in due posti soli
+
+Nella **lista di chiamata** c'è la riga densa: percentuale di titolarità, minuti medi, e i badge di
+rigorista e piazzati. Lì si scorre e si confronta — quaranta nomi, e la scelta è fra due o tre —
+quindi più informazione aiuta, purché stia su una riga che si legge in mezzo secondo.
+
+Nel **modale d'offerta** ci sono solo le macro: quanto è titolare, e se batte. Lì non si confronta,
+si decide una cifra in dieci secondi con un pollice sulla tastiera, e ogni riga in più ruba altezza
+al campo dell'offerta — che con la tastiera aperta è la risorsa scarsa, esattamente come aveva già
+insegnato la figurina.
+
+Nella card del lotto **no**, e non è una dimenticanza: la card non sparisce mai ed è la schermata
+che si guarda anche quando non si sta offrendo, mentre la domanda «quanto vale?» ce l'ha il modale.
+Due chiamanti, non tre.
+
+Un dettaglio piccolo che riassume l'atteggiamento di tutto il capitolo: **`—` e `0` non si scrivono
+allo stesso modo**. Un giocatore senza dati e un giocatore che non è mai partito titolare sono due
+cose diverse, e all'asta si pagano in modo diverso. Per lo stesso motivo si mostrano soltanto i
+numeri della stagione corrente: quelli di un terzo del listone parlano del campionato precedente, e
+accanto a quelli di quest'anno sarebbero un confronto falso. Escono come `—`, che è la risposta
+onesta.
+
+E un ultimo dettaglio che sembra un capriccio e non lo è: la percentuale di titolarità è **fermata
+al 100%**. Nella risposta vera c'è un giocatore con 42 partenze da titolare su 38 giornate — il
+campo somma più competizioni — e senza quel limite la card scriverebbe «110% da titolare», che è la
+sola cosa peggiore di non scrivere niente. Il test ha il suo nome dentro, così quella riga non viene
+tolta per pulizia da qualcuno che non sa perché c'è.
+
+---
+
 ## Il posto dove gira
 
 Tutto quello che hai letto finora vive su **una macchina sola**, ed è la conseguenza pratica della

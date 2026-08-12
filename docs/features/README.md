@@ -12,7 +12,11 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna. La prossima si apre su richiesta esplicita.
+- **[M8](08-insight-listone.md)** — Insight sul listone: titolarità, rigoristi, calci piazzati.
+  Aperta il 2026-08-11 su `feature/08-insight-listone`, **integrata su `dev` il 2026-08-12**. Non è
+  ancora in produzione: il merge su `main` aspetta una richiesta esplicita. ⚠ Tocca lo schema in modo
+  additivo, quindi il rilascio vorrà `pnpm db:push` a mano sul server, **più due backfill**: la
+  tabella nasce vuota (Admin → Listone) e `is_pro` nasce `false` per tutti. Procedura in §10 del file.
 
 ⚠ **M7 è in produzione ma il suo rilascio non è finito finché non si fanno due passi a mano sul
 server**, e nessuno te li ricorda: `CAMPIONCINI_EDITION` nel `.env` seguito da `pm2 reload
@@ -24,6 +28,13 @@ figurina — che è precisamente ciò che li rende facili da dimenticare. La pro
 ## Da pianificare
 
 Nessuna. Il quaderno `docs/REQUESTS.md` è vuoto.
+
+Due strade sono state **verificate e rinviate** durante M8, e sono scritte per esteso nel suo §9
+perché il lavoro d'analisi non si perda: la **griglia portieri** (l'accoppiamento fra portieri di due
+squadre — e la scoperta che qualsiasi indice per-squadra è provabilmente inutile, perché la media di
+riga vale 9.00 per tutte e venti) e i **titolari attesi con gli infortunati del momento**, che
+fantacalcio.it serve pubblicamente ma **solo a campionato in corso**: interrogata ad agosto, quella
+pagina è vuota.
 
 M5 e M6 sono nate da una sessione di spec sola, il 2026-08-10, e sono state **tagliate in due di
 proposito**. M5 tocca la strada del login — l'unica cosa che, se si rompe, chiude fuori tutti — e
