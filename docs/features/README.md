@@ -12,16 +12,18 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna. **M9 è chiusa su `dev`** e aspetta il rilascio: `CHANGELOG.md`, `package.json`, il merge su
-`main` e il tag `v1.10.0` si danno **su richiesta esplicita dell'owner**, e non c'è nessun passo a mano
-sul server da preparare — M9 non tocca lo schema, quindi per una volta il rilascio finisce col deploy.
-⚠ Resta invece **una prova che solo l'owner può fare**: guardare i badge dal telefono su un'asta col
-listone vero. Le quattro verifiche non spuntate del file di M9 sono tutte di quella forma.
+Nessuna. L'ultima chiusa è **M9** (v1.10.0), provata in locale dall'owner prima del rilascio, e in
+produzione **non resta nessun passo a mano pendente**: M9 non tocca lo schema — il suo rilascio è finito
+col deploy, il primo da tre versioni di cui si possa dire. I tre passi di M8 (`pnpm db:push`, i due
+import dal pannello, `is_pro`) e i due di M7 (`CAMPIONCINI_EDITION` nel `.env`, l'archivio figurine
+riempito) sono stati **dati e confermati dall'owner il 2026-08-12**. Se un giorno un dato di M7 o M8
+sembra assente in produzione, non è quello il sospetto da coltivare per primo.
 
-In produzione **non resta nessun passo a mano pendente**: i tre di M8 (`pnpm db:push`, i due import dal
-pannello, `is_pro`) e i due di M7 (`CAMPIONCINI_EDITION` nel `.env`, l'archivio figurine riempito) sono
-stati **dati e confermati dall'owner il 2026-08-12**. Se un giorno un dato di M7 o M8 sembra assente in
-produzione, non è quello il sospetto da coltivare per primo.
+⚠ **In locale invece i dati vanno riempiti, e la loro assenza somiglia a un guasto.** `player_insights`
+nasce vuota anche sul database di sviluppo: senza i due import da Admin → Listone **nessun badge di M9
+compare**, per nessun utente, e il sintomo è «non vedo niente in `/play`» — cioè lo stesso che darebbe
+un bug. È successo il 2026-08-12, subito dopo la chiusura di M9. La procedura sta in
+`docs/HOWTO-PROVA-LOCALE.md`.
 
 ## Da pianificare
 
@@ -64,7 +66,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
-| [M9](09-badge-insight.md) | I badge degli insight, e la striscia verde via | v1.10.0 — su `dev`, tag e rilascio su richiesta |
+| [M9](09-badge-insight.md) | I badge degli insight, e la striscia verde via | v1.10.0 — 2026-08-12 |
 | [M8](08-insight-listone.md) | Insight sul listone — titolarità, rigoristi, calci piazzati | v1.9.0 — 2026-08-12 |
 | [M7](07-caricature.md) | Le caricature dei calciatori — la figurina scaricata una volta e guardata per tutta la serata | v1.8.0 — 2026-08-11 |
 | [M6](06-amministrazione.md) | Amministrazione — il pannello: lista utenti, lista aste, e un perimetro strettissimo | v1.7.0 — 2026-08-11 |
