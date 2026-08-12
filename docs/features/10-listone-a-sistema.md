@@ -421,6 +421,13 @@ Due passi sul server, e nessuno te li ricorda:
       li usa in due colonne separate, quindi non gli servivano le composizioni pronte ma i due pezzi.
       È il terzo chiamante, quello che li rende un componente. → I nomi normalizzati per la ricerca si
       calcolano una volta sola con `useMemo`, non a ogni tasto.
+      → ⚠ **Ripreso il 2026-08-12 a macro già mergiata su `dev`**, su richiesta dell'owner:
+      intestazioni cliccabili, filtro «rigori e piazzati», e la lista che si apre ordinata per
+      quotazione dal più alto al più basso. L'ordinamento è finito in `lib/centro-dati.ts` — funzioni
+      pure con 15 test — perché è l'unica parte della pagina che può sbagliarsi **in silenzio**. E il
+      filtro ha fatto emergere una distinzione che la spec non aveva visto: i due rank **non sono
+      numeri di stagione**, quindi non passano da `showableInsights`, altrimenti il filtro perderebbe
+      22 designati su 92. Il portale resta com'è (M9). Tutto in `DECISIONS.md`, 2026-08-12.
 - [x] **M10-10** — Test con Postgres: un upload sostituisce l'intera tabella; **un'asta si crea e si
       gioca con `listone_players` vuota** (nessun dato di questa macro su un percorso critico); la
       copia dentro l'asta produce le **stesse righe** dell'upload dello stesso file — `fvm` e
@@ -489,6 +496,19 @@ dall'owner su mockup, entrambe diverse dalla prima ipotesi della spec.
 **Il gate su Insight non è stato messo, ed è la cosa che più assomiglia a una disobbedienza alla
 richiesta.** Le quattro ragioni di §5 tengono tutte; quella che decide resta la quarta — M11 lo
 smonterebbe fra una macro.
+
+**La coda della macro ha trovato la cosa più interessante di tutte, e non era nel perimetro.**
+Aggiungendo il filtro «rigori e piazzati» si è visto che `showableInsights` veniva applicato anche ai
+due rank, che dalla stagione non dipendono: **22 designati su 92** sono nascosti da un gate pensato
+per altro. Nel Centro dati è stato corretto; **nel portale no**, perché quello è M9 e la decisione è
+dell'owner. È la dimostrazione che una spec fatta bene sposta il momento in cui si scoprono le cose,
+non lo elimina: questa si è vista costruendo un filtro, cioè guardando i dati con una domanda nuova.
+
+⚠ **E una cicatrice nei test**: gli `ext_id` sintetici partivano da 1 e collidevano con quelli veri
+(che vanno da 4 a 7548). Il test del `LEFT JOIN` passava solo quando `player_insights` era vuota —
+cioè quando un altro file di test l'aveva appena svuotata. Verde da solo, verde nella suite, e
+sbagliato: se n'è accorto solo perché la modifica di oggi l'ha eseguito con la tabella piena. Base
+spostata a `10_000_000`.
 
 ## Verifica
 

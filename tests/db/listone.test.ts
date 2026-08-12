@@ -22,7 +22,11 @@ import {
 } from "@/lib/engine/setup";
 import { DEFAULT_CONFIG } from "@/lib/engine/setup-rules";
 
-import { makeGameAuction, markAllPresent, syntheticListone } from "./game-helpers";
+import * as XLSX from "xlsx";
+
+import { SHEET_NAME } from "@/lib/import/parseListone";
+
+import { makeGameAuction, markAllPresent } from "./game-helpers";
 import {
   closeDatabase,
   databaseAvailable,
@@ -60,6 +64,9 @@ import {
  * («verde da solo, rosso nella suite»). Il `LEFT JOIN` del Centro dati si prova
  * quindi **solo dal lato che è deterministico**: `ext_id` sintetici altissimi,
  * che nessuna fonte ha e che quindi non avranno mai una riga di insight.
+ *
+ * ⚠ **«Altissimi» va preso alla lettera**, e la prima versione di questo file lo
+ * aveva sbagliato: vedi `EXT_ID_BASE` qui sotto.
  */
 
 const dbUp = await databaseAvailable();
@@ -72,6 +79,51 @@ if (!dbUp) {
 const LISTONE = readFileSync(
   fileURLToPath(new URL("../../fixtures/listone.xlsx", import.meta.url)),
 );
+
+/**
+ * ⚠ **Il primo identificativo sintetico, e perché è così alto.**
+ *
+ * `syntheticListone` di `game-helpers.ts` numera da 1, e la prima versione di
+ * questo file lo usava credendo che «tanto quegli id non esistono in nessuna
+ * fonte». **È falso**: gli `ext_id` veri di Fantacalcio.it partono da 4 e
+ * arrivano a 7548, quindi due righe del listone sintetico si agganciavano a due
+ * righe di insight vere. Il test passava solo quando `player_insights` era
+ * vuota — cioè quando un altro file di test l'aveva appena svuotata — ed è
+ * esattamente il «verde da solo, rosso nella suite» da cui questo file cerca di
+ * stare lontano.
+ *
+ * Dieci milioni sta sopra qualunque identificativo che quella fonte possa
+ * assegnare, e rende il `LEFT JOIN` verificabile senza scrivere una riga di
+ * `player_insights`.
+ */
+const EXT_ID_BASE = 10_000_000;
+
+/** Un listone sintetico con identificativi che nessuna fonte può avere. */
+function syntheticListone(
+  counts: Record<"P" | "D" | "C" | "A", number> = { P: 10, D: 10, C: 10, A: 10 },
+): ArrayBuffer {
+  let n = 0;
+  const rows = (["P", "D", "C", "A"] as const).flatMap((role) =>
+    Array.from({ length: counts[role] }, () => {
+      n += 1;
+      return {
+        "#": EXT_ID_BASE + n,
+        Nome: `Giocatore ${n}`,
+        "Fuori lista": "",
+        "Sq.": "Test",
+        "R.": role,
+        "R.MANTRA": role,
+        // Quotazione decrescente: l'ordine di apertura della pagina è
+        // verificabile senza dipendere dal file vero.
+        "FVM/1000": 1000 - n,
+        "QUOT.": 1000 - n,
+      };
+    }),
+  );
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), SHEET_NAME);
+  return XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+}
 
 const createdAuctions: string[] = [];
 const createdUsers: string[] = [];
@@ -167,9 +219,9 @@ suite.runIf(dbUp)("l'upload del listone a sistema", () => {
     expect(status.rows).toBe(40);
     expect(status.uploadedAt?.getTime()).toBe(t1.getTime());
     // Nessuna riga del listone grande è sopravvissuta: gli id del sintetico
-    // arrivano a 40, quelli del file vero ben oltre.
+    // stanno tutti sopra `EXT_ID_BASE`, quelli del file vero tutti sotto.
     const ids = await listoneExtIds();
-    expect(Math.max(...ids)).toBe(40);
+    expect(Math.min(...ids)).toBeGreaterThan(EXT_ID_BASE);
   });
 
   it("un file illeggibile non tocca quello che c'è già", async () => {
@@ -378,9 +430,22 @@ suite.runIf(dbUp)("il Centro dati", () => {
     // chiave `insights` **non c'è affatto**, non è un `null` da nascondere in
     // pagina (stessa regola di `listPickPool`).
     expect(rows.every((row) => !("insights" in row))).toBe(true);
-    expect(rows.map((row) => row.name)).toEqual(
-      [...rows.map((row) => row.name)].sort((a, b) => a.localeCompare(b, "it")),
-    );
+  });
+
+  /**
+   * Le righe arrivano già nell'ordine con cui la pagina si apre — quotazione dal
+   * più alto al più basso, nome a parità. La tabella riordina comunque nel
+   * browser a ogni click sulle intestazioni, ma far arrivare i dati nell'ordine
+   * giusto evita che il primo disegno e il primo `sort` mostrino due liste
+   * diverse.
+   */
+  it("le righe arrivano nell'ordine con cui la pagina si apre", async () => {
+    await uploadListone(LISTONE, new Date("2026-08-12T10:00:00.000Z"));
+
+    const rows = await centroDatiRows();
+    const quotazioni = rows.map((row) => row.quot);
+    expect(quotazioni).toEqual([...quotazioni].sort((a, b) => b - a));
+    expect(quotazioni[0]).toBeGreaterThan(quotazioni[quotazioni.length - 1]);
   });
 
   it("con la tabella vuota non ha niente da mostrare, e non è un errore", async () => {

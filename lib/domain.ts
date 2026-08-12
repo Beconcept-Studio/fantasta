@@ -298,6 +298,36 @@ export function showableInsights(
 }
 
 /**
+ * La posizione migliore fra rigori e piazzati, o `null` se non è designato.
+ *
+ * ⚠ **Non passa da `showableInsights`, e la differenza è di sostanza.** Quel
+ * filtro esiste per i numeri **della stagione**: presenze, partenze da titolare,
+ * minuti — dove un dato del campionato scorso accanto a uno di quest'anno è un
+ * confronto falso. I due rank non sono numeri di stagione: vengono dalla fonte
+ * B, che pubblica **la gerarchia di adesso**, e non cambiano significato a
+ * seconda di quanto ha giocato l'anno scorso il giocatore che li porta.
+ *
+ * La misura dice quanto pesa: dei 92 designati, **22 hanno le statistiche della
+ * stagione precedente** — quasi un quarto. Un filtro «solo chi batte» costruito
+ * sul gate stagionale li perderebbe tutti, in silenzio.
+ *
+ * ⚠ **Oggi ha un chiamante solo, il Centro dati** (M10). Il portale e il modale
+ * d'offerta continuano a mostrare i badge blu solo a chi passa il gate
+ * stagionale, cioè quei 22 in `/play` non li vedono: è il comportamento di M9,
+ * e cambiarlo è una decisione dell'owner, non un effetto collaterale di un
+ * filtro amministrativo.
+ */
+export function bestSetPieceRank(
+  i: PlayerInsights | null | undefined,
+): number | null {
+  if (!i) return null;
+  const ranks = [i.rigoristaRank, i.piazzatiRank].filter(
+    (rank): rank is number => rank !== null,
+  );
+  return ranks.length === 0 ? null : Math.min(...ranks);
+}
+
+/**
  * Chi vede gli insight sul listone.
  *
  * ⚠ **Questo predicato decide una query, non un `className`.** Gli insight non

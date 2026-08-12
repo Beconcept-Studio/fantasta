@@ -2436,11 +2436,34 @@ mostra tutte e due.
 ha una riga di insight compare lo stesso, con un trattino al posto dei numeri; chi ha insight ma non
 è nel listone non compare affatto, perché il listone è il denominatore.
 
-Ricerca e filtro per ruolo girano **nel browser**, su un carico solo: cinquecento righe con gli
+Ricerca, filtri e ordinamento girano **nel browser**, su un carico solo: cinquecento righe con gli
 insight dentro sono un paio di centinaia di kilobyte, un numero che conosciamo perché è già pagato
 una volta a serata da ogni telefono collegato al portale. Niente paginazione, niente ricerca lato
 server, niente attesa fra un tasto e il successivo. Se un giorno il listone avesse cinquemila righe
 sarà il momento di cambiare, e non prima.
+
+Le intestazioni si cliccano per ordinare, e la lista si apre sulla quotazione dal più alto al più
+basso. La logica sta in un file di funzioni pure con i suoi test, e non dentro il componente, per una
+ragione che vale la pena dire: **una lista ordinata male non dà nessun errore.** Dà una lista
+plausibile, e nessuno se ne accorge finché non cerca un nome che dovrebbe stare in cima. Due regole
+lì dentro non sono ovvie: chi non ha il valore di quella colonna finisce in fondo *in entrambe le
+direzioni* — invertire «titolarità» non deve portare in cima trecento trattini, perché l'assenza di
+un dato non è uno zero — e a parità si ordina per nome, altrimenti duecento quotazioni uguali si
+riordinano a ogni click e sembrano un difetto.
+
+C'è poi un filtro «rigori e piazzati», e costruirlo ha fatto emergere una distinzione che prima era
+rimasta implicita. Il gate stagionale — quello che nasconde i numeri di chi ha giocato solo il
+campionato scorso — esiste per **i numeri della stagione**: presenze, partenze da titolare, minuti,
+dove un dato dell'anno scorso accanto a uno di quest'anno è un confronto falso. Ma le due posizioni
+di rigorista e battitore di piazzati non sono numeri di stagione: vengono dall'altra fonte, che
+pubblica la gerarchia *di adesso*. Applicare loro lo stesso gate significa perderne una fetta
+consistente — misurata: **22 designati su 92** — e un filtro che si chiama «solo chi batte» e ne
+nasconde un quarto è peggio di nessun filtro. Nel Centro dati, dove le due informazioni stanno in
+due colonne separate e non c'è nessun confronto da falsare, le posizioni si mostrano sempre.
+
+⚠ Il portale, invece, non è cambiato: in `/play` e nel modale d'offerta quei ventidue continuano a
+non avere il badge blu. È una differenza deliberata fra una pagina di consultazione e una schermata
+di gioco, ed è annotata come tale — non è una svista da uniformare senza chiederlo.
 
 La pagina sta dietro la guardia dell'amministrazione, e per questo non contiene nessun controllo sul
 permesso di vedere gli insight: un amministratore li vede per costruzione, e aggiungere il predicato
