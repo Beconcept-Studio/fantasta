@@ -92,7 +92,7 @@ export function LotClosedCard({
         <p
           className={cn(
             "text-4xl leading-none font-semibold tabular-nums",
-            iWon && "text-emerald-700 dark:text-emerald-400",
+            iWon && "text-emerald-700",
           )}
         >
           {reveal.price}

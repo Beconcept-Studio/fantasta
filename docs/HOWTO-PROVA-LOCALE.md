@@ -233,10 +233,24 @@ Due cose che non sono guasti, così non le cerchi:
 Per svuotarlo: `rm -rf storage/campioncini`. Non c'è un pulsante, di proposito.
 
 
-## 7. Gli insight sul listone, se vuoi vederli (M8)
+## 7. Gli insight sul listone, se vuoi vederli (M8, M9)
 
 Anche questo non serve per giocare: senza, la lista di chiamata e il modale d'offerta sono quelli di
 prima. Ma è il modo per vedere la parte nuova, e sono **due click e mezzo**.
+
+⚠ **Da M9 questo passo è anche il modo di non perdere mezz'ora.** I badge colorati vivono in
+`player_insights`, che **nasce vuota anche in locale**: senza i due import qui sotto non compare *nessun*
+badge, per nessun utente, e il sintomo è «in `/play` non vedo niente» — cioè identico a un bug.
+È già successo (2026-08-12). Prima di sospettare il codice, controlla che la tabella abbia delle righe:
+
+```bash
+docker compose exec db psql -U postgres -d asta -c "select count(*) from player_insights;"
+```
+
+⚠ **E i badge stanno in due posti soli**, che è il perimetro di M8 §7 e M9 §4: la **lista di chiamata**
+(solo quando è il tuo turno, a `WAITING_PICK` sul tuo seat) e il **modale d'offerta** (a `LOT_OPEN`, se
+sei idoneo). **Non** sulla card del lotto, **non** al reveal, **non** in regia, **non** sulla TV. Un'asta
+ferma in `LOT_REVEAL` non mostra badge nemmeno funzionando tutto.
 
 Da amministratore, **Admin → Listone**: si preme «Importa il listone» (scarica 497 giocatori da
 `api.fantalab.it`, poco più di un secondo) e poi «Aggiorna i designati» (la pagina dei rigoristi di

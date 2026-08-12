@@ -248,6 +248,19 @@ un diagramma testuale dove serve. **Aggiornarlo è un criterio di chiusura della
 - **Buffering SSE**: in nginx serve `proxy_buffering off` sulla route dello stream.
 - **Mobile**: il portale partecipante è **mobile-first**, non desktop con breakpoint. Si offre dal
   telefono, sotto pressione, con 30 secondi di countdown.
+- **Niente `dark:`, mai. L'applicazione gira in chiaro e il tema scuro non esiste.** Non c'è nessun
+  interruttore e nessuna preferenza di sistema che venga letta: una variante `dark:` è un colore che
+  **nessuno può guardare**, quindi nessuno può verificarlo — si scrive convinti di aver coperto un
+  caso, e resta sbagliato per mesi senza che si veda. Se un giorno un tema scuro servirà, i colori si
+  tratteranno **tutti insieme e guardandoli**, non uno per volta a scatola chiusa. Vale per il codice
+  che scriviamo noi, `app/**` e `components/**` esclusi i due punti qui sotto.
+  **Due cose non si toccano**, e non sono un'eccezione alla regola ma la ragione per cui la regola ha
+  bisogno di essere scritta: il blocco `.dark` di `app/globals.css` e il `className="dark"` di
+  `app/tv/[publicToken]/tv-view.tsx`. La vista TV è **bianco su nero di proposito** (DECISIONS
+  2026-08-08) ed è l'unico posto dell'app in cui `.dark` è attivo: togliere l'uno o l'altro spegne il
+  tabellone proiettato. Le primitive di `components/ui/**` arrivano da shadcn con i loro `dark:`
+  dentro e si lasciano come sono — sono inerti fuori dalla TV, e ripulirle vorrebbe dire rifarlo a
+  ogni aggiornamento.
 - **`next build` esegue ESLint**: un errore di lint **fa fallire la build di produzione**, anche
   con `pnpm dev`, `pnpm test` e `pnpm typecheck` verdi. `pnpm build` va dato **prima** di chiudere
   qualunque lavoro con della UI dentro, non la sera del deploy.
@@ -265,6 +278,11 @@ un diagramma testuale dove serve. **Aggiornarlo è un criterio di chiusura della
   bug del codice appena scritto e non lo è: si riavvia `pnpm dev` e passa. Per il gate a dev
   acceso basta `pnpm lint` (è ciò che la build aggiunge al typecheck); `pnpm build` va dato con
   il dev server spento.
+  ⚠ **E il danno sopravvive allo spegnimento**: la **prima** build dopo una sessione di `pnpm dev`
+  può morire da sola con `Failed to collect page data for /api/auctions/[id]/stream`, e **passare
+  identica al secondo tentativo** (successo il 2026-08-12, con dev già spento e nessuna modifica in
+  mezzo). Il sintomo punta sulla rotta dello stream, cioè sul punto più delicato dell'app, e non
+  c'entra niente: prima di indagare, ridai `pnpm build`.
 - **Chunk client stantio in dev**: dopo molte modifiche con `pnpm dev` acceso, il browser può
   chiedere un bundle che non esiste più — `404 su /_next/static/chunks/app/.../page.js`. Il sintomo
   inganna: la pagina *si carica* ma non idrata, il portale resta su "Mi collego all'asta…" e non

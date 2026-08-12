@@ -95,7 +95,7 @@ export function RevealBids({
                     <span
                       className={cn(
                         "shrink-0 font-medium tabular-nums",
-                        isWinner && "text-emerald-700 dark:text-emerald-400",
+                        isWinner && "text-emerald-700",
                         withdrawn && "line-through",
                       )}
                     >

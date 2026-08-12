@@ -443,7 +443,7 @@ function FeedbackLine({
         role="status"
         className={cn(
           base,
-          "border-emerald-600/40 bg-emerald-600/10 font-medium text-emerald-700 dark:text-emerald-400",
+          "border-emerald-600/40 bg-emerald-600/10 font-medium text-emerald-700",
         )}
       >
         ✓ Offerta salvata: {feedback.amount}

@@ -12,41 +12,62 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-- **[M8](08-insight-listone.md)** — Insight sul listone: titolarità, rigoristi, calci piazzati.
-  Aperta il 2026-08-11 su `feature/08-insight-listone`, **integrata su `dev` il 2026-08-12**. Non è
-  ancora in produzione: il merge su `main` aspetta una richiesta esplicita. ⚠ Tocca lo schema in modo
-  additivo, quindi il rilascio vorrà `pnpm db:push` a mano sul server, **più due backfill**: la
-  tabella nasce vuota (Admin → Listone) e `is_pro` nasce `false` per tutti. Procedura in §10 del file.
+Nessuna. L'ultima chiusa è **M9** (v1.10.0), provata in locale dall'owner prima del rilascio, e in
+produzione **non resta nessun passo a mano pendente**: M9 non tocca lo schema — il suo rilascio è finito
+col deploy, il primo da tre versioni di cui si possa dire. I tre passi di M8 (`pnpm db:push`, i due
+import dal pannello, `is_pro`) e i due di M7 (`CAMPIONCINI_EDITION` nel `.env`, l'archivio figurine
+riempito) sono stati **dati e confermati dall'owner il 2026-08-12**. Se un giorno un dato di M7 o M8
+sembra assente in produzione, non è quello il sospetto da coltivare per primo.
 
-⚠ **M7 è in produzione ma il suo rilascio non è finito finché non si fanno due passi a mano sul
-server**, e nessuno te li ricorda: `CAMPIONCINI_EDITION` nel `.env` seguito da `pm2 reload
-deploy/ecosystem.config.cjs --update-env`, e **l'archivio riempito da Admin → Figurine**, perché in
-produzione nasce vuoto. Nessuno dei due rompe niente se manca — semplicemente non si vede nessuna
-figurina — che è precisamente ciò che li rende facili da dimenticare. La procedura per esteso è nel
-`CHANGELOG.md` di v1.8.0.
+⚠ **In locale invece i dati vanno riempiti, e la loro assenza somiglia a un guasto.** `player_insights`
+nasce vuota anche sul database di sviluppo: senza i due import da Admin → Listone **nessun badge di M9
+compare**, per nessun utente, e il sintomo è «non vedo niente in `/play`» — cioè lo stesso che darebbe
+un bug. È successo il 2026-08-12, subito dopo la chiusura di M9. La procedura sta in
+`docs/HOWTO-PROVA-LOCALE.md`.
 
 ## Da pianificare
 
-Nessuna. Il quaderno `docs/REQUESTS.md` è vuoto.
+**Quattro macro, pianificate insieme il 2026-08-12** da una sessione di analisi sola, a partire dalle
+quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1. **La prima è
+chiusa**; le altre tre si aprono **su richiesta esplicita**, una alla volta.
 
-Due strade sono state **verificate e rinviate** durante M8, e sono scritte per esteso nel suo §9
-perché il lavoro d'analisi non si perda: la **griglia portieri** (l'accoppiamento fra portieri di due
-squadre — e la scoperta che qualsiasi indice per-squadra è provabilmente inutile, perché la media di
-riga vale 9.00 per tutte e venti) e i **titolari attesi con gli infortunati del momento**, che
-fantacalcio.it serve pubblicamente ma **solo a campionato in corso**: interrogata ad agosto, quella
-pagina è vuota.
+| Macro | Tema | Schema | Ordine |
+|---|---|---|---|
+| **[M10](10-listone-a-sistema.md)** | Il listone a sistema: la sezione admin, il Centro dati, la proposta alla creazione di un'asta | **sì** + backfill | 2ª |
+| **[M11](11-refresh-giornaliero.md)** | Il refresh giornaliero degli insight, dentro l'unico processo | sì, piccolo | 3ª |
+| **[M12](12-cancellazione-aste.md)** | Cancellare un'asta per forza, anche in corso | no | 4ª |
 
-M5 e M6 sono nate da una sessione di spec sola, il 2026-08-10, e sono state **tagliate in due di
-proposito**. M5 tocca la strada del login — l'unica cosa che, se si rompe, chiude fuori tutti — e
-introduce l'unica dipendenza esterna del progetto; M6 è un pannello. Due profili di rischio così
-diversi vogliono due tag e due punti di rollback: un rollback del pannello non deve portarsi via la
-registrazione. E la dipendenza è a senso unico — la lista utenti di M6, senza M5, non avrebbe niente
-da amministrare.
+**Perché quattro e non una.** Le quattro richieste sembravano un tema solo — «sistemiamo il pannello»
+— e hanno invece quattro profili di rischio diversi, che è il criterio con cui M5 e M6 sono state
+tagliate in due il 2026-08-10. M9 era tutta UI: zero schema, zero motore, e si è chiusa in una sessione. M10
+tocca **la strada dell'import**, cioè l'unica cosa che se si rompe rende impossibile *preparare* un'asta,
+e porta uno `db:push` più un file da caricare a mano in produzione. M11 è l'unico codice che gira
+**senza che nessuno guardi** dentro il processo che conduce l'asta. M12 è l'unico **irreversibile**: un
+suo errore non si corregge con un `git reset`, si corregge con un `pg_dump`. Quattro tag e quattro
+punti di rollback, perché un ritorno indietro sui badge non deve portarsi via la cancellazione delle
+aste, e un ritorno indietro sul listone non deve rimettere la striscia verde.
+
+**Le dipendenze sono due, e sono debolissime.** M10 usa i badge di M9 nel Centro dati — e M9 è chiusa,
+quindi quella dipendenza è già soddisfatta: `InsightBadge` in `components/auction/insights.tsx` aspetta
+il suo terzo chiamante, ed è il momento in cui dimostrerà di essere un componente e non tre
+`className`. M11 ha bisogno del pannello di M10 per avere un posto dove
+dire «ho provato e non ci sono riuscito» — e quella non è cosmetica: un automatismo muto è peggio di
+nessun automatismo. M12 non dipende da niente.
+
+**Due strade restano verificate e rinviate**, scritte per esteso in M8 §9 perché il lavoro d'analisi non
+si perda: la **griglia portieri** (l'accoppiamento fra portieri di due squadre — e la scoperta che
+qualsiasi indice per-squadra è provabilmente inutile, perché la media di riga vale 9.00 per tutte e
+venti) e i **titolari attesi con gli infortunati del momento**, che fantacalcio.it serve pubblicamente
+ma **solo a campionato in corso**: interrogata ad agosto, quella pagina è vuota. ⚠ La seconda ha avuto
+una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (ora)» in rosso è stata
+**ritirata dall'owner** proprio per quella misura. Non va riproposta come idea nuova.
 
 ## Chiuse
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M9](09-badge-insight.md) | I badge degli insight, e la striscia verde via | v1.10.0 — 2026-08-12 |
+| [M8](08-insight-listone.md) | Insight sul listone — titolarità, rigoristi, calci piazzati | v1.9.0 — 2026-08-12 |
 | [M7](07-caricature.md) | Le caricature dei calciatori — la figurina scaricata una volta e guardata per tutta la serata | v1.8.0 — 2026-08-11 |
 | [M6](06-amministrazione.md) | Amministrazione — il pannello: lista utenti, lista aste, e un perimetro strettissimo | v1.7.0 — 2026-08-11 |
 | [M5](05-identita.md) | Identità — registrazione con email e password, verifica dell'indirizzo, recupero | v1.6.0 — 2026-08-10 |
@@ -55,6 +76,13 @@ da amministrare.
 | [M2](02-navigazione.md) | Navigazione e identità delle pagine | v1.3.0 — 2026-08-10 |
 | [M1](01-segretezza-offerte.md) | Segretezza e rivelazione delle offerte | v1.2.0 — 2026-08-10 |
 | [M0](00-nuova-linea-di-sviluppo.md) | La nuova linea di sviluppo: tre branch, versioni, documenti | v1.1.0 — 2026-08-09 |
+
+M5 e M6 sono nate da una sessione di spec sola, il 2026-08-10, e sono state **tagliate in due di
+proposito**. M5 tocca la strada del login — l'unica cosa che, se si rompe, chiude fuori tutti — e
+introduce l'unica dipendenza esterna del progetto; M6 è un pannello. Due profili di rischio così
+diversi vogliono due tag e due punti di rollback: un rollback del pannello non deve portarsi via la
+registrazione. E la dipendenza è a senso unico — la lista utenti di M6, senza M5, non avrebbe niente
+da amministrare. È lo stesso criterio con cui il 2026-08-12 sono state tagliate M9–M12.
 
 ## Fuori macro
 
@@ -72,7 +100,8 @@ Dopo **v1.9.0**, su richiesta esplicita («si direi di filtrare quelle simulate,
 
 - **La guardia del deploy ignora le aste simulate.** Una simulazione lasciata in pausa bloccava ogni
   deploy e non c'era modo di chiuderla, quindi l'unico rimedio era scavalcare la guardia ogni volta.
-  `docs/DECISIONS.md`, 2026-08-12.
+  `docs/DECISIONS.md`, 2026-08-12. ⚠ **M12 apre quel vicolo cieco**, e ha ratificato che la guardia
+  resta comunque com'è: la voce sta nel suo §5.
 
 In **v1.3.1**, sempre su richiesta esplicita («vai pure da `dev` a `main` senza branch»):
 

@@ -4,6 +4,48 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.10.0] — 2026-08-12
+
+**M9 — I badge degli insight, e la striscia verde via.** I numeri arrivati con v1.9.0 c'erano ma erano
+vestiti di grigio: `Rigori 1°` e `Piazzati 2°` usavano due grigi che si distinguono a fatica, e la
+titolarità non era nemmeno un badge. Sotto un countdown di dieci secondi, con un pollice sulla
+tastiera, fra «leggibile» e «riconoscibile senza leggere» c'è tutta la differenza che conta.
+
+Ora ogni fatto ha un colore. **Verde la titolarità dall'80% in su**, blu chi batte i rigori e chi batte
+i calci piazzati, grigio tutto il resto. La percentuale e la posizione restano scritte **dentro** il
+badge: il colore fa arrivare l'occhio, il numero decide — «secondo battitore» vale molto meno di
+«primo», e un colore che sostituisse quel numero butterebbe via il dato per mostrarlo meglio.
+
+La soglia del verde non è stata scelta a naso. Contata sul listone vero, dall'80% in su ci sono **61
+giocatori su 497**: cinque o sei nomi in una lista di chiamata da quaranta — abbastanza raro da voler
+dire qualcosa, abbastanza frequente da non sembrare un guasto. Al 70% sarebbe un nome su cinque, cioè
+decorazione. Quel conteggio dice anche una cosa che nessuno aveva scritto: i verdi sono venticinque
+difensori e **sei attaccanti**. Gli attaccanti ruotano, e adesso si vede.
+
+**E la striscia verde in cima a ogni pagina non c'è più.** Compariva su tutte le schermate per tutta la
+sera, per dire una cosa che chi è in quella stanza sa già: era più disturbante che utile. Chi chiude il
+tab per sbaglio rientra dalla dashboard, dove le sue aste sono elencate — un tocco in più, in cambio
+del silenzio in cima a ogni pagina. Chi apre la lobby di un'asta già iniziata continua a essere portato
+al portale da sé, come prima: quella non dipendeva dalla striscia.
+
+Chi si ricollega a metà lotto ritrova esattamente la schermata di prima, striscia o non striscia. Non è
+cambiato niente lì: la striscia era il modo di *arrivare* alla pagina, non di ricostruirla.
+
+Due cose che **non** sono entrate, e sono decisioni prese: nessun badge «Infortunato», perché lo stato
+«si è rotto adesso» si popola a campionato in corso e l'asta si fa ad agosto — un badge rosso che non
+compare mai la sera per cui esiste l'app è lavoro speso male, e uno costruito su una pagina letta tre
+settimane prima sarebbe una bugia. E il badge dei calci piazzati si chiama **`Piazzati`** e non
+«Punizioni»: la fonte mette punizioni e corner nella stessa lista, quindi il primo battitore di una
+squadra può essere il suo uomo dei corner.
+
+### Per chi aggiorna il server
+
+**Niente.** Nessun cambio di schema, nessun `pnpm db:push`, nessun backfill, nessun passo a mano: il
+deploy automatico basta e il rilascio finisce lì. È la prima volta da tre versioni che si può dire.
+
+⚠ L'unica cosa che può fermare questo deploy è **un'asta reale `LIVE` o `PAUSED`** in produzione — la
+guardia esiste per quello e va lasciata fare. Le simulate non lo bloccano più (v1.9.1).
+
 ## [1.9.1] — 2026-08-12
 
 **Il deploy non si blocca più per un'asta simulata.** Fino a ieri la guardia che impedisce un rilascio

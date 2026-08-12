@@ -218,7 +218,7 @@ export function UserRow({ user }: { user: AdminUserView }) {
               className={
                 failed
                   ? "text-destructive text-sm"
-                  : "text-sm text-emerald-700 dark:text-emerald-400"
+                  : "text-sm text-emerald-700"
               }
             >
               {messages.join(" · ")}
