@@ -409,8 +409,13 @@ pannello, e va detto quando è vecchio di più di un giorno.
       giudizio, e perché non è una misura**. `docs/DECISIONS.md`, `docs/HOWTO-PROVA-LOCALE.md` (in
       locale il file si carica dopo il listone), `docs/features/README.md`
 - [ ] **M10B-16** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
-      esplicita** — `CHANGELOG.md`, `package.json`, merge su `main`, tag, push. **E il `CHANGELOG.md`
-      deve contenere i due passi a mano di §10 scritti per esteso**
+      esplicita** — `CHANGELOG.md`, `package.json`, merge su `main`, **tag `v1.11.0`**, push.
+      ⚠ **Quel rilascio porta in produzione anche M10**, che è ferma su `dev` dal 2026-08-12: un tag
+      solo per due macro, deciso dall'owner. Quindi il `CHANGELOG.md` ha **una sezione per entrambe**
+      e, dei passi a mano, porta: **un solo `pnpm db:push`** (copre i due cambi di schema) seguito da
+      `pm2 reload deploy/ecosystem.config.cjs --update-env`, e poi **due file da caricare
+      nell'ordine** — prima il listone da Admin → Listone, poi il foglio di Carmy, perché il secondo
+      si aggancia al primo per nome. Tutto per esteso: un comando abbreviato viene copiato com'è
 
 ## Verifica
 

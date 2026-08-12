@@ -1,8 +1,10 @@
 # M10 — Il listone a sistema
 
 > **Stato:** **chiusa** su `dev` il 2026-08-12 · Aperta e chiusa su `feature/10-listone-a-sistema` ·
-> Pianificata il 2026-08-12 · ⚠ **Il rilascio è ancora da fare**: `CHANGELOG.md`, `package.json`,
-> merge su `main` e tag `v1.11.0` aspettano una richiesta esplicita dell'owner · Dipende da
+> Pianificata il 2026-08-12 · ⚠ **Il rilascio non è suo**: M10 esce **insieme a M10B**, in un
+> rilascio solo con un tag solo — `v1.11.0` — deciso dall'owner il 2026-08-12. Fino ad allora `dev`
+> resta avanti a `main`, ed è la decisione, non una dimenticanza. I due passi a mano di §9 restano
+> dovuti e finiscono nel `CHANGELOG.md` di quel rilascio, insieme a quelli di M10B · Dipende da
 > **M9** solo per un componente: il Centro dati (§6) mostra i badge colorati, ed è il loro terzo
 > chiamante. Se per qualche ragione M9 slittasse, il Centro dati nasce con i due grigi di M8 e i badge
 > arrivano dopo — non è un blocco, è un ordine preferibile.
@@ -460,9 +462,13 @@ Due passi sul server, e nessuno te li ricorda:
       dicevano cose diventate false. In `HOWTO-PROVA-LOCALE.md` il §6 è stato **riscritto**: il
       listone a sistema è il primo passo, e le figurine sono diventate un suo sottoparagrafo — che è
       la stessa gerarchia del pannello.
-- [ ] **M10-13** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
+- [x] **M10-13** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       esplicita** — `CHANGELOG.md`, `package.json`, merge su `main`, tag `v1.11.0`, push. **E il
       `CHANGELOG.md` deve contenere i due passi a mano di §9 scritti per esteso**
+      → Merge su `dev` fatto il 2026-08-12. ⚠ **La seconda metà del task non è di M10**: l'owner ha
+      deciso che M10 esce **insieme a M10B**, con un tag solo, quindi `CHANGELOG.md`, `package.json`,
+      `main` e `v1.11.0` sono passati a **M10B-16**. I passi a mano di §9 restano dovuti e vanno in
+      quel changelog, prima di quelli di Carmy — l'ordine di caricamento dei due file conta.
 
 ## Com'è andata
 

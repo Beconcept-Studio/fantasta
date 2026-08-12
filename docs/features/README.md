@@ -22,11 +22,13 @@ rilascio solo, quando M10B sarà finita. Tre conseguenze da non riscoprire:
 2. **Il `CHANGELOG.md` dovrà portare i passi a mano di *entrambe*.** Un solo `pnpm db:push` copre i
    due cambi di schema, ma i **file da caricare sono due** — il listone da Admin → Listone, e poi il
    foglio di Carmy — e vanno scritti nell'ordine, perché il secondo si aggancia al primo.
-3. ⚠ **Un tag solo vuol dire un punto di rollback solo.** Il ciclo di `CLAUDE.md` dà a ogni macro il
-   suo tag proprio per poter tornare indietro su una senza portarsi via l'altra; uscendo insieme,
+3. **Un tag solo: `v1.11.0`, con dentro tutte e due** (owner, 2026-08-12, scelto fra questa e due tag
+   consecutivi). ⚠ Vuol dire **un punto di rollback solo**: il ciclo di `CLAUDE.md` dà a ogni macro il
+   suo tag proprio per poter tornare indietro su una senza portarsi via l'altra, e uscendo insieme,
    tornare indietro su M10B riporta indietro anche il listone a sistema. È il prezzo della scelta, ed
    è accettabile perché M10 in produzione da sola non ci è mai stata — ma va saputo **prima** di
-   trovarsi a fare un rollback alle nove di sera.
+   trovarsi a fare un rollback alle nove di sera. La versione la scrive M10B alla sua chiusura: M10
+   non ne alza nessuna per conto suo.
 
 ⚠ **E quando ci andrà, il rilascio non finirà col deploy**: M10 tocca lo schema **e** ha un backfill.
 Sul server servono `pnpm db:push` più `pm2 reload deploy/ecosystem.config.cjs --update-env`, e poi il
