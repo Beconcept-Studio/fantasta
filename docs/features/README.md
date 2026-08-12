@@ -12,8 +12,21 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna. **M10 è chiusa su `dev`** e ⚠ **non è ancora in produzione**: `CHANGELOG.md`,
-`package.json`, il merge su `main` e il tag `v1.11.0` aspettano una richiesta esplicita dell'owner.
+Nessuna aperta. **M10 è chiusa su `dev`** e ⚠ **non è ancora in produzione**.
+
+⚠ **E non ci andrà da sola: l'owner ha deciso il 2026-08-12 che M10 e M10B escono insieme**, in un
+rilascio solo, quando M10B sarà finita. Tre conseguenze da non riscoprire:
+
+1. **`dev` resta avanti a `main` per tutta la durata di M10B.** Non è una dimenticanza: è la
+   decisione. Chi apre una sessione e trova `dev` con roba non rilasciata non deve «sistemare».
+2. **Il `CHANGELOG.md` dovrà portare i passi a mano di *entrambe*.** Un solo `pnpm db:push` copre i
+   due cambi di schema, ma i **file da caricare sono due** — il listone da Admin → Listone, e poi il
+   foglio di Carmy — e vanno scritti nell'ordine, perché il secondo si aggancia al primo.
+3. ⚠ **Un tag solo vuol dire un punto di rollback solo.** Il ciclo di `CLAUDE.md` dà a ogni macro il
+   suo tag proprio per poter tornare indietro su una senza portarsi via l'altra; uscendo insieme,
+   tornare indietro su M10B riporta indietro anche il listone a sistema. È il prezzo della scelta, ed
+   è accettabile perché M10 in produzione da sola non ci è mai stata — ma va saputo **prima** di
+   trovarsi a fare un rollback alle nove di sera.
 
 ⚠ **E quando ci andrà, il rilascio non finirà col deploy**: M10 tocca lo schema **e** ha un backfill.
 Sul server servono `pnpm db:push` più `pm2 reload deploy/ecosystem.config.cjs --update-env`, e poi il
