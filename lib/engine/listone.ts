@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { listonePlayers, playerInsights } from "@/lib/db/schema";
@@ -285,7 +285,11 @@ export async function centroDatiRows(): Promise<CentroDatiRow[]> {
     })
     .from(listonePlayers)
     .leftJoin(playerInsights, eq(playerInsights.extId, listonePlayers.extId))
-    .orderBy(asc(listonePlayers.name));
+    // Lo stesso ordine con cui la pagina si apre — quotazione dal più alto al
+    // più basso, e il nome a parità. La tabella riordina comunque nel browser a
+    // ogni click, ma far arrivare le righe già nell'ordine giusto evita che il
+    // primo disegno e il primo `sort` mostrino due liste diverse.
+    .orderBy(desc(listonePlayers.quot), asc(listonePlayers.name));
 
   return rows.map(({ insights, ...player }) => {
     // ⚠ Niente `insights: undefined` esplicito: la chiave si aggiunge **solo** se

@@ -1971,3 +1971,42 @@ tabella, e a tabella vuota l'azione **rifiuta dicendo dove si carica** invece di
 figurine e dichiarare successo. Il messaggio «il file è ancora selezionato» è stato riscritto: di
 file non ce n'è più uno, ma il «riprende da dov'era» resta vero per la ragione di sempre — lo stato
 è il disco.
+
+**Il Centro dati ordina, e i badge blu smettono di sparire** (owner, 2026-08-12, a macro già
+mergiata su `dev`: intestazioni cliccabili, filtro «rigori e piazzati», e come default la lista
+ordinata per valore dal più alto al più basso). Tre scelte dentro una richiesta che sembrava
+meccanica:
+
+- **«Valore» è la quotazione**, non `FVM/1000`. È l'unica colonna di valore che quella pagina
+  mostra — l'altra resta fuori per decisione dell'owner, pur restando a database perché decide
+  l'auto-pick — e aprire la lista ordinata per una colonna invisibile darebbe una lista in un
+  ordine inspiegabile.
+- ⚠ **Il filtro sui piazzati non passa da `showableInsights`, e questa è la scelta di sostanza.**
+  Quel gate esiste per i numeri **della stagione** — presenze, partenze da titolare, minuti — dove
+  un dato del campionato scorso accanto a uno di quest'anno è un confronto falso. I due rank non
+  sono numeri di stagione: vengono dalla fonte B, che pubblica la gerarchia **di adesso**. La
+  misura dice quanto pesa la differenza: dei **92 designati, 22 hanno le statistiche della stagione
+  precedente** — quasi un quarto — e un filtro «solo chi batte» costruito sul gate li avrebbe persi
+  tutti, in silenzio, proprio dentro lo strumento che serve a trovarli. La regola sta in un posto
+  solo, `bestSetPieceRank` in `lib/domain.ts`, accanto a quella che continua a valere per la
+  titolarità.
+  ⚠ **Il portale non è stato toccato.** In `/play` e nel modale d'offerta quei 22 continuano a non
+  avere il badge blu: è il comportamento di M9, e cambiarlo è una decisione dell'owner, non un
+  effetto collaterale di un filtro amministrativo.
+- **L'ordinamento vive in `lib/centro-dati.ts`, non nel componente.** È l'unica parte di quella
+  pagina che può sbagliarsi **in silenzio**: cinquecento righe ordinate male non danno nessun
+  errore, danno una lista plausibile. Due regole che non sono ovvie e hanno un test ciascuna: chi
+  non ha il valore finisce in fondo **in entrambe le direzioni** (invertire «titolarità» non deve
+  portare in cima trecento trattini), e a parità si ordina per nome (duecento quotazioni uguali che
+  si riordinano a ogni click sembrano un bug). E il rank **migliore è il più basso**: «dal più
+  alto» sui piazzati deve mettere in cima i primi rigoristi, cioè invertire il segno rispetto a una
+  colonna numerica qualunque.
+
+⚠ **E una cicatrice da non ripetere: gli `ext_id` sintetici dei test devono essere davvero alti.**
+`syntheticListone` di `game-helpers.ts` numera da 1, e i test di M10 lo usavano dando per scontato
+che quegli identificativi non esistessero in nessuna fonte. **È falso**: gli `ext_id` veri di
+Fantacalcio.it vanno da 4 a 7548, quindi due righe sintetiche si agganciavano a due righe di insight
+vere. Il test passava solo quando `player_insights` era vuota — cioè quando un altro file di test
+l'aveva appena svuotata — ed è lo stesso «verde da solo, rosso nella suite» del parametro
+`auctionIds` di `insightsCoverage`. I test di M10 hanno adesso un generatore loro, con base
+`10_000_000`.

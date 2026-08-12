@@ -4,27 +4,48 @@ import { useMemo, useState } from "react";
 
 import { SetPieceBadges, TitolaritaBadge } from "@/components/auction/insights";
 import { Input } from "@/components/ui/input";
-import { ROLES, ROLE_LABELS, type Role, showableInsights } from "@/lib/domain";
+import {
+  type CentroDatiSort,
+  DEFAULT_SORT,
+  NO_FILTERS,
+  type SortKey,
+  arrangeRows,
+  nextSort,
+  searchableText,
+} from "@/lib/centro-dati";
+import {
+  ROLES,
+  ROLE_LABELS,
+  type Role,
+  bestSetPieceRank,
+  showableInsights,
+} from "@/lib/domain";
 import type { CentroDatiRow } from "@/lib/engine/listone";
 import { cn } from "@/lib/utils";
 
 /**
  * Il Centro dati (M10 §6): tutto il listone a sistema, con gli insight accanto.
  *
- * ⚠ **Search e filtro girano nel browser, su un payload solo.** Cinquecento
- * righe con gli insight dentro sono ~250 KB — un numero che conosciamo perché è
- * già stato pagato una volta al giorno da ogni telefono in `/play` (misura di
- * M8: 241 KB per il pool intero con insight, sopra HTTP). Niente paginazione,
- * niente `?q=` sul server, niente debounce contro un endpoint: la ricerca è un
- * `filter` su un array che è già in memoria, e risponde mentre si scrive. Se un
- * giorno il listone avesse cinquemila righe sarà il momento di cambiare, e non
- * prima (regola 8).
+ * ⚠ **Search, filtri e ordinamento girano nel browser, su un payload solo.**
+ * Cinquecento righe con gli insight dentro sono ~250 KB — un numero che
+ * conosciamo perché è già pagato una volta al giorno da ogni telefono in
+ * `/play` (misura di M8: 241 KB per il pool intero con insight, sopra HTTP).
+ * Niente paginazione, niente `?q=` o `?sort=` sul server, niente debounce contro
+ * un endpoint: è un `filter` e un `sort` su un array che è già in memoria, e
+ * rispondono mentre si scrive. Se un giorno il listone avesse cinquemila righe
+ * sarà il momento di cambiare, e non prima (regola 8).
+ *
+ * ⚠ **L'ordinamento vero sta in `lib/centro-dati.ts`, non qui.** È l'unica parte
+ * di questa pagina che può sbagliarsi in silenzio — una lista ordinata male non
+ * dà nessun errore, dà una lista plausibile — quindi vive in funzioni pure con i
+ * loro test, e questo file si occupa solo di disegnarla.
  *
  * ⚠ **La colonna `FVM/1000` non c'è**, per decisione dell'owner: qui si legge la
- * quotazione, che è il numero con cui si compra. Ma **`fvm` resta a database** —
+ * quotazione, che è il numero con cui si compra, ed è anche l'ordinamento di
+ * partenza — dal più alto al più basso. Ma **`fvm` resta a database**:
  * `players_autopick_idx` ordina per `fvm` DESC e quell'ordinamento *è*
- * l'auto-pick: toglierlo dalla copia cambierebbe chi viene scelto allo scadere di
- * una chiamata, per una decisione di layout (M10 §2).
+ * l'auto-pick, quindi toglierlo dalla copia cambierebbe chi viene scelto allo
+ * scadere di una chiamata, per una decisione di layout (M10 §2).
  *
  * ⚠ **`Fuori lista` è un segno accanto al nome, non una colonna.** Riguarda meno
  * del 5% delle righe e una settima colonna vuota per il resto stringerebbe le due
@@ -36,23 +57,35 @@ import { cn } from "@/lib/utils";
 export function CentroDatiTable({ rows }: { rows: CentroDatiRow[] }) {
   const [query, setQuery] = useState("");
   const [role, setRole] = useState<Role | null>(null);
+  const [onlySetPieces, setOnlySetPieces] = useState(false);
+  const [sort, setSort] = useState<CentroDatiSort>(DEFAULT_SORT);
 
   // I nomi normalizzati si calcolano **una volta**, non a ogni tasto: cercare
   // «Dzeko» scrivendo «dze» vuol dire togliere i segni diacritici a cinquecento
   // stringhe, e farlo dentro il `filter` lo rifarebbe a ogni lettera.
-  const searchable = useMemo(
-    () => rows.map((row) => `${fold(row.name)} ${fold(row.team)}`),
+  const searchable = useMemo(() => rows.map(searchableText), [rows]);
+
+  const shown = useMemo(
+    () =>
+      arrangeRows(
+        rows,
+        { ...NO_FILTERS, query, role, onlySetPieces },
+        sort,
+        searchable,
+      ),
+    [rows, searchable, query, role, onlySetPieces, sort],
+  );
+
+  // Quanti sarebbero, se si premesse il filtro: un numero accanto a
+  // un'etichetta spiega cosa fa il pulsante meglio dell'etichetta da sola.
+  const designati = useMemo(
+    () => rows.filter((row) => bestSetPieceRank(row.insights) !== null).length,
     [rows],
   );
 
-  const shown = useMemo(() => {
-    const needle = fold(query.trim());
-    return rows.filter((row, index) => {
-      if (role !== null && row.role !== role) return false;
-      if (needle === "") return true;
-      return searchable[index].includes(needle);
-    });
-  }, [rows, searchable, query, role]);
+  function sortBy(key: SortKey) {
+    setSort((current) => nextSort(current, key));
+  }
 
   return (
     <div className="space-y-4">
@@ -66,20 +99,30 @@ export function CentroDatiTable({ rows }: { rows: CentroDatiRow[] }) {
           aria-label="Cerca un calciatore"
         />
         <div className="flex gap-1" role="group" aria-label="Filtra per ruolo">
-          <RoleChip active={role === null} onClick={() => setRole(null)}>
+          <Chip active={role === null} onClick={() => setRole(null)}>
             Tutti
-          </RoleChip>
+          </Chip>
           {ROLES.map((r) => (
-            <RoleChip
+            <Chip
               key={r}
               active={role === r}
               onClick={() => setRole(role === r ? null : r)}
               title={ROLE_LABELS[r]}
             >
               {r}
-            </RoleChip>
+            </Chip>
           ))}
         </div>
+
+        <Chip
+          active={onlySetPieces}
+          onClick={() => setOnlySetPieces(!onlySetPieces)}
+          title="Solo chi batte rigori o calci piazzati"
+        >
+          Rigori e piazzati{" "}
+          <span className="tabular-nums opacity-70">{designati}</span>
+        </Chip>
+
         <p className="text-muted-foreground text-sm tabular-nums">
           {shown.length === rows.length
             ? `${rows.length} giocatori`
@@ -89,7 +132,7 @@ export function CentroDatiTable({ rows }: { rows: CentroDatiRow[] }) {
 
       {shown.length === 0 ? (
         <p className="text-muted-foreground py-8 text-center text-sm">
-          Nessun calciatore con questo nome{role !== null && ` fra i ${ROLE_LABELS[role].toLowerCase()}`}.
+          Nessun calciatore con questi filtri.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -102,17 +145,29 @@ export function CentroDatiTable({ rows }: { rows: CentroDatiRow[] }) {
             */}
             <thead className="text-muted-foreground sticky top-0 z-10 text-xs">
               <tr className="bg-background">
-                <Th className="text-left">Calciatore</Th>
-                <Th className="text-left">Sq.</Th>
-                <Th className="text-left">R.</Th>
-                <Th className="text-right">Quot.</Th>
-                <Th className="text-left">Titolarità</Th>
-                <Th className="text-left">Rigori e piazzati</Th>
+                <Th sortKey="name" sort={sort} onSort={sortBy}>
+                  Calciatore
+                </Th>
+                <Th sortKey="team" sort={sort} onSort={sortBy}>
+                  Sq.
+                </Th>
+                <Th sortKey="role" sort={sort} onSort={sortBy}>
+                  R.
+                </Th>
+                <Th sortKey="quot" sort={sort} onSort={sortBy} align="right">
+                  Quot.
+                </Th>
+                <Th sortKey="titolarita" sort={sort} onSort={sortBy}>
+                  Titolarità
+                </Th>
+                <Th sortKey="piazzati" sort={sort} onSort={sortBy}>
+                  Rigori e piazzati
+                </Th>
               </tr>
             </thead>
             <tbody>
               {shown.map((row) => {
-                const insights = showableInsights(row.insights);
+                const stagione = showableInsights(row.insights);
                 return (
                   <tr key={row.extId} className="hover:bg-muted/40">
                     <Td>
@@ -130,18 +185,27 @@ export function CentroDatiTable({ rows }: { rows: CentroDatiRow[] }) {
                     <Td className="font-mono text-xs">{row.role}</Td>
                     <Td className="text-right tabular-nums">{row.quot}</Td>
                     <Td>
-                      {insights === null ? (
+                      {stagione === null ? (
                         <Missing />
                       ) : (
-                        <TitolaritaBadge insights={insights} compact />
+                        <TitolaritaBadge insights={stagione} compact />
                       )}
                     </Td>
+                    {/*
+                      ⚠ **Qui non si passa da `showableInsights`**, a differenza
+                      della colonna accanto. I due rank vengono dalla fonte B e
+                      dicono la gerarchia **di adesso**: non sono numeri di
+                      stagione, e nasconderli a chi ha le statistiche dell'anno
+                      scorso vorrebbe dire perdere 22 designati su 92 — quasi un
+                      quarto — proprio dentro il filtro che serve a trovarli.
+                    */}
                     <Td>
-                      {insights === null ? (
+                      {row.insights === undefined ||
+                      bestSetPieceRank(row.insights) === null ? (
                         <Missing />
                       ) : (
                         <span className="flex flex-wrap gap-1">
-                          <SetPieceBadges insights={insights} compact />
+                          <SetPieceBadges insights={row.insights} compact />
                         </span>
                       )}
                     </Td>
@@ -159,25 +223,68 @@ export function CentroDatiTable({ rows }: { rows: CentroDatiRow[] }) {
 /**
  * Chi non ha niente da dire lo dice con un trattino, non con un badge a zero.
  *
- * ⚠ Sono **due** i motivi per cui compare, e a schermo si equivalgono: nessuna
- * riga di insight (il listone e la fonte non coincidono), oppure numeri della
- * stagione **precedente**, che `showableInsights` scarta perché un numero del
- * campionato scorso accanto a uno di quest'anno è un confronto falso (M8 §5).
+ * Nella colonna della titolarità sono **due** i motivi, e a schermo si
+ * equivalgono: nessuna riga di insight, oppure numeri della stagione precedente,
+ * che `showableInsights` scarta perché un numero del campionato scorso accanto a
+ * uno di quest'anno è un confronto falso (M8 §5). In quella dei piazzati il
+ * motivo è uno solo: non è designato.
  */
 function Missing() {
   return <span className="text-muted-foreground font-mono">—</span>;
 }
 
+/**
+ * Un'intestazione che ordina.
+ *
+ * È un `<button>` dentro il `<th>`, non un `<th onClick>`: si raggiunge con il
+ * tab, si preme con la barra spaziatrice, e `aria-sort` dice a chi legge con uno
+ * screen reader su quale colonna è ordinata la tabella e in che verso. La
+ * freccia compare **solo sulla colonna attiva**: sei frecce grigie sarebbero sei
+ * pulsanti che sembrano tutti premuti.
+ */
 function Th({
-  className,
+  sortKey,
+  sort,
+  onSort,
+  align = "left",
   children,
 }: {
-  className?: string;
+  sortKey: SortKey;
+  sort: CentroDatiSort;
+  onSort: (key: SortKey) => void;
+  align?: "left" | "right";
   children: React.ReactNode;
 }) {
+  const active = sort.key === sortKey;
+
   return (
-    <th className={cn("border-b px-2 py-2 font-medium", className)}>
-      {children}
+    <th
+      aria-sort={
+        active
+          ? sort.direction === "asc"
+            ? "ascending"
+            : "descending"
+          : "none"
+      }
+      className={cn(
+        "border-b px-2 py-2 font-medium",
+        align === "right" ? "text-right" : "text-left",
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={cn(
+          "hover:text-foreground inline-flex items-center gap-1 transition",
+          align === "right" && "flex-row-reverse",
+          active && "text-foreground",
+        )}
+      >
+        {children}
+        <span aria-hidden className="text-[10px]">
+          {active ? (sort.direction === "asc" ? "▲" : "▼") : ""}
+        </span>
+      </button>
     </th>
   );
 }
@@ -192,7 +299,7 @@ function Td({
   return <td className={cn("border-b px-2 py-1.5", className)}>{children}</td>;
 }
 
-function RoleChip({
+function Chip({
   active,
   onClick,
   title,
@@ -219,15 +326,4 @@ function RoleChip({
       {children}
     </button>
   );
-}
-
-/**
- * Minuscolo e senza segni diacritici: chi cerca «Dzeko» scrive «dzeko», non
- * «Džeko», e chi cerca «Perisic» non ha la `ć` sulla tastiera.
- */
-function fold(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "");
 }
