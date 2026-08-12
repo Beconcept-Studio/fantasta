@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   GIORNATE,
+  SOGLIA_TITOLARE,
   canSeeInsights,
   minutiMedi,
   quotaTitolare,
   showableInsights,
+  titolareForte,
   type PlayerInsights,
 } from "@/lib/domain";
 
@@ -72,6 +74,44 @@ describe("quotaTitolare", () => {
 
   it("zero partenze è zero, non un dato mancante", () => {
     expect(quotaTitolare(insight({ startsEleven: 0, presenze: 9 }))).toBe(0);
+  });
+});
+
+describe("titolareForte", () => {
+  it("la soglia è l'80%", () => {
+    expect(SOGLIA_TITOLARE).toBe(0.8);
+  });
+
+  it("⚠ la zona densa di M9 §1: 32/38 è verde, 30/38 è grigio", () => {
+    // Due giocatori a due partite di distanza finiscono in due colori, e va bene
+    // **solo** perché il badge scrive la percentuale accanto al colore. Il grumo
+    // a 32/38 = 84% esiste davvero nella fixture (Çelik, de Roon, Højlund,
+    // Marusic, McKennie, Modrić, Murić, Pinamonti): se questo caso viene tolto
+    // per pulizia, la prossima persona sposterà la soglia senza sapere di
+    // spostare quegli otto.
+    expect(titolareForte(insight({ startsEleven: 32, presenze: 34 }))).toBe(true);
+    expect(titolareForte(insight({ startsEleven: 30, presenze: 34 }))).toBe(false);
+  });
+
+  it("il primo intero verde è 31/38, e la soglia esatta non è raggiungibile", () => {
+    // 0,8 × 38 = 30,4: con `startsEleven` intero **nessun giocatore cade sulla
+    // soglia esatta**, quindi la direzione del confronto (`>=` invece di `>`) non
+    // cambia il colore di nessuno. Vale la pena saperlo prima di «correggere» il
+    // predicato: e va provato così, non con un 30,4 finto — `30.4 / 38` in
+    // virgola mobile vale 0,7999… e sarebbe grigio, cioè il test direbbe il
+    // contrario di quello che vuole dire.
+    expect(titolareForte(insight({ startsEleven: 31, presenze: 34 }))).toBe(true);
+    expect(titolareForte(insight({ startsEleven: 30, presenze: 34 }))).toBe(false);
+  });
+
+  it("chi supera le 38 partenze resta verde, non esce dal clamp", () => {
+    // Thiam, `starts_eleven: 42`: `quotaTitolare` lo porta a 1 e il predicato
+    // legge quello, non il campo grezzo.
+    expect(titolareForte(insight({ startsEleven: 42, presenze: 42 }))).toBe(true);
+  });
+
+  it("zero partenze è grigio", () => {
+    expect(titolareForte(insight({ startsEleven: 0, presenze: 9 }))).toBe(false);
   });
 });
 

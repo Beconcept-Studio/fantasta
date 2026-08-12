@@ -12,28 +12,32 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna. L'ultima chiusa è **M8** (v1.9.0), e in produzione **non resta nessun passo a mano
-pendente**: i tre di M8 (`pnpm db:push`, i due import dal pannello, `is_pro`) e i due di M7
-(`CAMPIONCINI_EDITION` nel `.env`, l'archivio figurine riempito) sono stati **dati e confermati
-dall'owner il 2026-08-12**. Se un giorno un dato di M7 o M8 sembra assente in produzione, non è quello
-il sospetto da coltivare per primo.
+Nessuna. **M9 è chiusa su `dev`** e aspetta il rilascio: `CHANGELOG.md`, `package.json`, il merge su
+`main` e il tag `v1.10.0` si danno **su richiesta esplicita dell'owner**, e non c'è nessun passo a mano
+sul server da preparare — M9 non tocca lo schema, quindi per una volta il rilascio finisce col deploy.
+⚠ Resta invece **una prova che solo l'owner può fare**: guardare i badge dal telefono su un'asta col
+listone vero. Le quattro verifiche non spuntate del file di M9 sono tutte di quella forma.
+
+In produzione **non resta nessun passo a mano pendente**: i tre di M8 (`pnpm db:push`, i due import dal
+pannello, `is_pro`) e i due di M7 (`CAMPIONCINI_EDITION` nel `.env`, l'archivio figurine riempito) sono
+stati **dati e confermati dall'owner il 2026-08-12**. Se un giorno un dato di M7 o M8 sembra assente in
+produzione, non è quello il sospetto da coltivare per primo.
 
 ## Da pianificare
 
 **Quattro macro, pianificate insieme il 2026-08-12** da una sessione di analisi sola, a partire dalle
-quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1. Nessuna è aperta:
-si apre **su richiesta esplicita**, una alla volta.
+quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1. **La prima è
+chiusa**; le altre tre si aprono **su richiesta esplicita**, una alla volta.
 
 | Macro | Tema | Schema | Ordine |
 |---|---|---|---|
-| **[M9](09-badge-insight.md)** | I badge degli insight, e la striscia verde via | no | 1ª |
 | **[M10](10-listone-a-sistema.md)** | Il listone a sistema: la sezione admin, il Centro dati, la proposta alla creazione di un'asta | **sì** + backfill | 2ª |
 | **[M11](11-refresh-giornaliero.md)** | Il refresh giornaliero degli insight, dentro l'unico processo | sì, piccolo | 3ª |
 | **[M12](12-cancellazione-aste.md)** | Cancellare un'asta per forza, anche in corso | no | 4ª |
 
 **Perché quattro e non una.** Le quattro richieste sembravano un tema solo — «sistemiamo il pannello»
 — e hanno invece quattro profili di rischio diversi, che è il criterio con cui M5 e M6 sono state
-tagliate in due il 2026-08-10. M9 è tutta UI: zero schema, zero motore, si rilascia in una sera. M10
+tagliate in due il 2026-08-10. M9 era tutta UI: zero schema, zero motore, e si è chiusa in una sessione. M10
 tocca **la strada dell'import**, cioè l'unica cosa che se si rompe rende impossibile *preparare* un'asta,
 e porta uno `db:push` più un file da caricare a mano in produzione. M11 è l'unico codice che gira
 **senza che nessuno guardi** dentro il processo che conduce l'asta. M12 è l'unico **irreversibile**: un
@@ -41,8 +45,10 @@ suo errore non si corregge con un `git reset`, si corregge con un `pg_dump`. Qua
 punti di rollback, perché un ritorno indietro sui badge non deve portarsi via la cancellazione delle
 aste, e un ritorno indietro sul listone non deve rimettere la striscia verde.
 
-**Le dipendenze sono due, e sono debolissime.** M10 usa i badge di M9 nel Centro dati (se M9 slittasse,
-il Centro dati nasce con i grigi di M8). M11 ha bisogno del pannello di M10 per avere un posto dove
+**Le dipendenze sono due, e sono debolissime.** M10 usa i badge di M9 nel Centro dati — e M9 è chiusa,
+quindi quella dipendenza è già soddisfatta: `InsightBadge` in `components/auction/insights.tsx` aspetta
+il suo terzo chiamante, ed è il momento in cui dimostrerà di essere un componente e non tre
+`className`. M11 ha bisogno del pannello di M10 per avere un posto dove
 dire «ho provato e non ci sono riuscito» — e quella non è cosmetica: un automatismo muto è peggio di
 nessun automatismo. M12 non dipende da niente.
 
@@ -58,6 +64,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M9](09-badge-insight.md) | I badge degli insight, e la striscia verde via | v1.10.0 — su `dev`, tag e rilascio su richiesta |
 | [M8](08-insight-listone.md) | Insight sul listone — titolarità, rigoristi, calci piazzati | v1.9.0 — 2026-08-12 |
 | [M7](07-caricature.md) | Le caricature dei calciatori — la figurina scaricata una volta e guardata per tutta la serata | v1.8.0 — 2026-08-11 |
 | [M6](06-amministrazione.md) | Amministrazione — il pannello: lista utenti, lista aste, e un perimetro strettissimo | v1.7.0 — 2026-08-11 |

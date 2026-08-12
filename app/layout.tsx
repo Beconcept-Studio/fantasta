@@ -1,11 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
-import { LiveBanner, type LiveMembership } from "@/components/auction/live-banner";
 import { Navbar } from "@/components/nav/navbar";
 import { currentUser } from "@/lib/auth";
 import { isAppAdmin } from "@/lib/domain";
-import { listUserAuctions } from "@/lib/engine/setup";
 
 /**
  * La versione mostrata nella navbar viene da `package.json`, letta **qui** e
@@ -69,24 +67,17 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Il banner globale di §8bis e la navbar di M2: stanno qui perché devono
-  // comparire su *tutte* le pagine, e da una sola lettura dell'utente. Chi non
-  // è autenticato non ha aste, e la seconda lettura non avviene.
+  // La navbar di M2 sta qui perché deve comparire su *tutte* le pagine, e da una
+  // sola lettura dell'utente.
+  //
+  // ⚠ **Fino a v1.9.1 qui c'era anche il banner globale «Asta in corso»** di
+  // `PLAN §8bis` punto 1, e con lui una `listUserAuctions(user.id)` a ogni
+  // richiesta di ogni utente autenticato — per una striscia che compariva solo
+  // quando un'asta era viva. Il banner è stato rimosso su richiesta dell'owner
+  // (M9 §5, DECISIONS 2026-08-12) e quel punto del piano ha smesso di valere: chi
+  // rientra passa dalla dashboard. Non rimetterlo qui per «comodità di rientro»
+  // senza rileggere quella voce — la seconda query per pagina era il suo prezzo.
   const user = await currentUser();
-  const live: LiveMembership[] =
-    user === null
-      ? []
-      : (await listUserAuctions(user.id))
-          .filter(
-            (auction) =>
-              auction.isMember &&
-              (auction.status === "LIVE" || auction.status === "PAUSED"),
-          )
-          .map((auction) => ({
-            id: auction.id,
-            name: auction.name,
-            paused: auction.status === "PAUSED",
-          }));
 
   return (
     // Le variabili dei font vanno su <html>, non su <body>: `globals.css`
@@ -96,7 +87,6 @@ export default async function RootLayout({
     // tutta la pagina.
     <html lang="it" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased">
-        <LiveBanner auctions={live} />
         <Navbar
           user={
             user === null

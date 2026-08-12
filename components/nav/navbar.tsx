@@ -13,11 +13,11 @@ import { Button } from "@/components/ui/button";
  * partecipante, dove lo spazio verticale è la risorsa più scarsa dell'app e non
  * può essere speso per una barra di navigazione mentre scorre un countdown di
  * otto secondi. Applicarlo ovunque non costa niente — le altre pagine sono
- * documenti, non cruscotti — e ci risparmia un incastro a tre livelli di
- * `z-index` fra `LiveBanner`, navbar e `PortalHeader`. Restano incollati i due
- * che devono esserlo: il banner, che è il richiamo d'emergenza, e
- * l'intestazione del portale, che tiene crediti e offerta massima sempre in
- * vista.
+ * documenti, non cruscotti — e ci risparmia un incastro di `z-index` con
+ * `PortalHeader`, che invece è incollato e deve esserlo: tiene crediti e offerta
+ * massima sempre in vista. (Fino a v1.9.1 l'incastro era a tre livelli, perché
+ * c'era anche il banner «Asta in corso» in cima a ogni pagina. È stato rimosso
+ * con M9: uno dei tre sticky non esiste più.)
  *
  * **Nome e uscita in chiaro, non dentro un menu a tendina.** Un menu con due
  * voci è un'astrazione prima del secondo chiamante (regola 8), e costerebbe un
@@ -55,10 +55,9 @@ export function Navbar({
   const pathname = usePathname();
 
   // La vista TV è pubblica, nera e proiettata: non ha un utente e non ha
-  // niente da navigare. Stesso meccanismo con cui il `LiveBanner` si toglie di
-  // mezzo sul portale — non un route group: spostare una rotta nell'albero per
-  // una riga di navbar sarebbe riorganizzare l'app per un dettaglio di
-  // presentazione.
+  // niente da navigare. Un controllo sul pathname e non un route group:
+  // spostare una rotta nell'albero per una riga di navbar sarebbe riorganizzare
+  // l'app per un dettaglio di presentazione.
   if (pathname.startsWith("/tv/")) return null;
 
   return (

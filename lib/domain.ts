@@ -215,6 +215,26 @@ export type PlayerInsights = {
 export const GIORNATE = 38;
 
 /**
+ * Da qui in su il badge della titolarità è verde (M9 §1). Sta qui e non dentro un
+ * componente perché è un numero di dominio, come `GIORNATE`.
+ *
+ * **La soglia è contata, non scelta a naso.** Sulla fixture della fonte A (i byte
+ * del 2026-08-11, 497 giocatori di cui 329 mostrabili) con questa `quotaTitolare`:
+ * 61 verdi all'80% — il 12,3% del listone, cinque o sei nomi in una lista di
+ * chiamata da quaranta. A 70% sarebbero 101, cioè uno su cinque, che è il punto in
+ * cui un colore smette di essere un segnale e diventa decorazione.
+ *
+ * ⚠ **Regge solo perché la percentuale è scritta dentro il badge.** La soglia cade
+ * in una zona densa: c'è un grumo di giocatori veri a 32/38 = 84% (Çelik, de Roon,
+ * Højlund, Marusic, McKennie, Modrić, Murić, Pinamonti) e chi sta a 30/38 = 79%
+ * resta grigio — due giocatori a due partite di distanza in due colori diversi. Va
+ * bene finché il numero è leggibile accanto al colore. **Il giorno che qualcuno
+ * togliesse la percentuale dal badge per fare spazio, questa soglia diventerebbe
+ * una bugia**, e chi lo fa non starà rileggendo `docs/features/09-badge-insight.md`.
+ */
+export const SOGLIA_TITOLARE = 0.8;
+
+/**
  * Quante volte è partito titolare, in frazione di stagione. È il numero che
  * decide all'asta: 0,63 per Berardi contro 0,32 per Bernardeschi, che nel file
  * Statistiche di Fantacalcio.it sono due `Pv` quasi uguali (M8 §2).
@@ -231,6 +251,18 @@ export const GIORNATE = 38;
  */
 export function quotaTitolare(i: PlayerInsights): number {
   return Math.min(1, i.startsEleven / GIORNATE);
+}
+
+/**
+ * Verde o grigio: l'unico posto in cui la soglia viene applicata.
+ *
+ * Il confronto è `>=`, e il caso di bordo sta nel test con i suoi numeri dentro —
+ * 32/38 verde, 30/38 grigio. Un predicato invece di un `>= 0.8` sparso nei due
+ * chiamanti (la lista di chiamata e il modale d'offerta) perché la stessa soglia
+ * scritta due volte è una soglia che prima o poi diverge.
+ */
+export function titolareForte(i: PlayerInsights): boolean {
+  return quotaTitolare(i) >= SOGLIA_TITOLARE;
 }
 
 /**
