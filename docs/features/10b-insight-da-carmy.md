@@ -62,6 +62,9 @@ Arrivano dalla conversazione del 2026-08-12, non da `docs/REQUESTS.md` — il qu
 **Tre decisioni dell'owner del 2026-08-12**, date in risposta alle tre domande della sessione:
 
 - **La titolarità è quella di Carmy.** Si smette di dedurla da `starts_eleven / 38` (§4).
+- **La soglia del verde è `>= 4`** sulla scala 1–5. ⚠ Colora un nome su tre: la misura, e la regola
+  di M9 che tocca, sono in §4.
+- **Il prezzo consigliato si scrive**, e come gestirlo lo decide l'owner guardandolo (§6).
 - **Il file si ricarica circa una volta al giorno**, quando serve.
 - **La provenienza non è un problema**: il file lo vedono solo gli `is_pro`.
 
@@ -183,11 +186,27 @@ Le conseguenze vanno dette per esteso, perché toccano la parte più visibile di
   cosa sono esattamente ciò che `showableInsights` era stato scritto per evitare, quindi **la scelta
   fra le due sta in un posto solo**, in `lib/domain.ts`, con il suo test.
 
-> ⚠ **Da guardare prima di scriverlo, non da dedurre.** Questa è la modifica più visibile della
-> macro: cambia ciò che dodici persone leggono sul telefono mentre offrono. La soglia del verde sulla
-> scala 1–5 (`>= 4`? solo `5`?) e la forma del badge («Titolare 5/5», «Titolarissimo», il numero e
-> basta) vanno **viste su una pagina di prova** e scelte dall'owner, come i colori di M9 il
-> 2026-08-12. La spec non le decide.
+**La soglia del verde è `Titolarità >= 4`** (owner, 2026-08-12).
+
+⚠ **E va scritta con accanto la sua misura, perché tocca una regola che M9 aveva messo per
+iscritto.** Contata sul file vero:
+
+| Soglia | Verdi sul listone | In una lista di chiamata da 40 nomi |
+|---|---|---|
+| **`>= 4`** — la scelta | **168/497 = 33,8%** | ~9 portieri, ~15 difensori, ~13 centrocampisti, ~14 attaccanti |
+| `>= 5` | 103/497 = 20,7% | ~6 · ~10 · ~9 · ~7 |
+| M9 oggi, l'80% sulle presenze | 61/497 = 12,3% (sui soli mostrabili) | ~5 |
+
+M9 §1 aveva scritto, contando: *«A 70% sarebbero 101, cioè un nome su cinque, che è il punto in cui
+un colore smette di essere un segnale e diventa decorazione»*. Con `>= 4` si colora **un nome su
+tre**, cioè oltre quella linea; `>= 5` cade esattamente su di essa. **La scelta resta `>= 4`, perché
+è dell'owner** — ma va guardata sulla pagina di prova con quaranta nomi veri sotto, che è il posto in
+cui «uno su tre» smette di essere una percentuale e diventa una schermata. Se lì risultasse troppo,
+la riga da cambiare è una sola e la sua misura è già qui.
+
+⚠ **La forma del badge resta invece da guardare, non da dedurre**: «Titolare 4/5», «Titolarissimo»,
+il numero e basta. Cambia ciò che dodici persone leggono sul telefono mentre offrono, ed è la stessa
+scelta che l'owner ha fatto per i colori di M9 il 2026-08-12 — guardandoli.
 
 **`Affidabilità` e `Integrità` non entrano nel badge.** Sono la stessa scala e lo stesso posto, e tre
 numeri da 1 a 5 accanto a un countdown sono tre numeri che non vengono letti — è la regola di M9 §4
@@ -239,10 +258,21 @@ Il filtro «rigori e piazzati» ha un fratello: i tag di Carmy.
 - **La lista di chiamata**: la riga di `InsightsLine` guadagna la titolarità di Carmy e, al più, un
   tag. ⚠ La riga è già larga quanto un telefono.
 - **Il modale d'offerta**: `InsightsMacro` è il posto dove ci sono i secondi per leggere. Qui vanno
-  `Fascia`, `Prezzo` consigliato, `Affidabilità`, `Integrità` e i tag per esteso. ⚠ **Il prezzo
-  consigliato accanto al campo dell'offerta è la cosa più utile e più pericolosa di questa macro**:
-  va guardato prima di scriverlo, perché una cifra suggerita accanto a una cifra da digitare è un
-  suggerimento che qualcuno seguirà senza pensarci.
+  `Fascia`, `Prezzo` consigliato, `Affidabilità`, `Integrità` e i tag per esteso.
+
+⚠ **Il prezzo consigliato accanto al campo dell'offerta si scrive** (owner, 2026-08-12: «scrivila
+comunque, poi io decido come gestirla»). Resta la cosa più delicata della macro, e la ragione va
+lasciata scritta perché la decisione su *come* gestirla arriva dopo, guardandola: **una cifra
+suggerita accanto a una cifra da digitare è un suggerimento che qualcuno segue senza pensarci** — e a
+differenza di ogni altro numero di questa macro non descrive un giocatore, propone un'azione. Il che
+significa anche che, se otto persone su otto hanno il file, il prezzo consigliato **smette di essere
+un vantaggio informativo e diventa un prezzo di listino**: l'asta converge lì, e la contesa che rende
+interessante la serata si sposta sui pochi nomi in cui qualcuno decide di scostarsene.
+
+Quindi si scrive, e si scrive **in modo da poter essere spostato o spento senza rifare niente**: un
+componente suo, un posto solo da cui si decide se e dove compare. Le tre forme fra cui si sceglierà
+guardando — accanto al campo, sotto le macro insieme agli altri giudizi, oppure dietro un tocco — non
+devono costare tre riscritture.
 
 **I filtri della chiamata, solo per `is_pro`.** Sopra la lista, accanto alla ricerca che c'è già:
 filtro per **fascia**, per **titolarità minima**, e per **tag**. La forma esatta va guardata — è
@@ -352,16 +382,20 @@ pannello, e va detto quando è vecchio di più di un giorno.
       aggancio al 90%, sostituzione integrale in transazione), lo stato per il pannello, e i nomi non
       agganciati riportati per nome. **Nessuna eccezione nuova all'allowlist ESLint**
 - [ ] **M10B-07** — `lib/domain.ts`: la titolarità che viene da Carmy, con il ripiego su M9 quando il
-      file non c'è, **in un posto solo** e con il suo test (§4). ⚠ La soglia e la forma del badge le
-      sceglie l'owner guardandole: **prima una pagina di prova, poi il codice**
+      file non c'è, **in un posto solo** e con il suo test (§4). La soglia del verde è **`>= 4`**
+      (owner), e il test la contiene con la sua misura accanto — 168/497, come `SOGLIA_TITOLARE` ha
+      la sua. ⚠ La **forma** del badge la sceglie l'owner guardandola: prima una pagina di prova,
+      poi il codice
 - [ ] **M10B-08** — Il pannello: il caricamento sotto quello del listone, il quarto timestamp, e
       l'avviso quando il file è vecchio di più di un giorno (§8)
 - [ ] **M10B-09** — Il Centro dati: le colonne nuove, ordinabili con la regola di M10, e il filtro
       per tag
 - [ ] **M10B-10** — `listPickPool`: la chiave `carmy` **assente** per chi non è pro, come `insights`
       (§7). Il test è quello di M8: si asserisce l'assenza della chiave, non il suo valore
-- [ ] **M10B-11** — Il portale: `InsightsLine` nella lista di chiamata, `InsightsMacro` nel modale.
-      ⚠ Il prezzo consigliato accanto al campo dell'offerta **si guarda prima di scriverlo**
+- [ ] **M10B-11** — Il portale: `InsightsLine` nella lista di chiamata, `InsightsMacro` nel modale, e
+      **il prezzo consigliato**, che si scrive (owner). ⚠ In un componente suo e con **un posto solo**
+      da cui si decide se e dove compare: le tre forme fra cui l'owner sceglierà guardando non devono
+      costare tre riscritture (§6)
 - [ ] **M10B-12** — I filtri della chiamata per `is_pro`: fascia, titolarità minima, tag. ⚠ **E la
       riga dell'auto-pick**, che è il vincolo del riquadro di §6 — da scegliere guardando, e da
       provare col filtro acceso

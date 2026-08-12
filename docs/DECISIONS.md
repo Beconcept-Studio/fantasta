@@ -2010,3 +2010,77 @@ vere. Il test passava solo quando `player_insights` era vuota — cioè quando u
 l'aveva appena svuotata — ed è lo stesso «verde da solo, rosso nella suite» del parametro
 `auctionIds` di `insightsCoverage`. I test di M10 hanno adesso un generatore loro, con base
 `10_000_000`.
+
+---
+
+## 2026-08-12 — M10B, gli insight che vengono da un umano
+
+Sessione di sola analisi sul foglio `fixtures/carmy.xlsx`, a valle di M10. **Nessuna macro aperta e
+nessuna riga di codice**: la spec è `docs/features/10b-insight-da-carmy.md`, qui stanno le scelte,
+perché sono scelte.
+
+**Carmy è una terza fonte sovrapposta, non un rimpiazzo delle due di M8.** La misura lo impone: **11
+colonne su 15 sono identiche byte per byte** alla fonte A (497/497 su presenze, partite da titolare,
+minuti, quotazione, rigori, cartellini). Carmy **non porta nessuna statistica nuova**; porta un
+giudizio. Sostituire le due `GET` vorrebbe dire prendere gli stessi numeri da un file caricato a mano
+invece che da una fonte che si aggiorna da sé — e **perdere la gerarchia dei rigoristi**, che Carmy
+ha come tag su 18 giocatori contro i 92 designati con la posizione della fonte B. La posizione *è*
+l'informazione (M9).
+
+**Il giudizio non è la statistica travestita, e c'è la misura.** Correlazione fra `Titolarità` 1–5 e
+`Pt. Tit. / 38`: **0,650** su 466 giocatori. I disaccordi sono esattamente i casi che la richiesta
+voleva modellare — 11 giudicati titolari con ≤10 partite da titolare (Dovbyk al Bologna 5 con 3, Kouadio
+5 con 0, Raspadori all'Atalanta 4 con 7) e 13 giudicati panchinari con ≥25 (Stankovic A. all'Inter 2
+con 34). Nuovo arrivo, cambio di modulo, cambio di allenatore: **la ponderazione che si voleva
+costruire con un modello è già una colonna.**
+
+⚠ **`Pt. Inf.` non è «partite saltate per infortunio», malgrado il nome.** Identica a `injured`
+(497/497), va da 0 a 5, e `Presenze + Pt. Inf.` non converge a 38. È il conteggio di episodi che M8
+§9 aveva già scartato. **Il punto «togliere le giornate di infortunio dal calcolo» resta senza dato**,
+e questa colonna sembra risolverlo senza risolverlo: se un giorno servisse, si chiede a chi compila
+il foglio invece di dedurlo dal nome della colonna.
+
+**Il join è per nome, e la soglia di aggancio qui è una guardia sana.** Carmy non ha `ext_id`: ha
+`Nome` e una sigla di tre lettere per la squadra. Misure: sul solo nome **487/497 = 98%** contro il
+listone (**zero omonimi**), 497/497 contro la fonte A; su `(nome, squadra)` **0%**, perché `ROM` non
+è `Roma`. Si aggancia a `listone_players` — la tabella di M10, che è il denominatore giusto per la
+stessa ragione per cui lo è nel Centro dati — con la sigla come **controllo** e non come chiave.
+⚠ Sotto il 90% l'import rifiuta senza scrivere, e **questo non ripete l'errore che M8 aveva smontato**:
+là il denominatore era il listone di un'asta, avvelenabile da una simulazione con `ext_id` sintetici;
+qui è il listone globale, che nessuna asta può inquinare. La continuità all'85% resta dov'è.
+
+**Tabella separata `carmy_players`, non tre colonne su `player_insights`.** Le due fonti di M8 si
+aggiornano **per colonna con un `upsert`**; questa si sostituisce **per intero** a ogni caricamento,
+come `listone_players`. Mescolarle è il punto in cui, fra sei mesi, il refresh giornaliero di M11
+cancella i giudizi con una `GET`.
+
+**La soglia del verde è `Titolarità >= 4`** (owner). ⚠ Va ricordato cosa comporta, perché tocca una
+regola che M9 aveva messo per iscritto contando: con `>= 4` si colorano **168/497 = 33,8%** del
+listone, cioè **un nome su tre** — in una lista di chiamata da quaranta ne colora tredici o quindici.
+M9 §1 aveva scritto che «uno su cinque è il punto in cui un colore smette di essere un segnale e
+diventa decorazione», e `>= 5` cade esattamente lì (103/497 = 20,7%). La scelta resta `>= 4` perché è
+dell'owner; la misura sta accanto alla soglia così che, guardando la pagina di prova, la riga da
+cambiare sia una sola.
+
+**Il prezzo consigliato si scrive** (owner: «scrivila comunque, poi io decido come gestirla»). La
+ragione per cui è delicato resta scritta: a differenza di ogni altro numero della macro **non descrive
+un giocatore, propone un'azione**, e se tutti hanno il file smette di essere un vantaggio informativo
+e diventa un prezzo di listino — l'asta converge lì. Perciò va scritto in **un componente suo, con un
+posto solo** da cui si decide se e dove compare: le tre forme fra cui si sceglierà guardando (accanto
+al campo, fra le macro, dietro un tocco) non devono costare tre riscritture.
+
+⚠ **E il vincolo più facile da rompere non è un invariante.** La lista di chiamata è ordinata `fvm
+DESC, quot DESC`, che **è** l'ordine dell'auto-pick: un filtro per fascia o titolarità cambia quali
+righe si vedono ma **non cambia chi il timer sceglie**, perché quello pesca dal pool intero dentro
+`machine.ts`. Con un filtro acceso il primo nome della lista non è più quello che verrebbe comprato
+allo scadere, e chi ha imparato a fidarsi di quella riga si ritroverebbe un altro giocatore. Va
+risolto nell'interfaccia in modo esplicito — non con un commento nel codice.
+
+**Le probabili formazioni sono pubbliche, complete, e restano fuori.** Misura del 2026-08-12, che
+**corregge M8 §9**: `fantacalcio.it/probabili-formazioni-serie-a` ha 20 moduli, **220 titolari tutti
+con `ext_id` e con la percentuale di ballottaggio** (90% su 116, 85% su 19, 80% su 34, 75% su 16, 70%
+su 35), 22 infortunati e 5 dubbi con la prosa e la data di rientro, e aggancia al **100%** con i
+nostri identificativi. M8 l'aveva misurata vuota l'11 agosto e ne aveva concluso che i ballottaggi
+stessero solo dietro il JWT di Fantalab: **non è così**. Resta fuori perché Carmy risponde alla stessa
+domanda con un caricamento invece che con un parser e uno scheduler — ma è una strada misurata, non
+chiusa, ed è la risposta pronta il giorno in cui il foglio non arrivasse.
