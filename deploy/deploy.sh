@@ -36,14 +36,33 @@ fi
 # `pnpm build` dura un minuto, e un minuto di silenzio con dieci persone che
 # aspettano è un minuto di panico. Se serve davvero:
 #   DEPLOY_DURING_AUCTION=1 ./deploy/deploy.sh
+#
+# ⚠ **Le aste simulate non contano**, e questa riga è stata aggiunta dopo che il
+# caso è successo (2026-08-12, rilascio di v1.9.0): una simulazione lasciata in
+# pausa mesi prima bloccava ogni deploy, e non c'era modo di chiuderla —
+# `deleteAuction` rifiuta `LIVE` e `PAUSED` anche a un amministratore, e a
+# `COMPLETED` si arriva solo giocando. Il rimedio era ricordarsi ogni volta la
+# variabile d'ambiente, cioè **trasformare una guardia in un rumore da
+# ignorare**: il modo esatto in cui una guardia smette di proteggere il giorno
+# che serve davvero. E il motivo per cui la guardia esiste — «dieci persone che
+# aspettano» — in una simulazione non c'è: aspettano dei bot, che il boot
+# recovery rimette in moto da soli.
+#
+# ⚠ Le simulate in corso vengono comunque **dette**, non ignorate in silenzio:
+# un deploy che passa senza spiegare cosa ha scavalcato insegna a non leggere il
+# suo output.
 if [ "${DEPLOY_DURING_AUCTION:-0}" != "1" ] && command -v psql >/dev/null 2>&1 && [ -f .env ]; then
   DB_URL="$(sed -n 's/^DATABASE_URL=["'"'"']\{0,1\}\([^"'"'"']*\)["'"'"']\{0,1\}$/\1/p' .env | tail -1)"
   if [ -n "$DB_URL" ]; then
-    LIVE="$(psql "$DB_URL" -tAc "select count(*) from auctions where status in ('LIVE','PAUSED')" 2>/dev/null || echo "")"
+    LIVE="$(psql "$DB_URL" -tAc "select count(*) from auctions where status in ('LIVE','PAUSED') and is_simulated = false" 2>/dev/null || echo "")"
     if [ -n "$LIVE" ] && [ "$LIVE" != "0" ]; then
-      echo "✗ Ci sono $LIVE aste in stato LIVE o PAUSED: deploy annullato." >&2
+      echo "✗ Ci sono $LIVE aste reali in stato LIVE o PAUSED: deploy annullato." >&2
       echo "  Se è deliberato: DEPLOY_DURING_AUCTION=1 ./deploy/deploy.sh" >&2
       exit 1
+    fi
+    SIM="$(psql "$DB_URL" -tAc "select count(*) from auctions where status in ('LIVE','PAUSED') and is_simulated = true" 2>/dev/null || echo "")"
+    if [ -n "$SIM" ] && [ "$SIM" != "0" ]; then
+      echo "▸ $SIM aste simulate in corso: non bloccano il deploy (aspettano dei bot)."
     fi
   fi
 fi

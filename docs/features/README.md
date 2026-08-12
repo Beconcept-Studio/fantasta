@@ -68,6 +68,12 @@ esplicita dell'owner («falla direttamente qui»), sono entrati su `dev` senza a
   pausa. `docs/DECISIONS.md`, 2026-08-10.
 - **La prova in locale**: `docs/HOWTO-PROVA-LOCALE.md` e il seed che fa entrare l'owner per ultimo.
 
+Dopo **v1.9.0**, su richiesta esplicita («si direi di filtrare quelle simulate, procedi pure»):
+
+- **La guardia del deploy ignora le aste simulate.** Una simulazione lasciata in pausa bloccava ogni
+  deploy e non c'era modo di chiuderla, quindi l'unico rimedio era scavalcare la guardia ogni volta.
+  `docs/DECISIONS.md`, 2026-08-12.
+
 In **v1.3.1**, sempre su richiesta esplicita («vai pure da `dev` a `main` senza branch»):
 
 - **La versione nella navbar**, accanto al pulsante per uscire. Serve a controllare a vista quale

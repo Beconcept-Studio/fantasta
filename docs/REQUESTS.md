@@ -19,3 +19,6 @@ I badge devono essere:
 - Punizioni: blu
 - Infortunato (ora): rosso
 - Se ci sono altre informazioni da insights usa il viola
+
+### Forzare cancellazione aste
+Da admin devo poter cancellare aste. La cancellazione da admin cade a cascata su tutto il resto. Solo gli utenti annessi non si cancellano.

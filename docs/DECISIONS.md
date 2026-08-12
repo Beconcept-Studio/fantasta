@@ -1688,3 +1688,28 @@ scritto in testa al file di test.
 di righe legate a un'asta e si somigliano, ma quella che conta di più sta prima: una figurina si vede
 da tre metri, una percentuale di titolarità si legge col telefono in mano.
 
+---
+
+## 2026-08-12 — La guardia del deploy ignora le aste simulate
+
+**`deploy/deploy.sh` blocca il deploy solo per un'asta `LIVE` o `PAUSED` non simulata.** Prima
+contava tutte, e il caso è successo davvero durante il rilascio di v1.9.0: «FerroAsta», una
+simulazione messa in pausa il giorno prima, ha annullato il deploy. Il problema non era il singolo
+blocco ma l'assenza di una via d'uscita: **una simulazione in pausa non si può chiudere** —
+`deleteAuction` rifiuta `LIVE` e `PAUSED` anche a un amministratore, non esiste un'azione «termina
+asta», e a `COMPLETED` si arriva solo giocando fino in fondo. L'unico rimedio praticabile era
+ricordarsi `DEPLOY_DURING_AUCTION=1` a ogni rilascio, cioè **abituarsi a scavalcare la guardia**: il
+modo esatto in cui una guardia smette di proteggere il giorno che serve davvero.
+
+La motivazione originale — «un minuto di silenzio con dieci persone che aspettano è un minuto di
+panico» — in una simulazione non si applica: aspettano dei bot, e il boot recovery li rimette in moto
+da solo. Le simulate in corso vengono comunque **stampate** nell'output del deploy: un deploy che
+passa senza dire cosa ha scavalcato insegna a non leggere il suo output.
+
+⚠ **La guardia gira prima del `git reset --hard`**, quindi lo script che decide è sempre quello già
+presente sul server: questa modifica entra in vigore dal deploy **successivo** a quello che la
+installa. Il primo, se una simulata è in pausa, vuole ancora la variabile d'ambiente.
+
+Fatta direttamente su `dev` senza aprire una macro, su richiesta esplicita dell'owner — è una riga di
+uno script di rilascio, non una feature.
+

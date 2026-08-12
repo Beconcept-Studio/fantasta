@@ -4,6 +4,35 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.9.1] — 2026-08-12
+
+**Il deploy non si blocca più per un'asta simulata.** Fino a ieri la guardia che impedisce un rilascio
+mentre si sta giocando contava **tutte** le aste in corso, comprese quelle di prova: una simulazione
+lasciata in pausa bloccava ogni deploy successivo, e non c'era modo di chiuderla — un'asta in pausa non
+si cancella, e a «completata» si arriva solo giocandola fino in fondo. L'unico rimedio era scavalcare
+la guardia a ogni rilascio, che è il modo in cui una guardia smette di proteggere il giorno che serve
+davvero.
+
+Ora blocca solo le aste **reali**. Le simulate in corso vengono comunque stampate nell'output del
+deploy, perché un rilascio che scavalca qualcosa in silenzio insegna a non leggere quello che scrive.
+
+### Per chi aggiorna il server
+
+**Niente**: nessun cambio di schema, nessun `pnpm db:push`, nessun passo a mano. Il deploy automatico
+basta.
+
+⚠ **Ma questo è l'ultimo deploy che può ancora bloccarsi.** La guardia viene eseguita *prima* che il
+codice nuovo venga scaricato, quindi quella che decide è la copia già presente sul server — cioè
+ancora la vecchia. Se in produzione c'è una simulazione in pausa, questo rilascio va forzato una volta
+sola:
+
+```bash
+cd /home/ploi/fantasta.rggndr.it
+DEPLOY_DURING_AUCTION=1 ./deploy/deploy.sh
+```
+
+Dal deploy dopo, il problema non si presenta più.
+
 ## [1.9.0] — 2026-08-12
 
 **M8 — Insight sul listone.** `fvm` dice quanto **costa** un giocatore, non se gioca. Da questa
