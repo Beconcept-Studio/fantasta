@@ -21,17 +21,29 @@ import {
  */
 
 describe("le sezioni del pannello", () => {
-  it("sono Utenti, Aste, Figurine e Listone, in quest'ordine", () => {
+  it("sono Utenti, Aste, Listone e il suo Centro dati, in quest'ordine", () => {
     expect(adminSections().map((s) => s.key)).toEqual([
       "users",
       "auctions",
-      // M7 — in fondo perché è l'unica voce che non parla di righe del
-      // database: è un archivio di file, e sopravvive alle aste.
-      "figurine",
-      // M8 — l'altra voce globale, dopo le figurine: si somigliano, ma quella
-      // che conta di più sta prima.
+      // M10 — `Listone` assorbe le figurine, che fino a v1.10.0 erano una voce
+      // di primo livello: erano le due voci che non parlavano di righe legate a
+      // un'asta, e una accanto all'altra erano un pannello cresciuto per
+      // accumulo. Adesso le caricature sono un blocco dentro questa pagina.
       "listone",
+      "dati",
     ]);
+  });
+
+  /**
+   * ⚠ La prima voce annidata dell'applicazione. Il `parent` non è decorazione:
+   * è ciò da cui la sidebar ricava l'indentazione, e senza di lui «Centro dati»
+   * sembrerebbe una sezione di pari grado di «Utenti».
+   */
+  it("il Centro dati è annidato sotto il listone, e nient'altro lo è", () => {
+    const nested = adminSections().filter((s) => s.parent !== undefined);
+    expect(nested.map((s) => s.key)).toEqual(["dati"]);
+    expect(nested[0].parent).toBe("listone");
+    expect(nested[0].segment).toBe("listone/dati");
   });
 
   /**
@@ -74,18 +86,41 @@ describe("le voci non possono divergere dalle destinazioni", () => {
 
 describe("la sezione attiva si ricava dal pathname", () => {
   it.each([
-    ["users", "Tutti gli utenti"],
-    ["auctions", "Tutte le aste"],
-    ["figurine", "Le figurine dei calciatori"],
-    ["listone", "Gli insight sul listone"],
-  ])("/admin/%s è la sezione con titolo «%s»", (segment, title) => {
+    ["users", "users", "Tutti gli utenti"],
+    ["auctions", "auctions", "Tutte le aste"],
+    ["listone", "listone", "Il listone a sistema"],
+  ])("/admin/%s è la sezione con titolo «%s»", (segment, key, title) => {
     const section = activeAdminSection(`${ADMIN_ROOT}/${segment}`);
-    expect(section?.key).toBe(segment);
+    expect(section?.key).toBe(key);
     expect(section?.title).toBe(title);
+  });
+
+  /**
+   * ⚠ **Il test per cui `activeAdminSection` è stata riscritta in M10.** Fino a
+   * v1.10.0 guardava `parts[1]` e basta: su questo percorso avrebbe acceso
+   * «Listone» e messo in cima alla pagina il titolo del listone, mentre la barra
+   * degli indirizzi diceva un'altra cosa. Il match più lungo vince.
+   */
+  it("/admin/listone/dati accende «Centro dati», non «Listone»", () => {
+    const section = activeAdminSection(`${ADMIN_ROOT}/listone/dati`);
+    expect(section?.key).toBe("dati");
+    expect(section?.label).toBe("Centro dati");
   });
 
   it("una barra finale non cambia la sezione", () => {
     expect(activeAdminSection(`${ADMIN_ROOT}/users/`)?.key).toBe("users");
+    expect(activeAdminSection(`${ADMIN_ROOT}/listone/dati/`)?.key).toBe("dati");
+  });
+
+  /**
+   * Una pagina che un giorno nascesse sotto `listone` senza essere una sezione
+   * resta dentro `Listone`: appartiene a quella sezione, e lasciare la sidebar
+   * spenta sarebbe peggio che accendere la voce da cui ci si è arrivati.
+   */
+  it("una sotto-pagina sconosciuta resta nella sezione che la contiene", () => {
+    expect(activeAdminSection(`${ADMIN_ROOT}/listone/qualcosa`)?.key).toBe(
+      "listone",
+    );
   });
 
   /**

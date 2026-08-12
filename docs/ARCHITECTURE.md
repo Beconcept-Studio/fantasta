@@ -514,6 +514,14 @@ momento dell'import. Se l'anno prossimo il file cambia, le aste dell'anno scorso
 con sé stesse. Un secondo caricamento sostituisce lo snapshot precedente invece di aggiungersi,
 così correggere un file sbagliato non richiede di rifare l'asta.
 
+Dalla versione 1.11 quel file si può anche **non** caricare: se un amministratore ne ha messo uno a
+sistema, chi crea un'asta se lo trova proposto con la data del caricamento accanto, e le righe
+vengono copiate dentro l'asta al posto suo. Il caricamento da file resta comunque — serve a
+correggere un file sbagliato, e a preparare un'asta il giorno in cui a sistema non c'è ancora
+niente — e le due strade si possono alternare quante volte si vuole finché l'asta non parte. Quello
+che **non** cambia è che dentro l'asta ci finisca una copia: il capitolo «Il listone a sistema»
+racconta perché quella parola è la cosa importante della frase.
+
 ### L'invariante che rifiuta un'asta impossibile
 
 Prima di accettare un import, il server verifica che **per ogni ruolo ci siano almeno
@@ -1900,6 +1908,13 @@ navigazione che prima o poi qualcuno confonderà per una difesa. `/admin` non è
 porta, e atterra sulla prima voce della sidebar ricavata dalla lista, non da una stringa scritta due
 volte.
 
+Dalla versione 1.11 una voce è **annidata** — il Centro dati, sotto il listone — e questo ha
+richiesto di riscrivere la funzione che decide quale voce è accesa: guardava il primo segmento dopo
+`/admin` e basta, quindi su `/admin/listone/dati` avrebbe acceso «Listone» e messo in cima alla
+pagina il titolo sbagliato. Adesso vince il percorso più lungo che combacia. È esattamente il bug
+per cui quel file esiste, ripresentatosi in una forma nuova; il test che lo copre nomina il percorso
+per esteso.
+
 Il pulsante «Admin» in navbar compare solo a chi è amministratore, e la navbar riceve **un
 booleano** e non la riga dell'utente: è un client component, e il tipo `User` si porterebbe dietro
 l'ORM fino al telefono.
@@ -2291,6 +2306,153 @@ al 100%**. Nella risposta vera c'è un giocatore con 42 partenze da titolare su 
 campo somma più competizioni — e senza quel limite la card scriverebbe «110% da titolare», che è la
 sola cosa peggiore di non scrivere niente. Il test ha il suo nome dentro, così quella riga non viene
 tolta per pulizia da qualcuno che non sa perché c'è.
+
+---
+
+## Il listone a sistema, e i due file che si chiamano allo stesso modo
+
+Fino alla versione 1.10 il listone non esisteva come cosa in sé. Esisteva solo *dentro* un'asta:
+chi la creava caricava il suo `.xlsx`, quelle righe finivano in `players` con l'`auction_id`
+accanto, e lì restavano. Lo stesso file veniva poi ricaricato per scaricare le caricature, e
+ricaricato ancora per l'asta dopo. Nessun posto dell'applicazione sapeva rispondere alla domanda più
+semplice che ci sia: *chi c'è nel listone di quest'anno?*
+
+Adesso quel posto c'è, e si chiama `listone_players`. Il file si carica **una volta**, in
+amministrazione; da lì si scaricano le caricature, si consulta il Centro dati, e chi crea un'asta se
+lo trova proposto invece di andarlo a cercare nei download.
+
+### Perché la tabella non si chiama `listone`
+
+Perché nel pannello quella parola indica **due file diversi**, ed è la distinzione da cui dipende
+tutto il resto del capitolo.
+
+Il primo è l'export **Leghe** di Fantacalcio.it: un `.xlsx` che si scarica a mano dall'area
+riservata, e che è *quello che definisce un'asta*. Porta la colonna `Fuori lista`, e da quella
+colonna dipendono l'invariante I9 e il toggle che decide se i fuori lista sono comprabili. Il
+secondo è la `GET` pubblica di `api.fantalab.it`, quella che riempie `player_insights` con
+titolarità, minuti e rigori: è la fonte del capitolo precedente, e il pulsante che la chiama si
+chiama «Importa il listone» da quando esiste.
+
+Solo il secondo si può chiedere da sé, e non è una questione di pigrizia: l'export Leghe passa da un
+login, quindi nessun automatismo può andarselo a prendere. C'è un terzo file, *Quotazioni*, che è
+pubblico e si scaricherebbe senza credenziali — ed è già stato scartato una volta, per una ragione
+che vale la pena ripetere: **non ha la colonna `Fuori lista`**. Un listone a sistema costruito da
+lì lascerebbe I9 e il toggle senza il loro dato di ingresso.
+
+Da qui la divisione del lavoro: il listone d'asta si carica a mano, e il refresh automatico
+giornaliero — che arriverà — riguarda solo le due fonti pubbliche degli insight. Le due cose stanno
+nella stessa pagina del pannello perché è il posto giusto per guardarle insieme, non perché siano la
+stessa cosa. E la tabella si chiama `listone_players` e non `listone` per lo stesso motivo per cui
+il codice dice `campioncini` e il menu dice «Figurine»: una tabella che porta il nome di un concetto
+ambiguo è una tabella che qualcuno userà per la cosa sbagliata.
+
+### Resta una copia, e questa è la parte da non toccare
+
+La tentazione, avendo finalmente un listone globale, è farlo leggere direttamente all'asta: una
+tabella sola, niente duplicazione, un `JOIN` e via. Sarebbe sbagliato, e non per ragioni di
+architettura ma di dominio.
+
+Un'asta preparata lunedì non può cambiare listone perché martedì un amministratore ne ha caricato
+uno aggiornato. Le rose comprate quella sera, i prezzi pagati, i giocatori che erano chiamabili e
+quelli che non lo erano: tutto è appeso a quelle righe. Se il listone fosse condiviso, correggere un
+refuso in un nome cambierebbe il verbale di un'asta finita tre settimane fa.
+
+Quindi il principio scritto in `schema.ts` dal primo giorno — *«il listone è copiato dentro l'asta,
+`players.auction_id` congela la lista al momento dell'import»* — non si tocca, e attorno a
+`listone_players` vale una regola con una direzione sola: **è una sorgente da cui si copia, mai una
+tabella da cui l'asta legge.** Nessuna query di gioco la attraversa. Se un `JOIN` verso quella
+tabella comparisse in `machine.ts`, in `rules.ts`, in `snapshot.ts` o nella lettura del pool
+chiamabile, sarebbe un errore anche se funzionasse.
+
+C'è un test che difende esattamente questo, ed è la stessa forma del test che difende gli insight:
+un'asta si crea, si prepara e arriva a `COMPLETED` con `listone_players` **vuota**. Se un giorno un
+pezzo di motore cominciasse a dipendere da quella tabella, è lì che si romperebbe — prima della sera
+dell'asta, invece che durante.
+
+La conseguenza pratica è che le due strade — caricare il file dentro l'asta, oppure caricarlo a
+sistema e copiarlo — devono produrre **le stesse identiche righe**. C'è un test anche per quello, e
+ha un motivo preciso: `players_autopick_idx` ordina per valore di mercato decrescente, e
+quell'ordinamento *è* la scelta automatica che scatta quando scade il tempo di una chiamata. La
+colonna del valore di mercato non si mostra nel Centro dati, per decisione di chi guarda la pagina;
+ma toglierla dalla copia perché «tanto non si vede» cambierebbe **chi viene comprato** allo scadere
+di un countdown. È la trappola più facile di tutta questa parte, e il test esiste per non caderci
+fra sei mesi.
+
+### I9 si valida alla copia, non al caricamento
+
+L'invariante I9 dice: per ogni ruolo, i giocatori disponibili devono essere almeno
+`slot × partecipanti`. Sono tre termini, e due — gli slot e i partecipanti — appartengono a
+un'asta. Al momento in cui il file entra a sistema non c'è nessuna asta di cui chiederlo, quindi
+lì si valida solo il file: che sia leggibile, che abbia le colonne, che gli identificativi non si
+ripetano.
+
+I9 si verifica **alla copia**, con la stessa funzione di sempre. La conseguenza è che lo stesso
+listone globale può passare per un'asta a otto partecipanti e fallire per una a dodici — ed è
+giusto che fallisca, perché quella seconda asta si bloccherebbe davvero a metà serata.
+
+Questo apre una domanda che vale la pena aver risolto bene: cosa succede se la copia fallisce
+proprio **mentre si sta creando l'asta**? La risposta è che l'asta **resta creata**, in bozza, senza
+listone, e il motivo arriva scritto in cima alla sua configurazione. L'alternativa — rifiutare la
+creazione — sarebbe la trappola in cui un file inadatto impedisce di creare un'asta che si
+preparerebbe a mano in trenta secondi.
+
+### Il pannello, e il gate messo solo dove è vero
+
+La sezione «Listone» del pannello tiene insieme il caricamento, lo stato e le due azioni che si
+fanno *con* un listone appena caricato: scaricare le caricature e aggiornare gli insight. Le
+figurine, che fino a ieri erano una voce di primo livello, sono diventate un blocco qui dentro:
+erano l'altra voce che non parlava di righe legate a un'asta, e una accanto all'altra erano un
+pannello cresciuto per accumulo. Il Centro dati ha invece una pagina sua, perché cinquecento righe
+con una casella di ricerca non stanno sotto un modulo di caricamento — e perché è una pagina che si
+apre per consultare, non per agire.
+
+La richiesta originale chiedeva che **entrambe** le sottosezioni restassero inerti finché il listone
+non fosse caricato. È stata accolta per una sola delle due, ed è una scelta che vale la pena
+spiegare. Le caricature hanno una dipendenza vera: senza un elenco di identificativi non c'è niente
+da scaricare, quindi il pulsante spento *dice* qualcosa. Gli insight no: le loro due fonti creano
+righe con la propria chiave e non sanno che il nostro listone esista, quindi bloccarle bloccherebbe
+un aggiornamento che **riuscirebbe**. Un pulsante disabilitato che funzionerebbe è una bugia
+dell'interfaccia. E fra i due c'è già un gate vero, che nessuno ha dovuto inventare: «aggiorna i
+designati» è spento finché la tabella degli insight è vuota, perché la seconda fonte aggiorna righe
+che nascono dalla prima.
+
+### La copertura, che finalmente ha un denominatore
+
+Con un listone a sistema esiste per la prima volta il numero che si vorrebbe leggere: *quanti dei
+giocatori di quest'anno hanno qualcosa da dire?* Sta nel pannello, accanto ai tre timestamp.
+
+Ed è un'informazione, non una guardia — la distinzione conta. La prima versione del controllo sugli
+insight, quella scartata, sbarrava l'import sotto una soglia di copertura, e si è rivelata
+**avvelenabile**: un'asta simulata con identificativi finti portava la copertura a zero su dati
+perfetti. Al suo posto c'è il controllo di continuità, che confronta la fonte con sé stessa.
+Trasformare la copertura globale in una soglia rimetterebbe in piedi esattamente quel problema, con
+un veleno nuovo: un file caricato per sbaglio. Le due domande, del resto, sono diverse — «il *mio*
+listone è coperto?» e «la fonte copre il listone di quest'anno?» — e per questo il pannello le
+mostra tutte e due.
+
+### Il Centro dati
+
+È una tabella e basta: tutto il listone a sistema, con gli insight accanto in `LEFT JOIN`. Chi non
+ha una riga di insight compare lo stesso, con un trattino al posto dei numeri; chi ha insight ma non
+è nel listone non compare affatto, perché il listone è il denominatore.
+
+Ricerca e filtro per ruolo girano **nel browser**, su un carico solo: cinquecento righe con gli
+insight dentro sono un paio di centinaia di kilobyte, un numero che conosciamo perché è già pagato
+una volta a serata da ogni telefono collegato al portale. Niente paginazione, niente ricerca lato
+server, niente attesa fra un tasto e il successivo. Se un giorno il listone avesse cinquemila righe
+sarà il momento di cambiare, e non prima.
+
+La pagina sta dietro la guardia dell'amministrazione, e per questo non contiene nessun controllo sul
+permesso di vedere gli insight: un amministratore li vede per costruzione, e aggiungere il predicato
+qui darebbe l'impressione che ci sia una seconda regola da tenere allineata alla prima.
+
+### La cosa che non si rompe, ed è quella da ricordare
+
+La tabella nasce **vuota**. Finché nessuno carica il file: le caricature non si scaricano, il Centro
+dati dice di essere vuoto, e chi crea un'asta non trova nessuna proposta — carica il suo file come
+ha sempre fatto. **Niente si rompe**, ed è precisamente ciò che rende quel passo facile da
+dimenticare dopo un rilascio. È lo stesso inciampo dell'archivio delle figurine e della tabella
+degli insight, con la stessa cura: il numero grande in cima alla pagina *è* l'allarme.
 
 ---
 

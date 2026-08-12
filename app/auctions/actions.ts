@@ -5,13 +5,14 @@ import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
 
-import type { FormState } from "./form-state";
+import { type FormState, LISTONE_NOTICE_PARAM } from "./form-state";
 import {
   createAuction,
   createInvite,
   deleteAuction,
   fillWithBots,
   importPlayers,
+  importPlayersFromListone,
   joinAsOwner,
   joinAuction,
   removeMember,
@@ -80,6 +81,21 @@ function configFrom(form: FormData) {
   };
 }
 
+/**
+ * ⚠ **Creare un'asta non deve poter fallire per colpa del listone** (M10 §4).
+ *
+ * La copia dal sistema avviene **dopo** che la riga dell'asta esiste, e se non
+ * passa — un listone che non copre gli slot di dodici squadre, cioè I9 —
+ * l'asta **resta creata, in DRAFT, senza listone**, e il motivo viaggia fino
+ * alla configurazione. L'alternativa (rifiutare la creazione) sarebbe la
+ * trappola in cui un file inadatto impedisce di creare un'asta che si
+ * preparerebbe a mano in trenta secondi.
+ *
+ * Il motivo passa da `LISTONE_NOTICE_PARAM` nell'URL perché è l'unico canale che
+ * sopravvive a un `redirect`: la `FormState` muore con la pagina che l'ha
+ * prodotta, e qui la pagina cambia. La costante vive in `form-state.ts`, perché
+ * da un modulo `"use server"` non esce niente che non sia una funzione async.
+ */
 export async function createAuctionAction(
   _prev: FormState,
   form: FormData,
@@ -93,7 +109,47 @@ export async function createAuctionAction(
     form.get("isSimulated") === "on",
   );
   if (!result.ok) return { error: result.error.message };
-  redirect(`/auctions/${result.value.auctionId}/setup`);
+
+  const auctionId = result.value.auctionId;
+  const setup = `/auctions/${auctionId}/setup`;
+
+  // `undefined` quando a sistema non c'era niente da proporre: il campo non
+  // esiste affatto nel form, e non è la stessa cosa di «ho scelto di no».
+  if (form.get("useSystemListone") !== "yes") redirect(setup);
+
+  const copied = await importPlayersFromListone(user.id, auctionId);
+  if (copied.ok) redirect(setup);
+  redirect(
+    `${setup}?${LISTONE_NOTICE_PARAM}=${encodeURIComponent(copied.error.message)}`,
+  );
+}
+
+/**
+ * «Usa il listone a sistema» dalla configurazione dell'asta (M10 §4).
+ *
+ * ⚠ **Non è riservata agli amministratori.** Il listone a sistema lo carica un
+ * admin, ma è un elenco di calciatori di Serie A: legarne l'uso a `is_admin`
+ * vorrebbe dire che un amico che si crea la sua asta deve chiedere il permesso
+ * per non caricare un file. La difesa che conta — solo chi possiede l'asta, solo
+ * in DRAFT/READY — sta nel motore, come per l'import da file.
+ */
+export async function importFromSystemListoneAction(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  const auctionId = text(form, "auctionId");
+  if (!auctionId) return { error: "Asta non indicata." };
+
+  const result = await importPlayersFromListone(user.id, auctionId);
+  if (!result.ok) return { error: result.error.message };
+
+  revalidatePath(`/auctions/${auctionId}/setup`);
+  const { imported, outOfList } = result.value;
+  return {
+    error: null,
+    ok: `Copiati ${imported} giocatori dal listone a sistema (${outOfList} fuori lista).`,
+  };
 }
 
 export async function updateSettingsAction(

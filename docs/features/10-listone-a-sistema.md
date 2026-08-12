@@ -1,6 +1,8 @@
 # M10 — Il listone a sistema
 
-> **Stato:** **da aprire** su `feature/10-listone-a-sistema` · Pianificata il 2026-08-12 · Dipende da
+> **Stato:** **chiusa** su `dev` il 2026-08-12 · Aperta e chiusa su `feature/10-listone-a-sistema` ·
+> Pianificata il 2026-08-12 · ⚠ **Il rilascio è ancora da fare**: `CHANGELOG.md`, `package.json`,
+> merge su `main` e tag `v1.11.0` aspettano una richiesta esplicita dell'owner · Dipende da
 > **M9** solo per un componente: il Centro dati (§6) mostra i badge colorati, ed è il loro terzo
 > chiamante. Se per qualche ragione M9 slittasse, il Centro dati nasce con i due grigi di M8 e i badge
 > arrivano dopo — non è un blocco, è un ordine preferibile.
@@ -26,7 +28,7 @@
 > perché), 6, 8. **P7** (il toggle `include_out_of_list`) dipende da una colonna che la tabella nuova
 > deve portarsi dietro, ed è il vincolo più facile da sbagliare di tutta la macro (§2).
 >
-> ⚠ Si apre **su richiesta esplicita dell'owner**, come tutte.
+> ⚠ Si è aperta **su richiesta esplicita dell'owner**, come tutte.
 
 ## Obiettivo
 
@@ -349,51 +351,143 @@ Due passi sul server, e nessuno te li ricorda:
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M10-01** — Aprire `feature/10-listone-a-sistema` da `dev`; rileggere questo file, e in
+- [x] **M10-01** — Aprire `feature/10-listone-a-sistema` da `dev`; rileggere questo file, e in
       particolare §1 (i due listoni), §2 (`fvm` e `outOfList` che non si tolgono) e §3 (la copia che
       resta una copia). Verificare che `pnpm test` sia verde **prima** di toccare qualcosa, così quando
       i test di M7 romperanno si sa perché
-- [ ] **M10-02** — `lib/db/schema.ts`: `listone_players` come in §2, con i commenti che dicono perché
+      → Baseline: **627 test in 41 file, verdi**.
+- [x] **M10-02** — `lib/db/schema.ts`: `listone_players` come in §2, con i commenti che dicono perché
       `fvm` c'è pur non essendo mostrato e perché `out_of_list` è obbligatorio. `pnpm db:push` in locale
-- [ ] **M10-03** — `lib/engine/listone.ts`: l'upload (parse, `DELETE` + `INSERT` in transazione,
+      → Nessuna divergenza. La tabella è esattamente quella di §2.
+- [x] **M10-03** — `lib/engine/listone.ts`: l'upload (parse, `DELETE` + `INSERT` in transazione,
       `uploadedAt`), lo stato per il pannello (righe, data), la lettura per il Centro dati con il
       `LEFT JOIN` sugli insight, e la copertura globale di §7. **Nessuna eccezione nuova
       all'allowlist ESLint**
-- [ ] **M10-04** — `importPlayersFromListone(actorUserId, auctionId)` in `lib/engine/setup.ts`, con la
+      → Nessuna eccezione aggiunta, come previsto. Due funzioni in più rispetto alla spec:
+      `readListoneForCopy(tx)`, che accetta un `Reader` perché la copia legge **dentro** il lock di
+      setup, e `listoneExtIds()` per M10-08. E una trappola già nota ripresa da `insights.ts`: il
+      `max(uploaded_at)` scritto in `sql<...>` torna una **stringa**, non una `Date` — la conversione
+      è esplicita, con il commento che rimanda alla cicatrice di M8.
+- [x] **M10-04** — `importPlayersFromListone(actorUserId, auctionId)` in `lib/engine/setup.ts`, con la
       parte condivisa estratta da `importPlayers` (regola 8: il secondo chiamante è arrivato).
       **I9 validato alla copia**, `recomputeStatus` in coda, e il rifiuto leggibile se il listone non
       copre gli slot dell'asta
-- [ ] **M10-05** — La proposta alla creazione (`app/auctions/new`) e il pulsante nel setup, con la
+      → La parte condivisa è `replacePlayers(tx, auction, rows)`, e il suo parametro è **strutturale**:
+      accetta sia le righe di `parseListone` sia quelle di `readListoneForCopy` senza che nessuno dei
+      due mondi conosca l'altro. È anche il motivo per cui le due strade producono righe identiche per
+      costruzione e non per attenzione.
+- [x] **M10-05** — La proposta alla creazione (`app/auctions/new`) e il pulsante nel setup, con la
       **data in `Europe/Rome`** (§4). ⚠ Se la copia fallisce, **l'asta resta creata in DRAFT** e il
       messaggio dice perché: da provare a mano, non solo con un test
-- [ ] **M10-06** — `lib/admin-nav.ts`: la gerarchia di §5 con la voce annidata, `Figurine` che
+      → La spec diceva «una scelta nel form, preselezionata». Mostrati tre mockup all'owner, che ha
+      scelto **due alternative esplicite** («Il listone a sistema · N giocatori · caricato il …» /
+      «Lo carico io») invece della casella spuntata: costa una domanda in più, e in cambio rende
+      visibile che la seconda strada esiste. → `when()` è uscita da `app/admin/listone/page.tsx` e
+      vive in `lib/when.ts`: i chiamanti sono **tre**, non due. → Il motivo del fallimento viaggia in
+      un parametro dell'URL, perché la creazione finisce con un `redirect` e la `FormState` muore con
+      la pagina; la costante sta in `form-state.ts`, perché da un modulo `"use server"` non esce
+      niente che non sia una funzione async — cosa che quel file dice in cima, e che ha già fatto
+      danno una volta.
+- [x] **M10-06** — `lib/admin-nav.ts`: la gerarchia di §5 con la voce annidata, `Figurine` che
       sparisce dal primo livello, e **`activeAdminSection` che risolve i percorsi a due segmenti** —
       con il suo test, perché è il bug per cui quel file esiste
-- [ ] **M10-07** — `/admin/listone`: l'upload, lo stato in cima (il numero grande **è** l'allarme del
+      → `AdminSection` ha un campo `parent` in più: senza, la sidebar non saprebbe indentare e «Centro
+      dati» sembrerebbe di pari grado di «Utenti». → `activeAdminSection` sceglie il **match più
+      lungo**, e una sotto-pagina sconosciuta resta dentro la sezione che la contiene invece di
+      spegnere la sidebar. Tre test nuovi.
+- [x] **M10-07** — `/admin/listone`: l'upload, lo stato in cima (il numero grande **è** l'allarme del
       passo a mano), il blocco Caricature **con il gate** e senza campo file, il blocco Insight
       **senza gate** (§5), i due timestamp e la copertura
-- [ ] **M10-08** — `downloadCampionciniAction`: gli id dalla tabella invece che dal file. ⚠ I test di
+      → I timestamp sono **tre** e non due: al listone d'asta caricato a mano si aggiungono i due
+      degli insight, che restano separati per la ragione di M8 — un pannello che ne mostrasse uno solo
+      non saprebbe dire quale fonte è ferma da tre mesi. → `app/admin/figurine/page.tsx` è stata
+      cancellata, non svuotata.
+- [x] **M10-08** — `downloadCampionciniAction`: gli id dalla tabella invece che dal file. ⚠ I test di
       M7 su quell'azione si romperanno, e si sistemano **togliendo il file**, non allentando le
       asserzioni. Il test di M6 sull'elenco delle action deve restare verde da sé (nessuna azione nuova)
-- [ ] **M10-09** — `/admin/listone/dati`: la tabella di §6, search e filtro per ruolo nel browser,
+      → ⚠ **Due previsioni sbagliate, in direzioni opposte.** I test di M7 su quell'azione **non
+      esistevano**: l'unico posto in cui `downloadCampionciniAction` compare nei test è l'elenco di
+      M6, quindi non c'è stato niente da allentare né da togliere. E il test di M6 **si è rotto**, ma
+      non per questa azione: la macro ne aggiunge una, `uploadListoneAction`, e §5 si riferiva alla
+      sola modifica delle caricature. Sistemato come prescrivono M7 e M8: riga aggiunta **dopo** aver
+      visto il test rompersi, insieme alla guardia in cima all'azione, e uguaglianza rimasta esatta.
+      → Riscritto anche il messaggio «il file è ancora selezionato», che non era più vero.
+- [x] **M10-09** — `/admin/listone/dati`: la tabella di §6, search e filtro per ruolo nel browser,
       badge di M9, `requireAppAdmin()` **anche nella pagina**
-- [ ] **M10-10** — Test con Postgres: un upload sostituisce l'intera tabella; **un'asta si crea e si
+      → Mostrati tre mockup all'owner, che ha scelto la **tabella unica con testata fissa**: tutte le
+      righe renderizzate, `Fuori lista` come segno accanto al nome e non come settima colonna (vuota
+      per il 95% delle righe, e stringerebbe le due che si leggono davvero). → `TitolaritaBadge` e
+      `SetPieceBadges` sono stati **esportati** da `components/auction/insights.tsx`: il Centro dati
+      li usa in due colonne separate, quindi non gli servivano le composizioni pronte ma i due pezzi.
+      È il terzo chiamante, quello che li rende un componente. → I nomi normalizzati per la ricerca si
+      calcolano una volta sola con `useMemo`, non a ogni tasto.
+- [x] **M10-10** — Test con Postgres: un upload sostituisce l'intera tabella; **un'asta si crea e si
       gioca con `listone_players` vuota** (nessun dato di questa macro su un percorso critico); la
       copia dentro l'asta produce le **stesse righe** dell'upload dello stesso file — `fvm` e
       `out_of_list` compresi, ed è il test che protegge l'ordine dell'auto-pick; la copia **fallisce**
       se il listone non copre gli slot (I9) e l'asta resta in DRAFT; il Centro dati mostra `—` per chi
       non ha insight; un non-admin è rifiutato sull'azione di upload
-- [ ] **M10-11** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
+      → 13 test in `tests/db/listone.test.ts`. L'asta non si limita a «giocare»: arriva a
+      **`COMPLETED`** con la tabella vuota, 32 assegnazioni, in 386 ms — la stessa tecnica di
+      `tests/engine/machine.test.ts` (nessuno agisce, i round scadono) ma contro Postgres. Aggiunta
+      anche la **verifica 5**, che la spec metteva solo fra le verifiche a mano: un'asta preparata non
+      cambia quando a sistema si carica un altro file. → ⚠ **Il file non scrive mai su
+      `player_insights`**, e non è pigrizia: `tests/db/insights.test.ts` la svuota nel suo
+      `beforeEach` e vitest gira i file in parallelo, quindi una riga scritta da qui potrebbe sparire
+      a metà di un test di lì — o comparire in mezzo a un suo conteggio e rompere un test che non
+      c'entra niente. Il `LEFT JOIN` si prova dal lato deterministico: `ext_id` sintetici che nessuna
+      fonte ha. → Il rifiuto del non-admin sull'upload è coperto dall'elenco di M6, che chiama **ogni**
+      azione del pannello con un utente qualunque e ne pretende il rifiuto.
+- [x] **M10-11** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
       spento)
-- [ ] **M10-12** — `docs/ARCHITECTURE.md`: il capitolo sui **due listoni** e sul perché uno resta
+      → 643 test in 42 file. `pnpm build` dato con il dev server spento, su richiesta all'owner.
+- [x] **M10-12** — `docs/ARCHITECTURE.md`: il capitolo sui **due listoni** e sul perché uno resta
       copiato dentro l'asta. `docs/DECISIONS.md`: la tabella globale con `fvm` tenuto pur non essendo
       mostrato, il gate solo su Caricature con le quattro ragioni, la copertura globale che resta
       informazione, il campo file delle caricature che sparisce. Più
       `docs/HOWTO-PROVA-LOCALE.md` (in locale il listone a sistema si carica una volta e serve tutte
       le prove) e `docs/features/README.md`
+      → Il capitolo nuovo di `ARCHITECTURE.md` è «Il listone a sistema, e i due file che si chiamano
+      allo stesso modo»; toccati anche «Il listone» del setup e «La navigazione» del pannello, che
+      dicevano cose diventate false. In `HOWTO-PROVA-LOCALE.md` il §6 è stato **riscritto**: il
+      listone a sistema è il primo passo, e le figurine sono diventate un suo sottoparagrafo — che è
+      la stessa gerarchia del pannello.
 - [ ] **M10-13** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       esplicita** — `CHANGELOG.md`, `package.json`, merge su `main`, tag `v1.11.0`, push. **E il
       `CHANGELOG.md` deve contenere i due passi a mano di §9 scritti per esteso**
+
+## Com'è andata
+
+**Le tre trappole annunciate sono state tutte evitate, e nessuna era quella che ha fatto perdere
+tempo.** `fvm` e `out_of_list` sono nella tabella e nella copia, e c'è un test che confronta riga per
+riga i `players` prodotti dalle due strade; nessun `JOIN` verso `listone_players` è entrato nel
+motore, e l'asta arriva a `COMPLETED` con la tabella vuota. Quello che la spec aveva sbagliato sta
+altrove.
+
+**§5 diceva che il test di M6 non si sarebbe rotto, e si è rotto.** La frase era giusta nel suo
+paragrafo — `downloadCampionciniAction` non cambia nome né firma nell'elenco — ma la macro
+un'azione la aggiunge, `uploadListoneAction`, e nessuno l'aveva contata. Il test ha fatto
+esattamente il lavoro per cui è scritto in quel modo, per la terza volta dopo M7 e M8.
+
+**E §5 prometteva test di M7 da sistemare che non esistono.** «I test di M7 su quell'azione si
+romperanno» dava per scontato che ci fossero asserzioni sul file caricato: non ce n'era nessuna —
+`downloadCampionciniAction` compare nei test in un posto solo, l'elenco di M6. Le due previsioni
+sbagliate sono in direzioni opposte e vengono dallo stesso errore: la spec ha immaginato la forma dei
+test invece di guardarla.
+
+**La spec non aveva previsto dove sarebbe finita la data.** §4 diceva «la funzione `when()` esiste
+già in `app/admin/listone/page.tsx` e ora ha il suo secondo chiamante»: i chiamanti sono tre, e una
+funzione condivisa da tre pagine dentro una pagina è il tipo di posto in cui una modifica al fuso
+orario ne aggiorna uno solo. Adesso sta in `lib/when.ts`.
+
+**Due decisioni sono state prese guardando, non deducendo**, come per i colori di M9: la forma della
+proposta alla creazione (due alternative esplicite, non una casella spuntata) e il Centro dati
+(tabella unica con testata fissa, `Fuori lista` come segno accanto al nome). Entrambe scelte
+dall'owner su mockup, entrambe diverse dalla prima ipotesi della spec.
+
+**Il gate su Insight non è stato messo, ed è la cosa che più assomiglia a una disobbedienza alla
+richiesta.** Le quattro ragioni di §5 tengono tutte; quella che decide resta la quarta — M11 lo
+smonterebbe fra una macro.
 
 ## Verifica
 
