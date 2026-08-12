@@ -45,8 +45,22 @@ sono chiuse**; le altre due si aprono **su richiesta esplicita**, una alla volta
 
 | Macro | Tema | Schema | Ordine |
 |---|---|---|---|
+| **[M10B](10b-insight-da-carmy.md)** | Gli insight che vengono da un umano: il foglio di Carmy, la titolarità letta invece che dedotta, i filtri per chi ha `is_pro` | **sì** + backfill | libera |
 | **[M11](11-refresh-giornaliero.md)** | Il refresh giornaliero degli insight, dentro l'unico processo | sì, piccolo | 3ª |
 | **[M12](12-cancellazione-aste.md)** | Cancellare un'asta per forza, anche in corso | no | 4ª |
+
+**M10B non è della fila delle quattro**, ed è scritta il 2026-08-12 dopo la chiusura di M10. È il
+**refactor degli insight** che M10 ha reso possibile: si aggancia a `listone_players` per nome — 98%
+misurato, zero omonimi — e senza quella tabella non avrebbe un denominatore. Va dopo M10; rispetto a
+M11 l'ordine è indifferente, ma se M11 arriva prima eredita gratis il posto dove dire da quanto il
+file non viene ricaricato. ⚠ **M11 non la può automatizzare**: è un file che una persona compila.
+
+⚠ **E porta una misura che corregge M8 §9, da non riscoprire da capo.** Il 2026-08-12
+`fantacalcio.it/probabili-formazioni-serie-a` è **piena** — 20 moduli, 220 titolari tutti con
+`ext_id` **e con la percentuale di ballottaggio**, 22 infortunati con la data di rientro — e aggancia
+al **100%** con i nostri identificativi. M8 l'aveva misurata vuota l'11 agosto e ne aveva concluso che
+i ballottaggi stessero solo dietro il login di Fantalab: **sono pubblici**. Resta una strada non
+percorsa, non una strada chiusa: sta in M10B §9.
 
 ⚠ **M11 eredita da M10 il posto in cui dire «ho provato e non ci sono riuscito»**: la sezione Listone
 del pannello, con i suoi tre timestamp. E eredita anche una promessa — il pulsante «Aggiorna il
