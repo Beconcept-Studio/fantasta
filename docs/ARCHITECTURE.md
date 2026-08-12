@@ -1156,10 +1156,11 @@ accesso, che è dove si guarda quando l'app non fa entrare. Il blocco utente si 
 sessione e il nome solo se esiste, il che copre senza casi speciali sia `/signin` (dove non c'è
 sessione) sia `/onboarding` (dove il nome è proprio ciò che si sta scrivendo, ma l'uscita deve
 esserci: è l'unica via di fuga per chi è entrato con l'account sbagliato). Si toglie di mezzo sulla
-sola vista TV, che è pubblica e proiettata — e con lei si toglie anche il banner dell'asta in corso,
-che fino a quel momento si incollava in cima allo schermo proiettato ogni volta che l'owner avesse
-una sessione aperta nello stesso browser: una striscia verde che invita ad andare al proprio
-portale, sopra un tabellone che guarda tutta la stanza.
+sola vista TV, che è pubblica e proiettata e non è la pagina di chi la guarda.
+
+Fino a v1.9.1 lì accanto c'era anche una **striscia verde «Asta in corso»**, su ogni pagina, e da
+v1.10.0 non c'è più: il capitolo del portale racconta perché, perché è lì che il suo posto è stato
+preso da qualcos'altro.
 
 Dentro un'asta, un layout su `/auctions/[id]` legge una volta chi guarda e che rapporto ha con
 quell'asta, e da due booleani — la possiede, ci gioca — ricava le sezioni. **Dipendono dal ruolo e
@@ -1181,10 +1182,10 @@ riga viene dalla stessa lettura e ha quindi la stessa età.
 Un dettaglio che sembra estetico e non lo è: **niente di tutto questo è sticky**. Il requisito nasce
 dal portale, dove lo spazio verticale è la risorsa più scarsa dell'applicazione e non può essere
 speso per una barra di navigazione mentre scorre un countdown di otto secondi; applicarlo ovunque
-non costa nulla, perché le altre pagine sono documenti e non cruscotti, ed evita un incastro a tre
-livelli di `z-index`. Restano incollati i due che devono esserlo: il banner dell'asta in corso, che
-è il richiamo d'emergenza, e l'intestazione dell'asta live, che tiene crediti e offerta massima
-sempre in vista.
+non costa nulla, perché le altre pagine sono documenti e non cruscotti, ed evitava un incastro a tre
+livelli di `z-index`. Resta incollato solo ciò che deve esserlo: l'intestazione dell'asta live, che
+tiene crediti e offerta massima sempre in vista. I tre livelli sono diventati due quando la striscia
+verde è stata rimossa.
 
 Il costo tecnico di tutto questo è una riga: `getAuctionOverview` è avvolta in `cache()` di React,
 perché ora la chiamano sia il layout sia la pagina. La memoizzazione dura quanto la richiesta e non
@@ -1209,13 +1210,28 @@ corrente è esattamente il modo in cui si desincronizza un'asta.
 ### Tre livelli, e nessuna notifica
 
 La gerarchia della UI è quella di `docs/PLAN.md` §8bis, e ogni livello esiste per un modo preciso in
-cui un partecipante può perdersi.
+cui un partecipante può perdersi. Da v1.10.0 i livelli sono **due**, non tre, e il primo che è caduto
+è l'unico pezzo di quel piano che ha smesso di valere: vale la pena raccontarlo per esteso, perché
+`PLAN.md` è archivio vincolante e continuerà a descrivere una cosa che l'applicazione non fa più.
 
-Il **banner globale** sta nel layout radice, quindi compare su qualunque pagina — dashboard
-inclusa — quando l'utente è membro di un'asta `LIVE` o `PAUSED`. Serve a chi ha chiuso il tab per
-sbaglio o ha riaperto l'app dalla home dello smartphone: senza, l'unico modo di rientrare sarebbe
-ricordarsi un URL con un uuid dentro. Si nasconde solo sul portale di quell'asta, dove porterebbe
-dove già sei.
+Il **banner globale «Asta in corso»** stava nel layout radice e compariva su qualunque pagina quando
+chi guardava era membro di un'asta `LIVE` o `PAUSED`. Nel piano era «il modo con cui un utente
+rientrato trova la strada da solo»; nell'uso è risultato **più disturbante che utile** — una striscia
+verde in cima a ogni schermata, per tutta la sera, che dice una cosa che chi è in quella stanza sa
+già. È stato rimosso su richiesta dell'owner, per tutte le aste e senza eccezioni.
+
+Al suo posto non c'è un rimando nuovo in navbar: c'è **la dashboard**. Chi chiude il tab per sbaglio
+riapre l'app, vede le proprie aste elencate e ne apre una — un tocco in più di prima, in cambio del
+silenzio in cima a ogni pagina. E chi arriva sulla lobby di un'asta già iniziata viene portato al
+portale da sé, perché quella navigazione automatica — l'unica dell'applicazione — la decide lo
+snapshot e non è mai dipesa dal banner.
+
+La cosa importante da capire è che **il banner era il modo di *arrivare* alla pagina, non di
+ricostruirla**. I cinque rientri di §8bis continuano a funzionare identici, perché dipendono dallo
+snapshot: chi si ricollega a metà lotto ritrova la schermata esatta di prima, banner o non banner.
+La sua rimozione fa *sembrare* rotto I10 e non lo sfiora. Il guadagno collaterale è misurabile: il
+layout radice non chiama più `listUserAuctions` a ogni richiesta di ogni utente autenticato, cioè una
+query per pagina in meno per un elemento che compariva solo qualche sera all'anno.
 
 La **card del lotto** è un elemento *permanente* del portale finché c'è un lotto corrente. È la
 correzione dell'errore che l'anno scorso ha reso l'app inutilizzabile: se l'unica interfaccia per
@@ -2079,7 +2095,7 @@ login: qui il passo mancante non rompe niente, si vede e basta.
 
 `fvm` è una quotazione: dice quanto **costa** un giocatore sul mercato, non se gioca. Fino a v1.8.0
 era l'unico numero che l'applicazione sapeva dire, e le domande che si fanno davvero a un'asta —
-*parte titolare? tira i rigori? batte le punizioni?* — si risolvevano con un telefono in mano e
+*parte titolare? tira i rigori? batte i piazzati?* — si risolvevano con un telefono in mano e
 un'altra app aperta. In una fase a tempo di dieci secondi, questo vuol dire che non si risolvevano.
 
 Da M8 quelle risposte stanno dentro l'applicazione, e arrivano da **due `GET` pubbliche** che il
@@ -2198,8 +2214,8 @@ questa macro senza che una sola riga del motore cambi.
 
 ### Dove si vede, e perché in due posti soli
 
-Nella **lista di chiamata** c'è la riga densa: percentuale di titolarità, minuti medi, e i badge di
-rigorista e piazzati. Lì si scorre e si confronta — quaranta nomi, e la scelta è fra due o tre —
+Nella **lista di chiamata** c'è la riga densa: il badge della titolarità con la sua percentuale, i
+minuti medi, e i badge di rigorista e piazzati. Lì si scorre e si confronta — quaranta nomi, e la scelta è fra due o tre —
 quindi più informazione aiuta, purché stia su una riga che si legge in mezzo secondo.
 
 Nel **modale d'offerta** ci sono solo le macro: quanto è titolare, e se batte. Lì non si confronta,
@@ -2210,6 +2226,50 @@ insegnato la figurina.
 Nella card del lotto **no**, e non è una dimenticanza: la card non sparisce mai ed è la schermata
 che si guarda anche quando non si sta offrendo, mentre la domanda «quanto vale?» ce l'ha il modale.
 Due chiamanti, non tre.
+
+### Il colore accelera, il numero decide
+
+M8 ha portato dentro i numeri e li ha vestiti con quello che c'era: due grigi che si distinguono a
+fatica, e la titolarità nemmeno un badge — testo con una percentuale in grassetto. Sotto un countdown
+di dieci secondi, con un pollice sulla tastiera, la differenza fra «leggibile» e «riconoscibile senza
+leggere» è tutta la differenza che conta, e v1.10.0 dà **un colore a ogni fatto**: verde la titolarità
+alta, blu chi batte i rigori e chi batte i piazzati, grigio tutto il resto.
+
+Il verde ha una soglia, e la soglia è stata **contata prima di essere scritta**: dall'80% in su. Sulla
+risposta vera della fonte sono 61 giocatori su 497 — il 12,3% del listone, cioè cinque o sei nomi in
+una lista di chiamata da quaranta: abbastanza raro da voler dire qualcosa, abbastanza frequente da non
+sembrare un guasto. Al 70% sarebbero 101, un nome su cinque, che è il punto in cui un colore smette di
+essere un segnale e diventa decorazione. Quel conteggio dice anche una verità di dominio che nessuno
+aveva scritto: i verdi sono venticinque difensori e **sei attaccanti**. Gli attaccanti ruotano, e chi
+guarda i badge lo scopre da sé.
+
+C'è però un prezzo, e va detto perché è la ragione per cui una riga di codice non va toccata. La
+soglia cade in una zona densa: c'è un grumo di giocatori veri a 32/38, che è l'84%, e chi sta a 30/38
+— il 79% — resta grigio. Due giocatori a due partite di distanza finiscono in due colori diversi, e
+questo va bene **solo perché la percentuale è scritta dentro il badge**. Il giorno in cui qualcuno
+togliesse il numero per fare spazio, la soglia diventerebbe una bugia: per questo il numero non è un
+dettaglio grafico ma parte della correttezza, e sta scritto accanto alla costante invece che solo qui.
+
+Dalla stessa regola discende che **il colore non è mai l'unica informazione**: verde e grigio a fianco
+non li distingue chiunque, quindi il badge dice sempre la percentuale e non «Titolare» da solo. Un
+badge senza testo non si aggiunge a quella lista. E il blu non cambia col rank: il colore dice *che*
+batte, il numero dice *quanto* conta — «secondo rigorista» vale molto meno di «primo», e un pallino
+colorato butterebbe via il dato per mostrarlo meglio.
+
+I quattro colori stanno in un posto solo, e non è la primitiva del badge. `components/ui/badge.tsx`
+non ha preso varianti nuove: un verde che significa «parte titolare almeno quattro volte su cinque»
+non vuol dire niente fuori da questa lista, quindi il vocabolario vive accanto ai suoi due chiamanti,
+in `components/auction/insights.tsx`. È la stessa scelta con cui il progetto ha rifiutato un
+`dialog.tsx` condiviso: le primitive si allargano quando arriva un secondo chiamante *generico*, e qui
+non arriverà. La quarta variante — il neutro — non ha un uso oggi: è il colore riservato al prossimo
+fatto categorico che arriverà dagli insight, perché quattro colori sono il massimo che una riga densa
+regge e il quinto renderebbe illeggibili i primi quattro.
+
+Un colore che la richiesta chiedeva **non** c'è, ed è il rosso di «Infortunato». Non per difficoltà:
+lo stato «si è rotto adesso» esiste in chiaro su Fantacalcio.it, ma si popola a campionato in corso e
+l'asta si fa ad agosto — interrogata quella pagina d'estate contiene quattro infortunati in tutta la
+Serie A. Un badge rosso che non compare mai la sera per cui esiste l'applicazione è lavoro speso male;
+uno generato da una pagina letta tre settimane prima sarebbe peggio, sarebbe una bugia.
 
 Un dettaglio piccolo che riassume l'atteggiamento di tutto il capitolo: **`—` e `0` non si scrivono
 allo stesso modo**. Un giocatore senza dati e un giocatore che non è mai partito titolare sono due

@@ -1,6 +1,8 @@
 # M9 — I badge degli insight, e la striscia verde via
 
-> **Stato:** **da aprire** su `feature/09-badge-insight` · Pianificata il 2026-08-12 · Nessuna
+> **Stato:** **chiusa** su `dev` il 2026-08-12 (`feature/09-badge-insight`, merge `--no-ff`) ·
+> `main`, tag `v1.10.0` e `CHANGELOG.md` **su richiesta esplicita dell'owner**, non ancora dati ·
+> Pianificata il 2026-08-12 · Nessuna
 > dipendenza da macro aperte: non ce ne sono, e M8 (v1.9.0) è in produzione **con i suoi tre passi a
 > mano già dati** — schema applicato, le due fonti importate, `is_pro` acceso (confermato dall'owner
 > il 2026-08-12). Quindi i badge di questa macro hanno dei dati veri sotto dal primo minuto.
@@ -236,36 +238,77 @@ dall'utente: una soglia che si può cambiare è una soglia di cui nessuno conosc
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M9-01** — Aprire `feature/09-badge-insight` da `dev`; rileggere questo file, e in particolare
+- [x] **M9-01** — Aprire `feature/09-badge-insight` da `dev`; rileggere questo file, e in particolare
       §1 e il punto 1 delle richieste: la soglia contata e il badge rosso ritirato sono le due cose
       che si è tentati di rifare a naso. Verificare che `pnpm test` sia verde **prima** di toccare
       qualcosa
-- [ ] **M9-02** — `lib/domain.ts`: la soglia dell'80% come costante con un nome, e il predicato che
+      → Baseline verde prima di qualunque modifica: **41 file, 622 test**.
+- [x] **M9-02** — `lib/domain.ts`: la soglia dell'80% come costante con un nome, e il predicato che
       decide verde o grigio. Test puro **con il caso di bordo di §1 dentro**: 30/38 grigio, 32/38
       verde — la zona densa senza il suo caso è una riga che qualcuno sposterà
-- [ ] **M9-03** — `components/auction/insights.tsx`: i tre badge colorati, il neutro riservato, i
+      → `SOGLIA_TITOLARE = 0.8` accanto a `GIORNATE`, e `titolareForte(i)` accanto a `quotaTitolare`.
+      Il caso di §1 c'è con i suoi numeri e gli otto nomi del grumo nel commento. **Un caso che avevo
+      scritto è stato tolto perché era falso**: «l'80% esatto è verde» non è provabile con un
+      `30.4/38`, che in virgola mobile vale 0,7999… ed è **grigio** — il test avrebbe asserito il
+      contrario di quello che voleva dire. Al suo posto il confine vero: **31/38 verde, 30/38
+      grigio**, con la nota che `0,8 × 38 = 30,4` e quindi con `starts_eleven` intero **nessun
+      giocatore cade sulla soglia**: `>` e `>=` colorano le stesse persone.
+- [x] **M9-03** — `components/auction/insights.tsx`: i tre badge colorati, il neutro riservato, i
       token per tema chiaro e scuro. Nessuna variante nuova in `components/ui/badge.tsx` (§6). Il
       testo resta dentro ogni badge (§2)
-- [ ] **M9-04** — «Punizioni» → **`Piazzati`** (§3), che è già il nome nel codice di M8: verificare
+      → `badge.tsx` non toccato. I colori scelti **guardandoli** su una pagina di prova coi valori
+      veri della Tailwind installata: **`blue-600` e non `sky-600`** (owner), tinta tenue e non
+      pieno. Tre differenze dalla spec: **la §2 conta quattro colori e il codice ne rende tre**
+      (grigio sotto soglia e neutro riservato sono la stessa `secondary` — vedi «Com'è andata»); il
+      rapporto grezzo del modale **resta fuori** dal badge invece di sparire (owner); e i badge sono
+      un `InsightBadge` con un tono, non tre `className`, perché il terzo chiamante è già annunciato
+      da M10.
+- [x] **M9-04** — «Punizioni» → **`Piazzati`** (§3), che è già il nome nel codice di M8: verificare
       che non sia rimasta la parola sbagliata da nessuna parte, `docs/` compresa
-- [ ] **M9-05** — Via `components/auction/live-banner.tsx`, la sua riga in `app/layout.tsx` **e la
+      → Nel codice la parola non compariva in nessun testo a schermo: sopravvive in due **commenti**
+      che spiegano perché non si usa (`lib/import/parseRigoristi.ts`, `lib/db/schema.ts`), e lì è
+      giusto che resti. **Una occorrenza vera c'era, in `docs/ARCHITECTURE.md`**: il capitolo degli
+      insight apriva con «*parte titolare? tira i rigori? batte le punizioni?*», cioè usava la parola
+      come se fosse il fatto. Corretta in «batte i piazzati?».
+- [x] **M9-05** — Via `components/auction/live-banner.tsx`, la sua riga in `app/layout.tsx` **e la
       query `listUserAuctions` che serviva solo a lui** (§5). Il `LiveMembership` esportato muore con
       il file: verificare che non lo importi nessun altro
-- [ ] **M9-06** — Verificare che i cinque rientri di §8bis siano ancora verdi (`portal.test.ts`) e
+      → `LiveMembership` non era importato da nessun altro. La **funzione** `listUserAuctions` resta:
+      il suo chiamante vero è la dashboard, che dopo M9 è l'unica strada di rientro e quindi la usa
+      più di prima — se ne va la **chiamata** nel layout radice, che è la query per pagina di §5.
+      Due cose in più, che il task non prevedeva e che senza il file diventavano rimandi a niente:
+      **due commenti in `components/nav/navbar.tsx`** («incastro a tre livelli di `z-index` fra
+      `LiveBanner`, navbar e `PortalHeader`», e il meccanismo con cui il banner si toglieva di mezzo)
+      e **tre passaggi di `docs/ARCHITECTURE.md`**.
+- [x] **M9-06** — Verificare che i cinque rientri di §8bis siano ancora verdi (`portal.test.ts`) e
       che la lobby porti ancora su `/play` all'avvio: il banner era il modo di arrivare alla pagina,
       non di ricostruirla, e la differenza va provata invece di essere raccontata
-- [ ] **M9-07** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
+      → `portal.test.ts` **31/31 verdi**, con i cinque rientri nominati uno per uno. La lobby non è
+      stata toccata: `router.push` su `snapshot.auction.status === "LIVE"`, cioè la decisione la
+      prende lo snapshot come prima.
+- [x] **M9-07** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
       spento — è una macro tutta di UI, quindi è **esattamente** quella in cui un errore di lint fa
       fallire la build di produzione con tutto il resto verde)
-- [ ] **M9-08** — `docs/ARCHITECTURE.md` (il capitolo degli insight: come si leggono adesso, e che il
+      → **627 test** (41 file), `typecheck`, `lint` e `build` verdi, con nessun dev server acceso —
+      controllato con `lsof` prima di lanciare la build. L'unico avviso di lint è arrivato **mentre**
+      scrivevo: `h-[18px]` che si scrive `h-4.5`. Preso al volo, non la sera del deploy.
+- [x] **M9-08** — `docs/ARCHITECTURE.md` (il capitolo degli insight: come si leggono adesso, e che il
       banner non c'è più) e `docs/DECISIONS.md`: la soglia con la misura di §1, «Piazzati» e non
       «Punizioni», il badge rosso ritirato con il perché, **e l'abbandono esplicito di PLAN §8bis
       punto 1**
-- [ ] **M9-09** — Chiusura: merge `--no-ff` su `dev`, prova in locale **dal telefono** (è l'unico
+      → In `ARCHITECTURE.md`: un capitolo nuovo, «Il colore accelera, il numero decide», e la
+      gerarchia del portale riscritta — **due livelli e non tre**, con il racconto per esteso di
+      perché il primo è caduto. In `DECISIONS.md` una voce che **richiama** quella di pianificazione
+      invece di riscriverla, e aggiunge solo ciò che si è deciso scrivendo il codice.
+- [x] **M9-09** — Chiusura: merge `--no-ff` su `dev`, prova in locale **dal telefono** (è l'unico
       posto dove si vede se un colore funziona sotto pressione), poi — **solo su richiesta esplicita**
       — `CHANGELOG.md`, `package.json`, merge su `main`, tag `v1.10.0`, push. **Nessun `db:push`,
       nessun passo a mano sul server**: per una volta il rilascio finisce col deploy, e il changelog
       può dirlo
+      → Merge `--no-ff` su `dev` dato. **La prova dal telefono è dell'owner e non è stata fatta**:
+      restano da guardare le verifiche 3, 6, 8 e 9 (vedi «Com'è andata» per cosa è già provato e
+      cosa no). `CHANGELOG.md`, `package.json`, `main` e il tag **non** sono stati toccati: aspettano
+      la richiesta esplicita.
 
 ## Verifica
 
@@ -287,3 +330,63 @@ dall'utente: una soglia che si può cambiare è una soglia di cui nessuno conosc
    è I10, e il banner non c'entrava niente — ma è il momento giusto per riprovarlo, perché è la cosa
    che la sua rimozione fa *sembrare* rotta.
 9. **Un'asta si gioca ancora**: una simulazione a 8 arriva a `COMPLETED` con i badge in pagina.
+
+---
+
+## Com'è andata
+
+**La spec era giusta quasi per intero**, ed è la prima volta: nessuna misura è stata smentita, nessun
+perimetro si è allargato, nessuna astrazione è arrivata prima del secondo chiamante. Il motore, la
+macchina a stati, il lock, `serializeSnapshot` e lo schema non sono stati aperti nemmeno per guardare.
+Restano quattro cose che la spec non poteva sapere, e sono queste.
+
+**§2 conta quattro colori, e il codice ne rende tre.** «Grigio sotto soglia» e «neutro riservato» sono
+la stessa cosa: la variante `secondary` che esiste già. La spec li elenca come due righe della tabella
+e quindi sembrano due colori, ma nessuna delle due voleva un rendering proprio — e scriverne due per
+tenere il conto a quattro avrebbe significato due nomi per un'unica classe. Nel codice il tono si
+chiama `neutro`, lo usa la titolarità sotto soglia, e il commento dice che è **anche** il posto dove
+atterrerà il prossimo fatto categorico. Conseguenza da sapere: il giorno che quel fatto arriverà, il
+suo badge sarà indistinguibile da una titolarità bassa. È accettabile perché il testo dentro il badge
+li separa — che è la stessa ragione per cui la soglia dell'80% regge.
+
+**Il caso di bordo di §1 si scrive con interi, o dice il contrario di quello che vuole dire.** Il test
+«l'80% esatto è verde» sembrava ovvio e non è scrivibile: `30.4 / 38` in virgola mobile vale 0,7999…,
+quindi quel test asseriva `false` dove voleva `true`. Il confine vero è **31/38 verde e 30/38 grigio**,
+e la scoperta utile è che con `starts_eleven` intero **nessun giocatore cade sulla soglia**: la
+direzione del confronto non colora nessuno. Chi un giorno guarderà quel `>=` chiedendosi se sia giusto
+troverà la risposta accanto.
+
+**I colori del tema scuro sono scritti per un tema che l'applicazione non mostra.** `.dark` è applicato
+in **un solo punto** dell'intera codebase — `app/tv/[publicToken]/tv-view.tsx` — e la vista TV non
+mostra insight: non esiste nessun interruttore di tema, quindi questi badge girano sempre in chiaro.
+I `dark:` sono stati scritti comunque, perché il giorno che un tema scuro arriva nessuno andrà a
+ripassare i colori dei badge. Ma la verifica 6 va letta per quello che è: **i colori scuri sono stati
+guardati sulla pagina di prova, non nell'applicazione, perché nell'applicazione non c'è modo di
+vederli.** §6 chiedeva di verificare che la TV non fosse interessata: è vero, e per una ragione più
+forte di quella prevista — è l'unico posto dove il tema scuro esiste.
+
+**Un colore in più era da decidere e non da dedurre, e la pagina di prova è stata il modo.** Non un
+mockup a parole: un file HTML con i valori veri della Tailwind installata, la geometria vera di
+`badge.tsx`, quattro righe della lista di chiamata e la riga del modale, tema chiaro e scuro
+affiancati, e dentro **i due giocatori del caso di bordo** — 84% verde e 79% grigio, uno sopra
+l'altro. Guardarli vicini era l'unico modo di rispondere alla domanda che conta: se quella differenza
+sembra un guasto invece di una soglia, il problema non è il colore. Scelta: tinta tenue, `blue-600`.
+
+### Cosa è provato, e cosa no
+
+| Verifica | Stato |
+|---|---|
+| 1 · `test`, `typecheck`, `build` | ✅ 627 test, tutto verde, build con dev spento |
+| 2 · 32/38 verde e 30/38 grigio, percentuale dentro | ✅ nel test puro, con gli otto nomi del grumo nel commento |
+| 3 · cinque o sei verdi in quaranta nomi | ⏳ **owner**: si rivede a schermo su un'asta col listone vero |
+| 4 · chi non ha dati mostrabili non ha nessun badge | ✅ `showableInsights` non toccata, e il commento dice perché non esiste un badge «vuoto» |
+| 5 · il pool senza permesso non ha la chiave `insights` | ✅ già provato da M8 (`tests/db/insights.test.ts`), e la query non è stata sfiorata |
+| 6 · i badge si leggono in chiaro e in scuro | ⚠ **chiaro sì, scuro solo sulla pagina di prova**: l'app non ha un tema scuro (sopra) |
+| 7 · nessuna striscia verde da nessuna parte | ✅ per costruzione — il componente non esiste più — e le rotte pubbliche rispondono 200 senza di lui |
+| 8 · chi rientra a metà lotto ritrova la sua schermata | ⏳ **owner**: `portal.test.ts` prova che dipende dallo snapshot, ma il rientro vero si fa col telefono |
+| 9 · un'asta si gioca ancora, coi badge in pagina | ⏳ **owner**: una simulata a 8 fino a `COMPLETED` |
+
+⚠ Le quattro righe non spuntate sono tutte della stessa forma: **si vedono solo con l'app in mano.**
+Il dev server è stato acceso il tempo di controllare che il layout radice regga senza il banner — le
+rotte pubbliche rispondono 200 e la striscia non c'è in nessuna risposta — e poi spento. Le due aste
+locali erano `PAUSED` e simulate, quindi nulla è avanzato da sé.

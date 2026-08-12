@@ -1850,3 +1850,50 @@ dell'ultimo tentativo, e un backoff esponenziale (1h, 2h, 4h… fino a 24h). La 
 cosa più importante di M11: **rendere visibile un fallimento silenzioso**, perché con il pulsante
 l'errore lo legge chi l'ha premuto, e automatico finirebbe in `console.error` e in nessun altro posto.
 
+
+---
+
+## 2026-08-12 — M9, i badge degli insight e la striscia verde via
+
+Le scelte prese **pianificando** stanno nella voce «Pianificazione di M9–M12» qui sopra e non si
+riscrivono: la soglia dell'80% con la sua misura, «Piazzati» e non «Punizioni», il badge rosso
+«Infortunato (ora)» ritirato, l'abbandono di `PLAN §8bis` punto 1. Qui stanno solo le scelte nate
+**scrivendo il codice**, che è dove si scoprono le cose che una spec non può sapere.
+
+**I quattro colori, scelti guardandoli.** Emerald per il verde e **`blue-600` per il blu, non
+`sky-600`** (owner, su una pagina di prova con i valori veri della Tailwind installata, tema chiaro e
+scuro affiancati). La forma è quella già usata in cinque punti dell'app — bordo al 40%, fondo al 10%,
+testo pieno — quindi i badge non introducono un secondo linguaggio; scartato il riempimento pieno, che
+si riconosce da più lontano ma trasforma quaranta righe di elenco in un cruscotto. Sky è stato
+scartato perché tende al ciano e a 10px si separa meno dal verde, che è la sola distinzione che deve
+funzionare con la coda dell'occhio.
+
+**La spec conta quattro colori, il codice ne rende tre.** Il «grigio sotto soglia» e il «neutro
+riservato» di §2 sono **la stessa cosa**: la variante `secondary` che esiste già. Un secondo nome per
+lo stesso rendering sarebbe stato solo un modo di far sembrare quattro ciò che è tre. Il tono `neutro`
+esiste nel tipo e non ha chiamanti: è il posto dove atterrerà il prossimo fatto categorico degli
+insight, invece di un quinto colore.
+
+**Il rapporto grezzo resta fuori dal badge** (owner). Nel modale d'offerta la titolarità era
+`81% da titolare (31/38)`; adesso è il badge `81% tit.` più un `31/38 da titolare` in grigio accanto.
+Così il badge è identico nei due posti — che è ciò che lo rende un componente e non due `className`,
+e sarà quello che M10 riuserà nel Centro dati — e il numero che dice *quante partite sono davvero* non
+si perde per far spazio a un colore.
+
+**La soglia esatta non è raggiungibile, e il test lo dice.** `titolareForte` confronta con `>=`, ma
+`0,8 × 38 = 30,4`: con `starts_eleven` intero nessun giocatore cade sulla soglia, quindi `>` e `>=`
+colorano esattamente le stesse persone. Vale la pena saperlo prima di «correggere» il predicato. ⚠ E
+il caso di bordo va provato **con interi veri** — 31/38 verde, 30/38 grigio: un `30.4/38` finto in
+virgola mobile vale 0,7999… e il test direbbe il contrario di quello che vuole dire.
+
+**I token per il tema scuro sono scritti per un tema che l'applicazione oggi non mostra.** `.dark` è
+applicato in un punto solo, `app/tv/[publicToken]/tv-view.tsx`, e la vista TV **non mostra insight**:
+non c'è nessun interruttore di tema, quindi i badge girano sempre in chiaro. I `dark:` ci sono comunque
+perché il giorno che un tema scuro arriva nessuno andrà a ripassare i colori dei badge — ma va detto
+che sono **verificati sulla pagina di prova, non nell'applicazione**, perché nell'applicazione non c'è
+modo di vederli. Se un giorno gli insight arrivassero sulla TV, il bianco-su-nero fisso di
+DECISIONS 2026-08-08 vorrebbe colori rifatti per quel fondo, non questi.
+
+**`listUserAuctions` sopravvive al banner.** Il task diceva di togliere «la query che serviva solo a
+lui»: la **chiamata** nel layout radice è quella, e se ne va, ma la funzione resta perché il suo
+chiamante vero è la dashboard — che dopo M9 è l'unica strada di rientro e quindi la usa più di prima.
