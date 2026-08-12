@@ -83,7 +83,7 @@ export function AuctionDelete({
         </p>
       )}
       {state.ok && (
-        <p role="status" className="text-xs text-emerald-700 dark:text-emerald-400">
+        <p role="status" className="text-xs text-emerald-700">
           {state.ok}
         </p>
       )}

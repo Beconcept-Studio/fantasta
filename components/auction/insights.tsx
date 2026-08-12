@@ -43,18 +43,21 @@ import { cn } from "@/lib/utils";
  * quarto colore: quattro sono il massimo che una riga densa regge, il quinto
  * rende illeggibili i primi quattro.
  *
- * Tema chiaro **e** tema scuro, entrambi espliciti: un blu leggibile sul chiaro
- * che sullo scuro sparisce è un bug che si vede solo la sera, che è quando si
- * gioca. La forma — bordo al 40%, fondo al 10%, testo pieno — è quella già usata
- * in cinque punti dell'app (l'offerta salvata, il prezzo vinto, i messaggi del
+ * ⚠ **Nessun `dark:`, ed è una regola dell'applicazione** (`CLAUDE.md`): l'app
+ * gira in chiaro e il tema scuro non esiste. Una variante scura qui sarebbe un
+ * colore che nessuno può guardare, cioè un colore che nessuno può verificare — e
+ * il giorno che un tema scuro arriverà si tratteranno tutti insieme, guardandoli,
+ * non uno per volta a scatola chiusa.
+ *
+ * La forma — bordo al 40%, fondo al 10%, testo pieno — è quella già usata in
+ * cinque punti dell'app (l'offerta salvata, il prezzo vinto, i messaggi del
  * pannello), quindi non introduce un secondo linguaggio.
  */
 const TONI = {
   /** Titolarità da `SOGLIA_TITOLARE` in su. */
-  verde:
-    "border-emerald-600/40 bg-emerald-600/10 text-emerald-700 dark:text-emerald-400",
+  verde: "border-emerald-600/40 bg-emerald-600/10 text-emerald-700",
   /** Rigorista e battitore di piazzati: lo stesso blu, perché sono lo stesso tipo di fatto. */
-  blu: "border-blue-600/40 bg-blue-600/10 text-blue-700 dark:text-blue-400",
+  blu: "border-blue-600/40 bg-blue-600/10 text-blue-700",
   /** Titolarità sotto soglia, **e** il colore di ciò che arriverà. */
   neutro: "",
 } as const;

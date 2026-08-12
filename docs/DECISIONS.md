@@ -1850,7 +1850,6 @@ dell'ultimo tentativo, e un backoff esponenziale (1h, 2h, 4h… fino a 24h). La 
 cosa più importante di M11: **rendere visibile un fallimento silenzioso**, perché con il pulsante
 l'errore lo legge chi l'ha premuto, e automatico finirebbe in `console.error` e in nessun altro posto.
 
-
 ---
 
 ## 2026-08-12 — M9, i badge degli insight e la striscia verde via
@@ -1886,13 +1885,20 @@ colorano esattamente le stesse persone. Vale la pena saperlo prima di «corregge
 il caso di bordo va provato **con interi veri** — 31/38 verde, 30/38 grigio: un `30.4/38` finto in
 virgola mobile vale 0,7999… e il test direbbe il contrario di quello che vuole dire.
 
-**I token per il tema scuro sono scritti per un tema che l'applicazione oggi non mostra.** `.dark` è
-applicato in un punto solo, `app/tv/[publicToken]/tv-view.tsx`, e la vista TV **non mostra insight**:
-non c'è nessun interruttore di tema, quindi i badge girano sempre in chiaro. I `dark:` ci sono comunque
-perché il giorno che un tema scuro arriva nessuno andrà a ripassare i colori dei badge — ma va detto
-che sono **verificati sulla pagina di prova, non nell'applicazione**, perché nell'applicazione non c'è
-modo di vederli. Se un giorno gli insight arrivassero sulla TV, il bianco-su-nero fisso di
-DECISIONS 2026-08-08 vorrebbe colori rifatti per quel fondo, non questi.
+**Niente `dark:`, e da qui in avanti è una regola dell'applicazione** (`CLAUDE.md`, «Errori noti da
+evitare»). §6 chiedeva i token per entrambi i temi e sono stati scritti; poi si è visto che **il tema
+scuro non esiste**: `.dark` è attivo in un punto solo di tutta la codebase — il `className="dark"` di
+`app/tv/[publicToken]/tv-view.tsx` — non c'è nessun interruttore né lettura della preferenza di
+sistema, e la vista TV **non mostra insight**. Quei `dark:` erano quindi colori che nessuno può
+guardare, cioè che nessuno può verificare: si scrivono convinti di aver coperto un caso e restano
+sbagliati per mesi senza che si veda. **Sono stati tolti** (owner: «non hanno senso, se un giorno li
+inseriremo poi li tratteremo»), e con loro i **sei `dark:text-emerald-400` già presenti** in
+`form-feedback`, `reveal-panel`, `lot-closed-card`, `bid-modal`, `user-row` e `auction-delete`: nessuno
+di quei componenti è mai renderizzato dentro il sottoalbero della TV, quindi erano morti anche loro.
+⚠ Restano intoccabili il blocco `.dark` di `globals.css` e il `className="dark"` della TV — sono il
+bianco-su-nero di DECISIONS 2026-08-08, non un residuo. E le primitive di `components/ui/**` tengono i
+loro: arrivano da shadcn, sono inerti fuori dalla TV, e ripulirle sarebbe lavoro da rifare a ogni
+aggiornamento.
 
 **`listUserAuctions` sopravvive al banner.** Il task diceva di togliere «la query che serviva solo a
 lui»: la **chiamata** nel layout radice è quella, e se ne va, ma la funzione resta perché il suo

@@ -1480,9 +1480,17 @@ confrontare i crediti residui.
 
 Due cose sopravvivono dalla versione precedente, ed è perché non dipendevano dalla distanza. Niente
 hover, niente scroll, niente click: nessuna informazione può stare dietro a un'interazione, perché
-chi guarda non ha un mouse. E bianco su nero **fisso**, l'unica pagina dell'applicazione che ignora
-il tema di sistema, perché uno schermo condiviso non ha una preferenza e un tema chiaro in una
-stanza al buio è illeggibile.
+chi guarda non ha un mouse. E bianco su nero **fisso**, perché uno schermo condiviso non ha una
+preferenza e un tema chiaro in una stanza al buio è illeggibile.
+
+Quel nero merita una precisazione, perché è facile leggerlo per ciò che non è: **il resto
+dell'applicazione non ha un tema scuro da cui la TV si stia distinguendo.** Non c'è nessun
+interruttore, e la preferenza di sistema non viene letta da nessuna parte: l'app gira in chiaro,
+sempre. La TV è l'unico posto in cui la classe `.dark` è attiva, e la accende da sé — è una scelta di
+quella pagina, non un tema dell'applicazione. Da qui la regola in `CLAUDE.md`: **non si scrivono
+varianti `dark:`**, perché sarebbero colori che nessuno può guardare e quindi nessuno può verificare —
+si scrivono convinti di aver coperto un caso e restano sbagliati per mesi senza che si veda. Il giorno
+che un tema scuro servirà davvero, i colori si tratteranno tutti insieme e guardandoli.
 
 Il prezzo di questa densità è dichiarato nel file invece che scoperto la sera dell'asta: su 900
 pixel di altezza ogni card ha circa 430 pixel per venticinque righe, cioè sedici pixel a riga con il

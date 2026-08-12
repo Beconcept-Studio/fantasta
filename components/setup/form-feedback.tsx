@@ -23,7 +23,7 @@ export function FormFeedback({ state }: { state: FormState }) {
     return (
       <p
         role="status"
-        className="rounded-md border border-emerald-600/40 bg-emerald-600/5 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400"
+        className="rounded-md border border-emerald-600/40 bg-emerald-600/5 px-3 py-2 text-sm text-emerald-700"
       >
         {state.ok}
       </p>
