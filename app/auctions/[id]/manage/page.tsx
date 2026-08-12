@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
+import { canSeeInsights } from "@/lib/domain";
 import { getAuctionOverview, listPickPool } from "@/lib/engine/setup";
 
 import { ManageConsole } from "./console";
@@ -43,7 +44,9 @@ export default async function ManagePage({
   // portale (DECISIONS Fase 5): non viaggia nello snapshot — è immutabile
   // dall'import e non ha niente da sanificare — e **chi** sia ancora libero
   // resta funzione dello snapshot, che le rose ce le ha.
-  const pool = await listPickPool(id);
+  // Stessa regola del portale (M8 §6): un owner con gli insight li vede anche
+  // in regia, uno senza no. Un predicato, due chiamate, nessuna eccezione.
+  const pool = await listPickPool(id, canSeeInsights(user));
 
   return (
     <ManageConsole

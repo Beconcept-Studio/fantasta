@@ -2,10 +2,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, suite } from "vitest";
+import { afterAll, beforeAll, beforeEach, expect, it, suite } from "vitest";
 
 import { db } from "@/lib/db";
-import { playerInsights } from "@/lib/db/schema";
+import { playerInsights, players, users } from "@/lib/db/schema";
+import { canSeeInsights } from "@/lib/domain";
 import {
   CONTINUITY_THRESHOLD,
   LISTONE_URL,
@@ -15,6 +16,7 @@ import {
   refreshListoneInsights,
   refreshSetPieces,
 } from "@/lib/engine/insights";
+import { listPickPool } from "@/lib/engine/setup";
 
 import { makeGameAuction } from "./game-helpers";
 import { closeDatabase, databaseAvailable, dropAuctions, dropUsers } from "./helpers";
@@ -30,6 +32,14 @@ import { closeDatabase, databaseAvailable, dropAuctions, dropUsers } from "./hel
  * ⚠ E la tabella è **globale**: non muore con l'asta, quindi va pulita a mano. È
  * la stessa cura che vuole l'archivio figurine, e la ragione è la stessa — questi
  * dati non sono un fatto dell'asta.
+ *
+ * ⚠ **Per la stessa ragione tutto M8 si prova in questo file solo, e non va
+ * spezzato.** Vitest gira i file in **worker paralleli**, e ogni altro test del
+ * database si isola creandosi le proprie aste — la cascata su `auction_id` fa il
+ * resto. Qui non c'è nessun `auction_id` da cui dipendere: due file che
+ * riempissero e svuotassero `player_insights` insieme si guasterebbero a vicenda,
+ * e il sintomo è il peggiore che esista — **verdi da soli, rossi nella suite**.
+ * È successo scrivendo questi test, e la diagnosi è costata più della cura.
  */
 
 const FIXTURES = path.resolve(__dirname, "..", "..", "fixtures");
@@ -38,6 +48,32 @@ let listoneBody: string;
 let rigoristiBody: string;
 const createdAuctions: string[] = [];
 const createdUsers: string[] = [];
+/** L'asta di gioco, ma con `ext_id` che esistono davvero nella fonte. */
+async function auctionWithRealExtIds(): Promise<{
+  auctionId: string;
+  playerId: number;
+}> {
+  const game = await makeGameAuction();
+  createdAuctions.push(game.auctionId);
+  createdUsers.push(game.ownerId, ...game.userIds);
+
+  // Il listone sintetico ha `ext_id` da 1 a 40, che nella fonte non esistono: si
+  // riscrivono su quelli di due giocatori veri, così l'aggancio è reale.
+  // 531 = Berardi (`current`), 184 = Bernardeschi.
+  const rows = await db
+    .select({ id: players.id, extId: players.extId })
+    .from(players)
+    .where(eq(players.auctionId, game.auctionId))
+    .orderBy(players.extId);
+
+  await db
+    .update(players)
+    .set({ extId: 531 })
+    .where(eq(players.id, rows[0].id));
+
+  return { auctionId: game.auctionId, playerId: 531 };
+}
+
 
 /** Una `fetch` che risponde con le fixture, e conta le chiamate. */
 function fakeFetch(bodies: Record<string, string>, status = 200) {
@@ -55,6 +91,21 @@ function fakeFetch(bodies: Record<string, string>, status = 200) {
 }
 
 const available = await databaseAvailable();
+
+/**
+ * Riempie la tabella dalla fixture, passando dal motore vero.
+ *
+ * ⚠ La suite del pool la richiama **prima di ogni test**, perché uno di quei test
+ * svuota la tabella di proposito — è quello che dimostra che l'asta funziona senza
+ * insight. Senza il ricarico, il test successivo girava sul vuoto e falliva per la
+ * ragione sbagliata.
+ */
+async function loadInsights(): Promise<void> {
+  await db.delete(playerInsights);
+  const { impl } = fakeFetch({ [LISTONE_URL]: listoneBody });
+  const done = await refreshListoneInsights({ fetchImpl: impl });
+  if (!done.ok) throw new Error(done.error.message);
+}
 
 beforeAll(async () => {
   listoneBody = await readFile(
@@ -281,7 +332,11 @@ suite.skipIf(!available)("la copertura, per asta", () => {
     // «Quasi» e non «del tutto»: due degli id sintetici (1..40) esistono per caso
     // anche nella fonte vera. È un dettaglio della fixture, non un comportamento
     // da bloccare — per questo l'asserzione guarda l'ordine di grandezza.
-    const coverage = await insightsCoverage();
+    // ⚠ Si chiede **questa** asta e non «le ultime cinque»: gli altri file di
+    // test ne creano decine negli stessi secondi, in worker paralleli, e la
+    // nostra non sarebbe fra le più recenti. È esattamente il motivo per cui
+    // `insightsCoverage` ha il parametro.
+    const coverage = await insightsCoverage(undefined, [game.auctionId]);
     const mine = coverage.find((c) => c.auctionId === game.auctionId);
     expect(mine).toBeDefined();
     expect(mine?.wanted).toBe(40);
@@ -296,5 +351,117 @@ suite.skipIf(!available)("la copertura, per asta", () => {
     // giorno del deploy, è esattamente questo il caso.
     const coverage = await insightsCoverage();
     expect(Array.isArray(coverage)).toBe(true);
+  });
+});
+
+suite.skipIf(!available)("il pool e gli insight", () => {
+  beforeEach(async () => {
+    await loadInsights();
+  });
+
+  it("⚠ senza il permesso la chiave `insights` non esiste nell'oggetto", async () => {
+    const { auctionId } = await auctionWithRealExtIds();
+
+    const pool = await listPickPool(auctionId, false);
+    expect(pool.length).toBeGreaterThan(0);
+
+    for (const player of pool) {
+      // Non `toBeUndefined()`: la chiave non deve **esserci**. Un
+      // `insights: undefined` sparirebbe nella serializzazione, ma direbbe che
+      // qualcuno ha pensato di metterla e poi svuotarla — e la prossima modifica
+      // la riempirebbe.
+      expect(Object.keys(player)).not.toContain("insights");
+    }
+
+    // E il default è senza: un chiamante nuovo che si dimentica il flag non fa
+    // uscire niente.
+    const byDefault = await listPickPool(auctionId);
+    for (const player of byDefault) {
+      expect(Object.keys(player)).not.toContain("insights");
+    }
+  });
+
+  it("con il permesso arrivano, agganciati per ext_id", async () => {
+    const { auctionId } = await auctionWithRealExtIds();
+
+    const pool = await listPickPool(auctionId, true);
+    const withInsights = pool.filter((p) => p.insights !== undefined);
+
+    // Il giocatore a cui abbiamo dato un `ext_id` vero c'è, con i suoi numeri.
+    const berardi = withInsights.find((p) => p.insights?.extId === 531);
+    expect(berardi?.insights).toMatchObject({
+      team: "Sassuolo",
+      statsSeason: "current",
+      startsEleven: 24,
+    });
+
+    // E la maggioranza resta **senza**, perché gli altri 39 hanno id sintetici:
+    // è il caso «il listone ha un nome che la fonte non conosce», vero anche in
+    // produzione (8 su 495). Due degli id da 1 a 40 esistono per caso nella
+    // fonte, quindi il conto non è esattamente 1.
+    expect(withInsights.length).toBeLessThan(5);
+    expect(pool.length - withInsights.length).toBeGreaterThan(30);
+  });
+
+  it("il pool non porta `extId`: serviva solo ad agganciare", async () => {
+    const { auctionId } = await auctionWithRealExtIds();
+    for (const player of await listPickPool(auctionId, true)) {
+      expect(Object.keys(player)).not.toContain("extId");
+    }
+  });
+
+  it("⚠ con la tabella vuota il pool è quello di prima, insight o no", async () => {
+    const { auctionId } = await auctionWithRealExtIds();
+    await db.delete(playerInsights);
+
+    const senza = await listPickPool(auctionId, false);
+    const con = await listPickPool(auctionId, true);
+
+    expect(con).toHaveLength(senza.length);
+    for (const player of con) {
+      expect(player.insights).toBeUndefined();
+    }
+    // È la prova che nessun dato di M8 sta su un percorso critico: con la tabella
+    // vuota — cioè come nasce in produzione — la lista di chiamata è identica a
+    // quella di prima della macro.
+    expect(con.map((p) => p.id).sort()).toEqual(senza.map((p) => p.id).sort());
+  });
+
+  it("il predicato e la colonna sono d'accordo: è `canSeeInsights` a decidere, non la pagina", async () => {
+    const { auctionId } = await auctionWithRealExtIds();
+
+    const [normale, pro, admin] = await Promise.all([
+      db
+        .insert(users)
+        .values({ displayName: "Normale", isPro: false })
+        .returning({ id: users.id }),
+      db
+        .insert(users)
+        .values({ displayName: "Pro", isPro: true })
+        .returning({ id: users.id }),
+      db
+        .insert(users)
+        .values({ displayName: "Admin", isAdmin: true })
+        .returning({ id: users.id }),
+    ]);
+    createdUsers.push(normale[0].id, pro[0].id, admin[0].id);
+
+    const rows = await db.select().from(users).where(eq(users.id, pro[0].id));
+    expect(canSeeInsights(rows[0])).toBe(true);
+
+    const proPool = await listPickPool(auctionId, canSeeInsights(rows[0]));
+    expect(proPool.some((p) => p.insights !== undefined)).toBe(true);
+
+    const plain = (await db.select().from(users).where(eq(users.id, normale[0].id)))[0];
+    const plainPool = await listPickPool(auctionId, canSeeInsights(plain));
+    expect(plainPool.every((p) => !("insights" in p))).toBe(true);
+
+    // L'amministratore li vede **senza** avere il flag: altrimenti dovrebbe
+    // accenderselo da sé per guardare i dati che ha appena importato.
+    const boss = (await db.select().from(users).where(eq(users.id, admin[0].id)))[0];
+    expect(boss.isPro).toBe(false);
+    expect(canSeeInsights(boss)).toBe(true);
+    const bossPool = await listPickPool(auctionId, canSeeInsights(boss));
+    expect(bossPool.some((p) => p.insights !== undefined)).toBe(true);
   });
 });

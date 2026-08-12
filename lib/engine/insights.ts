@@ -174,12 +174,30 @@ const COVERAGE_AUCTIONS = 5;
  * nostro listone. Il numero che serve è quanti dei giocatori che si possono
  * *chiamare stasera* hanno qualcosa da dire — misurato 487 su 495.
  */
-export async function insightsCoverage(tx: Reader = db): Promise<Coverage[]> {
-  const recent = await tx
-    .select({ id: auctions.id, name: auctions.name })
-    .from(auctions)
-    .orderBy(desc(auctions.createdAt))
-    .limit(COVERAGE_AUCTIONS);
+export async function insightsCoverage(
+  tx: Reader = db,
+  /**
+   * Aste precise invece delle ultime cinque.
+   *
+   * ⚠ Il secondo chiamante è **il test**, e non è una concessione: senza questo
+   * parametro, un test che verifica la copertura della *propria* asta dipende da
+   * quante aste hanno creato gli altri file di test nel frattempo — e vitest li
+   * gira in parallelo. Verde da solo, rosso nella suite: è successo, ed è il modo
+   * peggiore di rompersi. Il pannello continua a non passare niente.
+   */
+  auctionIds?: string[],
+): Promise<Coverage[]> {
+  const recent =
+    auctionIds === undefined
+      ? await tx
+          .select({ id: auctions.id, name: auctions.name })
+          .from(auctions)
+          .orderBy(desc(auctions.createdAt))
+          .limit(COVERAGE_AUCTIONS)
+      : await tx
+          .select({ id: auctions.id, name: auctions.name })
+          .from(auctions)
+          .where(inArray(auctions.id, auctionIds));
 
   if (recent.length === 0) return [];
 

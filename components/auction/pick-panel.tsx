@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { Countdown, CountdownBar } from "@/components/auction/countdown";
+import { InsightsLine } from "@/components/auction/insights";
 import { ROLE_LABELS, ROLE_LABELS_ONE } from "@/lib/domain";
 import type { ActionResult } from "@/lib/realtime/action";
 import { availablePlayers } from "@/lib/realtime/portal";
@@ -131,6 +132,12 @@ export function PickPanel({
                 <span className="text-muted-foreground block truncate text-xs">
                   {player.team}
                 </span>
+                {/* ⚠ Sotto la squadra e non accanto a `fvm`: la riga è già larga
+                    quanto un telefono, e i numeri che si confrontano fra loro
+                    stanno incolonnati a destra. Chi non ha il permesso, o chi ha
+                    solo la stagione precedente, non vede niente — e la riga non
+                    cambia altezza, perché era già su due righe. */}
+                <InsightsLine insights={player.insights} />
               </span>
               <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
                 fvm {player.fvm}

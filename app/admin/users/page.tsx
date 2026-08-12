@@ -42,6 +42,7 @@ export default async function AdminUsersPage({
     // seconda idea (M5).
     verified: isVerified(user),
     isAdmin: user.isAdmin,
+    isPro: user.isPro,
     isBot: user.isBot,
     createdOn: romeDay(user.createdAt.toISOString()),
     ownedAuctions: user.ownedAuctions,
@@ -64,7 +65,7 @@ export default async function AdminUsersPage({
       </div>
 
       <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-208 border-collapse text-left">
+        <table className="w-full min-w-240 border-collapse text-left">
           <thead className="bg-muted/40 text-muted-foreground text-xs uppercase">
             <tr className="border-b">
               <th className="px-2 py-2 font-medium">Email</th>
@@ -72,6 +73,8 @@ export default async function AdminUsersPage({
               <th className="px-2 py-2 font-medium">Come entra</th>
               <th className="px-2 py-2 font-medium">Indirizzo</th>
               <th className="px-2 py-2 font-medium">Permessi</th>
+              {/* M8 — chi vede titolarità, rigoristi e piazzati in `/play`. */}
+              <th className="px-2 py-2 font-medium">Insight</th>
               {/* Possedute / giocate: i due numeri con cui si capisce se una
                   riga è una persona o un residuo. */}
               <th className="px-2 py-2 font-medium">Aste</th>
