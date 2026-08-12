@@ -20,6 +20,7 @@ import {
   refreshListoneInsights,
   refreshSetPieces,
 } from "@/lib/engine/insights";
+import { uploadCarmy } from "@/lib/engine/carmy";
 import { listoneExtIds, uploadListone } from "@/lib/engine/listone";
 import { deleteAuction } from "@/lib/engine/setup";
 
@@ -250,6 +251,56 @@ export async function uploadListoneAction(
     error: null,
     ok: `${rows} giocatori a sistema (${outOfList} fuori lista). Da adesso è quello proposto a chi crea un'asta.`,
   };
+}
+
+/**
+ * Il caricamento del foglio di Carmy (M10B §8).
+ *
+ * ⚠ **Va dato dopo il listone, e non è una preferenza**: il join passa per nome da
+ * `listone_players` (§3), quindi senza listone non c'è denominatore. Il motore lo
+ * rifiuta dicendolo, invece di scrivere zero righe e dichiarare successo.
+ *
+ * ⚠ **I nomi non agganciati si dicono per nome**, come `unknown` in
+ * `refreshSetPieces`: dieci nomi in fondo alla pagina sono l'unico modo di
+ * accorgersi che il foglio e il listone hanno cominciato a divergere. E le
+ * discordanze di squadra si dicono accanto, perché sono un'altra cosa — un
+ * trasferimento, non un aggancio mancato.
+ */
+export async function uploadCarmyAction(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  await requireAppAdmin();
+
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Scegli il file .xlsx del foglio di Carmy." };
+  }
+
+  const result = await uploadCarmy(await file.arrayBuffer());
+  if (!result.ok) return { error: result.error.message };
+
+  revalidatePath(LISTONE_PATH);
+  revalidatePath(DATI_PATH);
+  const { fromFile, written, unmatched, teamMismatches } = result.value;
+
+  const parts = [
+    `${written} giudizi a sistema su ${fromFile} righe del foglio.`,
+  ];
+  if (unmatched.length > 0) {
+    parts.push(
+      `Non trovati nel listone (${unmatched.length}): ${unmatched.join(", ")} — di solito sono acquisti più recenti del listone caricato.`,
+    );
+  }
+  if (teamMismatches.length > 0) {
+    parts.push(
+      `Squadra diversa dal listone (${teamMismatches.length}): ${teamMismatches
+        .map((m) => `${m.name} — Carmy ${m.carmy}, listone ${m.listone}`)
+        .join("; ")}. Il giudizio è stato importato comunque: di solito è un trasferimento.`,
+    );
+  }
+
+  return { error: null, ok: parts.join(" ") };
 }
 
 // ─── Gli insight sul listone (M8) ────────────────────────────────────────────

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Campioncino } from "@/components/auction/campioncino";
 import { InsightsMacro } from "@/components/auction/insights";
+import { PrezzoConsigliato } from "@/components/auction/prezzo-consigliato";
 import { Countdown, CountdownBar } from "@/components/auction/countdown";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
@@ -95,7 +96,12 @@ export function BidModal({
   // ha il permesso, la tabella ancora vuota, e un giocatore che il pool non ha
   // (i fuori lista, se l'asta li esclude). In tutti e tre il blocco non si
   // renderizza da sé — nessun `if` da scrivere qui.
-  const insights = pool.find((p) => p.id === lot?.player.id)?.insights;
+  // Da M10B si prende la riga intera e non solo `insights`: le due chiavi sono
+  // indipendenti — un giocatore può avere il giudizio di Carmy e non la riga di
+  // insight — e `undefined` su una delle due non deve nascondere l'altra.
+  const poolRow = pool.find((p) => p.id === lot?.player.id);
+  const insights = poolRow?.insights;
+  const carmy = poolRow?.carmy;
 
   const [raw, setRaw] = useState("");
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle" });
@@ -253,7 +259,7 @@ export function BidModal({
             altezza al campo dell'offerta, che con la tastiera aperta è la risorsa
             scarsa. La lista di chiamata, dove invece si confronta, mostra di più.
           */}
-          <InsightsMacro insights={insights} />
+          <InsightsMacro insights={insights} carmy={carmy} />
 
           {/* ── Il campo e i suoi appigli ── */}
           <div className="flex items-center gap-2">
@@ -300,6 +306,15 @@ export function BidModal({
               +1
             </Button>
           </div>
+
+          {/*
+            ⚠ Il **secondo** punto d'innesto del prezzo consigliato, quello accanto
+            al campo — il più utile e il più pericoloso, perché è un numero
+            suggerito a due centimetri dal numero da scrivere. Quale dei due sia
+            attivo lo decide `POSIZIONE_PREZZO`, in un posto solo: qui non c'è
+            nessuna condizione da tenere allineata (M10B §6).
+          */}
+          <PrezzoConsigliato carmy={carmy} dove="campo" />
 
           <div className="flex gap-2">
             {[5, 10, 25].map((step) => (

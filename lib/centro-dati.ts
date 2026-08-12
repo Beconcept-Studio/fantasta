@@ -1,10 +1,12 @@
 import {
+  CARMY_SCALA_MAX,
+  type CarmyJudgement,
   ROLES,
   type PlayerInsights,
   type Role,
   bestSetPieceRank,
-  quotaTitolare,
-  showableInsights,
+  carmyFasciaRank,
+  titolarita,
 } from "@/lib/domain";
 
 /**
@@ -37,6 +39,7 @@ export type CentroDatiSortable = {
   role: Role;
   quot: number;
   insights?: PlayerInsights;
+  carmy?: CarmyJudgement;
 };
 
 export const SORT_KEYS = [
@@ -46,6 +49,11 @@ export const SORT_KEYS = [
   "quot",
   "titolarita",
   "piazzati",
+  // ─── M10B: le colonne che vengono dal foglio di Carmy ───
+  "fascia",
+  "affidabilita",
+  "integrita",
+  "prezzo",
 ] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 
@@ -87,12 +95,24 @@ export type CentroDatiFilters = {
   role: Role | null;
   /** Solo chi batte rigori o piazzati. */
   onlySetPieces: boolean;
+  /**
+   * Il fratello del filtro qui sopra, dal foglio di Carmy (M10B §6): solo chi ha
+   * **questo** tag. `null` = tutti.
+   *
+   * ⚠ **Uno e non un elenco.** Un giocatore ha in media due tag su diciassette
+   * etichette, e un filtro a più tag pone subito la domanda «tutti o almeno uno?»
+   * — due significati per lo stesso controllo, e nessuno dei due si legge da una
+   * fila di caselle. Se un giorno servirà l'intersezione, si aggiunge allora
+   * (regola 8).
+   */
+  tag: string | null;
 };
 
 export const NO_FILTERS: CentroDatiFilters = {
   query: "",
   role: null,
   onlySetPieces: false,
+  tag: null,
 };
 
 /**
@@ -127,12 +147,32 @@ function valueOf(row: CentroDatiSortable, key: SortKey): number | string | null 
       return ROLES.indexOf(row.role);
     case "quot":
       return row.quot;
+    // ⚠ **La titolarità è una colonna sola con due fonti dentro** (M10B §4), e
+    // ordinarla richiede una scelta che va scritta: il giudizio di Carmy sta su
+    // 1–5, il ripiego di M9 su una frazione di stagione. Si riportano entrambi a
+    // 0–1 — `voto / 5` da un lato, `quotaTitolare` dall'altro — perché rispondono
+    // alla **stessa** domanda: quanto parte titolare. Un `5` di Carmy finisce così
+    // sopra un `34/38`, che è l'ordine giusto: il giudizio è su quest'anno, il
+    // rapporto sull'anno scorso. L'alternativa — due colonne — è stata scartata
+    // perché nella pagina la titolarità è **una** informazione, e due colonne che
+    // dicono la stessa cosa con due scale sono due colonne che nessuno confronta.
     case "titolarita": {
-      const showable = showableInsights(row.insights);
-      return showable === null ? null : quotaTitolare(showable);
+      const t = titolarita(row.insights, row.carmy);
+      if (t === null) return null;
+      return t.fonte === "carmy" ? t.voto / CARMY_SCALA_MAX : t.quota;
     }
     case "piazzati":
       return bestSetPieceRank(row.insights);
+    // La fascia si ordina per **posizione**, non in alfabeto: `Top` prima di
+    // `Terza`, non dopo. Le sconosciute e le assenti in fondo, come tutto il resto.
+    case "fascia":
+      return row.carmy?.fascia == null ? null : -carmyFasciaRank(row.carmy.fascia);
+    case "affidabilita":
+      return row.carmy?.affidabilita ?? null;
+    case "integrita":
+      return row.carmy?.integrita ?? null;
+    case "prezzo":
+      return row.carmy?.prezzo ?? null;
   }
 }
 
@@ -158,6 +198,12 @@ export function matchesFilters(
 ): boolean {
   if (filters.role !== null && row.role !== filters.role) return false;
   if (filters.onlySetPieces && !hasSetPieces(row)) return false;
+  // Chi non ha nessun giudizio non ha nessun tag: esce, come esce da «solo chi
+  // batte» chi non ha una riga di insight. Un filtro acceso è una domanda, e
+  // «non lo so» non è una risposta affermativa.
+  if (filters.tag !== null && !(row.carmy?.tags ?? []).includes(filters.tag)) {
+    return false;
+  }
 
   const needle = fold(filters.query.trim());
   if (needle === "") return true;

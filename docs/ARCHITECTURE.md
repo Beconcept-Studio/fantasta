@@ -2479,6 +2479,221 @@ degli insight, con la stessa cura: il numero grande in cima alla pagina *è* l'a
 
 ---
 
+## Il giudizio di un umano: da dove viene, e perché non è una misura
+
+Il capitolo sugli insight si riapre qui, e non per aggiungere un'altra fonte: per aggiungere un
+**tipo diverso di informazione**. Fino a v1.10.0 tutto ciò che l'applicazione sapeva di un calciatore
+era una misura — quante partite, quanti minuti, quanti rigori, quale posizione nella gerarchia dei
+battitori. Numeri veri, letti da fonti pubbliche, che rispondono a una domanda sola: *cosa è
+successo l'anno scorso.*
+
+Solo che all'asta la domanda è un'altra, ed è **quanto giocherà quest'anno**. Le due non coincidono, e
+non coincidono per ragioni che nessun dato pubblico contiene: dipende da chi lo ha comprato, da che
+modulo gioca il suo allenatore nuovo, da chi gli è arrivato davanti. Un difensore con trentaquattro
+partenze da titolare che a luglio è finito in una squadra dove il suo posto è occupato non è un
+titolare, e il numero non lo sa. La sessione che ha aperto questa strada ha provato a modellarlo — pesi
+diversi fra inizio e fine stagione, giornate di infortunio da sottrarre, probabili formazioni — e si è
+fermata su un fatto banale: **il dato per giornata non esiste in nessuna fonte pubblica**, e
+ricostruirlo voleva dire cinquecento richieste HTTP e una tabella da diciannovemila righe per ottenere
+un'approssimazione di qualcosa che una persona sa già.
+
+Perché quella ponderazione, in effetti, **qualcuno l'ha già fatta**. Un foglio compilato a mano,
+giocatore per giocatore, con tre giudizi su una scala da 1 a 5 — quanto è titolare, quanto è
+affidabile, quanto tiene fisicamente — più una fascia di prezzo, un prezzo consigliato e delle
+etichette brevi: `rigorista`, `rischio infortuni`, `subentrante`, `scommessa`. Si carica dal pannello
+come il listone, circa una volta al giorno.
+
+Il tema di questo capitolo, in una riga: **smettere di dedurre la titolarità e cominciare a leggerla,
+senza smettere di mostrare il numero che la rende verificabile.**
+
+### La misura che giustifica tutto il resto
+
+Prima di costruirci sopra, una domanda andava chiusa: quel giudizio è informazione vera, o è la
+statistica dell'anno scorso riscritta a mano? Perché se fosse la seconda, tutto questo capitolo
+sarebbe una preferenza estetica.
+
+La correlazione fra il voto di titolarità e la quota di partenze dell'anno scorso è **0,65** su 466
+giocatori confrontabili. Correlata — un titolare tende a restare titolare — ma lontanissima
+dall'essere una copia. E soprattutto: **i disaccordi sono esattamente i casi che la domanda voleva
+catturare.** Undici giocatori sono giudicati titolari pieni pur avendo giocato dieci partite o meno:
+un attaccante appena comprato da una squadra dove sarà il centravanti, un ragazzo promosso, due
+difensori arrivati in una squadra che si è svuotata. Tredici sono giudicati panchinari pur avendo
+trentaquattro partenze alle spalle: gente che ha cambiato squadra in peggio, o a cui è arrivato
+davanti qualcuno.
+
+Nuovo arrivo, cambio di modulo, cambio di allenatore, gerarchia nuova. La ponderazione che si voleva
+costruire con un modello **era già una colonna**, e non ha bisogno di essere difesa: ha bisogno di
+essere attribuita.
+
+E c'è il rovescio della misura, che è la ragione per cui questa non è diventata *la* fonte. Delle
+quindici colonne di statistiche del foglio, **undici sono identiche byte per byte** a quelle che
+importiamo già: presenze, partite da titolare, minuti, quotazione, rigori, cartellini — 497 righe su
+497. Il foglio non porta **nessuna statistica nuova**. Porta un giudizio, e solo per quello vale la
+pena caricarlo. Sostituire con lui le due `GET` vorrebbe dire prendere gli stessi numeri da un file
+caricato a mano invece che da una fonte che si aggiorna da sé, e perdere la gerarchia dei rigoristi —
+che il foglio ha come etichetta su diciotto giocatori, contro i novantadue designati **con la loro
+posizione** della fonte pubblica. La posizione *è* l'informazione. Quindi è una **terza fonte
+sovrapposta**, non un rimpiazzo.
+
+C'è anche una trappola, e va lasciata scritta perché il suo nome è convincente. Il foglio ha una
+colonna che si chiama `Pt. Inf.`, e sembra la risposta a «togli le giornate di infortunio dal
+calcolo». Non lo è: è identica al campo «infortunato» della fonte pubblica, va da 0 a 5, e
+`presenze + Pt. Inf.` non fa 38 — arriva a 42, perché le presenze sommano più competizioni. È un
+**conteggio di episodi**, non di giornate saltate. Quel punto resta senza dato, e questa colonna
+sembra risolverlo senza risolverlo: se un giorno servisse, si chiede a chi compila il foglio invece di
+dedurlo dal nome della colonna.
+
+### Il join per nome, che è la parte fragile
+
+Il foglio non ha identificativi. Ha un nome e una sigla di tre lettere per la squadra, e le due cose
+insieme non bastano: `ROM` non è `Roma`, e agganciare su `(nome, squadra)` senza tradurre le sigle dà
+**zero** su 497 — il genere di zero che fa sospettare il file invece della mappa.
+
+Si aggancia quindi **sul solo nome, normalizzato**, contro il listone a sistema. Il risultato misurato
+è 487 su 497, il 98%, e il fatto che lo rende sicuro non è la percentuale: è che **nel listone non c'è
+un solo nome ripetuto**, quindi il nome è una chiave non ambigua. I dieci che restano fuori sono
+acquisti più recenti del listone caricato — gente che quel file non aveva ancora.
+
+Il listone è il denominatore giusto per la stessa ragione per cui lo è nel Centro dati: è la lista di
+chi si può comprare, e un giudizio su qualcuno che non è in vendita non serve a nessuno. La sigla della
+squadra non è la chiave, ma **il controllo**: si traduce con una mappa di venti righe scritte in chiaro
+e si confronta, e una discordanza **si segnala per nome** invece di essere ingoiata. Sul file vero sono
+tre, e sono tre trasferimenti veri: il giudizio si importa comunque, perché un giocatore che ha cambiato
+squadra è lo stesso giocatore.
+
+Venti righe in chiaro e non un algoritmo di somiglianza, e la ragione è la stessa di sempre in questo
+progetto: `ROM → Roma` lo indovinerebbe qualunque prefisso, ma `MON` sta per Monza e non per Modena, e
+una funzione che sbaglia in silenzio su una squadra sola sposta il giudizio di un giocatore addosso a
+un altro. Venti righe che qualcuno rilegge ad agosto sono più oneste. Vanno rigenerate a ogni
+promozione, e c'è un test che se ne accorge.
+
+Sotto il **90%** di nomi agganciati l'import **rifiuta e non scrive niente**. Vale la pena dire perché
+questa guardia è sana, quando M8 aveva smontato un controllo che somigliava a questo: quello là
+misurava la copertura contro il listone di *un'asta*, e un'asta simulata con identificativi finti la
+portava a zero su dati perfetti — era **avvelenabile**. Qui il denominatore è il listone globale, che
+non appartiene a nessuna asta: nessuna simulazione lo può inquinare, e l'unica cosa che può abbassare
+quella quota è che il foglio e il listone abbiano davvero cominciato a divergere. Di solito perché il
+listone è vecchio, ed è quello che il messaggio d'errore dice di fare.
+
+### Una tabella sua, e non tre colonne accanto alle altre
+
+I giudizi stanno in `carmy_players`, non in tre colonne di `player_insights` — che pure ospita già due
+fonti diverse. La differenza non è di gusto, è di **semantica della scrittura**: le due fonti pubbliche
+si aggiornano *per colonna, con un upsert* — una scrive le statistiche, l'altra i due rank, e nessuna
+tocca le colonne dell'altra — mentre questa si **sostituisce per intero** a ogni caricamento, come il
+listone.
+
+Mescolarle vorrebbe dire che un refresh automatico e l'upload di un file umano scrivono nella stessa
+riga con due regole diverse, ed è il punto esatto in cui qualcuno, fra sei mesi, cancellerebbe i
+giudizi con una `GET`. La sostituzione integrale serve anche a una cosa che l'upsert non farebbe: **un
+giudizio ritirato deve poter sparire**. Un `titolarissimo` messo a luglio e tolto ad agosto, con un
+merge, resterebbe in tabella per sempre.
+
+Il foglio invecchia in fretta — un giudizio sulla titolarità cambia con un infortunio — quindi il
+pannello dice **quando** è stato caricato e lo segnala se è più vecchio di un giorno. È l'unico dei
+quattro timestamp con un avviso sopra: gli altri tre vengono da fonti che si aggiornano da sé, questo
+lo carica una persona, e nessun refresh automatico potrà mai occuparsene.
+
+### Il giudizio vince, ma il numero resta accanto
+
+Da qui in avanti la titolarità dell'applicazione **è** quella del foglio. Si smette di dedurla dalle
+partenze dell'anno scorso, e la soglia del verde si sposta sulla scala 1–5: da 4 in su.
+
+Il rapporto grezzo però **non si perde**. Resta accanto al badge, in grigio, e non è nostalgia: è ciò
+che rende il giudizio verificabile. Un «5 su 5» da solo è un'affermazione che nessuno può controllare;
+un «5 su 5» accanto a «3 partite su 38» è un'affermazione con la sua prova — e quando i due divergono,
+**quella divergenza è l'informazione più preziosa della riga**. È letteralmente il caso che giustifica
+il capitolo: l'attaccante giudicato titolare pieno che l'anno scorso ha giocato tre partite non è un
+errore del foglio, è una notizia.
+
+Con una precisazione che vale la pena capire, perché sembra un'incoerenza e non lo è. Il numero grezzo
+compare **solo se è di quest'anno**: chi ha le statistiche del campionato precedente porta il giudizio
+da solo, senza rapporto accanto. Il motivo è che le presenze sono un numero *di stagione*, e uno di due
+campionati fa accanto a un giudizio scritto oggi non è una prova ma un confronto falso. Il giudizio
+invece non ha stagione: è un'opinione su quest'anno, scritta oggi, e non cambia significato per quanto
+ha giocato chi la porta. Se fosse passato dallo stesso filtro, i centosessantotto giocatori con le
+statistiche vecchie avrebbero perso l'informazione più recente che abbiamo su di loro.
+
+E quando il foglio non c'è? **Si torna al badge di prima**, calcolato dalle presenze. Questo è il
+punto in cui l'architettura ha fatto una scelta che vale più di quanto sembri: la decisione «da dove
+viene la titolarità» sta in **una funzione sola**, in `lib/domain.ts`, e restituisce una delle due
+forme — mai un misto. I tre posti che disegnano un badge non sanno quale delle due ha vinto. Se quella
+scelta fosse sparsa nei componenti, il giorno in cui la lista di chiamata e il modale d'offerta la
+applicassero in due modi diversi lo stesso giocatore sarebbe verde in una schermata e grigio
+nell'altra — e nessuna delle due schermate sbaglierebbe *da sola*, che è il genere di bug che non si
+trova. Per la stessa ragione il badge è **un** componente e non due: tenerne uno per fonte voleva dire
+che ogni chiamante decideva quale disegnare, cioè riportare la decisione dove non deve stare.
+
+### Un numero che propone un'azione, e per questo sta in un posto solo
+
+Fra tutto ciò che il foglio porta, il prezzo consigliato è diverso dagli altri, e la differenza va
+detta perché è la ragione della forma che ha preso: **non descrive un giocatore, propone un'azione.**
+Una cifra suggerita accanto a una cifra da digitare è un suggerimento che qualcuno segue senza
+pensarci.
+
+C'è anche un effetto sull'asta, non sull'interfaccia. Se otto persone su otto hanno il file, il prezzo
+consigliato smette di essere un vantaggio informativo e diventa **un prezzo di listino**: l'asta
+converge lì, e la contesa che rende interessante la serata si sposta sui pochi nomi in cui qualcuno
+decide di scostarsene.
+
+Per questo vive in un componente suo, con **un posto solo** da cui si decide se e dove compare, e
+quattro posizioni tutte scritte: accanto al campo dell'offerta, fra gli altri giudizi, dietro un tocco,
+oppure spento. Oggi sta fra gli altri giudizi — dove si legge come *un giudizio fra i giudizi* invece
+che come un'istruzione a due centimetri dalla cifra da scrivere — e spegnerlo in tutta l'applicazione
+è cambiare una parola, non togliere del codice: i due punti d'innesto restano al loro posto e tacciono
+da sé.
+
+### Il vincolo che non è un invariante, e che era il più facile da rompere
+
+Sopra la lista di chiamata, per chi ha il permesso, ci sono dei filtri: titolarità minima e fascia.
+Servono a quello per cui esistono — trovare in mezzo a quaranta nomi i pochi che vale la pena
+chiamare — e sono, tecnicamente, una banalità: un `filter` su un array che è già in memoria.
+
+Solo che quella lista **non era ordinata per caso**. È ordinata come l'auto-pick, ed è per questo che
+il suo primo nome ha sempre avuto un significato preciso: *quello che il timer comprerebbe al posto
+tuo se lasci scadere la chiamata*. Saperlo cambia la fretta con cui si guarda il countdown.
+
+Un filtro cambia quali righe si vedono e **non cambia di una virgola chi il timer sceglie** — quello
+pesca dal pool intero, dentro la macchina a stati, e del foglio non sa niente né deve saperne. Con un
+filtro acceso il primo nome della lista **non è più** quello che verrebbe comprato allo scadere, e chi
+ha imparato a fidarsi di quella riga si ritroverebbe comprato qualcun altro. Nessun invariante si
+rompe: si rompe una promessa che l'interfaccia aveva fatto senza scriverla.
+
+Va risolto **in pagina e in modo esplicito**, non con un commento nel codice. Sopra l'elenco c'è una
+riga che dice chi comprerebbe il timer, e c'è **sempre** — filtro o no. Diventa ambrata quando il primo
+della lista non è più quello. Il «sempre» non è pigrizia: se comparisse solo a filtro acceso, chi non
+filtra continuerebbe a fidarsi dell'ordinamento e chi filtra la leggerebbe come un avviso d'errore
+invece che come un'informazione.
+
+L'altra strada — tenere quel giocatore fisso in cima anche quando il filtro lo escluderebbe — è
+scritta e disattivata, perché risolve il problema introducendone un altro: un elenco che contiene una
+riga che il filtro dichiara di aver tolto mente su sé stesso in un altro modo.
+
+Quello che protegge davvero il motore, comunque, non è nessuna di queste due righe di interfaccia: è
+un test che gioca **un'asta intera** con la tabella dei giudizi piena — messi apposta *contro* l'ordine
+dell'auto-pick, il migliore per il foglio è l'ultimo per il motore — e verifica che compri esattamente
+gli stessi giocatori, nello stesso ordine, di un'asta identica giocata con la tabella vuota.
+
+### Chi li vede, e la cosa che non si rompe
+
+Come per gli insight, il permesso decide **una query e non un `className`**: la chiave con i giudizi è
+*assente* dal payload di chi non ce l'ha — non `null`, assente — perché quel dato viaggia dentro le
+prop di un componente client, cioè finisce nel browser di chi apre la pagina. I filtri sopra la lista
+di chiamata **non sono la protezione**: sono l'interfaccia sopra un dato che a chi non ha il permesso
+non arriva affatto. Se un giorno il filtro si vedesse e i dati non ci fossero, il bug è nella query.
+Nel Centro dati il discorso non si pone: quella pagina è dietro il permesso di amministratore, e un
+amministratore li vede per costruzione.
+
+E la solita cosa da ricordare, la quarta di fila. **La tabella nasce vuota.** Finché nessuno carica il
+foglio, i giudizi non compaiono da nessuna parte, il badge della titolarità è quello calcolato dalle
+presenze e il portale è identico a quello della versione precedente. **Niente si rompe** — ed è
+precisamente ciò che rende quel passo facile da dimenticare dopo un rilascio. I due file vanno caricati
+**in quest'ordine**: prima il listone, poi il foglio, perché il secondo si aggancia al primo per nome.
+L'ordine non è una preferenza, ed è la ragione per cui il pulsante del secondo è spento finché il primo
+non c'è.
+
+---
+
 ## Il posto dove gira
 
 Tutto quello che hai letto finora vive su **una macchina sola**, ed è la conseguenza pratica della

@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 
+import type { CarmyJudgement } from "@/lib/domain";
 import {
+  NO_CARMY_FILTERS,
   amInTie,
+  autoPickCandidate,
   availablePlayers,
   bidBounds,
   canWithdraw,
   checkAmount,
   countdownLabel,
+  hasCarmyFilters,
   parseAmount,
   pausedRemaining,
   portalScreen,
@@ -312,5 +316,186 @@ describe("giocatori chiamabili", () => {
 
   it("i presi si leggono dalle rose dello snapshot, non da una query", () => {
     expect([...takenPlayerIds(conRose)]).toEqual(["p2"]);
+  });
+});
+
+// ─── I filtri di Carmy, e il vincolo che protegge l'auto-pick (M10B §6) ───────
+
+describe("i filtri di Carmy sulla lista di chiamata", () => {
+  /** Un giudizio minimo, con solo ciò che i filtri guardano. */
+  function judge(over: Partial<CarmyJudgement>): CarmyJudgement {
+    return {
+      extId: 1,
+      sourceName: "x",
+      sourceTeam: "INT",
+      fascia: null,
+      prezzo: null,
+      titolarita: null,
+      affidabilita: null,
+      integrita: null,
+      fmvExp: null,
+      tags: [],
+      commento: null,
+      ...over,
+    };
+  }
+
+  /**
+   * ⚠ **Il pool è ordinato in modo che il primo per `fvm` sia l'ultimo per
+   * titolarità.** Serve esattamente a questo: è la configurazione in cui un filtro
+   * di Carmy **sposta** il primo nome della lista, cioè il caso che il riquadro di
+   * §6 descrive. Un pool in cui il migliore per `fvm` è anche il migliore per
+   * titolarità non proverebbe niente.
+   */
+  const pool: PoolPlayer[] = [
+    {
+      id: "p1",
+      name: "Lautaro",
+      team: "Inter",
+      role: "A",
+      fvm: 300,
+      quot: 30,
+      carmy: judge({ titolarita: 2, fascia: "Top", tags: ["incostante"] }),
+    },
+    {
+      id: "p2",
+      name: "Retegui",
+      team: "Atalanta",
+      role: "A",
+      fvm: 250,
+      quot: 29,
+      carmy: judge({ titolarita: 5, fascia: "Semi-Top", tags: ["bonus", "rigorista"] }),
+    },
+    {
+      id: "p3",
+      name: "Vlahovic",
+      team: "Juventus",
+      role: "A",
+      fvm: 200,
+      quot: 28,
+      carmy: judge({ titolarita: 4, fascia: "Top", tags: ["bonus"] }),
+    },
+    // ⚠ Senza giudizio: è il caso dei dieci nomi che il listone non aveva, e di
+    // ogni giocatore quando il foglio non è caricato.
+    { id: "p4", name: "Senza", team: "Lecce", role: "A", fvm: 180, quot: 10 },
+  ];
+
+  const s = snapshot();
+
+  it("senza filtri la lista è quella di prima, nell'ordine dell'auto-pick", () => {
+    expect(availablePlayers(pool, s, "A").map((p) => p.id)).toEqual([
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+    ]);
+  });
+
+  it("la titolarità minima tiene chi ci arriva, nell'ordine dell'auto-pick", () => {
+    expect(
+      availablePlayers(pool, s, "A", "", { ...NO_CARMY_FILTERS, titolaritaMin: 4 }).map(
+        (p) => p.id,
+      ),
+    ).toEqual(["p2", "p3"]);
+  });
+
+  it("la fascia filtra per valore esatto", () => {
+    expect(
+      availablePlayers(pool, s, "A", "", { ...NO_CARMY_FILTERS, fascia: "Top" }).map(
+        (p) => p.id,
+      ),
+    ).toEqual(["p1", "p3"]);
+  });
+
+  it("il tag filtra per appartenenza, uno per volta", () => {
+    expect(
+      availablePlayers(pool, s, "A", "", { ...NO_CARMY_FILTERS, tag: "bonus" }).map(
+        (p) => p.id,
+      ),
+    ).toEqual(["p2", "p3"]);
+  });
+
+  it("i filtri si compongono, e la ricerca continua a valere accanto a loro", () => {
+    expect(
+      availablePlayers(pool, s, "A", "juv", {
+        ...NO_CARMY_FILTERS,
+        fascia: "Top",
+        titolaritaMin: 4,
+      }).map((p) => p.id),
+    ).toEqual(["p3"]);
+  });
+
+  it("⚠ chi non ha un giudizio esce quando un filtro è acceso: «non lo so» non è un sì", () => {
+    // Vale anche per chi non ha il permesso, a cui la chiave non arriva affatto: i
+    // filtri sono l'interfaccia sopra un dato, non la sua protezione (§7).
+    const senzaGiudizio = availablePlayers(pool, s, "A", "", {
+      ...NO_CARMY_FILTERS,
+      titolaritaMin: 1,
+    });
+    expect(senzaGiudizio.map((p) => p.id)).not.toContain("p4");
+  });
+
+  it("e senza filtri accesi rientra, perché la domanda non è stata fatta", () => {
+    expect(availablePlayers(pool, s, "A").map((p) => p.id)).toContain("p4");
+    expect(hasCarmyFilters(NO_CARMY_FILTERS)).toBe(false);
+  });
+
+  it("hasCarmyFilters riconosce ognuno dei tre da solo", () => {
+    expect(hasCarmyFilters({ ...NO_CARMY_FILTERS, fascia: "Top" })).toBe(true);
+    expect(hasCarmyFilters({ ...NO_CARMY_FILTERS, titolaritaMin: 4 })).toBe(true);
+    expect(hasCarmyFilters({ ...NO_CARMY_FILTERS, tag: "bonus" })).toBe(true);
+  });
+});
+
+/**
+ * ⚠ **Il vincolo più facile da rompere di M10B** (§6), provato dove vive.
+ *
+ * La lista di chiamata è ordinata `fvm DESC, quot DESC`, che **è** l'ordine
+ * dell'auto-pick: per questo il primo nome è sempre stato «quello che il timer
+ * sceglierebbe al posto tuo». Un filtro cambia quali righe si vedono e **non**
+ * cambia chi il timer scegli — quello pesca dal pool intero, in `machine.ts`.
+ *
+ * `autoPickCandidate` è la risposta a «chi prenderebbe il timer?» e **deve essere
+ * insensibile ai filtri**. Se un giorno qualcuno le passasse i filtri «per
+ * coerenza», è qui che si romperebbe — e in `/play` la riga direbbe una bugia
+ * esattamente nel momento in cui serve.
+ */
+describe("autoPickCandidate — chi comprerebbe il timer", () => {
+  const pool: PoolPlayer[] = [
+    { id: "p1", name: "Lautaro", team: "Inter", role: "A", fvm: 300, quot: 30 },
+    { id: "p2", name: "Retegui", team: "Atalanta", role: "A", fvm: 250, quot: 29 },
+    { id: "p3", name: "Zaccagni", team: "Lazio", role: "C", fvm: 200, quot: 20 },
+  ];
+
+  it("è il primo per fvm, poi per quot: l'ordine del motore", () => {
+    expect(autoPickCandidate(pool, snapshot(), "A")?.id).toBe("p1");
+  });
+
+  it("rispetta il ruolo corrente e le rose, come l'auto-pick", () => {
+    const conRose = snapshot({
+      members: [
+        member(ME, 0, {
+          roster: [
+            {
+              assignmentId: "a1",
+              playerId: "p1",
+              name: "Lautaro",
+              role: "A",
+              team: "Inter",
+              price: 80,
+            },
+          ],
+        }),
+        member(OTHER, 1),
+        member(THIRD, 2),
+      ],
+    });
+    expect(autoPickCandidate(pool, conRose, "A")?.id).toBe("p2");
+    expect(autoPickCandidate(pool, snapshot(), "C")?.id).toBe("p3");
+  });
+
+  it("è `null` quando non c'è niente da comprare di quel ruolo", () => {
+    expect(autoPickCandidate(pool, snapshot(), "P")).toBeNull();
+    expect(autoPickCandidate(pool, snapshot(), null)).toBeNull();
   });
 });

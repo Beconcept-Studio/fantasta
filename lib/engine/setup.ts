@@ -31,6 +31,7 @@ import type { PoolPlayer } from "@/lib/realtime/types";
 
 import { ensureBotUsers } from "./bots";
 import { type Result, fail, ok } from "./errors";
+import { carmyForExtIds } from "./carmy";
 import { insightsForExtIds } from "./insights";
 import { isUuid } from "./ids";
 import { readListoneForCopy } from "./listone";
@@ -1241,6 +1242,13 @@ export async function listPlayers(
  * risultato finisce nel payload RSC di un client component, cioè nel browser di
  * chi apre la pagina, e ciò che non deve leggere non deve arrivargli. È la regola
  * 6 applicata alla lettura invece che alla scrittura.
+ *
+ * ⚠ **Da M10B il flag decide anche `carmy`, e con lo stesso `canSeeInsights`.**
+ * Il giudizio di chi compila il foglio segue esattamente la strada degli insight,
+ * senza nessuna eccezione: un secondo permesso per un secondo dato vorrebbe dire
+ * due regole da tenere allineate, e i filtri della lista di chiamata — che si
+ * vedono solo agli `is_pro` — sono l'**interfaccia** sopra questo dato, non la sua
+ * protezione (M10B §7).
  */
 export async function listPickPool(
   auctionId: string,
@@ -1285,17 +1293,29 @@ export async function listPickPool(
     }));
   }
 
-  const insights = await insightsForExtIds(rows.map((r) => r.extId));
+  const extIds = rows.map((r) => r.extId);
+  // ⚠ Due letture e non un `JOIN`: le due tabelle sono globali e indipendenti, e
+  // il foglio di Carmy può essere vuoto mentre gli insight ci sono (e viceversa).
+  // Chi ha l'uno e non l'altro deve arrivare comunque, con la sola chiave che ha.
+  const [insights, carmy] = await Promise.all([
+    insightsForExtIds(extIds),
+    carmyForExtIds(extIds),
+  ]);
 
   return rows.map(({ extId, ...player }) => {
     const found = insights.get(extId);
+    const judged = carmy.get(extId);
     // ⚠ Niente `insights: undefined`: la chiave si aggiunge **solo** se c'è
     // qualcosa. Un `undefined` esplicito sparirebbe comunque nella
     // serializzazione, ma il tipo direbbe una cosa diversa da quella che il test
     // asserisce — e quel test è la differenza fra un dato protetto e uno nascosto.
-    if (!found) return player;
+    // Le due chiavi si aggiungono **una per una e solo se ci sono**: un giocatore
+    // giudicato da Carmy ma senza riga di insight arriva con `carmy` e senza
+    // `insights`, e la UI di M10B sa già trattarlo (è il ripiego di `titolarita`).
+    const withCarmy = judged ? { ...player, carmy: judged } : player;
+    if (!found) return withCarmy;
     return {
-      ...player,
+      ...withCarmy,
       insights: {
         extId: found.extId,
         fullName: found.fullName,

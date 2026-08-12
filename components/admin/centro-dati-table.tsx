@@ -2,7 +2,12 @@
 
 import { useMemo, useState } from "react";
 
-import { SetPieceBadges, TitolaritaBadge } from "@/components/auction/insights";
+import {
+  CarmyTags,
+  FasciaBadge,
+  SetPieceBadges,
+  TitolaritaAnyBadge,
+} from "@/components/auction/insights";
 import { Input } from "@/components/ui/input";
 import {
   type CentroDatiSort,
@@ -14,6 +19,7 @@ import {
   searchableText,
 } from "@/lib/centro-dati";
 import {
+  GIORNATE,
   ROLES,
   ROLE_LABELS,
   type Role,
@@ -54,10 +60,18 @@ import { cn } from "@/lib/utils";
  *
  * ⚠ **Nessun `dark:`** (`CLAUDE.md`): l'applicazione gira in chiaro.
  */
-export function CentroDatiTable({ rows }: { rows: CentroDatiRow[] }) {
+export function CentroDatiTable({
+  rows,
+  tags = [],
+}: {
+  rows: CentroDatiRow[];
+  /** I tag che esistono davvero a sistema, con la loro frequenza (M10B §6). */
+  tags?: { tag: string; count: number }[];
+}) {
   const [query, setQuery] = useState("");
   const [role, setRole] = useState<Role | null>(null);
   const [onlySetPieces, setOnlySetPieces] = useState(false);
+  const [tag, setTag] = useState<string | null>(null);
   const [sort, setSort] = useState<CentroDatiSort>(DEFAULT_SORT);
 
   // I nomi normalizzati si calcolano **una volta**, non a ogni tasto: cercare
@@ -69,11 +83,11 @@ export function CentroDatiTable({ rows }: { rows: CentroDatiRow[] }) {
     () =>
       arrangeRows(
         rows,
-        { ...NO_FILTERS, query, role, onlySetPieces },
+        { ...NO_FILTERS, query, role, onlySetPieces, tag },
         sort,
         searchable,
       ),
-    [rows, searchable, query, role, onlySetPieces, sort],
+    [rows, searchable, query, role, onlySetPieces, tag, sort],
   );
 
   // Quanti sarebbero, se si premesse il filtro: un numero accanto a
@@ -130,6 +144,32 @@ export function CentroDatiTable({ rows }: { rows: CentroDatiRow[] }) {
         </p>
       </div>
 
+      {/*
+        ⚠ **Il fratello del filtro «rigori e piazzati»** (M10B §6): i tag di Carmy,
+        letti **dai dati** e non da un elenco scritto a mano — chi compila il foglio
+        ne aggiungerà uno, e un elenco fisso vorrebbe dire un filtro che non lo
+        mostra senza che nessuno sappia perché. Su una riga sua e non accanto ai
+        ruoli: sono diciassette, e mescolati agli altri controlli li renderebbero
+        illeggibili tutti. Uno per volta, non un elenco: vedi `CentroDatiFilters`.
+      */}
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Filtra per tag">
+          <Chip active={tag === null} onClick={() => setTag(null)}>
+            Tutti i tag
+          </Chip>
+          {tags.map((t) => (
+            <Chip
+              key={t.tag}
+              active={tag === t.tag}
+              onClick={() => setTag(tag === t.tag ? null : t.tag)}
+            >
+              {t.tag}{" "}
+              <span className="tabular-nums opacity-70">{t.count}</span>
+            </Chip>
+          ))}
+        </div>
+      )}
+
       {shown.length === 0 ? (
         <p className="text-muted-foreground py-8 text-center text-sm">
           Nessun calciatore con questi filtri.
@@ -163,6 +203,27 @@ export function CentroDatiTable({ rows }: { rows: CentroDatiRow[] }) {
                 <Th sortKey="piazzati" sort={sort} onSort={sortBy}>
                   Rigori e piazzati
                 </Th>
+                {/* ─── Dal foglio di Carmy (M10B §6) ─── */}
+                <Th sortKey="fascia" sort={sort} onSort={sortBy}>
+                  Fascia
+                </Th>
+                <Th sortKey="prezzo" sort={sort} onSort={sortBy} align="right">
+                  Consigl.
+                </Th>
+                <Th
+                  sortKey="affidabilita"
+                  sort={sort}
+                  onSort={sortBy}
+                  align="right"
+                >
+                  Affid.
+                </Th>
+                <Th sortKey="integrita" sort={sort} onSort={sortBy} align="right">
+                  Integr.
+                </Th>
+                <th className="border-b px-2 py-2 text-left font-medium">
+                  Note
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -184,11 +245,31 @@ export function CentroDatiTable({ rows }: { rows: CentroDatiRow[] }) {
                     <Td className="text-muted-foreground">{row.team}</Td>
                     <Td className="font-mono text-xs">{row.role}</Td>
                     <Td className="text-right tabular-nums">{row.quot}</Td>
+                    {/*
+                      ⚠ **Una colonna sola con due fonti dentro** (M10B §4): il
+                      giudizio di Carmy quando c'è, il badge calcolato dalle
+                      presenze quando non c'è. La scelta la fa `titolarita()` in
+                      `lib/domain.ts`, in un posto solo — qui non c'è nessun `if`
+                      sulla provenienza da tenere allineato con il portale. Accanto,
+                      in grigio, il rapporto grezzo: è la prova del giudizio, e
+                      quando i due divergono quella divergenza è l'informazione.
+                    */}
                     <Td>
-                      {stagione === null ? (
+                      {row.carmy === undefined && stagione === null ? (
                         <Missing />
                       ) : (
-                        <TitolaritaBadge insights={stagione} compact />
+                        <span className="flex flex-wrap items-center gap-1">
+                          <TitolaritaAnyBadge
+                            insights={row.insights}
+                            carmy={row.carmy}
+                            compact
+                          />
+                          {row.carmy?.titolarita != null && stagione !== null && (
+                            <span className="text-muted-foreground text-xs tabular-nums">
+                              {stagione.startsEleven}/{GIORNATE}
+                            </span>
+                          )}
+                        </span>
                       )}
                     </Td>
                     {/*
@@ -206,6 +287,42 @@ export function CentroDatiTable({ rows }: { rows: CentroDatiRow[] }) {
                       ) : (
                         <span className="flex flex-wrap gap-1">
                           <SetPieceBadges insights={row.insights} compact />
+                        </span>
+                      )}
+                    </Td>
+
+                    {/* ─── Dal foglio di Carmy ─── */}
+                    <Td>
+                      {row.carmy?.fascia == null ? (
+                        <Missing />
+                      ) : (
+                        <FasciaBadge fascia={row.carmy.fascia} compact />
+                      )}
+                    </Td>
+                    <Td className="text-right tabular-nums">
+                      {row.carmy?.prezzo ?? <Missing />}
+                    </Td>
+                    <Td className="text-right tabular-nums">
+                      {row.carmy?.affidabilita ?? <Missing />}
+                    </Td>
+                    <Td className="text-right tabular-nums">
+                      {row.carmy?.integrita ?? <Missing />}
+                    </Td>
+                    {/*
+                      Le note per esteso: qui c'è lo spazio, e sono la parte del
+                      foglio che nessuna fonte pubblica ha. Il commento, che esiste
+                      su dieci portieri, sta nel `title`: è multi-riga e in tabella
+                      spaccherebbe la griglia.
+                    */}
+                    <Td>
+                      {row.carmy === undefined || row.carmy.tags.length === 0 ? (
+                        <Missing />
+                      ) : (
+                        <span
+                          className="flex flex-wrap gap-1"
+                          title={row.carmy.commento ?? undefined}
+                        >
+                          <CarmyTags tags={row.carmy.tags} compact />
                         </span>
                       )}
                     </Td>

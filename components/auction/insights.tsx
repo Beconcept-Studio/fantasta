@@ -1,11 +1,13 @@
+import { PrezzoConsigliato } from "@/components/auction/prezzo-consigliato";
 import { Badge } from "@/components/ui/badge";
 import {
+  CARMY_SCALA_MAX,
+  type CarmyJudgement,
   GIORNATE,
   type PlayerInsights,
   minutiMedi,
-  quotaTitolare,
   showableInsights,
-  titolareForte,
+  titolarita,
 } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 
@@ -25,12 +27,21 @@ import { cn } from "@/lib/utils";
  * disegnato vuoto per tutti sarebbe il modo esatto di rendere invisibile la
  * protezione di M8. Vedi `lib/domain.ts`.
  *
- * ⚠ **`TitolaritaBadge` e `SetPieceBadges` sono esportati da M10**, che è il
+ * ⚠ **`TitolaritaAnyBadge` e `SetPieceBadges` sono esportati da M10**, che è il
  * terzo chiamante e quello che li rende un componente invece di tre `className`:
  * il Centro dati li usa in due colonne separate, quindi non gli servono le due
  * composizioni pronte (`InsightsLine`, `InsightsMacro`) ma i due pezzi. Il tono,
  * la soglia e la regola «il colore non è mai l'unica informazione» restano
  * decisi qui dentro, in un posto solo.
+ *
+ * ⚠ **Da M10B il badge della titolarità è uno solo per due fonti**, e prima erano
+ * due componenti: c'era `TitolaritaBadge` che leggeva le presenze, e il giudizio di
+ * Carmy avrebbe voluto il suo. Tenerli separati voleva dire che ogni chiamante
+ * decideva **quale dei due** disegnare — cioè tre copie della regola «da dove viene
+ * la titolarità», che è esattamente la cosa che `titolarita()` in `lib/domain.ts`
+ * esiste per centralizzare. Ora il chiamante passa le due chiavi e non sa quale
+ * vince: se un giorno questo file contenesse un `if` sulla provenienza, lo stesso
+ * giocatore sarebbe verde in una schermata e grigio nell'altra.
  */
 
 /**
@@ -107,24 +118,210 @@ function InsightBadge({
   );
 }
 
+// ─── La titolarità (M9, e da M10B con due fonti) ─────────────────────────────
+
 /**
- * Il badge della titolarità: la percentuale **dentro**, e il colore sopra.
+ * Le tre forme fra cui la titolarità giudicata si scrive, e **un posto solo da cui
+ * si decide quale vale**.
  *
- * ⚠ La percentuale non si toglie per fare spazio. La soglia dell'80% cade in una
- * zona densa — 32/38 verde e 30/38 grigio, due partite di distanza — e regge solo
- * perché il numero è leggibile accanto al colore. Il perché per esteso, con la
- * misura, sta su `SOGLIA_TITOLARE` in `lib/domain.ts`.
+ * ⚠ **Sono tre perché era una decisione dell'owner, non una deduzione** (M10B §4):
+ * cambia ciò che dodici persone leggono sul telefono mentre offrono, ed è la stessa
+ * scelta che l'owner ha fatto per i colori di M9 — guardandola su una pagina di
+ * prova con quaranta nomi veri sotto. Restano tutte e tre scritte perché il costo
+ * di cambiare idea deve essere questa riga e non una riscrittura.
+ *
+ * - `voto` — «Titolare 4/5». Dice la scala, quindi si capisce senza sapere niente:
+ *   un 4 su 5 è un 4 su 5. Costa due caratteri in più su una riga già larga quanto
+ *   un telefono.
+ * - `parola` — «Titolarissimo» sopra il massimo, «Titolare» sopra la soglia. Si
+ *   legge in un colpo d'occhio e non chiede di fare una divisione.
+ * - `numero` — «4/5» e basta. La più corta, e la meno leggibile da sola: un `4/5`
+ *   in mezzo a `76′` e `Rigori 1°` non dice di cosa è il quattro.
  */
-export function TitolaritaBadge({
+export const FORME_TITOLARITA = ["voto", "parola", "numero"] as const;
+export type FormaTitolarita = (typeof FORME_TITOLARITA)[number];
+
+/**
+ * ⚠ **La forma scelta dall'owner, 2026-08-12, guardandola** sulla pagina di prova
+ * con quaranta nomi veri: **`parola`**.
+ *
+ * La riga è questa: cambiarla cambia la lista di chiamata, il modale d'offerta e il
+ * Centro dati insieme, che è il motivo per cui esiste.
+ *
+ * ⚠ **Due cose che questa scelta ha comportato, e che vanno lette insieme a lei**,
+ * perché sono l'unico modo in cui `parola` resta vera:
+ *
+ * 1. **Sotto soglia la parola non c'è, e non si inventa.** Il foglio dice «3 su 5»,
+ *    non «panchinaro»: chiamarlo così sarebbe attribuire a chi compila il file un
+ *    giudizio che non ha scritto. Quei badge portano quindi la scala —
+ *    «Titolarità 3/5» — che è anche ciò che tiene in piedi la regola di M9 «il
+ *    colore non è mai l'unica informazione».
+ * 2. **Il tag `titolarissimo` sparisce dalla riga quando il badge lo dice già.**
+ *    È un tag vero del foglio, su 106 giocatori, e senza questa regola la stessa
+ *    parola comparirebbe **due volte sulla stessa riga** — una come badge verde e
+ *    una come etichetta grigia. Vedi `CarmyTags`.
+ */
+export const FORMA_TITOLARITA: FormaTitolarita = "parola";
+
+/**
+ * Il tag che il badge `parola` dice già da sé, e che quindi non si ripete.
+ *
+ * ⚠ **Vive qui e non dentro `CarmyTags` per un motivo**: è una conseguenza di
+ * `FORMA_TITOLARITA`, non una proprietà dei tag. Se un giorno la forma tornasse a
+ * `voto`, questo tag deve **ricomparire** — e con le due cose accanto, chi cambia
+ * la costante vede subito anche l'altra riga da cambiare.
+ */
+const TAG_DETTO_DAL_BADGE = "titolarissimo";
+
+/**
+ * Il badge della titolarità **giudicata**: il verde di M9 sulla scala di Carmy.
+ *
+ * ⚠ **Il colore non è mai l'unica informazione**, come per il badge delle
+ * presenze: il testo dice sempre *quanto*, e la soglia (`>= 4`) sta in
+ * `lib/domain.ts` con la sua misura accanto — 168 su 497, cioè un nome su tre.
+ */
+function TitolaritaCarmyBadge({
+  voto,
+  forte,
+  compact = false,
+  forma = FORMA_TITOLARITA,
+}: {
+  voto: number;
+  forte: boolean;
+  compact?: boolean;
+  forma?: FormaTitolarita;
+}) {
+  const testo =
+    forma === "numero"
+      ? `${voto}/${CARMY_SCALA_MAX}`
+      : forma === "parola"
+        ? voto >= CARMY_SCALA_MAX
+          ? "Titolarissimo"
+          : forte
+            ? "Titolare"
+            : // ⚠ Sotto soglia la parola non esiste, e non si inventa: il foglio
+              // dice «3 su 5», non «panchinaro». Si scrive «Titolarità», non
+              // «Titolare», perché un badge grigio che dice «Titolare 3/5»
+              // afferma la cosa che il grigio sta negando.
+              `Titolarità ${voto}/${CARMY_SCALA_MAX}`
+        : `Titolare ${voto}/${CARMY_SCALA_MAX}`;
+
+  return (
+    <InsightBadge tono={forte ? "verde" : "neutro"} compact={compact}>
+      {testo}
+    </InsightBadge>
+  );
+}
+
+/**
+ * La titolarità, **da qualunque delle due fonti venga**: è il badge che i tre
+ * chiamanti usano da M10B.
+ *
+ * ⚠ **Non decide niente da sé**: la scelta fra Carmy e le presenze la fa
+ * `titolarita()` in `lib/domain.ts`, in un posto solo e con il suo test. Qui si
+ * disegna il risultato. Il giorno in cui questa funzione contenesse un `if` sulla
+ * provenienza, esisterebbero due regole per la stessa cosa e lo stesso giocatore
+ * sarebbe verde in una schermata e grigio nell'altra.
+ *
+ * ⚠ **Il rapporto grezzo resta fuori dal badge**, in grigio accanto (owner, M9):
+ * `5/5` da solo è un'affermazione che nessuno può controllare, `5/5` accanto a
+ * `3/38` è un'affermazione con la sua prova — **e quando i due divergono, quella
+ * divergenza è l'informazione più preziosa della riga**. Chi lo mostra è il
+ * chiamante, perché nella lista di chiamata non c'è spazio e nel modale sì.
+ */
+export function TitolaritaAnyBadge({
   insights,
+  carmy,
   compact = false,
 }: {
-  insights: PlayerInsights;
+  insights: PlayerInsights | undefined;
+  carmy: CarmyJudgement | undefined;
+  compact?: boolean;
+}) {
+  const t = titolarita(insights, carmy);
+  if (t === null) return null;
+
+  if (t.fonte === "carmy") {
+    return (
+      <TitolaritaCarmyBadge voto={t.voto} forte={t.forte} compact={compact} />
+    );
+  }
+
+  /*
+   * Il ripiego di M9, per quando il foglio non è caricato o quel nome non ha
+   * agganciato: identico a com'era, percentuale compresa.
+   *
+   * ⚠ **La percentuale non si toglie per fare spazio.** La soglia dell'80% cade in
+   * una zona densa — 32/38 verde e 30/38 grigio, due partite di distanza — e regge
+   * solo perché il numero è leggibile accanto al colore. Il perché per esteso, con
+   * la misura, sta su `SOGLIA_TITOLARE` in `lib/domain.ts`.
+   */
+  return (
+    <InsightBadge tono={t.forte ? "verde" : "neutro"} compact={compact}>
+      {Math.round(t.quota * 100)}% tit.
+    </InsightBadge>
+  );
+}
+
+/**
+ * I tag di Carmy, e **quanti se ne mostrano dove**.
+ *
+ * ⚠ **Uno nella lista di chiamata, tutti nel modale** (M10B §6). Un giocatore ne
+ * ha in media due su diciassette etichette: cinque tag su una riga larga quanto un
+ * telefono sono cinque etichette che non vengono lette e che rubano l'altezza al
+ * nome. Il primo è quello che chi compila il foglio ha scritto per primo, che è
+ * l'unica gerarchia disponibile — e non si inventa un ordine di importanza nostro.
+ */
+export function CarmyTags({
+  tags,
+  max,
+  compact = false,
+}: {
+  tags: string[];
+  max?: number;
+  compact?: boolean;
+}) {
+  /*
+   * ⚠ **Si toglie il tag che il badge sta già dicendo a parole** (vedi
+   * `FORMA_TITOLARITA`). Con la forma `parola` scelta dall'owner, «Titolarissimo»
+   * è il badge verde di chi sta a 5, e `titolarissimo` è un tag che il foglio
+   * scrive su 106 giocatori: senza questa riga, la stessa parola comparirebbe due
+   * volte sulla stessa riga di un telefono — una verde e una grigia — e il posto
+   * che ruba è quello del secondo tag, cioè di un'informazione che non c'è altrove.
+   *
+   * Non si filtra il tag *sempre*: solo quando la forma attiva lo dice. Con la
+   * forma `voto` o `numero` il badge non pronuncia nessuna parola, e il tag torna
+   * a essere l'unico posto in cui quella cosa è scritta.
+   */
+  const utili =
+    FORMA_TITOLARITA === "parola"
+      ? tags.filter((tag) => tag !== TAG_DETTO_DAL_BADGE)
+      : tags;
+  const shown = max === undefined ? utili : utili.slice(0, max);
+  if (shown.length === 0) return null;
+
+  return (
+    <>
+      {shown.map((tag) => (
+        <InsightBadge key={tag} tono="neutro" compact={compact}>
+          {tag}
+        </InsightBadge>
+      ))}
+    </>
+  );
+}
+
+/** La fascia, che è un'etichetta di prezzo e non un giudizio sul giocatore. */
+export function FasciaBadge({
+  fascia,
+  compact = false,
+}: {
+  fascia: string;
   compact?: boolean;
 }) {
   return (
-    <InsightBadge tono={titolareForte(insights) ? "verde" : "neutro"} compact={compact}>
-      {Math.round(quotaTitolare(insights) * 100)}% tit.
+    <InsightBadge tono="neutro" compact={compact}>
+      {fascia}
     </InsightBadge>
   );
 }
@@ -132,22 +329,41 @@ export function TitolaritaBadge({
 /**
  * La riga densa, per la lista di chiamata: si legge in mezzo secondo, con quaranta
  * nomi sotto e un countdown che scorre.
+ *
+ * ⚠ **Da M10B guadagna la titolarità di Carmy e, al più, un tag** (§6). La riga era
+ * già larga quanto un telefono: la fascia, l'affidabilità, l'integrità e il prezzo
+ * consigliato **restano fuori** e vivono nel modale d'offerta, dove ci sono i
+ * secondi per leggerli. Tre numeri da 1 a 5 accanto a un countdown sono tre numeri
+ * che non vengono letti (è la regola di M9 §4).
  */
 export function InsightsLine({
   insights,
+  carmy,
 }: {
   insights: PlayerInsights | undefined;
+  carmy?: CarmyJudgement;
 }) {
   const i = showableInsights(insights);
-  if (i === null) return null;
+  const t = titolarita(insights, carmy);
+  // Niente da dire affatto: né un giudizio, né i numeri di quest'anno.
+  if (t === null && i === null) return null;
 
-  const minuti = minutiMedi(i);
+  const minuti = i === null ? null : minutiMedi(i);
 
   return (
     <span className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs tabular-nums">
-      <TitolaritaBadge insights={i} compact />
+      <TitolaritaAnyBadge insights={insights} carmy={carmy} compact />
+      {/* Il rapporto grezzo accanto al giudizio: è la sua prova, e la divergenza
+          è l'informazione. Solo quando il badge viene da Carmy — altrimenti il
+          badge già dice la percentuale, e ripeterla due volte è rumore. */}
+      {t?.fonte === "carmy" && t.quota !== null && (
+        <span>
+          {t.quota.starts}/{t.quota.giornate}
+        </span>
+      )}
       {minuti !== null && <span>{Math.round(minuti)}′</span>}
-      <SetPieceBadges insights={i} compact />
+      {i !== null && <SetPieceBadges insights={i} compact />}
+      {carmy && <CarmyTags tags={carmy.tags} max={1} compact />}
     </span>
   );
 }
@@ -166,19 +382,57 @@ export function InsightsLine({
  */
 export function InsightsMacro({
   insights,
+  carmy,
 }: {
   insights: PlayerInsights | undefined;
+  carmy?: CarmyJudgement;
 }) {
   const i = showableInsights(insights);
-  if (i === null) return null;
+  const t = titolarita(insights, carmy);
+  if (t === null && i === null && !carmy) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
-      <TitolaritaBadge insights={i} />
-      <span className="text-muted-foreground tabular-nums">
-        {i.startsEleven}/{GIORNATE} da titolare
-      </span>
-      <SetPieceBadges insights={i} />
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <TitolaritaAnyBadge insights={insights} carmy={carmy} />
+        {/* Il rapporto grezzo, in grigio: la prova del giudizio. Quando il badge
+            viene dalle presenze la percentuale è già dentro il badge, e questo
+            numero dice quante partite sono davvero. */}
+        {i !== null && (
+          <span className="text-muted-foreground tabular-nums">
+            {i.startsEleven}/{GIORNATE} da titolare
+          </span>
+        )}
+        {i !== null && <SetPieceBadges insights={i} />}
+      </div>
+
+      {/*
+        ⚠ **Qui ci sono i secondi per leggere, e per questo è qui che vanno le
+        cose che nella lista di chiamata non stanno** (M10B §6): fascia,
+        affidabilità, integrità e i tag per esteso. Non tre badge colorati in
+        più — un solo tono, perché il verde della titolarità deve restare l'unica
+        cosa che salta all'occhio.
+      */}
+      {carmy && (
+        <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          {carmy.fascia !== null && <FasciaBadge fascia={carmy.fascia} compact />}
+          {carmy.affidabilita !== null && (
+            <span className="tabular-nums">
+              affidabilità {carmy.affidabilita}/{CARMY_SCALA_MAX}
+            </span>
+          )}
+          {carmy.integrita !== null && (
+            <span className="tabular-nums">
+              integrità {carmy.integrita}/{CARMY_SCALA_MAX}
+            </span>
+          )}
+          {/* Il prezzo consigliato, se l'owner ha scelto che stia qui: è uno dei
+              **due** punti d'innesto, e quale sia attivo lo decide
+              `POSIZIONE_PREZZO` in un posto solo (M10B §6). */}
+          <PrezzoConsigliato carmy={carmy} dove="macro" />
+          <CarmyTags tags={carmy.tags} compact />
+        </div>
+      )}
     </div>
   );
 }

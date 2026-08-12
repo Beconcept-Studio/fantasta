@@ -210,12 +210,17 @@ Per fermarli: `Ctrl-C`.
 
 ---
 
-## 6. Il listone a sistema, e le figurine (M7, M10)
+## 6. Il listone a sistema, il foglio di Carmy, e le figurine (M7, M10, M10B)
 
 ⚠ **Da M10 questo è il passo che conviene dare per primo**, prima ancora dei bot: il listone a
 sistema si carica **una volta** e serve tutte le prove successive — le caricature, il Centro dati, e
 la proposta che compare a chi crea un'asta. Prima di M10 lo stesso file andava ricaricato ogni volta
 e in tre posti diversi.
+
+⚠ **E da M10B l'ordine dentro questo passo conta: listone → Carmy → caricature.** Non è una
+preferenza: il foglio di Carmy si aggancia al listone **per nome** e le caricature prendono gli
+identificativi dal listone, quindi il listone è il primo **di necessità**. I pulsanti degli altri due
+sono spenti finché non c'è, e lo dicono.
 
 Da amministratore (`users.is_admin`), **Admin → Listone**: si carica `fixtures/listone.xlsx` — il
 listone vero da 495 giocatori, già in git — e si preme «Carica il listone». È istantaneo.
@@ -235,6 +240,44 @@ sempre, e resta: serve a correggere un file sbagliato. ⚠ Se scegli il listone 
 un'asta a **12** partecipanti con gli slot di default, I9 passa — la fixture regge tutti e tre i
 tagli — ma se provi con un listone piccolo l'asta **viene creata lo stesso**, in DRAFT, e il motivo
 è scritto in cima alla sua configurazione. Non è un guasto: è la regola.
+
+### Il foglio di Carmy (M10B)
+
+⚠ **Va caricato dopo il listone e prima delle caricature**, e l'ordine **non è una preferenza**: il
+foglio non ha identificativi, si aggancia al listone **per nome**, e senza listone non c'è niente a cui
+agganciarsi. Il pulsante è spento finché il listone non c'è, e lo dice.
+
+Nella stessa pagina, sotto l'upload del listone: si carica `fixtures/carmy.xlsx` — quattro fogli,
+497 giocatori, già in git — e si preme «Carica il foglio». È istantaneo.
+
+Cosa deve dire quando è andato bene, sui byte del 2026-08-12:
+
+```text
+487 giudizi a sistema su 497 righe del foglio.
+Non trovati nel listone (10): Satalino, Chalobah T., … — di solito sono acquisti
+più recenti del listone caricato.
+Squadra diversa dal listone (3): Dominguez B. — Carmy Sassuolo, listone Bologna; …
+```
+
+**Tutte e tre le righe sono normali.** I dieci non agganciati sono giocatori che il listone del 6
+agosto non aveva ancora; le tre discordanze di squadra sono trasferimenti veri, e il giudizio viene
+importato comunque. Se invece il caricamento **rifiuta** dicendo «solo N nomi su 497 (…%) trovano un
+giocatore nel listone», il foglio e il listone parlano di due elenchi diversi: di solito il listone è
+vecchio, e si ricarica quello prima.
+
+Tre cose che non sono guasti:
+
+- **Un nome su tre diventa verde** nella lista di chiamata: la soglia è `Titolarità >= 4`, e sui byte
+  veri sono 168 su 497. È una scelta dell'owner, misurata (`docs/DECISIONS.md`, 2026-08-12).
+- **Accanto al badge c'è un rapporto tipo `3/38`**, ed è voluto che a volte contraddica il badge: è la
+  prova del giudizio, e la divergenza è l'informazione. Su chi ha solo le statistiche della stagione
+  precedente quel rapporto **non compare**, e il giudizio resta da solo.
+- **Senza il foglio caricato il portale è identico a prima**, badge delle presenze compreso. È il
+  ripiego dichiarato, non un caso.
+
+Per svuotarlo:
+`docker compose exec db psql -U postgres -d asta -c "delete from carmy_players;"`. Come per il
+listone, non c'è un pulsante, di proposito.
 
 ### Le figurine
 
@@ -265,6 +308,11 @@ pulsante né per l'uno né per l'altro, di proposito.
 filtro per ruolo. È il posto più veloce da cui vedere se gli insight sono stati importati davvero —
 chi ha `—` in tutte e due le colonne non ha una riga di insight, o ne ha una della stagione
 precedente.
+
+Da M10B ci sono anche le colonne del foglio di Carmy — fascia, prezzo consigliato, affidabilità,
+integrità, note — e il **filtro per tag**, che è il fratello di «rigori e piazzati». Tutte le
+intestazioni ordinano, e chi non ha il valore va **in fondo in entrambe le direzioni**: se invertendo
+una colonna ti aspettavi trecento trattini in cima, è quella la regola.
 
 ## 7. Gli insight sul listone, se vuoi vederli (M8, M9)
 

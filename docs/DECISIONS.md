@@ -2084,3 +2084,97 @@ nostri identificativi. M8 l'aveva misurata vuota l'11 agosto e ne aveva concluso
 stessero solo dietro il JWT di Fantalab: **non è così**. Resta fuori perché Carmy risponde alla stessa
 domanda con un caricamento invece che con un parser e uno scheduler — ma è una strada misurata, non
 chiusa, ed è la risposta pronta il giorno in cui il foglio non arrivasse.
+
+---
+
+## 2026-08-12 — M10B, quello che è cambiato scrivendola
+
+Le scelte della sessione di analisi restano dov'erano, nella voce qui sopra: non si riscrivono. Qui
+c'è **solo ciò che la spec non sapeva**, deciso mentre il codice si scriveva.
+
+**Lo `0` del foglio non è un voto, e il foglio scrive l'assenza in tre modi.** Rifatta la misura sui
+byte del giorno di apertura, la spec regge quasi per intero — 497 righe, 487/497 di aggancio, `Pt.
+Inf.` identica a `injured`, correlazione 0,649, 168 verdi a `>= 4` — ma **§1 dice «1–5» e nel file
+c'è uno zero**: un giocatore (Aurelio) ha titolarità, affidabilità, integrità, prezzo e `MV` tutti a
+zero, `PMA` a `"0%"` e la fantamedia vuota. È una **riga non compilata**, non un giudizio basso, e
+letta come un voto lo farebbe passare per il peggior giocatore del listone. Lo stesso vale per
+`Prezzo = 0`, che sono **73 giocatori su 497** — riserve e terzi portieri, tutti con `PMA` a zero — e
+per `Fascia = "Non Impostata"`, che sono **84** e sono l'unico modo in cui il file scrive «nessuna
+fascia» (nessuna cella è vuota). Decisione: **tutti e tre diventano `null` nel parser**, così
+l'applicazione scrive l'assenza in un modo solo. Sul prezzo la ragione è anche più stringente:
+**zero non è nemmeno un'offerta valida**, quindi un «prezzo consigliato: 0» accanto al campo sarebbe
+un suggerimento impossibile da seguire.
+
+**La colonna `Obiett.` non si importa, e va detto perché.** Vale `Sí` su **tre** giocatori
+(McTominay, Baturina, Rowe) ed è la **lista della spesa di chi compila il foglio**: portarla
+nell'app vorrebbe dire mostrare a dodici persone chi punta a comprare l'autore del file, che gioca
+la stessa asta. Sta scritto in testa a `parseCarmy.ts` perché è la colonna che qualcuno vorrà
+aggiungere. Non si importano nemmeno `PMA` (è `Prezzo` diviso il budget, un dato derivato, e per di
+più una stringa) e `Ruolo` (ridondante col nome del foglio: 0 discordanze su 497).
+
+**L'ordine delle fasce è quello del foglio, non uno nostro.** Tutti e quattro i fogli raggruppano le
+righe nella stessa sequenza — `Top > Semi-Top > Terza > Quarta > Scomm. > Titolare "Scarso" >
+Outsider` — e la mediana del `Prezzo` la conferma (47 → 26 → 13 → 3 → 2 → 1 → 1). L'unico punto in
+cui servirebbe indovinare è `Titolare "Scarso"` contro `Outsider`, che hanno la stessa mediana: lì si
+tiene l'ordine in cui li mette il file, che è l'unica fonte che ne sa qualcosa.
+
+**La forma del badge è `parola` (owner, guardandola), e ha comportato due conseguenze.** «Titolarissimo»
+per chi sta a 5, «Titolare» per chi sta a 4. Le due conseguenze non sono dettagli di resa:
+1. **Sotto soglia la parola non si inventa.** Il foglio dice «3 su 5», non «panchinaro»: chiamarlo
+   così sarebbe attribuire a chi compila il file un giudizio che non ha scritto. Quei badge portano
+   quindi la scala — `Titolarità 3/5` — che è anche ciò che tiene in piedi la regola di M9 «il colore
+   non è mai l'unica informazione».
+2. **Il tag `titolarissimo` sparisce dalla riga quando il badge lo dice già.** È un tag vero del
+   foglio, su **106 giocatori**: senza questa regola la stessa parola comparirebbe **due volte sulla
+   stessa riga** di un telefono — una verde e una grigia — e il posto che ruba è quello del secondo
+   tag, cioè di un'informazione che non c'è altrove. Il filtro per tag continua a offrirlo, perché
+   lavora sui dati e non sulla resa.
+
+**Il prezzo consigliato sta `macro`, e le posizioni scritte sono quattro.** Fra fascia, affidabilità
+e integrità — dove si legge come **un giudizio fra i giudizi** invece che come un'istruzione a due
+centimetri dalla cifra da digitare. La quarta posizione è **`spento`**, che la spec chiedeva senza
+nominarla («poter essere spostato o spento senza rifare niente»): spegnerlo in tutta l'applicazione
+è scrivere una parola in `POSIZIONE_PREZZO`, non togliere del codice — i due punti d'innesto restano
+scritti e tacciono da sé.
+
+**La riga dell'auto-pick: `riga`, su delega dell'owner.** «Non importa, l'importante è che la
+dinamica di auto estrazione del lotto esista — la pagina di visualizzazione è più una utility per
+l'utente.» Fra le due strade di §6 si è preso «una riga che lo dice sempre» perché è l'unica che non
+fa mentire l'elenco una seconda volta: tenere il giocatore fisso in cima risolve «il primo nome non è
+quello giusto» introducendo una riga presente in un elenco che dichiara di averla filtrata. La riga
+c'è **sempre**, filtro o no, e diventa ambrata quando il primo della lista non è più quello — se
+comparisse solo a filtro acceso, chi non filtra continuerebbe a fidarsi dell'ordinamento e chi filtra
+la leggerebbe come un avviso d'errore. ⚠ La delega è sulla **forma**: che l'auto-pick resti quello di
+prima è ciò che la macro non ha toccato, e c'è un test che lo verifica con la tabella dei giudizi
+piena.
+
+**La titolarità nel Centro dati è una colonna sola, non due.** §6 la elencava fra le «colonne nuove»,
+ma quella pagina ne aveva già una: due colonne che dicono la stessa cosa con due scale sono due
+colonne che nessuno confronta. Ordinare una colonna con due fonti dentro ha richiesto una scelta,
+scritta in `valueOf`: i due valori si riportano a **0–1** — `voto / 5` da un lato, `quotaTitolare`
+dall'altro — perché rispondono alla stessa domanda, e un `5` di Carmy finisce sopra un `34/38`, che è
+l'ordine giusto (il giudizio parla di quest'anno, il rapporto dell'anno scorso).
+
+**Un componente in meno, non uno in più.** `TitolaritaBadge` di M9 non esiste più: al suo posto c'è
+`TitolaritaAnyBadge`, che prende le due chiavi e non sa quale vince — la scelta la fa `titolarita()`
+in `lib/domain.ts`. Tenerne due voleva dire che ogni chiamante decideva quale disegnare, cioè tre
+copie della regola che quella funzione esiste per centralizzare, e la prima stesura l'aveva fatto
+davvero duplicando la resa del badge di M9 in due punti.
+
+**⚠ Una tabella globale, un file di test che la possiede.** I test con Postgres di M10B erano in
+`tests/db/carmy.test.ts`, verdi da soli, e hanno reso **rossa la suite in dieci test** con un
+`duplicate key value violates unique constraint "listone_players_pkey"`. La ragione: `uploadListone`
+fa `DELETE` sulla tabella, il join di M10B ha bisogno di un listone caricato, e vitest gira i file in
+worker **paralleli**. È la stessa cicatrice che il file di M10 aveva già documentato per
+`player_insights` («verde da solo, rosso nella suite»), e la regola che ne esce vale da qui in avanti:
+**una tabella globale, un file di test che la possiede.** `tests/db/listone.test.ts` possiede
+`listone_players` **e** `carmy_players`. L'alternativa — serializzare i file con
+`fileParallelism: false` — costerebbe secondi a ogni `pnpm test` per un problema che riguarda due
+file, e lascerebbe la trappola aperta per il terzo.
+
+**La previsione che la spec aveva sbagliato.** Il task M10B-01 diceva «i test di M9 su `quotaTitolare`
+si romperanno, e va saputo perché». **Non si è rotto niente**: 659 verdi prima, 659 dopo. Il ripiego
+di §4 *è* il codice di M9 lasciato intatto — `quotaTitolare`, `titolareForte` e `SOGLIA_TITOLARE` non
+sono stati toccati — e portare la titolarità su Carmy è stato **additivo**. Vale come promemoria sul
+genere di previsione da non mettere in una spec: quella riga avrebbe fatto cercare per mezz'ora un
+rosso che non doveva esserci.

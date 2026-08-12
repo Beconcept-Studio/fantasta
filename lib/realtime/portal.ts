@@ -326,6 +326,8 @@ export function availablePlayers(
   snapshot: Snapshot,
   role: Role | null,
   query = "",
+  /** I filtri di Carmy, solo per chi ha il permesso (M10B §6). */
+  carmyFilters: CarmyFilters = NO_CARMY_FILTERS,
 ): PoolPlayer[] {
   if (role === null) return [];
   const taken = takenPlayerIds(snapshot);
@@ -337,7 +339,90 @@ export function availablePlayers(
         !taken.has(p.id) &&
         (needle === "" ||
           fold(p.name).includes(needle) ||
-          fold(p.team).includes(needle)),
+          fold(p.team).includes(needle)) &&
+        matchesCarmy(p, carmyFilters),
     )
     .sort((a, b) => b.fvm - a.fvm || b.quot - a.quot || a.name.localeCompare(b.name));
+}
+
+// ─── I filtri di Carmy sulla lista di chiamata (M10B §6) ─────────────────────
+
+/**
+ * Fascia, titolarità minima, tag.
+ *
+ * ⚠ **Sono una lente sulla lista, non una modifica del motore.** L'auto-pick pesca
+ * dal pool intero dentro `machine.ts`, ordinando per `fvm DESC, quot DESC`, e di
+ * Carmy non sa niente — né deve saperne. Le conseguenze di questa asimmetria sono
+ * il vincolo più importante della macro, e stanno su `autoPickCandidate` qui sotto.
+ */
+export type CarmyFilters = {
+  /** `null` = tutte le fasce. */
+  fascia: string | null;
+  /** `null` = nessun minimo. Altrimenti 1–5. */
+  titolaritaMin: number | null;
+  /** `null` = tutti. Uno per volta, come nel Centro dati. */
+  tag: string | null;
+};
+
+export const NO_CARMY_FILTERS: CarmyFilters = {
+  fascia: null,
+  titolaritaMin: null,
+  tag: null,
+};
+
+/** Se un filtro di Carmy è acceso: serve a decidere se avvisare, in un posto solo. */
+export function hasCarmyFilters(filters: CarmyFilters): boolean {
+  return (
+    filters.fascia !== null ||
+    filters.titolaritaMin !== null ||
+    filters.tag !== null
+  );
+}
+
+function matchesCarmy(player: PoolPlayer, filters: CarmyFilters): boolean {
+  if (!hasCarmyFilters(filters)) return true;
+  const carmy = player.carmy;
+  // ⚠ Chi non ha un giudizio **esce** quando un filtro è acceso, e vale anche per
+  // chi non ha il permesso — a cui la chiave non arriva affatto. Un filtro acceso è
+  // una domanda, e «non lo so» non è una risposta affermativa. È la stessa regola
+  // del filtro «solo chi batte» nel Centro dati.
+  if (!carmy) return false;
+  if (filters.fascia !== null && carmy.fascia !== filters.fascia) return false;
+  if (
+    filters.titolaritaMin !== null &&
+    (carmy.titolarita === null || carmy.titolarita < filters.titolaritaMin)
+  ) {
+    return false;
+  }
+  if (filters.tag !== null && !carmy.tags.includes(filters.tag)) return false;
+  return true;
+}
+
+/**
+ * ⚠ **Chi comprerebbe l'auto-pick allo scadere del timer**, e questo è il vincolo
+ * più facile da rompere di tutta M10B (§6).
+ *
+ * La lista di chiamata è ordinata `fvm DESC, quot DESC`, che **non è cosmetica**: è
+ * l'ordine esatto dell'auto-pick, e per questo il primo nome della lista è sempre
+ * stato «quello che il timer sceglierebbe al posto tuo». Un filtro di Carmy cambia
+ * **quali righe si vedono**, ma non cambia di una virgola chi l'auto-pick sceglie:
+ * quello pesca dal pool intero. Con un filtro acceso il primo nome della lista
+ * **non è più** quello che verrebbe comprato allo scadere, e chi ha imparato a
+ * fidarsi di quella riga si ritroverebbe comprato qualcun altro.
+ *
+ * ⚠ **Va risolto nell'interfaccia e in modo esplicito, non con un commento nel
+ * codice.** Questa funzione risponde alla domanda «chi prenderebbe il timer?»
+ * indipendentemente dai filtri: è la lista **non filtrata**, e il chiamante lo
+ * scrive in una riga sopra l'elenco, sempre, filtro o no.
+ *
+ * `null` solo quando non c'è nessun giocatore libero di quel ruolo, cioè quando
+ * l'auto-pick non avrebbe niente da comprare.
+ */
+export function autoPickCandidate(
+  pool: PoolPlayer[],
+  snapshot: Snapshot,
+  role: Role | null,
+): PoolPlayer | null {
+  // Nessun filtro, nessuna ricerca: è **esattamente** l'ordine del motore.
+  return availablePlayers(pool, snapshot, role)[0] ?? null;
 }
