@@ -12,15 +12,15 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-**[M11](11-refresh-giornaliero.md) — il refresh giornaliero degli insight.** Aperta il 2026-08-13 su
-richiesta esplicita dell'owner, chiusa su `dev` lo stesso giorno con il gate verde: **777 test**,
-typecheck e build. **Non è ancora rilasciata**: il tag `v1.12.0` e il merge su `main` aspettano una
-richiesta esplicita.
+Nessuna aperta. **M11 è in produzione da `v1.12.0`** (2026-08-13), aperta e chiusa nella stessa
+giornata: gate verde con **777 test**, typecheck e build.
 
-⚠ **Il rilascio porta un `pnpm db:push`** — `source_runs`, additiva, due righe per sempre — e **nessun
-file da caricare a mano**: è il primo rilascio da quattro che non ne ha, e va verificato invece di
-darlo per scontato. La tabella nasce vuota, «nessun tentativo registrato» è lo stato iniziale corretto,
-e il primo tick la riempie da sé entro un quarto d'ora.
+⚠ **Il suo rilascio porta un `pnpm db:push`** — `source_runs`, additiva, due righe per sempre — e
+**nessun file da caricare a mano**: è il primo rilascio da quattro che non ne ha, e la cosa è stata
+verificata invece di darla per scontata. La tabella nasce vuota, «nessun tentativo registrato» è lo
+stato iniziale corretto, e il primo tick la riempie da sé entro un quarto d'ora. ⚠ Ma finché il push
+non è dato, il refresh non parte **e la pagina Admin → Listone va in errore quando la si apre**: è il
+passo che finisce il rilascio, non un extra.
 
 ```bash
 cd /home/ploi/fantasta.rggndr.it && pnpm db:push
@@ -75,9 +75,9 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 ## Da pianificare
 
 **Quattro macro, pianificate insieme il 2026-08-12** da una sessione di analisi sola, a partire dalle
-quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1. **Le prime due
-sono rilasciate** (v1.10.0 e v1.11.0, con M10B dentro l'ultima), **la terza è su `dev`** e aspetta il
-tag; l'ultima si apre **su richiesta esplicita**.
+quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1. **Le prime tre
+sono rilasciate** (v1.10.0, v1.11.0 con M10B dentro, v1.12.0); **resta l'ultima**, e si apre su
+richiesta esplicita.
 
 | Macro | Tema | Schema | Ordine |
 |---|---|---|---|
@@ -137,6 +137,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M11](11-refresh-giornaliero.md) | Il refresh giornaliero degli insight: le due fonti pubbliche si chiedono da sé, e il pannello dice quando non ci riesce | v1.12.0 — 2026-08-13 |
 | [M10B](10b-insight-da-carmy.md) | Gli insight che vengono da un umano: il foglio di Carmy, la titolarità letta invece che dedotta, i filtri per chi ha `is_pro` | v1.11.0 — 2026-08-12 |
 | [M10](10-listone-a-sistema.md) | Il listone a sistema: la sezione admin, il Centro dati, la proposta alla creazione di un'asta | v1.11.0 — 2026-08-12 |
 | [M9](09-badge-insight.md) | I badge degli insight, e la striscia verde via | v1.10.0 — 2026-08-12 |
