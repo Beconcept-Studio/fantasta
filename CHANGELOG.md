@@ -4,6 +4,91 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.12.0] — 2026-08-13
+
+**M11 — Il refresh giornaliero degli insight.** I numeri delle due fonti pubbliche si aggiornavano
+premendo due pulsanti. Funzionava, e la sera dell'asta qualcuno se lo ricordava — il resto dell'anno
+no, e i numeri invecchiavano **senza dire niente**: la pagina mostrava «aggiornato: 12 agosto» per tre
+mesi, e nessuno lo leggeva come un problema, perché era esattamente ciò che mostrava anche il giorno
+prima.
+
+Adesso quei due aggiornamenti partono **da sé, una volta al giorno**. Sono le due fonti pubbliche: il
+listone di `api.fantalab.it` (titolarità, minuti, rigori storici) e la pagina dei rigoristi di
+`fantacalcio.it`. **I due pulsanti restano** e servono a quello che l'automatismo non fa: aggiornare
+*adesso*, la sera prima dell'asta, guardando il risultato.
+
+⚠ **Non si aggiornano da sé i due file che carichi tu** — il listone d'asta (l'export Leghe in
+`.xlsx`) e il foglio di Carmy. Il primo passa da un login, il secondo lo compila una persona. Restano
+due caricamenti a mano, e la data dell'ultimo resta scritta nel pannello.
+
+**Non a un'ora fissa, e non è una svista.** Il conto si fa sull'ultimo *tentativo*, non sull'orologio,
+quindi il refresh scivola in avanti di qualche minuto al giorno: un dato di mercato non ha un'ora. In
+cambio un rilascio a mezzanotte non fa perdere il turno e non lo fa scattare due volte — lo stato sta
+nel database, non nel processo.
+
+### La parte che conta: quando **non** riesce, lo dice
+
+Un automatismo che riesce non ha bisogno di raccontarlo. Uno che fallisce in silenzio è peggio di non
+averlo affatto — ed è il motivo per cui metà di questa versione è un avviso.
+
+**In cima ad Admin → Listone compare un blocco rosso, e solo quando c'è un guasto.** Dice quale fonte,
+da quante volte, con quale messaggio, e — la parte che serve davvero — **che i dati a sistema sono
+ancora quelli di prima e sono integri**: un import che fallisce non lascia righe a metà, mai. Il costo
+di un guasto è sapere numeri vecchi, non numeri falsi.
+
+Dopo il primo fallimento dice «non si è aggiornato». Dal secondo in poi dice «non si aggiorna da **tre**
+volte», perché «fallito» è un incidente e un numero è un guasto che dura: sono due notizie diverse.
+
+**Accanto a ciascuno dei due pulsanti c'è una riga che c'è sempre**, e dice quando si è aggiornato e se
+è partito **da sé o a mano**. L'avviso in cima risponde a «c'è qualcosa che non va?», che si legge
+entrando nella pagina; questa riga risponde a «quando si è aggiornato?», che si legge guardando il
+pulsante. E che l'avviso in cima **non** ci sia quando tutto va bene è la sua unica proprietà
+importante: un avviso che c'è sempre si smette di leggere, e il giorno che serve non lo si vede.
+
+⚠ **Anche i due pulsanti scrivono lì.** Se scrivesse solo l'automatismo, il pannello avrebbe mentito
+nel modo più fastidioso: premi il pulsante, l'aggiornamento riesce, e la pagina continua a dire «ultimo
+tentativo fallito ieri».
+
+**Non manda email**, e non è una dimenticanza: una notifica che arriva ogni giorno per un dato di
+mercato è una notifica che si impara a cancellare senza leggere, e il giorno che conta viene cancellata
+con le altre. Il limite è dichiarato — l'avviso lo vede chi apre il pannello — e regge perché i dati
+non si corrompono e il pannello lo si apre comunque prima di un'asta.
+
+### Due cose che non cambiano, e una che non si vede
+
+**Durante un'asta vera non si aggiorna niente.** Se c'è un'asta reale in corso o in pausa, il refresh
+sta fermo: due download e cinquecento righe in transazione non si fanno accanto a un round da chiudere.
+È la stessa regola dei bot, e come per i bot le **simulazioni non contano**. Un giro saltato per questa
+ragione non viene registrato come fallimento — altrimenti una serata d'asta manderebbe le fonti in
+attesa lunga per un guasto che non c'è stato.
+
+**Se una fonte è giù non viene tempestata di richieste.** Si riprova dopo un'ora, poi due, quattro,
+otto, sedici, poi una volta al giorno: cinque richieste in una giornata di guasto invece di
+novantasei. È una cortesia verso un sito che non è nostro, e costa una riga.
+
+**E niente processi nuovi**: nessun cron, nessun servizio, nessun worker. È un intervallo dentro
+l'unico processo Node che c'è già, il terzo accanto ai timer dell'asta e al tick dei bot.
+
+### ⚠ Il rilascio non finisce col deploy: un passo a mano
+
+**Lo schema, sul server**, dopo che il deploy è finito e con nessuna asta `LIVE` o `PAUSED`. Il cambio è
+**additivo** — una tabella nuova con due righe, una per fonte — quindi **niente `pg_dump` preventivo**:
+
+```bash
+cd /home/ploi/fantasta.rggndr.it && pnpm db:push
+pm2 reload deploy/ecosystem.config.cjs --update-env
+```
+
+**E questo è tutto: nessun file da caricare.** È il primo rilascio da quattro senza quel passo. La
+tabella nasce **vuota**, ed è lo stato iniziale corretto — «nessun tentativo registrato» vuol dire
+«prova adesso», e il primo giro la riempie da sé entro un quarto d'ora. ⚠ Se `pnpm db:push` non viene
+dato, il refresh non parte e il pannello va in errore quando lo apri: è il passo che finisce il
+rilascio, non un extra.
+
+Vale ancora quello che valeva prima: il deploy **si rifiuta di partire** se in produzione c'è un'asta
+**reale** `LIVE` o `PAUSED`, e in quel caso non tocca niente. Le aste **simulate** non lo bloccano: le
+dice e tira avanti.
+
 ## [1.11.0] — 2026-08-12
 
 **Due macro in un rilascio solo** (M10 e M10B), perché la seconda si appoggia alla tabella che
