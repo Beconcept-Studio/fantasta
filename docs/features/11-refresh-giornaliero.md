@@ -1,7 +1,7 @@
 # M11 — Il refresh giornaliero degli insight
 
-> **Stato:** **chiusa su `dev`, non rilasciata** · Aperta e chiusa il 2026-08-13 su
-> `feature/11-refresh-giornaliero` · Pianificata il 2026-08-12 · **Dipende
+> **Stato:** **in produzione da `v1.12.0`** (2026-08-13) · Aperta, chiusa e rilasciata nella stessa
+> giornata su `feature/11-refresh-giornaliero` · Pianificata il 2026-08-12 · **Dipende
 > da M10**, e non per un componente: questa macro ha bisogno del pannello riorganizzato per avere un
 > posto dove dire *«ho provato e non ci sono riuscito»*. Un automatismo senza quel posto è un
 > automatismo muto, che è la cosa peggiore che possa essere (§4).
@@ -348,13 +348,21 @@ backoff per un ordine di operazioni che si sistemerà da sé al primo giro utile
       `DECISIONS.md`, più una settima sulla forma scelta dall'owner. E `HOWTO-PROVA-LOCALE` §8: come si
       prova un loop da quindici minuti senza aspettarne quindici (si mente sulla data a database, non
       si riavvia il processo — riavviarlo non accelera niente, perché il tick non parte al boot).
-- [ ] **M11-12** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
+- [x] **M11-12** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       esplicita** — `CHANGELOG.md`, `package.json`, merge su `main`, tag `v1.12.0`, push. **Il
       `CHANGELOG.md` deve contenere il `pnpm db:push`** scritto per esteso
-      → Merge su `dev` fatto. Il rilascio aspetta la richiesta esplicita dell'owner. ⚠ **Verificato che
-      non c'è nessun file da caricare a mano**: `source_runs` nasce vuota, «nessun tentativo
-      registrato» è lo stato iniziale corretto, e il primo tick la riempie entro un quarto d'ora — è il
-      primo rilascio da quattro senza un passo a mano oltre al `db:push`.
+      → Fatto: merge `7ac118a` su `main`, tag `v1.12.0`, deploy completato (homepage 307 → `/signin`,
+      `/signin` 200). Il `pnpm db:push` sul server **è stato dato e la produzione è stata verificata
+      dall'owner** il 2026-08-13. ⚠ **Verificato che non c'è nessun file da caricare a mano**:
+      `source_runs` nasce vuota, «nessun tentativo registrato» è lo stato iniziale corretto, e il primo
+      tick la riempie entro un quarto d'ora — primo rilascio da quattro senza un passo a mano oltre al
+      `db:push`.
+      ⚠ **Ma questo `db:push` non è come i quattro precedenti, e il changelog lo dice.** Con M7–M10B
+      «finché il passo a mano non è dato, niente si rompe e niente si vede». Qui no: `sourceRunsStatus()`
+      interroga `source_runs`, quindi **fra il deploy e il push la pagina Admin → Listone risponde
+      500**. Il resto dell'app è intatto — asta, portale, TV e Centro dati non toccano quella tabella —
+      ma la finestra esiste, e chi rilascerà una macro che aggiunge una tabella *letta da una pagina*
+      farà bene a saperlo: l'ordine giusto è deploy → `db:push` **subito**, non deploy → domani.
 
 ## Verifica
 

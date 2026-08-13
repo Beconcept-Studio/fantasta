@@ -2293,3 +2293,17 @@ guardando il pulsante. Che l'avviso in cima compaia solo in caso di guasto è la
 importante: un avviso che c'è sempre si smette di leggere. E i quattro timestamp in fondo alla pagina
 **restano** dove erano: rispondono a «quale di queste quattro cose è ferma?», che è una terza domanda
 ancora.
+
+⚠ **Una postilla scritta il giorno del rilascio, e vale per le macro future più che per questa.** Il
+`pnpm db:push` di M11 **non** ha la proprietà rassicurante dei quattro rilasci precedenti. Da M7 a M10B
+la frase era sempre la stessa — «finché il passo a mano non è dato, niente si rompe e niente si vede» —
+perché quelle tabelle erano lette in `LEFT JOIN` da schermate che sanno stare senza. `source_runs` no: la
+legge `sourceRunsStatus()`, che è la prima riga del pannello, quindi **fra la fine del deploy e il
+`db:push` la pagina Admin → Listone risponde 500**. Il resto dell'app è intatto — l'asta, il portale, la
+TV e il Centro dati non toccano quella tabella — ma la finestra è reale, e il changelog di `v1.12.0` la
+dichiara.
+
+**La regola che se ne ricava:** una tabella nuova **letta da una pagina** non è additiva nello stesso
+senso in cui lo è una tabella nuova letta in `LEFT JOIN` da una query di dominio. Nel primo caso
+l'ordine è deploy → `db:push` **subito**; nel secondo si può prendere tempo. La distinzione va fatta
+quando si scrive il file della macro, non quando si legge il 500.
