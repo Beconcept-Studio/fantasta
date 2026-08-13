@@ -5,8 +5,15 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, expect, it, suite } from "vitest";
 
 import { db } from "@/lib/db";
-import { playerInsights, players, users } from "@/lib/db/schema";
+import { playerInsights, players, sourceRuns, users } from "@/lib/db/schema";
 import { canSeeInsights } from "@/lib/domain";
+import { startAuction } from "@/lib/engine/actions";
+import {
+  recordSourceRun,
+  refreshDueSources,
+  runRefreshTick,
+  sourceRunsStatus,
+} from "@/lib/engine/insight-refresh";
 import {
   CONTINUITY_THRESHOLD,
   LISTONE_URL,
@@ -40,6 +47,16 @@ import { closeDatabase, databaseAvailable, dropAuctions, dropUsers } from "./hel
  * riempissero e svuotassero `player_insights` insieme si guasterebbero a vicenda,
  * e il sintomo è il peggiore che esista — **verdi da soli, rossi nella suite**.
  * È successo scrivendo questi test, e la diagnosi è costata più della cura.
+ *
+ * ## ⚠ Questo file possiede due tabelle globali: `player_insights` e `source_runs`
+ *
+ * È la regola uscita da M10B (`DECISIONS.md`, 2026-08-12) — *una tabella globale,
+ * un file di test che la possiede* — e M11 ci andava addosso due volte:
+ * `source_runs` è una tabella globale nuova, **e il tick scrive
+ * `player_insights`**, che questo file già svuota nel suo `beforeAll` e nel suo
+ * `afterAll`. Un file separato per M11 sarebbe stato verde da solo e rosso nella
+ * suite, esattamente come in M10B. Quindi i test del refresh stanno qui, e chi
+ * scriverà su `source_runs` da un altro file deve prima spostare la proprietà.
  */
 
 const FIXTURES = path.resolve(__dirname, "..", "..", "fixtures");
@@ -113,12 +130,16 @@ beforeAll(async () => {
     "utf8",
   );
   rigoristiBody = await readFile(path.join(FIXTURES, "rigoristi.html"), "utf8");
-  if (available) await db.delete(playerInsights);
+  if (available) {
+    await db.delete(playerInsights);
+    await db.delete(sourceRuns);
+  }
 });
 
 afterAll(async () => {
   if (available) {
     await db.delete(playerInsights);
+    await db.delete(sourceRuns);
     await dropAuctions(createdAuctions);
     await dropUsers(createdUsers);
   }
@@ -463,5 +484,330 @@ suite.skipIf(!available)("il pool e gli insight", () => {
     expect(canSeeInsights(boss)).toBe(true);
     const bossPool = await listPickPool(auctionId, canSeeInsights(boss));
     expect(bossPool.some((p) => p.insights !== undefined)).toBe(true);
+  });
+});
+
+// ─── M11 — il refresh giornaliero ────────────────────────────────────────────
+
+/**
+ * Il tick contro Postgres vero (M11-08).
+ *
+ * ⚠ **Quasi tutto passa da `refreshDueSources` e non da `runRefreshTick`**, per la
+ * ragione già scritta in `tests/db/bots.test.ts`: la guardia è una domanda
+ * **globale** — «esiste un'asta reale in corso su questa macchina?» — e i file di
+ * test girano in worker paralleli su un database condiviso. Un test che
+ * pretendesse l'assenza di aste reali sarebbe rosso a seconda di cosa sta facendo
+ * un altro file. `runRefreshTick` si prova quindi solo nella direzione robusta:
+ * con un'asta reale accesa **deve** fermarsi.
+ *
+ * ⚠ **Conseguenza dichiarata:** «una simulata `LIVE` non ferma il tick» non è
+ * verificabile qui senza flakiness — sarebbe rossa ogni volta che un altro file
+ * ha un'asta vera accesa nello stesso istante. La guardia è `realAuctionRunning`,
+ * **la stessa funzione** del tick dei bot, e la distinzione simulata/reale vive
+ * lì; quel verso si prova in locale (M11-09, `HOWTO-PROVA-LOCALE` §8) con le
+ * simulate del database di sviluppo.
+ */
+const t0 = Date.UTC(2026, 7, 13, 4, 0, 0);
+const HOUR = 60 * 60 * 1000;
+
+async function runRows() {
+  return db.select().from(sourceRuns).orderBy(sourceRuns.source);
+}
+
+async function clearRuns(): Promise<void> {
+  await db.delete(sourceRuns);
+  await db.delete(playerInsights);
+}
+
+suite.skipIf(!available)("il tick del refresh", () => {
+  it("un giro a tabella vuota chiede tutte e due le fonti, in ordine, e registra com'è andata", async () => {
+    await clearRuns();
+    const { impl, calls } = fakeFetch({
+      [LISTONE_URL]: listoneBody,
+      [RIGORISTI_URL]: rigoristiBody,
+    });
+
+    const outcome = await refreshDueSources({ fetchImpl: impl, now: t0 });
+
+    // A prima di B: la seconda aggiorna righe che nascono dalla prima, e a
+    // tabella vuota l'ordine è la differenza fra portare a casa tutte e due o
+    // rimandare la seconda al giro dopo.
+    expect(calls).toEqual([LISTONE_URL, RIGORISTI_URL]);
+    expect(outcome.attempted).toEqual([
+      { source: "listone_insights", ok: true },
+      { source: "set_pieces", ok: true },
+    ]);
+    expect(outcome.skipped).toEqual([]);
+
+    // I dati ci sono davvero: il tick non si limita a scrivere che è andata bene.
+    const status = await insightsStatus();
+    expect(status.rows).toBe(497);
+    expect(status.designated).toBe(92);
+
+    const rows = await runRows();
+    expect(rows.map((r) => r.source)).toEqual([
+      "listone_insights",
+      "set_pieces",
+    ]);
+    for (const row of rows) {
+      expect(row.ok).toBe(true);
+      expect(row.failures).toBe(0);
+      expect(row.message).toBeNull();
+      expect(row.trigger).toBe("auto");
+      expect(row.attemptedAt.getTime()).toBe(t0);
+    }
+    expect(rows[0].rows).toBe(497);
+    expect(rows[1].rows).toBe(92);
+  });
+
+  it("⚠ due tick di fila fanno un solo tentativo", async () => {
+    await clearRuns();
+    const primo = fakeFetch({
+      [LISTONE_URL]: listoneBody,
+      [RIGORISTI_URL]: rigoristiBody,
+    });
+    await refreshDueSources({ fetchImpl: primo.impl, now: t0 });
+
+    // Un quarto d'ora dopo, cioè il tick successivo: nessuna delle due è scaduta.
+    const secondo = fakeFetch({
+      [LISTONE_URL]: listoneBody,
+      [RIGORISTI_URL]: rigoristiBody,
+    });
+    const outcome = await refreshDueSources({
+      fetchImpl: secondo.impl,
+      now: t0 + 15 * 60 * 1000,
+    });
+
+    // ⚠ Il conto sta a database, non nel processo: la fonte non viene nemmeno
+    // sfiorata, e un riavvio in mezzo non cambierebbe niente.
+    expect(secondo.calls).toEqual([]);
+    expect(outcome.attempted).toEqual([]);
+    expect(outcome.skipped).toEqual([
+      { source: "listone_insights", reason: "not-due" },
+      { source: "set_pieces", reason: "not-due" },
+    ]);
+
+    const rows = await runRows();
+    for (const row of rows) expect(row.attemptedAt.getTime()).toBe(t0);
+  });
+
+  it("⚠ una fonte che risponde male non scrive i dati, scrive il fallimento, e incrementa `failures`", async () => {
+    await clearRuns();
+    const buono = fakeFetch({
+      [LISTONE_URL]: listoneBody,
+      [RIGORISTI_URL]: rigoristiBody,
+    });
+    await refreshDueSources({ fetchImpl: buono.impl, now: t0 });
+    const prima = await insightsStatus();
+
+    // Il giorno dopo tutte e due sono scadute, ma la fonte A è giù. ⚠ Le due
+    // fonti sono **indipendenti**: il guasto dell'una non ferma l'altra, che
+    // infatti passa — è la ragione per cui `source_runs` ha due righe e non un
+    // esito solo.
+    const rotta = fakeFetch({ [RIGORISTI_URL]: rigoristiBody });
+    const uno = await refreshDueSources({
+      fetchImpl: rotta.impl,
+      now: t0 + 25 * HOUR,
+    });
+    expect(uno.attempted).toEqual([
+      { source: "listone_insights", ok: false },
+      { source: "set_pieces", ok: true },
+    ]);
+
+    // I dati sono quelli di prima: il caso peggiore automatico è sapere numeri
+    // vecchi, mai numeri falsi (M11 §7).
+    const dopo = await insightsStatus();
+    expect(dopo.rows).toBe(prima.rows);
+    expect(dopo.listoneUpdatedAt?.getTime()).toBe(
+      prima.listoneUpdatedAt?.getTime(),
+    );
+
+    const [listone] = await runRows();
+    expect(listone.ok).toBe(false);
+    expect(listone.failures).toBe(1);
+    expect(listone.rows).toBeNull();
+    // Il messaggio è quello del `Result`, così com'è: è già scritto per un umano.
+    expect(listone.message).toContain("fonte");
+
+    // ⚠ Mezz'ora dopo **non** si riprova: è la riga che protegge un sito che non
+    // è nostro da novantasei richieste al giorno.
+    const troppoPresto = fakeFetch({});
+    await refreshDueSources({
+      fetchImpl: troppoPresto.impl,
+      now: t0 + 25 * HOUR + 30 * 60 * 1000,
+    });
+    expect(troppoPresto.calls).toEqual([]);
+
+    // Passata l'ora sì, e il contatore sale.
+    const ancoraRotta = fakeFetch({});
+    await refreshDueSources({
+      fetchImpl: ancoraRotta.impl,
+      now: t0 + 26 * HOUR + 5 * 60 * 1000,
+    });
+    expect(ancoraRotta.calls).toEqual([LISTONE_URL]);
+    const [dueVolte] = await runRows();
+    expect(dueVolte.failures).toBe(2);
+
+    // E un successo riazzera il contatore, senza passare da nessun `UPDATE` a
+    // mano: è il `case when excluded.ok` dell'`upsert`.
+    const tornata = fakeFetch({ [LISTONE_URL]: listoneBody });
+    await refreshDueSources({ fetchImpl: tornata.impl, now: t0 + 30 * HOUR });
+    const [guarita] = await runRows();
+    expect(guarita.ok).toBe(true);
+    expect(guarita.failures).toBe(0);
+    expect(guarita.message).toBeNull();
+  });
+
+  it("⚠ a `player_insights` vuota la fonte B si salta, e non si registra come fallita", async () => {
+    await clearRuns();
+    // La A è giù, quindi la tabella resta vuota: è il caso del giorno del
+    // deploy, e mandare la B in backoff per un ordine di operazioni che si
+    // sistema da sé sarebbe punire la sequenza giusta.
+    const { impl, calls } = fakeFetch({ [RIGORISTI_URL]: rigoristiBody });
+
+    const outcome = await refreshDueSources({ fetchImpl: impl, now: t0 });
+
+    expect(outcome.attempted).toEqual([
+      { source: "listone_insights", ok: false },
+    ]);
+    expect(outcome.skipped).toEqual([
+      { source: "set_pieces", reason: "no-insights" },
+    ]);
+    // La pagina dei rigoristi non viene nemmeno chiesta.
+    expect(calls).toEqual([LISTONE_URL]);
+
+    // ⚠ Una riga sola: la B non ha lasciato traccia, quindi al primo giro utile
+    // riproverà subito invece di aspettare un'ora.
+    const rows = await runRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source).toBe("listone_insights");
+  });
+
+  it("⚠ con un'asta reale LIVE il tick non fa niente e non tocca `source_runs`", async () => {
+    await clearRuns();
+
+    const real = await makeGameAuction();
+    createdAuctions.push(real.auctionId);
+    createdUsers.push(real.ownerId, ...real.userIds);
+    const avviata = await startAuction(real.ownerId, real.auctionId, 0);
+    expect(avviata.ok).toBe(true);
+
+    const { impl, calls } = fakeFetch({
+      [LISTONE_URL]: listoneBody,
+      [RIGORISTI_URL]: rigoristiBody,
+    });
+    const outcome = await runRefreshTick({ fetchImpl: impl, now: t0 });
+
+    expect(outcome).toEqual({ standBy: true, attempted: [], skipped: [] });
+    // Nessuna `fetch` da mezzo megabyte accanto a un round da chiudere…
+    expect(calls).toEqual([]);
+    // …e nessuna riga: **un tick saltato non è un tentativo fallito**. Se lo
+    // registrasse, una serata d'asta manderebbe le fonti in backoff per un
+    // guasto che non c'è stato.
+    expect(await runRows()).toHaveLength(0);
+    expect((await insightsStatus()).rows).toBe(0);
+  });
+});
+
+suite.skipIf(!available)("`source_runs`, per il pannello", () => {
+  it("sono sempre due voci, anche senza nessun tentativo registrato", async () => {
+    await clearRuns();
+
+    const status = await sourceRunsStatus();
+    expect(status.map((s) => s.source)).toEqual([
+      "listone_insights",
+      "set_pieces",
+    ]);
+    // «Non ho mai provato» è una risposta, e una fonte che sparisse dal pannello
+    // perché non ha una riga sarebbe il silenzio che M11 esiste per togliere.
+    for (const voce of status) {
+      expect(voce.ok).toBeNull();
+      expect(voce.attemptedAt).toBeNull();
+      expect(voce.failures).toBe(0);
+      expect(voce.nextAttemptAt).toBeNull();
+    }
+  });
+
+  it("dopo un successo dice quando riproverà: ventiquattr'ore dopo il tentativo", async () => {
+    await clearRuns();
+    const { impl } = fakeFetch({
+      [LISTONE_URL]: listoneBody,
+      [RIGORISTI_URL]: rigoristiBody,
+    });
+    await refreshDueSources({ fetchImpl: impl, now: t0 });
+
+    const [listone] = await sourceRunsStatus();
+    expect(listone.ok).toBe(true);
+    expect(listone.rows).toBe(497);
+    expect(listone.trigger).toBe("auto");
+    expect(listone.nextAttemptAt?.getTime()).toBe(t0 + 24 * HOUR);
+  });
+
+  it("⚠ dopo un fallimento la prossima è fra un'ora, non fra un giorno", async () => {
+    await clearRuns();
+    await refreshDueSources({ fetchImpl: fakeFetch({}).impl, now: t0 });
+
+    const [listone] = await sourceRunsStatus();
+    expect(listone.ok).toBe(false);
+    expect(listone.failures).toBe(1);
+    expect(listone.nextAttemptAt?.getTime()).toBe(t0 + 1 * HOUR);
+  });
+
+  it("⚠ un tentativo manuale scrive la stessa riga, e si distingue dal `trigger`", async () => {
+    await clearRuns();
+    // Il fallimento automatico di ieri…
+    await refreshDueSources({ fetchImpl: fakeFetch({}).impl, now: t0 });
+    expect((await runRows())[0].trigger).toBe("auto");
+
+    // …e il pulsante premuto stasera, che riesce. È la ragione per cui i due
+    // pulsanti scrivono qui: senza, la pagina continuerebbe a dire «ultimo
+    // tentativo fallito» dopo un aggiornamento andato a buon fine.
+    await recordSourceRun(
+      "listone_insights",
+      "manual",
+      { ok: true, value: { fromSource: 497 } },
+      new Date(t0 + HOUR),
+    );
+
+    const [row] = await runRows();
+    expect(row).toMatchObject({
+      trigger: "manual",
+      ok: true,
+      failures: 0,
+      rows: 497,
+      message: null,
+    });
+    expect(row.attemptedAt.getTime()).toBe(t0 + HOUR);
+  });
+
+  it("⚠ e un fallimento manuale rimanda in avanti anche il tentativo automatico", async () => {
+    await clearRuns();
+    await recordSourceRun(
+      "set_pieces",
+      "manual",
+      { ok: false, error: { code: "SOURCE_UNREACHABLE", message: "giù" } },
+      new Date(t0),
+    );
+
+    // Il backoff protegge la fonte da **tutti** i chiamanti, non solo dal loop.
+    const status = await sourceRunsStatus();
+    expect(status[1].nextAttemptAt?.getTime()).toBe(t0 + 1 * HOUR);
+
+    // Mezz'ora dopo il tick non ci riprova: la salta perché non è scaduta, e non
+    // perché la tabella degli insight è vuota — le due ragioni sono diverse e il
+    // codice le distingue.
+    const { impl, calls } = fakeFetch({
+      [LISTONE_URL]: listoneBody,
+      [RIGORISTI_URL]: rigoristiBody,
+    });
+    const outcome = await refreshDueSources({
+      fetchImpl: impl,
+      now: t0 + 30 * 60 * 1000,
+    });
+    expect(outcome.skipped).toContainEqual({
+      source: "set_pieces",
+      reason: "not-due",
+    });
+    expect(calls).toEqual([LISTONE_URL]);
   });
 });

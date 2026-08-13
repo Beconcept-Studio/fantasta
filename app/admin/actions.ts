@@ -16,6 +16,7 @@ import {
   setUserDisplayName,
   setUserPro,
 } from "@/lib/engine/admin";
+import { recordSourceRun } from "@/lib/engine/insight-refresh";
 import {
   refreshListoneInsights,
   refreshSetPieces,
@@ -348,11 +349,21 @@ export async function setUserProAction(
  * argomenti è assegnabile a una che li riceve. È la ragione per cui
  * questa macro non aggiunge nessun upload — l'unico che c'era in progetto, la
  * griglia portieri, è rimasto fuori dal perimetro.
+ *
+ * ⚠ **Da M11 il pulsante scrive anche `source_runs`**, con `trigger: "manual"`, e
+ * la riga sta **prima** del `return` di fallimento perché è soprattutto il
+ * fallimento che va registrato. Senza, il pannello racconterebbe una storia e la
+ * realtà un'altra: premo il pulsante, riesce, e la pagina continua a dire «ultimo
+ * tentativo automatico fallito ieri». E vale anche al contrario — un pulsante che
+ * fallisce adesso rimanda in avanti il prossimo tentativo automatico, che è
+ * esattamente ciò che si vuole: il backoff protegge la fonte da *tutti* i
+ * chiamanti, non solo dal loop.
  */
 export async function refreshListoneInsightsAction(): Promise<FormState> {
   await requireAppAdmin();
 
   const result = await refreshListoneInsights();
+  await recordSourceRun("listone_insights", "manual", result, new Date());
   if (!result.ok) return { error: result.error.message };
 
   revalidatePath(LISTONE_PATH);
@@ -371,11 +382,20 @@ export async function refreshListoneInsightsAction(): Promise<FormState> {
  * Va dato **dopo** il listone la prima volta: aggiorna righe che nascono da
  * quello, e se la tabella è vuota rifiuta dicendolo — invece di scrivere zero
  * righe e dichiarare successo.
+ *
+ * ⚠ **Anche questo scrive `source_runs`** (M11 §5). E lo scrive *anche* quando il
+ * rifiuto è «prima va importato il listone», che il tick automatico invece salta
+ * senza registrare (§7): la differenza non è un'incoerenza, è chi ha fatto la
+ * domanda. Il tick incontra quella condizione da solo, il giorno del deploy, ed è
+ * un ordine di operazioni che si sistema da sé al primo giro utile; qui l'ha
+ * chiesto una persona — il pulsante è pure spento a tabella vuota — e un
+ * tentativo fatto apposta è un tentativo.
  */
 export async function refreshSetPiecesAction(): Promise<FormState> {
   await requireAppAdmin();
 
   const result = await refreshSetPieces();
+  await recordSourceRun("set_pieces", "manual", result, new Date());
   if (!result.ok) return { error: result.error.message };
 
   revalidatePath(LISTONE_PATH);

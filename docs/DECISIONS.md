@@ -2227,3 +2227,69 @@ due numeri che nessuno confronterebbe sotto un countdown.
 non con la sua sigla, perché in questo progetto `fvm` è il **Fantavalore di Mercato** — un indice di
 prezzo, 300 — e sta **sulla stessa riga**, a destra, nella lista di chiamata. Due sigle quasi
 identiche per due cose che non si somigliano: scritte accanto, l'una si legge per l'altra.
+
+---
+
+## 2026-08-13 — M11, il refresh giornaliero
+
+Sei scelte, e tutte e sei si potevano fare in un altro modo che sembra più naturale. È per questo che
+sono qui: la versione naturale, in cinque casi su sei, è quella sbagliata.
+
+**⚠ La scadenza si conta dall'ultimo *tentativo*, non dall'ultimo *successo*.** La formulazione che
+viene in mente è «se `player_insights.listone_updated_at` è vecchio di un giorno, aggiorna», ed è
+sbagliata in un modo che non si manifesta **mai finché tutto funziona**. Nel momento in cui una fonte è
+giù, i dati restano vecchi per definizione, quindi la condizione è vera a ogni giro del tick: con un
+tick da quindici minuti sono **novantasei richieste al giorno** verso un sito che non è nostro, per non
+riuscire novantasei volte. Il conto si fa quindi su `source_runs.attempted_at`. È la decisione di M11
+che, sbagliata, non si vede in locale, non si vede nei test scritti a mano e si vede nei log di
+qualcun altro.
+
+**Il backoff è esponenziale e si ferma a ventiquattro ore.** 1h, 2h, 4h, 8h, 16h, poi 24h per sempre.
+Una fonte giù per un giorno costa **cinque** richieste invece di novantasei — misurato in un test, non
+stimato. Si ferma a 24h perché sopra il giorno il backoff smette di proteggere qualcuno e comincia solo
+a ritardare la ripresa: una fonte tornata su dopo tre giorni di guasto deve rientrare entro il giorno,
+non entro la settimana.
+
+**La guardia sull'asta reale è la stessa funzione dei bot, e un tick saltato non è un fallimento.** La
+prima metà era ovvia: `realAuctionRunning()` esisteva già, e riscriverla avrebbe voluto dire due
+definizioni di «si sta giocando» che divergono. La seconda metà non lo era affatto — **un tick saltato
+per la guardia non scrive su `source_runs`**. Se lo scrivesse, una serata d'asta di tre ore manderebbe
+le due fonti in backoff per un guasto che non c'è stato, e il giorno dopo il pannello direbbe «non si
+aggiorna da tre volte» avendo fallito zero volte: l'automatismo mentirebbe **esattamente** nel giorno
+in cui lo si va a guardare. Vale lo stesso per il secondo salto: la fonte B rifiuta a
+`player_insights` vuota, che il giorno del deploy è la condizione normale, e anche quello si salta
+senza registrare.
+
+**I due pulsanti scrivono la stessa riga dell'automatismo**, con `trigger: "manual"`. L'alternativa —
+solo il loop scrive — dava un pannello che racconta una storia e una realtà che ne racconta un'altra:
+premo il pulsante, riesce, e la pagina continua a dire «ultimo tentativo fallito ieri». Due storie
+nello stesso posto sarebbero due verità, e per questo `trigger` è una colonna e non due tabelle. Ha un
+effetto voluto che va saputo: **un fallimento a mano rimanda in avanti il prossimo tentativo
+automatico**, perché il backoff protegge la fonte da *tutti* i chiamanti e non solo dal loop.
+
+**La regola 1 non è violata, e la domanda giusta non è «è un timer?».** «Mai un timer che decide» parla
+della macchina a stati dell'asta: il client renderizza i countdown ma non cambia stato, e a chiudere un
+round è solo il server. Questo timer non chiama `transition`, non prende `withAuctionLock`, non tocca
+`auctions`, `lots`, `bids`, `assignments` né `ledger`, non incrementa `state_version` e non fa nessun
+broadcast. Decide una cosa sola: se è il momento di chiedere a un sito web se ha numeri nuovi. Il
+confine è lo stesso che M8 aveva già tracciato per non prendere il lock. **La domanda da farsi la
+prossima volta che servirà «un timer per…» è: tocca lo stato dell'asta? Allora no.**
+
+**Niente email, ed è una scelta con un limite dichiarato.** Un automatismo che fallisce in silenzio è
+peggio di nessun automatismo, quindi l'allarme serve — ma una notifica che arriva **ogni giorno** per
+un dato di mercato è una notifica che si impara a cancellare senza leggere, e il giorno che conta viene
+cancellata con le altre. Il limite è che l'avviso lo vede solo chi apre il pannello, e due cose lo
+rendono accettabile: i dati **non si corrompono** (transazione, envelope validato, continuità all'85%
+— il caso peggiore è sapere numeri vecchi, mai numeri falsi), e il pannello lo si apre comunque prima
+di un'asta. Per la stessa ragione non c'è un'ora configurabile né un interruttore per spegnere
+l'automatismo: stati in più da spiegare, che nessuno ha chiesto.
+
+**E una scelta di forma, dell'owner, guardandola** (2026-08-13, come per i colori di M9 e il badge di
+M10B): il guasto si vede in **due posti** — un avviso rosso in cima alla sezione Listone, che compare
+*soltanto* quando una fonte è in guasto, e una riga di stato accanto a ciascuno dei due pulsanti, che
+c'è sempre. La ragione della doppia collocazione è che rispondono a due domande diverse: «c'è qualcosa
+che non va?» si legge entrando nella pagina, «quando si è aggiornato, da sé o a mano?» si legge
+guardando il pulsante. Che l'avviso in cima compaia solo in caso di guasto è la sua unica proprietà
+importante: un avviso che c'è sempre si smette di leggere. E i quattro timestamp in fondo alla pagina
+**restano** dove erano: rispondono a «quale di queste quattro cose è ferma?», che è una terza domanda
+ancora.

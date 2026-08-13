@@ -2721,6 +2721,168 @@ non c'è.
 
 ---
 
+## I tre loop: cosa gira da sé, dentro il processo
+
+Quasi tutto in questa applicazione parte perché qualcuno ha premuto qualcosa. Tre cose no. Girano da
+sole, dentro lo stesso processo Node che serve le pagine, e sono l'unica parte del progetto che
+funziona — o si guasta — mentre nessuno guarda.
+
+Vale la pena elencarle tutte e tre insieme, perché separate sembrano tre scelte indipendenti e non lo
+sono: **poggiano su una garanzia sola**, e se quella garanzia cade cadono tutte e tre nello stesso
+modo. La garanzia è `exec_mode: "fork"` con `instances: 1` in `deploy/ecosystem.config.cjs`. In
+cluster mode pm2 avvierebbe una copia per core, ogni copia eseguirebbe `instrumentation.ts`, e ci
+sarebbero due sweep sulla stessa asta, due tick dei bot e due refresh — cioè un round chiuso due
+volte, un bot che offre due volte, e un sito di terzi interrogato il doppio delle volte che credi. È
+per questo che quelle due righe di configurazione hanno un capitolo apposta più sotto, e non sono una
+preferenza di deploy.
+
+Il secondo dettaglio comune è più subdolo: **i tre singleton stanno su `globalThis`**, non in variabili
+di modulo. Next compila `instrumentation.ts` e i route handler in *bundle separati*, quindi dello
+stesso file esistono due copie in memoria, e una variabile di modulo sarebbe due variabili. È l'errore
+che una volta ha già prodotto uno stream aperto e poi silenzio per tutta l'asta: il registro SSE e
+l'hook di broadcast si erano trovati in due mondi diversi.
+
+Tre loop, dunque, con tre periodi e tre ragioni.
+
+**Lo sweep dello scheduler, ogni secondo.** È la rete di sicurezza dei timer dell'asta: cerca le aste
+`LIVE` con la deadline scaduta e le fa avanzare. Serve perché i `setTimeout` armati sulle deadline
+muoiono con il processo, e lo stato invece no — dopo un riavvio, lo sweep riprende dal database. È
+raccontato per esteso in «Il tempo ha due gambe».
+
+**Il tick dei bot, ogni secondo.** Muove i partecipanti simulati. Ha un intervallo proprio e non sta
+dentro lo sweep, perché lo sweep chiude i round ed è sequenziale: undici bot che scrivono sotto lock
+ritarderebbero la chiusura di un round dell'asta vera che gira accanto. Ed è il primo dei tre a
+fermarsi da sé quando c'è un'asta vera in corso. «Lo stand-down, che è la difesa vera».
+
+**Il refresh degli insight, ogni quindici minuti.** È il terzo, ed è arrivato con M11. Chiede alle due
+fonti pubbliche — il listone di `api.fantalab.it` e la pagina dei rigoristi di `fantacalcio.it` — se
+hanno numeri nuovi, una volta al giorno. Il resto di questo capitolo è su di lui, perché è quello con
+le decisioni meno ovvie.
+
+### Il tick da quindici minuti che aggiorna una volta al giorno
+
+I due numeri sembrano in contraddizione e sono la parte importante. **L'intervallo non è l'orologio.**
+Un `setInterval` da ventiquattro ore sarebbe ancorato al *boot* del processo, e questo processo
+riparte a ogni push su `main`: in una settimana di rilasci un refresh «ogni 24 ore da quando sono
+partito» non scatterebbe mai, e nelle settimane senza rilasci scatterebbe a un'ora casuale che
+scivola. Il conto quindi non si fa nel processo, si fa **nel database**: c'è una tabella,
+`source_runs`, con **due righe per sempre** — una per fonte — e ogni quindici minuti il loop le
+rilegge e si chiede, per ciascuna, *quando ho provato l'ultima volta, e com'è andata?*
+
+Lo stato a database ha una conseguenza che vale da sola il disegno: **un riavvio è innocuo**. Un
+deploy alle 04:59 non fa perdere il turno e non lo fa scattare due volte, perché il primo processo che
+riparte legge la stessa riga che aveva letto quello di prima. È la stessa proprietà che rende
+affidabile il boot recovery dello scheduler, e per la stessa ragione: lo stato non sta nei
+`setTimeout`.
+
+L'ora del giorno, quindi, non è fissa: il refresh scivola in avanti di qualche minuto al giorno. È una
+scelta e non un effetto collaterale. Un'ora fissa vorrebbe dire aritmetica di fusi orari — il server
+gira in UTC — e un ramo che gestisce «l'ora era già passata mentre eravamo spenti», cioè tutto ciò che
+questo schema non ha bisogno di avere. Un dato di mercato non ha un'ora.
+
+### La scadenza si conta dai tentativi, non dai successi
+
+Questa è la riga che, sbagliata, non si vede in locale. Sembrerebbe naturale chiedersi «`player_insights`
+è vecchia di un giorno? allora aggiorna», e la formulazione è sbagliata in un modo che non si manifesta
+mai finché tutto funziona: nel momento in cui una fonte è giù, i dati restano vecchi per definizione,
+quindi la condizione è vera a ogni giro — **novantasei richieste al giorno** verso un sito che non è
+nostro, per non riuscire novantasei volte.
+
+Il conto si fa allora sull'ultimo **tentativo**, e sopra ci sta un backoff esponenziale: dopo il primo
+fallimento si riprova dopo un'ora, poi due, quattro, otto, sedici, e da lì in avanti una volta al
+giorno. Una fonte giù per un giorno costa **cinque richieste** invece di novantasei. Costa una riga di
+codice e vale un ordine di grandezza in educazione. Il backoff si ferma a ventiquattro ore e non
+cresce oltre, perché sopra il giorno smetterebbe di proteggere qualcuno e comincerebbe solo a
+ritardare la ripresa.
+
+La decisione di *quando* provare è una **funzione pura** in `lib/engine/refresh-rules.ts`: prende la
+riga di `source_runs` (o `null`) e un istante, e risponde sì o no. Sta separata dal loop per la stessa
+ragione per cui `setup-rules.ts` sta separato da `setup.ts` — quello importa il database e vuole un
+Postgres acceso, questa si prova in millisecondi. È dove vive il backoff, ed è la parte del sistema
+che merita più test per riga di codice, perché è quella il cui errore si vedrebbe solo dai log di
+qualcun altro.
+
+### La guardia, che è la stessa dei bot
+
+Se esiste un'asta **reale** `LIVE` o `PAUSED`, il tick non fa niente. Due download da mezzo megabyte e
+un `upsert` di 497 righe in transazione, nello stesso processo che deve chiudere un round nel
+millisecondo giusto, non si fanno mentre si gioca. La condizione è letteralmente la stessa di
+`runBotTick` — la funzione è una, `realAuctionRunning()` — e le aste **simulate non contano**:
+aspettano dei bot, non dodici telefoni. È la stessa distinzione della guardia del deploy.
+
+⚠ E c'è un dettaglio che si sbaglia facilmente: **un tick saltato per la guardia non è un tentativo
+fallito**, e non tocca `source_runs`. Se lo registrasse, una serata d'asta di tre ore manderebbe le
+due fonti in backoff per un guasto che non c'è stato, e il giorno dopo il pannello direbbe «non si
+aggiorna da tre volte» avendo fallito zero volte. Lo stesso vale per un secondo caso: la fonte dei
+rigoristi rifiuta quando `player_insights` è vuota — aggiorna righe che nascono dall'altra fonte, non
+le crea — e in produzione, il giorno del deploy, quella condizione è **normale**. Si salta, non si
+registra.
+
+### La regola «mai un timer che decide», guardata in faccia
+
+`CLAUDE.md` ha una regola non negoziabile che dice «mai un timer che decide», e un capitolo che
+introduce un timer nuovo deve spiegare perché non la viola invece di sperare che nessuno chieda.
+
+Quella regola parla della **macchina a stati dell'asta**: il client renderizza i countdown ma non
+cambia mai stato, e la chiusura di un round avviene solo lato server. Questo timer non decide niente
+di un'asta. Non chiama `transition`, non prende `withAuctionLock`, non tocca `auctions`, `lots`,
+`bids`, `assignments` né `ledger`, non incrementa `state_version`, non fa nessun broadcast. Decide una
+cosa sola: se è il momento di chiedere a un sito web se ha numeri nuovi. È lo stesso confine che gli
+insight avevano già tracciato per non prendere il lock — `player_insights` è globale e non entra in
+nessuna regola di gioco.
+
+La domanda da farsi la prossima volta che servirà «un timer per…», quindi, non è «è un timer?» ma:
+**tocca lo stato dell'asta?** Se sì, allora no.
+
+### Il silenzio è il guasto
+
+Con i due pulsanti in admin, un errore lo leggeva la persona che aveva premuto. Nel momento in cui il
+refresh parte da sé, un rifiuto tipizzato finisce in `console.error` e non lo vede **nessuno**: i
+numeri invecchiano senza dire niente, la pagina mostra «aggiornato: 12 agosto» per tre mesi, e nessuno
+lo interpreta come un problema perché è esattamente ciò che mostrava anche il giorno prima. Un
+automatismo che riesce non ha bisogno di raccontarlo; uno che fallisce in silenzio è peggio di nessun
+automatismo.
+
+`source_runs` è quindi anche il posto in cui l'automatismo parla, e il pannello lo legge in due punti.
+Accanto a ciascuno dei due pulsanti c'è una riga che dice com'è andato l'ultimo tentativo, quando, e se
+è partito **da sé o a mano** — e in cima alla sezione Listone compare un avviso rosso **soltanto**
+quando una fonte è in guasto. Che compaia solo allora è la sua unica proprietà importante: un avviso
+che c'è sempre si smette di leggere, e il giorno che serve non lo si vede. Dopo il primo fallimento
+dice «non si è aggiornato»; dal secondo in poi dice «non si aggiorna da **tre** volte», perché
+«fallito» è un incidente e un numero è un guasto che dura — sono due notizie diverse, e la seconda è
+quella che fa aprire il pannello.
+
+⚠ **Anche i due pulsanti scrivono quella riga**, con `trigger: "manual"`. Se ci scrivesse solo
+l'automatismo, il pannello racconterebbe una storia e la realtà un'altra: si premerebbe il pulsante,
+l'aggiornamento riuscirebbe, e la pagina continuerebbe a dire «ultimo tentativo fallito ieri». Due
+storie nello stesso posto sarebbero due verità, e per questo `trigger` è una colonna e non due
+tabelle. Ha anche un effetto voluto: un fallimento a mano rimanda in avanti il prossimo tentativo
+automatico, perché il backoff protegge la fonte da *tutti* i chiamanti e non solo dal loop.
+
+E le frasi le scrive un modulo puro, `lib/source-status.ts`, non i due componenti. L'avviso in cima è
+un componente server, la riga accanto al pulsante vive dentro un `"use client"`: le stesse frasi
+scritte in due posti divergono al primo ritocco, e queste due, se divergono, dicono due cose diverse
+dello stesso guasto nella stessa pagina.
+
+### Il limite, dichiarato invece che scoperto
+
+**Non manda email.** L'allarme funziona solo se qualcuno apre il pannello, e questo è un limite vero,
+non una dimenticanza: una notifica che arriva ogni giorno per un dato di mercato è una notifica che si
+impara a cancellare senza leggere, e il giorno che conta viene cancellata con le altre.
+
+Due cose lo rendono accettabile. La prima è che **i dati non si corrompono**, e lo si deve al lavoro
+degli insight: la scrittura è in transazione, l'envelope è validato, e una lista che ha in comune con
+la precedente meno dell'85% degli identificativi viene rifiutata invece di scritta. Il caso peggiore
+automatico è quindi *sapere numeri vecchi*, mai numeri falsi — e la differenza fra le due cose è la
+differenza fra un ritardo e un guaio. La seconda è che il pannello lo si apre comunque, prima di
+un'asta. Se un giorno non basterà, l'SMTP c'è già e sarà una macro di tre righe.
+
+Non c'è nemmeno un'ora configurabile né un interruttore per spegnere l'automatismo: uno stato in più
+da spiegare, che nessuno ha chiesto. Se serve fermarlo si ferma il processo — e in quel caso è ferma
+anche l'asta, quindi la domanda non si pone.
+
+---
+
 ## Il posto dove gira
 
 Tutto quello che hai letto finora vive su **una macchina sola**, ed è la conseguenza pratica della
@@ -2741,7 +2903,9 @@ la concorrenza governabile da un `SELECT … FOR UPDATE`.
      ┌──────────────┐
      │   Node       │  un processo, sotto pm2 (fork, 1 istanza)
      │   Next.js    │  · lo scheduler: sweep ogni secondo + timer armati
-     │   standalone │  · il registro delle connessioni SSE
+     │   standalone │  · il tick dei bot: ogni secondo, fermo se si gioca
+     │              │  · il refresh degli insight: ogni quindici minuti
+     │              │  · il registro delle connessioni SSE
      └──────┬───────┘
             │  socket locale
             ▼
@@ -2785,6 +2949,14 @@ eseguirebbe `instrumentation.ts`**: due sweep che fanno avanzare la stessa asta,
 contro cui esiste la guardia `globalThis.__scheduler`, riprodotto in produzione a comando. Il
 lock e l'invariante di versione lo renderebbero probabilmente innocuo, ma "probabilmente innocuo"
 non è il modo in cui si conduce un'asta.
+
+E da M11 quella riga protegge **tre** loop e non uno: accanto allo sweep ci sono il tick dei bot e il
+refresh degli insight, e i danni di una seconda copia sono diversi per ciascuno — un round chiuso due
+volte, un bot che offre due volte, e due richieste al giorno di troppo a un sito che non è nostro. Il
+terzo è anche il più difficile da accorgersi: `source_runs` ha una riga per fonte, quindi il secondo
+`upsert` sovrascriverebbe il primo e il conto dei tentativi tornerebbe **giusto** anche essendo
+sbagliato. È lo stesso motivo per cui il controllo da fare in locale, prima di sospettare il codice, è
+`lsof -nP -iTCP -sTCP:LISTEN | grep node`.
 
 ### nginx, e l'unica riga che conta
 
@@ -2889,6 +3061,14 @@ e nel frattempo l'asta è ferma. Non c'è un ambiente di staging: la prova gener
 produzione con i bot e poi si cancella, che per questo progetto è più onesto — collauda la macchina
 vera. E non c'è nessun monitoraggio automatico: il controllo è un umano che guarda `pm2 logs` con
 dieci persone intorno, ed è il monitoraggio con il tempo di reazione più breve che ci sia.
+
+⚠ Con M11 quest'ultima frase ha acquistato un'eccezione, e conviene dirlo qui invece di lasciarlo
+dedurre: **una cosa sola in questa applicazione si guasta senza che nessuno sia nella stanza**, e cioè
+il refresh delle due fonti pubbliche. Non ha un monitoraggio nel senso di un servizio che avvisa: ha
+una tabella con due righe e un avviso in cima a una pagina, che è il monitoraggio più piccolo che
+risponda alla domanda vera. Il limite — lo vede solo chi apre quella pagina — è scritto in «Il limite,
+dichiarato invece che scoperto», insieme alla ragione per cui è accettabile: i dati non si corrompono,
+quindi il costo del ritardo è sapere numeri vecchi e non numeri falsi.
 
 ---
 

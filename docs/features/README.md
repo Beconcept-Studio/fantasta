@@ -12,8 +12,28 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M10 e M10B sono in produzione da `v1.11.0`** (2026-08-12), uscite **insieme in un
-rilascio solo con un tag solo**, per decisione dell'owner.
+**[M11](11-refresh-giornaliero.md) — il refresh giornaliero degli insight.** Aperta il 2026-08-13 su
+richiesta esplicita dell'owner, chiusa su `dev` lo stesso giorno con il gate verde: **777 test**,
+typecheck e build. **Non è ancora rilasciata**: il tag `v1.12.0` e il merge su `main` aspettano una
+richiesta esplicita.
+
+⚠ **Il rilascio porta un `pnpm db:push`** — `source_runs`, additiva, due righe per sempre — e **nessun
+file da caricare a mano**: è il primo rilascio da quattro che non ne ha, e va verificato invece di
+darlo per scontato. La tabella nasce vuota, «nessun tentativo registrato» è lo stato iniziale corretto,
+e il primo tick la riempie da sé entro un quarto d'ora.
+
+```bash
+cd /home/ploi/fantasta.rggndr.it && pnpm db:push
+pm2 reload deploy/ecosystem.config.cjs --update-env
+```
+
+⚠ **E da questa macro il processo ha tre loop invece di due.** `exec_mode: "fork"` con `instances: 1`
+in `deploy/ecosystem.config.cjs` era già la riga da non toccare mai; adesso protegge anche il refresh,
+ed è il caso in cui una seconda copia si nota meno — `source_runs` ha una riga per fonte, quindi il
+secondo `upsert` sovrascrive il primo e il conto dei tentativi sembra giusto.
+
+**M10 e M10B sono in produzione da `v1.11.0`** (2026-08-12), uscite **insieme in un rilascio solo con
+un tag solo**, per decisione dell'owner.
 
 ⚠ **Un tag solo vuol dire un punto di rollback solo**, e va saputo prima di trovarsi a farlo alle nove
 di sera: il ciclo di `CLAUDE.md` dà a ogni macro il suo tag proprio per poter tornare indietro su una
@@ -56,31 +76,34 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 **Quattro macro, pianificate insieme il 2026-08-12** da una sessione di analisi sola, a partire dalle
 quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1. **Le prime due
-sono rilasciate** (v1.10.0 e v1.11.0, con M10B dentro l'ultima); le altre due si aprono **su richiesta
-esplicita**, una alla volta.
+sono rilasciate** (v1.10.0 e v1.11.0, con M10B dentro l'ultima), **la terza è su `dev`** e aspetta il
+tag; l'ultima si apre **su richiesta esplicita**.
 
 | Macro | Tema | Schema | Ordine |
 |---|---|---|---|
-| **[M11](11-refresh-giornaliero.md)** | Il refresh giornaliero degli insight, dentro l'unico processo | sì, piccolo | 3ª |
 | **[M12](12-cancellazione-aste.md)** | Cancellare un'asta per forza, anche in corso | no | 4ª |
 
-⚠ **M11 non può automatizzare il foglio di Carmy, e nessuno ci provi**: è un file che una persona
-compila e che arriva da fuori. Quello che M11 *può* dare è il posto dove dire da quanto non lo si
-ricarica — e M10B quel posto l'ha già preso, con il **quarto timestamp** nel pannello e l'avviso
-quando il file è più vecchio di un giorno. Con un file che invecchia in un giorno, quella data conta
-più che per il listone.
+⚠ **M11 non ha automatizzato il foglio di Carmy, e nessuno ci provi**: è un file che una persona
+compila e che arriva da fuori. Lo stesso vale per il listone **d'asta**, l'export Leghe in `.xlsx`, che
+passa da un login — è l'opzione B scelta dall'owner il 2026-08-12, e la distinzione fra i due file che
+si chiamano «listone» sta in M10 §1. Quello che M11 dà è il posto dove dire da quanto non lo si
+ricarica, e M10B quel posto l'aveva già preso: il **quarto timestamp** nel pannello e l'avviso quando
+il file è più vecchio di un giorno. Con un file che invecchia in un giorno, quella data conta più che
+per il listone.
 
-⚠ **E porta una misura che corregge M8 §9, da non riscoprire da capo.** Il 2026-08-12
+⚠ **Una misura che corregge M8 §9, da non riscoprire da capo, e che M11 non ha usato.** Il 2026-08-12
 `fantacalcio.it/probabili-formazioni-serie-a` è **piena** — 20 moduli, 220 titolari tutti con
 `ext_id` **e con la percentuale di ballottaggio**, 22 infortunati con la data di rientro — e aggancia
 al **100%** con i nostri identificativi. M8 l'aveva misurata vuota l'11 agosto e ne aveva concluso che
 i ballottaggi stessero solo dietro il login di Fantalab: **sono pubblici**. Resta una strada non
 percorsa, non una strada chiusa: sta in M10B §9.
 
-⚠ **M11 eredita da M10 il posto in cui dire «ho provato e non ci sono riuscito»**: la sezione Listone
-del pannello, con i suoi tre timestamp. E eredita anche una promessa — il pulsante «Aggiorna il
-listone» degli insight è rimasto **sempre attivo** proprio perché M11 lo farà partire da sé, e un
-pulsante bloccato accanto a «aggiornato automaticamente tre ore fa» sarebbe da smontare subito.
+⚠ **M11 ha ereditato da M10 il posto in cui dire «ho provato e non ci sono riuscito»**: la sezione
+Listone del pannello. La dipendenza si è rivelata reale in un modo che la spec non aveva previsto — non
+serviva *un* posto, ne servivano **due**, perché «c'è qualcosa che non va?» e «quando si è aggiornato,
+da sé o a mano?» sono due domande diverse e si leggono in due momenti diversi. E la promessa è stata
+onorata dalla parte giusta: il pulsante «Aggiorna il listone» era rimasto **sempre attivo** proprio in
+vista di questa macro, e non ha dovuto essere smontato niente.
 
 **Perché quattro e non una.** Le quattro richieste sembravano un tema solo — «sistemiamo il pannello»
 — e hanno invece quattro profili di rischio diversi, che è il criterio con cui M5 e M6 sono state
@@ -98,9 +121,9 @@ dati è il terzo chiamante dei badge, e li ha resi un componente vero — `Titol
 colonne separate, non nelle due composizioni pronte. ⚠ Il primo dei due si chiamava
 `TitolaritaBadge` fino a M10B, che lo ha **sostituito**: da quando la titolarità ha due fonti, un
 badge per fonte voleva dire che ogni chiamante decideva quale disegnare — tre copie della regola che
-`titolarita()` esiste per centralizzare. M11 ha bisogno del pannello di M10 per
-avere un posto dove dire «ho provato e non ci sono riuscito» — e quella non è cosmetica: un
-automatismo muto è peggio di nessun automatismo. M12 non dipende da niente.
+`titolarita()` esiste per centralizzare. Quella di M11 su M10 è stata **onorata** anch'essa, ed era la
+meno cosmetica delle due: un automatismo muto è peggio di nessun automatismo, e senza il pannello di
+M10 il refresh sarebbe stato muto. M12 non dipende da niente.
 
 **Due strade restano verificate e rinviate**, scritte per esteso in M8 §9 perché il lavoro d'analisi non
 si perda: la **griglia portieri** (l'accoppiamento fra portieri di due squadre — e la scoperta che

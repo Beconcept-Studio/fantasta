@@ -578,6 +578,59 @@ export const carmyPlayers = pgTable("carmy_players", {
   uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull(),
 });
 
+// ─── Come sono andate le due fonti pubbliche (globale, non per asta) ─────────
+
+/**
+ * L'ultimo tentativo di aggiornamento di ciascuna fonte pubblica (M11 §5).
+ *
+ * ⚠ **Due righe, per sempre, e non uno storico.** La chiave primaria è il nome
+ * della fonte: `"listone_insights"` e `"set_pieces"`. Ogni tentativo fa un
+ * `upsert` sulla sua riga. Nessuno ha chiesto la cronologia dei tentativi, e la
+ * domanda a cui il pannello deve rispondere è una sola — *l'ultimo tentativo è
+ * andato bene?* (regola 8: lo storico si aggiunge il giorno che qualcuno vuole
+ * leggerlo).
+ *
+ * ⚠ **Perché esiste**: con i due pulsanti di M8 l'errore lo legge la persona che
+ * ha premuto. Dal momento in cui il refresh parte da sé, un `SOURCE_SCHEMA`
+ * finirebbe in `console.error` e non lo vedrebbe **nessuno** — e i numeri
+ * invecchierebbero senza dire niente, che è esattamente il guasto che M11 esiste
+ * per togliere. Questa tabella è il posto in cui l'automatismo dice «ho provato e
+ * non ci sono riuscito».
+ *
+ * ⚠ **`attempted_at` è l'ultimo *tentativo*, non l'ultimo *successo***, ed è la
+ * colonna su cui si fa il conto della scadenza (M11 §3). Contare dall'ultimo
+ * successo sembrerebbe naturale e produrrebbe **novantasei richieste al giorno**
+ * verso un sito di terzi ogni volta che la fonte è giù: il quando-riprovare si
+ * legge da qui e da `failures`, non da `player_insights.listone_updated_at`.
+ *
+ * ⚠ **Ci scrivono anche i due pulsanti**, con `trigger: "manual"`. Se scrivesse
+ * solo l'automatismo, il pannello racconterebbe una storia e la realtà un'altra:
+ * premo il pulsante, riesce, e la pagina continua a dire «ultimo tentativo
+ * fallito ieri».
+ *
+ * ⚠ **Un tick saltato non è un tentativo**: quando la guardia sull'asta reale
+ * ferma il giro, o quando la fonte B viene saltata perché `player_insights` è
+ * vuota, qui non si scrive niente. Registrarlo manderebbe una fonte in backoff
+ * per un guasto che non c'è stato (M11 §4 e §7).
+ *
+ * Nasce **vuota** e va bene così: «nessun tentativo registrato» è lo stato
+ * iniziale corretto, ed è la condizione che fa partire il primo tick subito.
+ */
+export const sourceRuns = pgTable("source_runs", {
+  /** `"listone_insights"` o `"set_pieces"`. */
+  source: text("source").$type<"listone_insights" | "set_pieces">().primaryKey(),
+  attemptedAt: timestamp("attempted_at", { withTimezone: true }).notNull(),
+  ok: boolean("ok").notNull(),
+  /** Il messaggio del `Result`, così com'è: è già scritto per essere letto. */
+  message: text("message"),
+  /** Righe lette dalla fonte, quando è andata bene. */
+  rows: integer("rows"),
+  /** Quanti fallimenti di fila: decide il backoff (§3) **e** si mostra (§5). */
+  failures: integer("failures").notNull().default(0),
+  /** `"auto"` o `"manual"`: due storie nello stesso posto sarebbero due verità. */
+  trigger: text("trigger").$type<"auto" | "manual">().notNull(),
+});
+
 // ─── Lotti (una chiamata all'asta) ───────────────────────────────────────────
 
 export const lots = pgTable(
@@ -774,6 +827,7 @@ export type PlayerInsightRow = typeof playerInsights.$inferSelect;
 export type NewPlayerInsightRow = typeof playerInsights.$inferInsert;
 export type CarmyPlayerRow = typeof carmyPlayers.$inferSelect;
 export type NewCarmyPlayerRow = typeof carmyPlayers.$inferInsert;
+export type SourceRunRow = typeof sourceRuns.$inferSelect;
 export type Lot = typeof lots.$inferSelect;
 export type LotRound = typeof lotRounds.$inferSelect;
 export type Bid = typeof bids.$inferSelect;

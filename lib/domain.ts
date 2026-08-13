@@ -591,3 +591,34 @@ export function canSeeInsights(
 ): boolean {
   return user?.isPro === true || user?.isAdmin === true;
 }
+
+// ─── Il refresh giornaliero (M11) ────────────────────────────────────────────
+
+/**
+ * Le due fonti pubbliche che si aggiornano da sé, nell'ordine in cui si chiedono.
+ *
+ * ⚠ **L'ordine non è alfabetico né casuale: A prima di B.** La fonte B aggiorna
+ * righe che nascono dalla A, e il giorno del primo deploy la tabella è vuota —
+ * chiedendo prima la A, il primo giro utile porta a casa tutte e due invece di
+ * rimandare la seconda al quarto d'ora dopo. È anche l'ordine in cui il pannello
+ * le mostra, e non è una coincidenza da spezzare: si leggono nella sequenza in
+ * cui accadono.
+ *
+ * Sta qui e non in `lib/engine/insight-refresh.ts` perché serve **anche al
+ * pannello**, che è un client component: quel modulo importa `lib/db`, e
+ * `player_insights` con un ORM al seguito non deve arrivare fino al telefono.
+ * Sono i nomi delle cose, e i nomi delle cose stanno qui.
+ */
+export const REFRESH_SOURCES = ["listone_insights", "set_pieces"] as const;
+export type RefreshSource = (typeof REFRESH_SOURCES)[number];
+
+/**
+ * Come si chiamano in pagina. Sono **le stesse intestazioni dei due pulsanti** di
+ * M8, di proposito: il messaggio di guasto in cima alla pagina e il pulsante che
+ * lo risolve a metà pagina devono nominare la stessa cosa, o chi legge non capisce
+ * quale dei due premere.
+ */
+export const REFRESH_SOURCE_LABELS: Record<RefreshSource, string> = {
+  listone_insights: "Titolarità e rigori storici",
+  set_pieces: "Rigoristi e calci piazzati",
+};
