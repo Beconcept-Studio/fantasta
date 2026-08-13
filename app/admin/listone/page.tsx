@@ -4,6 +4,7 @@ import { CampionciniPanel } from "@/components/admin/campioncini-panel";
 import { CarmyUpload } from "@/components/admin/carmy-upload";
 import { InsightsPanel } from "@/components/admin/insights-panel";
 import { ListoneUpload } from "@/components/admin/listone-upload";
+import { SourceRunBanner } from "@/components/admin/source-run-banner";
 import { requireAppAdmin } from "@/lib/auth";
 import {
   campioncinoEdition,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/campioncini";
 import { SOGLIA_TITOLARE_CARMY } from "@/lib/domain";
 import { carmyStatus } from "@/lib/engine/carmy";
+import { sourceRunsStatus } from "@/lib/engine/insight-refresh";
 import { insightsStatus } from "@/lib/engine/insights";
 import { listoneStatus } from "@/lib/engine/listone";
 import { when } from "@/lib/when";
@@ -36,9 +38,14 @@ import { when } from "@/lib/when";
  * *riuscirebbe*: un pulsante disabilitato che funzionerebbe è una bugia
  * dell'interfaccia, come lo era nascondere gli insight in CSS (M8 §6). Il gate
  * che serve, lì dentro, esiste già ed è vero: «Aggiorna i designati» è spento
- * finché la tabella degli insight è vuota. E **M11 farà partire quel refresh da
- * sé ogni giorno**: un pulsante bloccato accanto a «aggiornato automaticamente
- * tre ore fa» sarebbe da smontare alla macro dopo.
+ * finché la tabella degli insight è vuota. E **M11 fa partire quel refresh da sé
+ * ogni giorno**: un pulsante bloccato accanto a «aggiornato da sé tre ore fa»
+ * sarebbe stato da smontare in questa macro. La previsione era giusta.
+ *
+ * ⚠ **Da M11 la prima cosa della pagina non è il conteggio: è il guasto**, quando
+ * c'è. `SourceRunBanner` non rende niente se le due fonti stanno bene, quindi in
+ * condizioni normali la pagina è identica a prima — ed è precisamente il punto:
+ * un avviso che c'è sempre si smette di leggere.
  *
  * ⚠ **La guardia sta qui e non solo nel layout**: la regola di M6 §5 vale anche
  * per le pagine, che sono endpoint come le altre.
@@ -55,10 +62,27 @@ export default async function AdminListonePage() {
   const listone = await listoneStatus();
   const insights = await insightsStatus();
   const carmy = await carmyStatus();
+  const runs = await sourceRunsStatus();
   const archived = await countArchive(campionciniDir());
 
   return (
     <section className="space-y-6">
+      {/*
+        ⚠ **Il guasto sta in cima, prima di ogni altra cosa** (M11 §5, forma
+        scelta dall'owner il 2026-08-13). Non compare quando le fonti stanno
+        bene: quello lo racconta la riga accanto a ciascun pulsante. È l'unico
+        modo in cui il refresh automatico *parla* — un automatismo che riesce non
+        ha bisogno di dirlo, uno che fallisce in silenzio è peggio di nessun
+        automatismo.
+      */}
+      <SourceRunBanner
+        statuses={runs}
+        dataUpdatedAt={{
+          listone_insights: insights.listoneUpdatedAt,
+          set_pieces: insights.setPiecesUpdatedAt,
+        }}
+      />
+
       <div className="space-y-1">
         <p className="text-3xl font-semibold tabular-nums">{listone.rows}</p>
         <p className="text-muted-foreground text-sm">
@@ -107,7 +131,7 @@ export default async function AdminListonePage() {
 
       <div className="grid max-w-3xl gap-6 border-t pt-6 sm:grid-cols-2">
         <CampionciniPanel archived={archived} listoneRows={listone.rows} />
-        <InsightsPanel rows={insights.rows} />
+        <InsightsPanel rows={insights.rows} statuses={runs} />
       </div>
 
       <dl className="grid max-w-3xl gap-4 border-t pt-4 text-sm sm:grid-cols-3">
@@ -275,6 +299,30 @@ export default async function AdminListonePage() {
           te lo dice, invece di riempire la tabella di righe vuote. Vale anche
           quando la lista nuova non somiglia più a quella di prima: sotto
           l&apos;85% di identificativi in comune non viene scritto niente.
+        </p>
+        <p>
+          <strong>Le due fonti pubbliche si aggiornano da sé, una volta al
+          giorno.</strong>{" "}
+          Non a un&apos;ora fissa: il conto si fa sull&apos;ultimo tentativo, e il
+          refresh scivola in avanti di qualche minuto al giorno — un dato di
+          mercato non ha un&apos;ora. Se una fonte è giù non viene richiesta ogni
+          quindici minuti: si riprova dopo un&apos;ora, poi due, quattro, otto,
+          sedici, e poi una volta al giorno. Mentre è in corso un&apos;asta{" "}
+          <em>vera</em> non si aggiorna niente — due download e cinquecento righe
+          in transazione non si fanno accanto a un round da chiudere — e un giro
+          saltato per quella ragione non conta come tentativo fallito. Le
+          simulazioni non fermano niente. I due pulsanti restano per la cosa che
+          l&apos;automatismo non fa: aggiornare <em>adesso</em>, la sera prima
+          dell&apos;asta, guardando il risultato.
+        </p>
+        <p>
+          <strong>Quando un aggiornamento automatico fallisce, lo dice qui</strong>{" "}
+          — in cima a questa pagina, e non per email: una notifica che arriva ogni
+          giorno per un dato di mercato è una notifica che si impara a cancellare
+          senza leggere. Il limite è che l&apos;avviso lo vede solo chi apre questa
+          pagina, ed è accettabile per una ragione precisa: i dati{" "}
+          <strong>non si corrompono</strong>. Il caso peggiore è sapere numeri
+          vecchi, mai numeri falsi.
         </p>
         <p>
           <strong>Edizione {campioncinoEdition()}</strong> per le caricature. È

@@ -1,6 +1,7 @@
 # M11 — Il refresh giornaliero degli insight
 
-> **Stato:** **da aprire** su `feature/11-refresh-giornaliero` · Pianificata il 2026-08-12 · **Dipende
+> **Stato:** **chiusa su `dev`, non rilasciata** · Aperta e chiusa il 2026-08-13 su
+> `feature/11-refresh-giornaliero` · Pianificata il 2026-08-12 · **Dipende
 > da M10**, e non per un componente: questa macro ha bisogno del pannello riorganizzato per avere un
 > posto dove dire *«ho provato e non ci sono riuscito»*. Un automatismo senza quel posto è un
 > automatismo muto, che è la cosa peggiore che possa essere (§4).
@@ -245,44 +246,115 @@ backoff per un ordine di operazioni che si sistemerà da sé al primo giro utile
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M11-01** — Aprire `feature/11-refresh-giornaliero` da `dev`; rileggere questo file, e in
+- [x] **M11-01** — Aprire `feature/11-refresh-giornaliero` da `dev`; rileggere questo file, e in
       particolare §3 (la scadenza contata dai **tentativi**, non dai successi) e §4 (la guardia). Sono
       le due cose che, sbagliate, non si vedono in locale e si vedono su un sito di terzi
-- [ ] **M11-02** — `lib/db/schema.ts`: `source_runs` come in §5. `pnpm db:push` in locale
-- [ ] **M11-03** — La decisione di quando provare, come **funzione pura** in un file che non importa
+      → Fatto. **Le due cose erano davvero le due cose**, e la seconda si è rivelata più insidiosa
+      della prima: contare dai tentativi è una riga scritta una volta, ma «un tick saltato non è un
+      tentativo» sono **due** rami distinti nel codice — la guardia e il salto della fonte B — e
+      sbagliarne uno solo basta a far mentire il pannello.
+- [x] **M11-02** — `lib/db/schema.ts`: `source_runs` come in §5. `pnpm db:push` in locale
+      → Fatto, identica a §5 tranne due `$type<>()` sulle colonne `source` e `trigger`: sono due unioni
+      di stringhe, e senza il tipo il codice avrebbe scritto `"listone-insights"` con un trattino senza
+      che niente si lamentasse. `pnpm db:push` in locale ha creato la tabella e nient'altro.
+- [x] **M11-03** — La decisione di quando provare, come **funzione pura** in un file che non importa
       `lib/db`: `(riga di source_runs | null, now) → provare o no`. È il pezzo che va provato in
       millisecondi, ed è dove vive il backoff — la stessa linea che `setup-rules.ts` e `rules.ts`
       tracciano fra ciò che si prova senza database e ciò che no. Test puro: mai provato → sì; riuscito
       23 h fa → no; riuscito 25 h fa → sì; fallito una volta 30 min fa → no; fallito una volta 90 min
       fa → sì; fallito sei volte 20 h fa → no
-- [ ] **M11-04** — `lib/engine/insight-refresh.ts` (o dove starà il loop): il tick da 15 minuti, la
+      → Fatto in `lib/engine/refresh-rules.ts`, i sei casi passano. ⚠ **Un settimo test ha corretto un
+      numero della spec**: il conto «una fonte giù per un giorno costa N richieste invece di 96» dà
+      **cinque**, non sei — t0, +1h, +3h, +7h, +15h, e il sesto tentativo cade a +31h, cioè fuori dalla
+      giornata. La spec non aveva scritto il numero, ma la prima stesura del test sì, ed era sbagliata.
+- [x] **M11-04** — `lib/engine/insight-refresh.ts` (o dove starà il loop): il tick da 15 minuti, la
       guardia sull'asta reale con **la stessa condizione di `runBotTick`**, la sequenza A→B, il salto
       di B a tabella vuota, la scrittura di `source_runs`. Tutto sotto `.catch()`: un errore qui non
       deve poter fermare il processo che sta conducendo un'asta
-- [ ] **M11-05** — `instrumentation.ts`: l'avvio, dentro il ramo `nodejs`, **con il singleton su
+      → Fatto, e la guardia non è «la stessa condizione»: è **la stessa funzione**,
+      `realAuctionRunning()` importata da `bots.ts` — il secondo chiamante è arrivato e la regola 8 dice
+      di riusarla, non di ricopiarla. Due cose non previste dalla spec: il tick è diviso in
+      `runRefreshTick` (guardia) e `refreshDueSources` (lavoro), **copiando il taglio di `runBotTick` /
+      `tickAuction`**, perché la guardia è una domanda globale e un test che pretendesse l'assenza di
+      aste reali sarebbe rosso a seconda di cosa fa un altro file; e `failures` si incrementa in SQL
+      (`case when excluded.ok then 0 else source_runs.failures + 1 end`) invece che leggendo e
+      riscrivendo, che avrebbe lasciato una finestra fra le due.
+- [x] **M11-05** — `instrumentation.ts`: l'avvio, dentro il ramo `nodejs`, **con il singleton su
       `globalThis`** accanto a `__scheduler` e `__botLoop`
-- [ ] **M11-06** — I due pulsanti di M8 scrivono `source_runs` con `trigger: "manual"` (§5)
-- [ ] **M11-07** — Il pannello (sezione Listone di M10): esito, quando, `failures` e messaggio per
+      → Fatto: `g.__insightRefresh`. La guardia `if (g.__scheduler) return` già in cima copre tutti e
+      tre, e `tests/instrumentation.test.ts` ha adesso un caso che lo verifica sul terzo loop.
+- [x] **M11-06** — I due pulsanti di M8 scrivono `source_runs` con `trigger: "manual"` (§5)
+      → Fatto, con una riga sola per azione, **prima** del `return` di fallimento. ⚠ Una decisione che
+      la spec non copriva: il pulsante dei rigoristi registra anche il rifiuto «prima va importato il
+      listone», che il tick automatico invece **salta**. Non è un'incoerenza — è chi ha fatto la
+      domanda: il tick incontra quella condizione da solo il giorno del deploy, qui l'ha chiesto una
+      persona, e il pulsante è pure spento a tabella vuota.
+- [x] **M11-07** — Il pannello (sezione Listone di M10): esito, quando, `failures` e messaggio per
       ciascuna fonte. Un fallimento in corso è **la cosa più visibile della pagina**
-- [ ] **M11-08** — Test con Postgres: un tick con una fonte finta scrive `source_runs` e i dati; un
+      → Fatto, nella forma scelta dall'owner guardando tre alternative (2026-08-13): **avviso rosso in
+      cima che compare solo in caso di guasto** + **riga di stato accanto a ciascun pulsante, sempre
+      presente**. I quattro timestamp in fondo restano dov'erano. ⚠ La spec diceva «un posto»; servivano
+      **due**, perché «c'è qualcosa che non va?» e «quando si è aggiornato, da sé o a mano?» si leggono
+      in due momenti diversi. Le frasi le scrive un modulo puro, `lib/source-status.ts`, perché i due
+      consumatori stanno in due mondi — l'avviso è un componente server, la riga vive in un
+      `"use client"` — e le stesse parole scritte due volte divergono al primo ritocco.
+- [x] **M11-08** — Test con Postgres: un tick con una fonte finta scrive `source_runs` e i dati; un
       tick con la fonte che risponde male **non scrive i dati**, scrive il fallimento e incrementa
       `failures`; **un tick con un'asta reale `LIVE` non fa niente e non tocca `source_runs`**; una
       simulata `LIVE` non lo ferma; due tick di fila fanno **un solo** tentativo; B viene saltata a
       `player_insights` vuota **senza** registrare un fallimento
-- [ ] **M11-09** — Prova in locale con le **fonti vere**, guardando il payload e non lo schermo (è il
+      → Fatto, tutti dentro `tests/db/insights.test.ts`, che adesso dichiara in testa di possedere
+      **due** tabelle globali: `player_insights` e `source_runs`. Era la trappola di M10B, e M11 ci
+      andava addosso due volte.
+      ⚠ **Un caso è rimasto fuori, e non per dimenticanza: «una simulata `LIVE` non lo ferma».** Non è
+      verificabile in un test parallelo senza flakiness — sarebbe rosso ogni volta che un altro file ha
+      un'asta vera accesa nello stesso istante, ed è precisamente la ragione per cui
+      `tests/db/bots.test.ts` prova `runBotTick` **solo** nella direzione robusta. Il verso «la
+      simulata non conta» vive in `realAuctionRunning()`, che è condivisa, e si è provato in locale
+      (M11-09) sul database di sviluppo, che ha due simulate in pausa: il tick ha lavorato.
+      In compenso sono nati due test che la spec non chiedeva: le frasi del pannello in
+      `tests/source-status.test.ts` (è lì che vive la verifica 7) e la guardia sul terzo loop in
+      `tests/instrumentation.test.ts`.
+- [x] **M11-09** — Prova in locale con le **fonti vere**, guardando il payload e non lo schermo (è il
       metodo con cui M8 ha chiuso): il primo tick importa, il secondo non fa niente, e il pannello dice
       la verità in ora italiana
-- [ ] **M11-10** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
+      → Fatto, sulle fonti vere: **497 righe** da `api.fantalab.it` e **92 designati** da
+      `fantacalcio.it` al primo tick; il secondo, subito dopo, ha restituito
+      `skipped: [not-due, not-due]` senza sfiorare la rete; `nextAttemptAt` a ventiquattr'ore esatte.
+      La guardia interrogata con le due simulate in pausa a database ha risposto `standBy: false`, che è
+      la verifica 4. Il pannello si è guardato su una pagina di prova temporanea con i quattro stati
+      affiancati, poi cancellata: ⚠ **e ha fatto il suo lavoro**, perché due frasi erano sbagliate e
+      non si vedeva dal codice — una maiuscola dopo i due punti («Titolarità e rigori storici: L'ultimo
+      aggiornamento è fallito») e una data isolata che si leggeva come una frase interrotta
+      («Aggiornato da sé: 497 righe dalla fonte. Il 13 ago 2026, 06:12.»).
+- [x] **M11-10** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
       spento). ⚠ E un controllo che i test non fanno: **`lsof -nP -iTCP -sTCP:LISTEN | grep node`** —
       con due processi dell'app accesi ci sono **due loop**, e il conto dei tentativi non tornerebbe
-- [ ] **M11-11** — `docs/ARCHITECTURE.md`: il capitolo su cosa gira da sé dentro il processo (sweep,
+      → Verde: **777 test** su 47 file, typecheck e build. `lsof` ha mostrato **un solo** processo in
+      ascolto sulla 3000. ⚠ E il controllo ha fatto emergere una cosa da sapere in locale che non
+      riguarda i due processi: **con `pnpm dev` acceso il loop c'è**, quindi `player_insights` si
+      riempie da sola entro un quarto d'ora dall'avvio — e se `pnpm test` gira mentre scatta un tick,
+      i test degli insight possono trovare righe che non hanno scritto loro. È una finestra di due
+      secondi ogni quindici minuti, ed è scritta in `HOWTO-PROVA-LOCALE` §8.
+- [x] **M11-11** — `docs/ARCHITECTURE.md`: il capitolo su cosa gira da sé dentro il processo (sweep,
       bot, refresh: tre loop, tre ragioni, una sola garanzia — un processo). `docs/DECISIONS.md`: la
       scadenza dai tentativi con la tempesta che evita, il backoff, la guardia sull'asta reale, i due
       pulsanti che scrivono la stessa riga, **la regola 1 e perché questo timer non la viola**, e
       l'email decisa di no
+      → Fatto: «I tre loop: cosa gira da sé, dentro il processo» in `ARCHITECTURE.md`, più il diagramma
+      del processo aggiornato a tre righe e una postilla in «Cosa non c'è ancora» — perché da questa
+      macro **una cosa in questa applicazione si guasta senza che nessuno sia nella stanza**, e la
+      frase «nessun monitoraggio automatico» aveva bisogno di un'eccezione. Le sei voci in
+      `DECISIONS.md`, più una settima sulla forma scelta dall'owner. E `HOWTO-PROVA-LOCALE` §8: come si
+      prova un loop da quindici minuti senza aspettarne quindici (si mente sulla data a database, non
+      si riavvia il processo — riavviarlo non accelera niente, perché il tick non parte al boot).
 - [ ] **M11-12** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       esplicita** — `CHANGELOG.md`, `package.json`, merge su `main`, tag `v1.12.0`, push. **Il
       `CHANGELOG.md` deve contenere il `pnpm db:push`** scritto per esteso
+      → Merge su `dev` fatto. Il rilascio aspetta la richiesta esplicita dell'owner. ⚠ **Verificato che
+      non c'è nessun file da caricare a mano**: `source_runs` nasce vuota, «nessun tentativo
+      registrato» è lo stato iniziale corretto, e il primo tick la riempie entro un quarto d'ora — è il
+      primo rilascio da quattro senza un passo a mano oltre al `db:push`.
 
 ## Verifica
 
@@ -302,3 +374,63 @@ backoff per un ordine di operazioni che si sistemerà da sé al primo giro utile
 8. **A `player_insights` vuota la fonte B viene saltata**, non registrata come fallita.
 9. **Un'asta si gioca durante tutto questo**: una simulazione a 8 arriva a `COMPLETED` con il loop
    acceso, e i tempi dei round non cambiano.
+
+---
+
+## Com'è andata
+
+Non cosa è stato fatto — quello sta nei task. Cosa **la spec aveva sbagliato**, che è l'unica parte
+che serve a chi scriverà la prossima.
+
+**⚠ «Un posto dove dire che non ci sono riuscito» erano due posti.** È l'errore più utile di questa
+spec, e nasce da una formulazione che sembrava precisa: §5 diceva «nel pannello, accanto ai due
+timestamp: per ciascuna fonte, com'è andato l'ultimo tentativo, quando, e — se è fallito — da quante
+volte e con quale messaggio», e poi «un fallimento in corso non è una riga di dettaglio: è la cosa più
+importante di quella pagina». **Le due frasi chiedono due cose diverse e la spec non se n'era
+accorta**, perché rispondono a due domande che si fanno in due momenti diversi: «c'è qualcosa che non
+va?» si legge *entrando* nella pagina, e vuole qualcosa in cima che di solito non c'è; «quando si è
+aggiornato, da sé o a mano?» si legge *guardando il pulsante*, e vuole qualcosa che c'è sempre.
+Provando a farne un posto solo si otteneva o un avviso permanente — che si smette di leggere, e il
+giorno che serve non lo si vede — o un guasto a metà pagina. La forma finale l'ha scelta l'owner
+guardando tre alternative, ed è quella con due posti.
+
+**⚠ Un numero della spec era sbagliato, e l'ha corretto un test.** «Novantasei richieste al giorno» era
+giusto; il conto complementare — quante ne costa il backoff — no. Ne costa **cinque** in ventiquattro
+ore, non sei: t0, +1h, +3h, +7h, +15h, e il sesto tentativo cade a +31h, cioè il giorno dopo. Il test
+è nato dando per buona la sesta e si è visto rosso subito. È lo stesso genere di riga della lezione di
+M10B — *se una colonna si scarta, si scarta con una misura* — declinata al contrario: **se una spec
+scrive un numero, quel numero è un test, non una frase.**
+
+**⚠ «La stessa condizione di `runBotTick`» era la richiesta sbagliata: serviva la stessa funzione.** Il
+task M11-04 chiedeva di copiare la condizione della guardia. Copiarla avrebbe voluto dire due
+definizioni di «si sta giocando» a due chilometri l'una dall'altra, che divergono la prima volta che
+qualcuno aggiunge uno stato. `realAuctionRunning()` era già esportata: il secondo chiamante è arrivato,
+e la regola 8 dice di riusarla. Vale come promemoria sul modo di scrivere un task: «copia il
+precedente» è quasi sempre un modo impreciso di dire «riusa il precedente».
+
+**⚠ E il precedente da copiare per davvero era un altro, ed era nei test.** La spec non l'aveva visto:
+il taglio `runBotTick` / `tickAuction` esiste perché la guardia è una domanda **globale** — «esiste
+un'asta reale su questa macchina?» — e i file di test girano in worker paralleli su un database
+condiviso. Senza quel taglio, metà dei test di M11-08 sarebbero stati rossi a seconda di cosa stava
+facendo `tests/db/bots.test.ts` nello stesso istante. La conseguenza è dichiarata invece che aggirata:
+**un caso della lista di M11-08 non è automatizzabile** — «una simulata `LIVE` non lo ferma» — e si è
+provato in locale, sul database di sviluppo che ha due simulate in pausa.
+
+**La trappola annunciata era annunciata bene, e non è costata niente.** Il briefing diceva che M11 ci
+andava addosso due volte — `source_runs` nuova, e il tick che scrive `player_insights`, già posseduta
+da `tests/db/insights.test.ts` — e la cura era decisa prima di scrivere una riga: tutti i test con
+Postgres dentro il file che possiede già quella tabella, che adesso dichiara di possederne **due**.
+Zero rossi, zero diagnosi. È il primo caso in cui una lezione di `DECISIONS.md` ha pagato in
+prevenzione invece che in cura, e vale la pena notarlo: la regola era scritta in una forma azionabile
+(«una tabella globale, un file che la possiede») e non come racconto di un incidente.
+
+**Due previsioni della spec sono state confermate, e vale dirlo.** La prima: i due pulsanti che
+scrivono la stessa riga *servivano* — è il caso in cui il pannello avrebbe mentito nel modo più
+fastidioso, dicendo «fallito ieri» dopo un aggiornamento riuscito adesso. La seconda: la promessa di
+M10 di lasciare il pulsante degli insight **sempre attivo** era giusta, e non c'è stato niente da
+smontare.
+
+**Quello che non è cambiato, e che era il punto.** `refreshListoneInsights` e `refreshSetPieces` non
+hanno **una riga** di differenza: `git diff` su `lib/engine/insights.ts` è vuoto. La macro ha aggiunto
+chi le chiama, come §1 chiedeva, e il fatto che quel file non compaia nel diff è il modo migliore di
+misurare se il perimetro ha tenuto.
