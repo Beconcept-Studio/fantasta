@@ -1,8 +1,8 @@
 /**
  * L'aggancio di Next.js all'avvio del processo (F3-08, F4-03): qui partono le
- * due cose che devono esistere una volta sola per processo — lo scheduler
- * (sweep periodico e boot recovery) e il collegamento fra le mutazioni e lo
- * stream SSE.
+ * cose che devono esistere una volta sola per processo — lo scheduler (sweep
+ * periodico e boot recovery), il collegamento fra le mutazioni e lo stream SSE,
+ * il tick dei bot (M4) e il refresh giornaliero degli insight (M11).
  *
  * Il `??=` su `globalThis` è la guardia di PLAN §16.8: in dev l'HMR riesegue
  * questo file, e senza guardia si accumulerebbero due sweep che fanno
@@ -26,6 +26,9 @@ export async function register(): Promise<void> {
     const { advancePhase } = await import("@/lib/engine/actions");
     const { setBroadcastHook } = await import("@/lib/engine/mutate");
     const { startBotLoop } = await import("@/lib/engine/bots");
+    const { startInsightRefreshLoop } = await import(
+      "@/lib/engine/insight-refresh"
+    );
     const { scheduleSnapshot, schedulePresenceSnapshot } = await import(
       "@/lib/realtime/broadcast"
     );
@@ -33,6 +36,7 @@ export async function register(): Promise<void> {
     const g = globalThis as typeof globalThis & {
       __scheduler?: unknown;
       __botLoop?: unknown;
+      __insightRefresh?: unknown;
     };
     if (g.__scheduler) return;
     setBroadcastHook(scheduleSnapshot);
@@ -47,5 +51,17 @@ export async function register(): Promise<void> {
     // compila questo file e i route handler in bundle separati, e una variabile
     // di modulo esisterebbe in due copie.
     g.__botLoop = startBotLoop(schedulePresenceSnapshot);
+
+    // Il refresh giornaliero delle due fonti pubbliche (M11). **Il terzo loop di
+    // questo processo, e l'ultimo che serve**: quindici minuti di intervallo, e
+    // a dire «è passato un giorno» è `source_runs`, non l'intervallo — un
+    // `setInterval` da ventiquattro ore sarebbe ancorato al boot, e questo
+    // processo riparte a ogni push su `main`.
+    //
+    // Anche questo su `globalThis`, e per la terza volta la ragione è la stessa:
+    // Next compila questo file e i route handler in bundle separati, quindi di
+    // una variabile di modulo esisterebbero due copie — e due copie di un loop
+    // che conta i tentativi vorrebbero dire un conto che non torna.
+    g.__insightRefresh = startInsightRefreshLoop();
   }
 }

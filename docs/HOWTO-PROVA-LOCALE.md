@@ -362,6 +362,95 @@ La tabella è **globale**: sopravvive alla cancellazione delle aste e ai `pnpm d
 importa una volta e resta lì per tutte le prove. Per svuotarla:
 `docker compose exec db psql -U postgres -d asta -c "delete from player_insights;"`.
 
+⚠ **`pnpm test` la svuota**, insieme a `listone_players`, `carmy_players` e `source_runs`: i test con
+Postgres puliscono ciò che hanno sporcato, ed è il comportamento giusto. Vuol dire che dopo ogni
+`pnpm test` il giro di §6 e §7 va rifatto, in quest'ordine: listone → Carmy → i due import. Se «in
+`/play` non vedo niente» arriva subito dopo una suite verde, il colpevole è questo e non il codice.
+
+## 8. Il refresh automatico, e come si prova senza aspettare un quarto d'ora (M11)
+
+Da M11 i due import di §7 partono **da sé**, una volta al giorno, dentro il processo dell'app: c'è un
+terzo `setInterval` accanto allo sweep e al tick dei bot, che ogni **quindici minuti** rilegge la
+tabella `source_runs` e si chiede, per ciascuna fonte, quando ha provato l'ultima volta e com'è andata.
+
+Questo cambia una cosa nelle prove in locale, e conviene saperla prima di trovarsela: **con `pnpm dev`
+acceso, `player_insights` si riempie da sola** entro un quarto d'ora dal primo avvio, perché
+`source_runs` nasce vuota e «nessun tentativo registrato» vuol dire «prova adesso». Non è un guasto ed
+è precisamente ciò che la macro fa. ⚠ Il rovescio è che se `pnpm test` gira **mentre** scatta un tick,
+i test degli insight possono trovare righe che non hanno scritto loro: è una finestra di due secondi
+ogni quindici minuti, ma se vedi un rosso irriproducibile in `tests/db/insights.test.ts` guarda l'ora
+prima di guardare il codice.
+
+**Come si guarda lo stato.** Le due righe stanno tutte lì:
+
+```bash
+docker compose exec db psql -U postgres -d asta -c "select * from source_runs;"
+```
+
+E in pagina, **Admin → Listone**: accanto a ciascuno dei due pulsanti c'è una riga che dice com'è
+andato l'ultimo tentativo, quando, e se è partito **da sé o a mano**.
+
+**Come si fa scattare un tick adesso.** Non serve aspettare: lo stato è a database, quindi basta
+mentire sulla data dell'ultimo tentativo. Il loop se ne accorge al giro dopo, e nel frattempo si può
+guardare il pannello.
+
+```bash
+# «l'ultimo tentativo è di due giorni fa»: il prossimo tick di quindici minuti riprova
+docker compose exec db psql -U postgres -d asta \
+  -c "update source_runs set attempted_at = now() - interval '2 days';"
+
+# oppure: azzerare tutto, così il primo tick riprova subito tutte e due le fonti
+docker compose exec db psql -U postgres -d asta -c "delete from source_runs;"
+```
+
+⚠ **Non serve riavviare `pnpm dev`**, e riavviarlo non accelera niente: il tick non parte all'avvio del
+processo, proprio perché il processo riparte a ogni modifica. Se non vuoi attendere il prossimo quarto
+d'ora, l'alternativa è premere uno dei due pulsanti in pagina: scrivono la stessa riga con
+`trigger = 'manual'`, e il refresh automatico ne tiene conto.
+
+**Come si prova il caso che conta, cioè il guasto.** È l'unico modo in cui questa macro parla, quindi
+val la pena guardarlo almeno una volta. Si scrive a mano una riga fallita e si apre **Admin → Listone**:
+in cima alla pagina compare l'avviso rosso, che in condizioni normali non c'è.
+
+```bash
+# «non si aggiorna da tre volte»: è la frase della verifica 7
+docker compose exec db psql -U postgres -d asta -c "
+  insert into source_runs (source, attempted_at, ok, message, rows, failures, trigger)
+  values ('listone_insights', now(), false,
+          'La fonte ha risposto 503. Riprova fra qualche minuto: non c''è niente da sistemare da parte nostra.',
+          null, 3, 'auto')
+  on conflict (source) do update set
+    ok = false, failures = 3, message = excluded.message, attempted_at = excluded.attempted_at;"
+```
+
+Con `failures = 1` la frase è «non si è aggiornato»; da 2 in su diventa «non si aggiorna da *due*
+volte», a parole. È voluto: «fallito» è un incidente, un numero è un guasto che dura.
+
+**Tre cose che non sono guasti.**
+
+- **Con un'asta *vera* `LIVE` o `PAUSED` il refresh non fa niente**, esattamente come i bot. È la stessa
+  funzione (`realAuctionRunning`), e le aste **simulate non contano**: una simulazione in pausa non
+  ferma il refresh. Un tick saltato per questa ragione **non** scrive su `source_runs` — se lo
+  scrivesse, una serata d'asta manderebbe le fonti in backoff per un guasto che non c'è stato.
+- **Se una fonte è giù, non viene richiesta ogni quindici minuti**: si riprova dopo un'ora, poi due,
+  quattro, otto, sedici, e poi una volta al giorno. Se stai aspettando un tentativo e non arriva,
+  guarda `failures` prima di sospettare il loop.
+- **A `player_insights` vuota la seconda fonte viene saltata**, e non registrata come fallita: aggiorna
+  righe che nascono dalla prima. Nel `source_runs` di un database appena azzerato è normale trovare una
+  riga sola dopo il primo giro.
+
+⚠ **E il controllo che nessun test può fare.** Se ci sono **due** processi dell'app accesi, ci sono due
+loop, e il conto dei tentativi non torna — peggio: `source_runs` ha una riga per fonte, quindi il
+secondo `upsert` sovrascrive il primo e il conto sembra giusto. Prima di indagare su un refresh che «si
+comporta in modo strano»:
+
+```bash
+lsof -nP -iTCP -sTCP:LISTEN | grep node
+```
+
+Deve esserci **una sola** riga in ascolto sulla porta dell'app. È la stessa diagnosi del paragrafo su
+`pnpm build && pnpm start` in fondo a questo documento.
+
 ---
 
 ## Chi è chi nell'asta di prova
