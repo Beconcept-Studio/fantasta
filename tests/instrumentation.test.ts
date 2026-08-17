@@ -10,7 +10,8 @@ import { afterEach, expect, it, vi } from "vitest";
 
 const startScheduler = vi.fn(() => ({ stop: vi.fn() }));
 const startInsightRefreshLoop = vi.fn(() => ({ stop: vi.fn() }));
-vi.mock("@/lib/engine/scheduler", () => ({ startScheduler }));
+const cancelTimer = vi.fn();
+vi.mock("@/lib/engine/scheduler", () => ({ startScheduler, cancelTimer }));
 vi.mock("@/lib/engine/actions", () => ({ advancePhase: vi.fn() }));
 vi.mock("@/lib/engine/insight-refresh", () => ({ startInsightRefreshLoop }));
 
@@ -19,6 +20,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   startScheduler.mockClear();
   startInsightRefreshLoop.mockClear();
+  cancelTimer.mockClear();
 });
 
 it("register() eseguita due volte avvia un solo scheduler", async () => {
@@ -44,6 +46,32 @@ it("register() eseguita due volte avvia un solo loop di refresh", async () => {
   await register();
 
   expect(startInsightRefreshLoop).toHaveBeenCalledTimes(1);
+});
+
+/**
+ * ⚠ **M12 — l'aggancio del congedo, che è il pezzo la cui assenza non si vede.**
+ *
+ * Se questa riga sparisse da `register()`, non si romperebbe niente di visibile:
+ * `deleteAuction` continuerebbe a cancellare le aste, i test del motore
+ * resterebbero verdi, e l'unica differenza sarebbe che dodici persone in una
+ * stanza restano a guardare una schermata ferma — cioè il bug che M12 esiste per
+ * togliere, tornato in silenzio.
+ *
+ * Il test non guarda il congedo delle connessioni (quello ha un file suo, con
+ * Postgres vero): guarda che l'hook **sia agganciato**, e lo fa dal lato del
+ * timer, che qui è finto. Serve anche a proteggere la ragione per cui il timer
+ * passa da qui: dentro il motore, `active` sarebbe quello di un altro bundle.
+ */
+it("register() aggancia il congedo, e da lì il timer si cancella davvero", async () => {
+  vi.stubEnv("NEXT_RUNTIME", "nodejs");
+  const { register } = await import("@/instrumentation");
+  const { auctionGone } = await import("@/lib/engine/mutate");
+
+  await register();
+  // È ciò che fa `deleteAuction` dopo il commit, senza sapere chi ascolta.
+  auctionGone("un-id-qualsiasi", "Un'asta qualsiasi");
+
+  expect(cancelTimer).toHaveBeenCalledWith("un-id-qualsiasi");
 });
 
 it("register() non avvia niente fuori dal runtime nodejs", async () => {

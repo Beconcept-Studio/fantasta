@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { DELETED_NOTICE_PARAM } from "@/app/auctions/form-state";
 import { SimulationBadge } from "@/components/auction/simulation-badge";
 import { StatusBadge } from "@/components/setup/status-badge";
 import { Button } from "@/components/ui/button";
@@ -8,9 +9,18 @@ import { listUserAuctions } from "@/lib/engine/setup";
 
 export const metadata = { title: "Le tue aste — Asta Fantacalcio" };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await requireUser();
   const auctions = await listUserAuctions(user.id);
+
+  // M12 §3c — chi stava guardando un'asta cancellata arriva qui, e questa è
+  // l'unica frase che gli spiega perché la schermata dell'asta è sparita.
+  const deletedRaw = (await searchParams)[DELETED_NOTICE_PARAM];
+  const deletedName = typeof deletedRaw === "string" ? deletedRaw : null;
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-8 p-6">
@@ -19,6 +29,15 @@ export default async function DashboardPage() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Le tue aste</h1>
       </header>
+
+      {deletedName !== null && (
+        <p
+          role="status"
+          className="border-destructive/40 bg-destructive/5 text-destructive rounded-lg border p-4 text-sm"
+        >
+          L&apos;asta «{deletedName}» è stata cancellata da un amministratore.
+        </p>
+      )}
 
       {auctions.length === 0 ? (
         <section className="space-y-4 rounded-lg border border-dashed p-8 text-center">

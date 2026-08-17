@@ -582,9 +582,15 @@ suite("deleteAuction dal pannello", () => {
    * ⚠ **Il rifiuto non si allenta per un amministratore.** Non si butta via una
    * stanza con dodici persone dentro, e la pausa congela la fase senza azzerare
    * l'asta: `PAUSED` è un rifiuto esattamente come `LIVE`.
+   *
+   * ⚠ **M12 non ha cambiato questa riga**, e vale la pena dire perché: la strada
+   * forzata è un'altra chiamata, `deleteAuction(..., { force: true })`, e chi non
+   * la chiede si sente rispondere esattamente questo. La cancellazione forzata ha
+   * un file di test suo (`delete-auction.test.ts`), compreso il caso opposto —
+   * l'amministratore che forza e ci riesce.
    */
   it.each(["LIVE", "PAUSED"] as const)(
-    "su un'asta %s è rifiutata anche a un amministratore",
+    "su un'asta %s è rifiutata anche a un amministratore, se non la forza",
     async (status) => {
       const admin = await user("admin", { isAdmin: true });
       const game = await makeGameAuction({ ownerPlays: false });

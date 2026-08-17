@@ -170,3 +170,23 @@ export function syncTimer(
     active.cancel(auctionId);
   }
 }
+
+/**
+ * Il timer di un'asta **che non esiste più** (M12 §2.3).
+ *
+ * Non passa da `syncTimer` perché non c'è nessuno stato da guardare: la riga è
+ * stata cancellata, e non c'è nessun `status` da cui dedurre «spegni».
+ *
+ * Lasciarlo armato non romperebbe niente — quando scatta, `advancePhase` non
+ * trova la riga e `withAuctionLock` restituisce un `NOT_FOUND` tipizzato, senza
+ * eccezioni e senza rumore, verificato il 2026-08-17 — ma resterebbe in memoria
+ * una voce che nessuno ripulirà mai, perché il solo posto che la ripuliva era la
+ * mutazione successiva di quell'asta, e di mutazioni successive non ce ne sono.
+ *
+ * ⚠ Lo chiama la closure agganciata in `instrumentation.ts`, non `deleteAuction`
+ * direttamente: `active` è una variabile di modulo, e di questo modulo esistono
+ * due copie in due bundle (PLAN §16.8). Vedi `setAuctionGoneHook` in `mutate.ts`.
+ */
+export function cancelTimer(auctionId: string): void {
+  active?.cancel(auctionId);
+}
