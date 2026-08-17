@@ -12,7 +12,23 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M11 è in produzione da `v1.12.0`** (2026-08-13), aperta e chiusa nella stessa
+**M12 è chiusa su `dev`** (2026-08-17) e **non è ancora rilasciata**: il merge su `main`, il tag
+`v1.13.0` e il changelog aspettano una richiesta esplicita dell'owner. Gate verde con **791 test**,
+typecheck e build, e **nessun `pnpm db:push`** — verificato, non dato per scontato: `git diff` non tocca
+`lib/db/schema.ts`, le cascate verso `auctions` esistono per intero dal 2026-08-07, e non c'è nessun
+backfill. È il primo rilascio da sei senza nessun passo a mano sul server.
+
+⚠ **Ma il changelog dovrà dire la cosa che nessun pulsante può impedire**: cancellare un'asta **reale**
+`COMPLETED` si porta via il verbale delle rose e tutto lo storico di M3, per sempre, e prima si dà
+`deploy/db-backup.sh`. È l'unico posto che qualcuno rileggerà.
+
+⚠ **Resta da fare la prova a due dispositivi** (M12-10): telefono su `/play`, computer sulla vista TV,
+cancellazione mentre guardano, e **il pannello di rete** per vedere che nessuno dei due riprova a
+connettersi. Il lato server è già verificato con due stream aperti — il congedo arriva a entrambi e lo
+stream si chiude — ma la parte «nessuno riprova» si distingue solo guardando le richieste di un browser
+vero. La procedura è in `docs/HOWTO-PROVA-LOCALE.md` §9.
+
+**M11 è in produzione da `v1.12.0`** (2026-08-13), aperta e chiusa nella stessa
 giornata: gate verde con **777 test**, typecheck e build.
 
 ⚠ **Il suo rilascio porta un `pnpm db:push`** — `source_runs`, additiva, due righe per sempre — e
@@ -74,14 +90,13 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-**Quattro macro, pianificate insieme il 2026-08-12** da una sessione di analisi sola, a partire dalle
-quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1. **Le prime tre
-sono rilasciate** (v1.10.0, v1.11.0 con M10B dentro, v1.12.0); **resta l'ultima**, e si apre su
-richiesta esplicita.
+Nessuna. **Le quattro macro pianificate insieme il 2026-08-12** — da una sessione di analisi sola, a
+partire dalle quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1 —
+sono state tutte lavorate: M9, M10 e M11 sono in produzione (v1.10.0, v1.11.0 con M10B dentro,
+v1.12.0), M12 è chiusa su `dev` e aspetta il rilascio.
 
-| Macro | Tema | Schema | Ordine |
-|---|---|---|---|
-| **[M12](12-cancellazione-aste.md)** | Cancellare un'asta per forza, anche in corso | no | 4ª |
+⚠ **`docs/REQUESTS.md` non è vuoto**: c'è «Admin – Refactor pagina utenti», scritta dall'owner e **non
+pianificata in nessuna macro**. Sarà una macro sua quando la chiederà, e non è entrata in M12.
 
 ⚠ **M11 non ha automatizzato il foglio di Carmy, e nessuno ci provi**: è un file che una persona
 compila e che arriva da fuori. Lo stesso vale per il listone **d'asta**, l'export Leghe in `.xlsx`, che

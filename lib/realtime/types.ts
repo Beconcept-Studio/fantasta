@@ -10,20 +10,34 @@ import type {
  * La forma dello snapshot (PLAN §8): l'unico messaggio che viaggia dal server
  * al client durante l'asta.
  *
- * **Un solo tipo di evento, e porta lo stato completo.** Niente delta, niente
- * merge lato client: a ogni transizione il server rimanda tutto, sanificato per
- * chi lo riceve. Con dodici persone e pochi KB il costo è irrilevante, e in
- * cambio spariscono due intere classi di bug — il merge sbagliato di un delta e
- * il desync di chi si riconnette a metà round (regola 7, invariante I10).
+ * **Un solo tipo di evento per lo stato, e porta lo stato completo.** Niente
+ * delta, niente merge lato client: a ogni transizione il server rimanda tutto,
+ * sanificato per chi lo riceve. Con dodici persone e pochi KB il costo è
+ * irrilevante, e in cambio spariscono due intere classi di bug — il merge
+ * sbagliato di un delta e il desync di chi si riconnette a metà round (regola 7,
+ * invariante I10). Da M12 ce n'è un secondo, e non porta stato: il congedo di
+ * `DELETED_EVENT`, che dice che l'asta non esiste più.
  *
  * Il file sta qui, e non dentro `lib/engine/`, per la stessa ragione di
- * `lib/domain.ts`: lo importa anche il client. Sono soltanto tipi — nessuna
- * dipendenza, niente ORM che viaggia fino al telefono.
+ * `lib/domain.ts`: lo importa anche il client. Tipi, più i nomi su cui le due
+ * sponde del canale devono essere d'accordo — nessuna dipendenza, niente ORM
+ * che viaggia fino al telefono.
  *
  * **Tutti i tempi sono stringhe ISO.** Il client non si fida del proprio
  * orologio: calcola `offset = serverNow − Date.now()` a ogni snapshot e rende i
  * countdown come `deadline − (Date.now() + offset)`.
  */
+
+/**
+ * **L'evento terminale del canale** (M12 §3): l'asta è stata cancellata, non
+ * arriverà nessun altro snapshot, lo stream si chiude subito dopo.
+ *
+ * Il nome sta qui perché è l'unica cosa su cui la rotta dello stream e l'hook
+ * del client devono essere d'accordo **alla lettera**: due stringhe uguali
+ * scritte in due file sono due stringhe che un giorno divergono, e il modo in
+ * cui te ne accorgi è un congedo che non arriva a nessuno.
+ */
+export const DELETED_EVENT = "deleted";
 
 export type Presence = "LIVE" | "IDLE" | "OFFLINE";
 

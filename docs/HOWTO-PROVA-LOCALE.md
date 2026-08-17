@@ -453,6 +453,60 @@ Deve esserci **una sola** riga in ascolto sulla porta dell'app. È la stessa dia
 
 ---
 
+## 9. Il congedo: cancellare un'asta mentre qualcuno la guarda (M12)
+
+Da v1.13.0 un amministratore può cancellare un'asta **in corso**, e chi la stava guardando deve essere
+avvisato invece di restare davanti a una schermata ferma. È l'unica cosa di questa applicazione che si
+prova bene solo con **due dispositivi**, perché i due spettatori si comportano in modo diverso di
+proposito.
+
+Serve una simulazione `LIVE` (§5) e due schermi:
+
+1. sul telefono, il portale di un partecipante — `pnpm dev:lan` stampa l'URL da usare in LAN;
+2. sul computer, la **vista TV**: dalla regia c'è il link, ed è l'unico URL dell'app che non chiede di
+   entrare.
+
+Poi, da un terzo posto — una finestra dove sei entrato come amministratore — apri **Admin → Aste**.
+L'asta in corso adesso ha il suo pulsante «Cancella», che prima non c'era: l'avviso che compare nomina
+**quante persone sono collegate in quel momento**. Scrivi il nome dell'asta e premi «Interrompi e
+cancella».
+
+Cosa deve succedere, e sono tre cose distinte:
+
+- **Il telefono** finisce sulla dashboard, con scritto che quell'asta — per nome — è stata cancellata
+  da un amministratore.
+- **La TV** non si muove da dove è: mostra «Asta cancellata» in grande, il nome in cima, e si ferma lì.
+  Non ha una dashboard dove andare e non ha una sessione: mandarla al login vorrebbe dire proiettare
+  una schermata di consenso in mezzo alla stanza.
+- **Nessuno dei due riprova a connettersi.** ⚠ Questo si guarda **nel pannello di rete del browser,
+  non sullo schermo**: se il `close()` mancasse, lo schermo finirebbe in dashboard identico e la
+  differenza sarebbe solo una richiesta in più allo stream, che risponde 404. È l'unico modo di
+  distinguere un `close()` che c'è da uno che manca.
+
+E il messaggio nel pannello, dopo la cancellazione, dice quante persone sono state riportate alla
+dashboard: deve essere il numero degli schermi che stavi guardando.
+
+**Senza due dispositivi**, il pezzo lato server si vede anche da terminale, ed è la prova che ha
+trovato il bug prima della cura (2026-08-17). Apri lo stream della TV con `curl` — il token nell'URL è
+tutta l'autenticazione che serve — e guarda cosa arriva:
+
+```bash
+curl -sN "http://localhost:3000/api/auctions/<id>/stream?token=<publicToken>"
+```
+
+Ad asta viva scorrono gli `event: snapshot` e un `: ping` ogni quindici secondi. Alla cancellazione
+arriva **una volta** `event: deleted` col nome dell'asta, e `curl` esce da sé perché il server ha
+chiuso lo stream. Prima di M12, al posto di tutto questo, i `: ping` continuavano ad arrivare per
+sempre e nessuno snapshot arrivava mai più: la connessione era sana e non aveva più niente da dire, che
+è il motivo per cui il guasto sembrava lentezza.
+
+⚠ **Una cancellazione dal terminale non congeda nessuno.** Un `DELETE` da `psql`, o uno script che
+chiama `deleteAuction`, girano in un processo che non ha né connessioni aperte né l'hook agganciato: le
+righe spariscono e gli schermi restano fermi. Il congedo esiste solo dentro il processo dell'app, che è
+esattamente il motivo per cui l'hook si aggancia in `instrumentation.ts`.
+
+---
+
 ## Chi è chi nell'asta di prova
 
 I posti sono sempre gli stessi fra un seed e l'altro: serve a poter rifare la stessa prova due

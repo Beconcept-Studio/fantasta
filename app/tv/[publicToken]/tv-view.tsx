@@ -75,10 +75,43 @@ export function TvView({
    */
   isSimulated: boolean;
 }) {
-  const { snapshot, connected, offset } = useAuctionStream(
+  const { snapshot, connected, offset, deleted } = useAuctionStream(
     auctionId,
     publicToken,
   );
+
+  /**
+   * **La TV si ferma qui** (M12 §3, ultimo capoverso).
+   *
+   * ⚠ Nessuna navigazione, e non è una dimenticanza: la TV non ha una dashboard
+   * dove andare — non ha nemmeno una sessione — e mandarla a `/dashboard`
+   * significherebbe proiettare una schermata di login in mezzo alla stanza. Lo
+   * stream è già chiuso dall'hook, quindi da qui non riparte niente.
+   *
+   * Il nome dell'asta resta in cima come nel resto della vista: chi alza gli
+   * occhi deve capire *quale* asta è finita, non soltanto che è finita.
+   */
+  if (deleted !== null) {
+    return (
+      <Screen>
+        <header className="flex shrink-0 items-baseline gap-4 border-b border-white/15 px-4 py-2">
+          <h1 className="truncate text-base font-semibold">
+            {deleted.auctionName}
+          </h1>
+          {isSimulated && <SimulationTag />}
+        </header>
+        <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center">
+          <p className="text-5xl font-semibold tracking-tight">
+            Asta cancellata
+          </p>
+          <p className="max-w-2xl text-2xl text-white/70">
+            Un amministratore ha cancellato questa asta. Il tabellone si ferma
+            qui.
+          </p>
+        </div>
+      </Screen>
+    );
+  }
 
   if (snapshot === null) {
     return (

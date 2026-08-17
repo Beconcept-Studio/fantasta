@@ -2,8 +2,8 @@ import { errorResponse } from "@/app/api/http";
 import { currentUser } from "@/lib/auth";
 import { loadForSnapshot, serializeSnapshot } from "@/lib/engine/snapshot";
 import { resolveViewer } from "@/lib/engine/viewer";
-import { subscribe } from "@/lib/realtime/broadcast";
-import type { Snapshot } from "@/lib/realtime/types";
+import { type Dismissal, subscribe } from "@/lib/realtime/broadcast";
+import { DELETED_EVENT, type Snapshot } from "@/lib/realtime/types";
 
 /**
  * `GET /api/auctions/:id/stream` — il canale verso i client (PLAN §8).
@@ -21,7 +21,10 @@ import type { Snapshot } from "@/lib/realtime/types";
  *   prima un broadcast recente e poi lo snapshot iniziale più vecchio — lo
  *   neutralizza il client, che scarta le versioni inferiori (F4-07).
  * - **Un commento `: ping` ogni 15 secondi.** Senza traffico, proxy e reti
- *   mobili chiudono la connessione a metà lotto senza dire niente.
+ *   mobili chiudono la connessione a metà lotto senza dire niente. ⚠ È anche
+ *   ciò che rendeva invisibile il bug di M12 §2: con l'asta cancellata la
+ *   connessione restava *sana* — nessuno snapshot, ma il ping puntuale — quindi
+ *   nessun client si accorgeva di niente e nessuno provava a riconnettersi.
  * - **`X-Accel-Buffering: no`.** Con nginx davanti, senza questo header la
  *   risposta viene bufferizzata e gli snapshot arrivano a blocchi: il
  *   countdown si muoverebbe a scatti di trenta secondi (vedi anche
@@ -65,7 +68,33 @@ export async function GET(
       const sendSnapshot = (snapshot: Snapshot) =>
         write(`event: snapshot\ndata: ${JSON.stringify(snapshot)}\n\n`);
 
-      unsubscribe = subscribe(id, { viewerMemberId: memberId, send: sendSnapshot });
+      /**
+       * Il congedo (M12 §3a): l'evento terminale, poi si chiude tutto.
+       *
+       * ⚠ **Il `controller.close()` serve anche se il client si chiude da sé.**
+       * Un client vecchio — un bundle in cache che non conosce l'evento — non
+       * chiuderebbe niente, e senza questa riga resterebbe attaccato a uno
+       * stream muto: cioè il bug di §2 sopravvissuto alla sua stessa cura.
+       * Chiuso lo stream, quel client riconnette una volta e trova un 404, che
+       * per l'`EventSource` è un errore definitivo e non un ritentativo.
+       */
+      const dismiss = (dismissal: Dismissal) => {
+        write(`event: ${DELETED_EVENT}\ndata: ${JSON.stringify(dismissal)}\n\n`);
+        closed = true;
+        if (ping) clearInterval(ping);
+        ping = null;
+        try {
+          controller.close();
+        } catch {
+          // Già chiuso dall'altra parte: il congedo era per chi non c'è più.
+        }
+      };
+
+      unsubscribe = subscribe(id, {
+        viewerMemberId: memberId,
+        send: sendSnapshot,
+        dismiss,
+      });
 
       const loaded = await loadForSnapshot(id);
       if (loaded) sendSnapshot(serializeSnapshot(loaded, memberId));

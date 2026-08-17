@@ -1,6 +1,8 @@
 # M12 — Cancellare un'asta per forza
 
-> **Stato:** **da aprire** su `feature/12-cancellazione-aste` · Pianificata il 2026-08-12 ·
+> **Stato:** **chiusa su `dev`** il 2026-08-17, **non ancora rilasciata** — il merge su `main`, il tag
+> `v1.13.0` e il `CHANGELOG.md` aspettano una richiesta esplicita dell'owner. Resta aperta la sola
+> M12-10, la prova a due browser veri. Pianificata il 2026-08-12 ·
 > **Indipendente da M9, M10 e M11**: può scivolare dove serve. Sta per ultima perché è l'unica macro
 > dopo la quale un errore non si corregge con un `git reset`.
 >
@@ -218,46 +220,104 @@ voci in fila deve trovare la domanda già posta, non doversela fare.
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M12-01** — Aprire `feature/12-cancellazione-aste` da `dev`; rileggere questo file, e in
+- [x] **M12-01** — Aprire `feature/12-cancellazione-aste` da `dev`; rileggere questo file, e in
       particolare §2: i tre comportamenti sono stati letti nel codice, non ipotizzati, e sono la
       ragione per cui la macro non è «una riga»
-- [ ] **M12-02** — Riprodurre §2 **prima di scrivere il rimedio**: un'asta simulata `LIVE`, un browser
+- [x] **M12-02** — Riprodurre §2 **prima di scrivere il rimedio**: un'asta simulata `LIVE`, un browser
       collegato, `DELETE` a mano da `psql`, e guardare il portale restare fermo con i ping che
       arrivano. È il bug che questa macro esiste per non lasciare in piedi, e va visto una volta
-- [ ] **M12-03** — `lib/realtime/broadcast.ts`: il campo del congedo in `Subscriber` e
+      → **Fatto, e il bug si è comportato esattamente come scritto.** Al posto del browser uno stream
+      TV aperto con `curl` — il token nell'URL *è* l'autenticazione, quindi non serve una sessione, e
+      un terminale timbra ogni riga con l'ora, che uno schermo non fa. «Simulasta» riportata `LIVE`,
+      snapshot alle 23:11:20/32/39/43/45 mentre i bot giocavano, `DELETE` da `psql` alle 23:11:46:
+      **da lì solo `: ping` alle :52, :07, :22, e nessuno snapshot mai più.** La connessione non muore
+      mai, quindi nessun client ha motivo di riconnettersi. → **Una cosa la spec l'aveva sbagliata:
+      vedi «Com'è andata».**
+- [x] **M12-03** — `lib/realtime/broadcast.ts`: il campo del congedo in `Subscriber` e
       `closeAuctionStreams(auctionId)` (§3a). La voce della mappa va svuotata
-- [ ] **M12-04** — La rotta dello stream manda l'evento terminale e chiude il controller; il client
+      → Il campo si chiama `dismiss` e la funzione prende **anche il nome dell'asta**, perché il
+      congedo lo porta ai client (§3c dice «con un messaggio», e il messaggio nomina l'asta). Svuota
+      anche un eventuale broadcast di presence in coda: era innocuo, ma è un timer armato su un'asta
+      che non c'è, cioè la stessa cosa che §2.3 chiede di non lasciare in giro.
+- [x] **M12-04** — La rotta dello stream manda l'evento terminale e chiude il controller; il client
       (`use-auction-stream.ts`) fa **`close()` e poi naviga** (§3c). ⚠ L'ordine è il punto: senza il
       `close()` l'`EventSource` riconnette da sé
-- [ ] **M12-05** — L'hook settabile in `deleteAuction` + l'aggancio in `instrumentation.ts` dentro il
+      → `event: deleted`, e il nome dell'evento sta in `lib/realtime/types.ts` perché le due sponde
+      devono essere d'accordo alla lettera. La navigazione **non** è finita dentro
+      `use-auction-stream.ts`: l'hook restituisce `deleted` e chi ha una dashboard chiama
+      `useDeletedRedirect` (`app/auctions/use-deleted-redirect.ts`). Tre ragioni nel file, e la prima
+      è che così l'ordine di §3c **non si può invertire per sbaglio**: il `close()` è sincrono dentro
+      il listener, la navigazione è un effetto che parte dopo, e le due cose non stanno nello stesso
+      posto. La seconda è la TV. La terza è che `lib/` non deve conoscere le rotte dell'app.
+- [x] **M12-05** — L'hook settabile in `deleteAuction` + l'aggancio in `instrumentation.ts` dentro il
       ramo `nodejs` (§3b). **`lib/engine/setup.ts` non importa `lib/realtime/`**
-- [ ] **M12-06** — Il rifiuto su `LIVE`/`PAUSED` resta per tutti; la strada forzata è
+      → `setAuctionGoneHook` sta in `lib/engine/mutate.ts`, accanto a `setBroadcastHook`: **riusato,
+      non somigliato** — stessa forma, stesso `globalThis`, stesso no-op di default. E l'hook fa
+      **due** cose, non una: congeda le connessioni **e** cancella il timer. Perché è l'unico posto da
+      cui il timer si cancella davvero, vedi M12-06.
+- [x] **M12-06** — Il rifiuto su `LIVE`/`PAUSED` resta per tutti; la strada forzata è
       dell'amministratore, con `is_admin` **riletto dentro il lock**. Cancellare il timer armato (§2.3)
-- [ ] **M12-07** — La conferma che **nomina il numero di collegati** (`connectionCount`) e la riga di
+      → `deleteAuction(userId, auctionId, { force })`, e `force` vale solo se `actorIsAppAdmin` dice sì
+      **dentro la transazione**. Il messaggio del rifiuto adesso dice anche chi può interrompere, che
+      è la verifica 4. → **Il timer non si poteva cancellare da `deleteAuction`**, e la spec non lo
+      sapeva: `active` è una variabile di modulo di `scheduler.ts`, e di quel modulo esistono due copie
+      in due bundle — una `cancelTimer` chiamata da una Server Action girerebbe in quella dove
+      `active` è `null`. Passa dalla closure di `instrumentation.ts`, che nasce nel bundle dello
+      scheduler. Il `cancelTimer` nuovo è in `scheduler.ts` e non passa da `syncTimer`: non c'è nessuno
+      stato da guardare, la riga non esiste più.
+- [x] **M12-07** — La conferma che **nomina il numero di collegati** (`connectionCount`) e la riga di
       log che dice quanti sono stati congedati (§4)
-- [ ] **M12-08** — La vista TV: il messaggio, e nessuna navigazione (§3, ultimo capoverso)
-- [ ] **M12-09** — Test con Postgres: un'amministratore cancella un'asta `LIVE` e una `PAUSED`;
+      → La conferma ha **tre** forme, non una: plurale, singolare, e «nessuno è collegato». Lo zero
+      era il caso da non scrivere come numero — «0 persone verranno riportate alla dashboard» fa
+      sembrare una serata interrotta quella che è una prova buttata, ed è il caso più frequente di
+      tutti. → **La riga di log si è spostata dopo il commit**, perché il numero dei congedati esiste
+      solo dopo il congedo; è anche più onesta di prima, quando registrava una cancellazione che una
+      transazione fallita poteva ancora annullare.
+- [x] **M12-08** — La vista TV: il messaggio, e nessuna navigazione (§3, ultimo capoverso)
+- [x] **M12-09** — Test con Postgres: un'amministratore cancella un'asta `LIVE` e una `PAUSED`;
       **l'owner no**, in entrambi gli stati; le righe di `members`, `players`, `lots`, `bids`,
       `assignments`, `ledger`, `invites`, `events` sono spariste e **le righe di `users` sono ancora
       tutte lì** (è il test che dimostra la frase «solo gli utenti non si cancellano»);
       `player_insights` e `listone_players` intatte; il nome sbagliato non cancella niente; **un
       congedo raggiunge le connessioni aperte** (si asserisce sul registro, non sul browser)
+      → 13 test in `tests/db/delete-auction.test.ts`. Su `users` si asserisce **per id, uno per uno**,
+      come la spec avvertiva. Due cose sono venute fuori scrivendoli: `bids` **non ha** `auction_id` —
+      si arriva solo passando da lotti e round, che è proprio il pezzo di cascata che potrebbe
+      rompersi in silenzio — e il `ledger` restava a zero anche prima della cancellazione, quindi
+      l'asserzione era vuota: adesso il test scrive una rettifica con `adjustBudget` prima di
+      cancellare. → **Il nome sbagliato non è coperto da un test**, e non per dimenticanza: il
+      confronto sta nella Server Action, dietro `requireAppAdmin`, che nei test del pannello è un
+      finto che interrompe. È codice che M12 non ha toccato, e resta nella verifica a mano (n. 6).
 - [ ] **M12-10** — Prova a mano, che i test non sostituiscono: **due dispositivi collegati** a una
       simulazione `LIVE` — uno su `/play`, uno su `/tv/` — e la cancellazione mentre guardano. Il primo
       finisce in dashboard con il messaggio, il secondo si ferma con il suo, **e nessuno dei due
       riprova a connettersi** (si guarda la rete, non lo schermo)
-- [ ] **M12-11** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
+      → **Lato server già verificato, lato browser no.** Due stream TV aperti con `curl` su un'asta
+      simulata `LIVE` usa e getta, cancellazione forzata *dentro il processo dell'app*: entrambi hanno
+      ricevuto `event: deleted` con `{"auctionName":"M12 congedo"}` allo stesso secondo e il server ha
+      chiuso lo stream — `curl` è uscito subito invece di aspettare il timeout, che è la differenza
+      esatta con la riproduzione di M12-02. La riga di log diceva `forced:true, dismissed:2`, e la
+      riconnessione risponde 404. **Resta da guardare il pannello di rete di due browser veri**: è
+      l'unica cosa che distingue un `close()` che c'è da uno che manca, e la fa l'owner. Procedura in
+      `docs/HOWTO-PROVA-LOCALE.md` §9.
+- [x] **M12-11** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
       spento)
-- [ ] **M12-12** — `docs/ARCHITECTURE.md`: il paragrafo su cosa succede a chi guarda un'asta che
+- [x] **M12-12** — `docs/ARCHITECTURE.md`: il paragrafo su cosa succede a chi guarda un'asta che
       viene cancellata — è il sesto caso di §8bis, e va scritto accanto agli altri cinque.
       `docs/DECISIONS.md`: la regola 5 e perché non è in mezzo (con la citazione del 2026-08-07), il
       congedo via hook invece dell'import diretto, il `close()` prima della navigazione, **la ratifica
       di §5 sulla guardia del deploy**, e le due strade scartate di §6 (terminare un'asta,
       cancellazione morbida)
+      → Toccati anche i due punti di `ARCHITECTURE.md` che dicevano «il rifiuto vale per
+      l'amministratore come per tutti»: restavano veri a metà, e un documento che si contraddice da
+      solo è peggio di uno incompleto. E `HOWTO-PROVA-LOCALE.md` ha una §9 nuova.
 - [ ] **M12-13** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       esplicita** — `CHANGELOG.md`, `package.json`, merge su `main`, tag `v1.13.0`, push. **Nessun
       `db:push`**; ma il changelog deve dire, con parole semplici, che cancellare un'asta conclusa
       cancella il suo verbale e che prima si fa un backup (§4)
+      → Merge su `dev` fatto. **Il rilascio no**, aspetta la richiesta esplicita. `pnpm db:push`
+      **non serve**, verificato e non dato per scontato: `git diff dev..feature/12-cancellazione-aste`
+      non tocca `lib/db/schema.ts`.
 
 ## Verifica
 
@@ -280,3 +340,77 @@ voci in fila deve trovare la domanda già posta, non doversela fare.
    deploy successivo non ha niente da dire.
 10. **La riga di log dice quante connessioni sono state congedate**: è la differenza fra una prova
     buttata e una serata interrotta.
+
+---
+
+## Com'è andata
+
+Scritto il 2026-08-17, a macro chiusa su `dev`. Non è il riassunto di cosa è stato fatto — quello sta
+nei task — ma l'elenco di **cosa questa spec aveva sbagliato**, perché è la parte che serve alla
+prossima.
+
+**§2.2 aveva ragione sul rimedio e torto sul meccanismo, e la differenza conta.** La spec diceva: «chi
+ricarica trova un errore che riprova all'infinito; l'`EventSource` riconnette da sé». Verificato: la
+rotta risponde **404 con `Content-Type: application/json`**, e per la specifica di `EventSource` un
+non-200 **fa fallire la connessione in modo definitivo** — nessun ritentativo, `readyState` a `CLOSED`.
+Il ciclo di tentativi non esisteva. Quello che esisteva era il problema 1, e basta.
+
+Il punto interessante è che il ciclo di tentativi **lo introduce la cura**: chiudere lo stream lato
+server significa terminarlo *normalmente*, con 200, e uno stream terminato normalmente è per un browser
+il caso in cui riconnettersi. Verificato con `curl`: il congedo esce e la risposta si chiude con 200.
+Quindi il `close()` di §3c non è la difesa da un bug che c'era — **è la difesa dal bug che la cura
+avrebbe creato senza di lui**. La conclusione operativa non cambia di una riga, e la spec aveva
+indovinato la cosa giusta per la ragione sbagliata: se il prossimo lettore ne deduce che un 404 fa
+ciclare un `EventSource`, si porterà dietro un modello mentale falso.
+
+**§2.3 chiedeva di cancellare il timer senza sapere che da `deleteAuction` non si può.** «Va comunque
+cancellato esplicitamente» è giusto; il modo no. Lo scheduler attivo è una variabile di modulo, e Next
+compila `instrumentation.ts` e i route handler in bundle separati: una `cancelTimer` chiamata da una
+Server Action non trova nessun timer da cancellare, e — cosa peggiore — **non fallisce**. Sarebbe stata
+una riga di codice che non fa niente, con un commento che spiega cosa fa. Il timer si cancella dalla
+closure agganciata in `instrumentation.ts`, che è la stessa che congeda le connessioni: per questo
+l'hook di §3b ha finito per fare due cose invece di una. È la trappola di CLAUDE.md — «ogni singleton
+di processo va su `globalThis`» — incontrata dal lato in cui *non* si può risolvere spostando il
+singleton, perché spostare `active` su `globalThis` cambierebbe il comportamento dei timer di tutta
+l'asta, e non è quello che questa macro deve fare.
+
+**§4 chiedeva due cose che non potevano stare nello stesso posto.** La riga di log doveva portare il
+numero dei congedati, ma il log era *dentro* il lock e il congedo va *dopo* il commit: il numero non
+esisteva ancora quando la riga veniva scritta. Si è spostata la riga, non il congedo — ed è venuto
+fuori che così è anche più corretta, perché prima registrava una cancellazione che una transazione
+fallita poteva ancora annullare.
+
+**Il numero dei collegati nella conferma è vero al render, non al clic.** La pagina del pannello è
+dinamica, quindi il numero è fresco quando la si apre, e la conferma dice «in questo momento». Ma se
+la pagina resta aperta, quel numero invecchia. Non è stato aggiunto niente per rinfrescarlo — sarebbe
+una Server Action in più per una differenza di qualche unità — e la copertura è che **il numero vero lo
+dice l'azione dopo**: «3 persone collegate sono state riportate alla dashboard» è contato al congedo, e
+quello non può sbagliare.
+
+**Tre forme per la frase, non una.** §4 dava l'esempio con `N` persone. Il caso da scrivere a parte è
+**zero**, che è anche il più frequente: una simulazione in pausa che nessuno guarda è esattamente il
+motivo per cui questa macro esiste, e «0 persone verranno riportate alla dashboard» la farebbe sembrare
+una serata interrotta. E il singolare, perché «1 persone» è il modo più rapido di far vedere che nessuno
+ha letto quella frase.
+
+**§3a chiedeva `closeAuctionStreams(auctionId)` e serviva anche il nome.** Il congedo dice «quest'asta
+non esiste più», e §3c vuole che la dashboard lo spieghi: senza il nome, chi segue due aste non sa
+quale delle due è sparita. Il nome viaggia nell'evento e poi nell'URL — non è stato di gioco, lo
+vedono già tutti, TV compresa, quindi I8 non è sfiorata.
+
+**Due cose sul test, e una non si può fare.** `bids` **non ha** `auction_id`: si arriva solo passando
+per lotti e round, ed è lì che una cascata si romperebbe in silenzio, quindi il test conta seguendo la
+catena. Il `ledger`, invece, era vuoto anche *prima* della cancellazione: l'asserzione «zero righe
+dopo» era vera senza dimostrare niente, e ora il test scrive una rettifica prima di cancellare. La
+cosa che non si può fare è la verifica 6: il confronto del nome digitato sta nella Server Action,
+dietro `requireAppAdmin`, che nei test del pannello è un finto che interrompe — e non vale la pena
+estrarre un confronto di due stringhe per poterlo chiamare da un test. Resta una verifica a mano, come
+era.
+
+**Quello che la spec aveva previsto giusto, e vale dirlo.** Che la macro fosse «una riga di condizione
+più tutto il resto» è esatto: il rifiuto è diventato una condizione con un `force`, e il resto —
+congedo, hook, ordine del `close()`, tre forme della conferma, il timer — è il novanta per cento del
+lavoro. Che le cascate esistessero per intero è esatto: **nessun `pnpm db:push`, nessun backfill**, e
+`users` non si tocca per direzione delle chiavi, senza bisogno di nessuna guardia. E il consiglio di
+riprodurre il bug prima di curarlo si è pagato da solo: è così che si è scoperto che il `: ping` è la
+ragione per cui il guasto sembrava lentezza, ed è così che è venuta fuori la correzione a §2.2.

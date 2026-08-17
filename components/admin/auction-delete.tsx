@@ -21,18 +21,47 @@ import { Input } from "@/components/ui/input";
  * sa niente. Se è un'asta reale conclusa, se ne va il verbale delle rose e tutto
  * lo storico dei lotti — l'unica copia che esiste.
  *
- * Le aste in corso non arrivano qui: la pagina non mostra il pulsante, e il
- * motore rifiuta comunque `LIVE` e `PAUSED` anche a un amministratore.
+ * ⚠ **Da M12 anche le aste in corso arrivano qui**, ed è l'unico posto da cui si
+ * possono cancellare (§4). Per quelle l'avviso è un altro, e la differenza non è
+ * il tono: **nomina quante persone sono collegate in quel momento**. Un avviso
+ * che dice «tre persone» si legge; uno che dice «questa azione è irreversibile»
+ * si clicca — l'abbiamo letto tutti mille volte e non vuol dire più niente.
  */
+/**
+ * La frase che nomina i collegati (M12 §4), nelle tre forme che servono.
+ *
+ * ⚠ **Zero non è «0 persone collegate».** Un numero al posto di nessuno fa
+ * suonare un allarme che non c'è: una simulazione in pausa che nessuno sta
+ * guardando è esattamente il caso per cui questa strada è stata aperta, e leggere
+ * «0 persone verranno riportate alla dashboard» la farebbe sembrare una serata
+ * interrotta. Il singolare, per la stessa ragione al contrario: «1 persone» è il
+ * modo più rapido di far capire che il numero non è stato letto da nessuno.
+ */
+function connectedSentence(connected: number): string {
+  if (connected === 0) {
+    return "Nessuno è collegato in questo momento, ma l'asta non esisterà più.";
+  }
+  if (connected === 1) {
+    return "C'è 1 persona collegata in questo momento: verrà riportata alla dashboard e l'asta non esisterà più.";
+  }
+  return `Ci sono ${connected} persone collegate in questo momento: verranno riportate alla dashboard e l'asta non esisterà più.`;
+}
+
 export function AuctionDelete({
   auctionId,
   name,
   ownerLabel,
+  running,
+  connected,
 }: {
   auctionId: string;
   name: string;
   /** Di chi è l'asta, ripetuto nell'avviso: è ciò che qui non si sa a memoria. */
   ownerLabel: string;
+  /** `LIVE` o `PAUSED`: si interrompe una serata, non si butta una prova. */
+  running: boolean;
+  /** Quante connessioni SSE aperte su quest'asta, al render della pagina. */
+  connected: number;
 }) {
   const [state, formAction, pending] = useActionState(
     deleteAuctionAsAdminAction,
@@ -60,12 +89,21 @@ export function AuctionDelete({
       <input type="hidden" name="auctionId" value={auctionId} />
       <input type="hidden" name="name" value={name} />
 
-      <p className="text-destructive text-xs">
-        Cancelli l&apos;asta di {ownerLabel}. Se ne vanno partecipanti, listone,
-        lotti, buste, <strong>rose e storico</strong>: se è un&apos;asta vera e
-        conclusa, quello è il verbale della serata e non ne esiste un&apos;altra
-        copia. L&apos;utente resta.
-      </p>
+      {running ? (
+        <p className="text-destructive text-xs">
+          <strong>Questa asta è in corso.</strong> {connectedSentence(connected)}{" "}
+          Se ne vanno partecipanti, listone, lotti, buste,{" "}
+          <strong>rose e storico</strong> dell&apos;asta di {ownerLabel}.
+          L&apos;utente resta.
+        </p>
+      ) : (
+        <p className="text-destructive text-xs">
+          Cancelli l&apos;asta di {ownerLabel}. Se ne vanno partecipanti,
+          listone, lotti, buste, <strong>rose e storico</strong>: se è
+          un&apos;asta vera e conclusa, quello è il verbale della serata e non ne
+          esiste un&apos;altra copia. L&apos;utente resta.
+        </p>
+      )}
 
       <Input
         name="confirmName"
@@ -96,7 +134,11 @@ export function AuctionDelete({
           className="border-destructive/50 text-destructive hover:bg-destructive/10 h-8"
           disabled={pending || typed.trim() !== name.trim()}
         >
-          {pending ? "Cancello…" : "Cancella per sempre"}
+          {pending
+            ? "Cancello…"
+            : running
+              ? "Interrompi e cancella"
+              : "Cancella per sempre"}
         </Button>
         <Button
           type="button"

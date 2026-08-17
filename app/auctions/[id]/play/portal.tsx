@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { useDeletedRedirect } from "@/app/auctions/use-deleted-redirect";
 import { BidModal } from "@/components/auction/bid-modal";
+import { DeletedCurtain } from "@/components/auction/deleted-curtain";
 import { LotCard } from "@/components/auction/lot-card";
 import { LotClosedCard } from "@/components/auction/lot-closed-card";
 import { MembersPanel } from "@/components/auction/members-panel";
@@ -63,8 +65,10 @@ export function Portal({
    */
   viewerIsOwner: boolean;
 }) {
-  const { snapshot, connected, offset } = useAuctionStream(auctionId);
+  const { snapshot, connected, offset, deleted } = useAuctionStream(auctionId);
   useHeartbeat(auctionId);
+  // M12 §3c — l'asta cancellata mentre la si stava giocando: si va in dashboard.
+  useDeletedRedirect(deleted);
 
   // ⚠ §8bis — vive **solo** qui: non è persistito, non è sincronizzato, e al
   // lotto successivo diventa irrilevante da sé perché l'id cambia.
@@ -78,6 +82,12 @@ export function Portal({
     // Nessun messaggio di conferma: la conferma è il lotto successivo che si
     // apre da solo. Se il server rifiuta — reveal già scaduto mentre premevi —
     // lo snapshot è già andato avanti lo stesso, e non c'è niente da dire.
+  }
+
+  // Prima dello snapshot, perché l'ultimo snapshot ricevuto è di un'asta che non
+  // c'è più: mostrarlo vorrebbe dire un countdown che scorre sul nulla.
+  if (deleted !== null) {
+    return <DeletedCurtain auctionName={deleted.auctionName} />;
   }
 
   if (snapshot === null) {

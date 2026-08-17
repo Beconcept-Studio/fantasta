@@ -22,16 +22,19 @@ export async function register(): Promise<void> {
   // funzione compila comunque `pg` nel bundle edge, non risolve `fs` né
   // `pg-native` e ogni pagina risponde 500 (vedi DECISIONS 2026-08-07, F4).
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { startScheduler } = await import("@/lib/engine/scheduler");
+    const { cancelTimer, startScheduler } = await import(
+      "@/lib/engine/scheduler"
+    );
     const { advancePhase } = await import("@/lib/engine/actions");
-    const { setBroadcastHook } = await import("@/lib/engine/mutate");
+    const { setAuctionGoneHook, setBroadcastHook } = await import(
+      "@/lib/engine/mutate"
+    );
     const { startBotLoop } = await import("@/lib/engine/bots");
     const { startInsightRefreshLoop } = await import(
       "@/lib/engine/insight-refresh"
     );
-    const { scheduleSnapshot, schedulePresenceSnapshot } = await import(
-      "@/lib/realtime/broadcast"
-    );
+    const { closeAuctionStreams, scheduleSnapshot, schedulePresenceSnapshot } =
+      await import("@/lib/realtime/broadcast");
 
     const g = globalThis as typeof globalThis & {
       __scheduler?: unknown;
@@ -40,6 +43,23 @@ export async function register(): Promise<void> {
     };
     if (g.__scheduler) return;
     setBroadcastHook(scheduleSnapshot);
+
+    // Il congedo di un'asta cancellata (M12 §3b). Aggancia le due sole cose che
+    // di quell'asta vivono **in memoria di questo processo**: le connessioni
+    // aperte, che vanno congedate perché nessuno snapshot arriverà più, e il
+    // timer di fase armato, che nessuna mutazione successiva spegnerà.
+    //
+    // ⚠ **Solo da qui il timer si cancella davvero.** `active` è una variabile
+    // di modulo di `scheduler.ts`, e di questo file e dei route handler
+    // esistono due bundle: la stessa `cancelTimer` chiamata da una Server
+    // Action girerebbe nella copia dove `active` è `null`. La closure nasce
+    // qui, dove lo scheduler è stato avviato, quindi il timer che vede è quello
+    // vero (PLAN §16.8, la ragione di sempre).
+    setAuctionGoneHook((auctionId, auctionName) => {
+      cancelTimer(auctionId);
+      return closeAuctionStreams(auctionId, auctionName);
+    });
+
     g.__scheduler = startScheduler(advancePhase);
 
     // Il tick dei bot (M4). **Un intervallo suo, non lo sweep**: lo sweep chiude

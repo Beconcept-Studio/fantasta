@@ -1291,6 +1291,70 @@ asta in pausa — sono **test automatici** che costruiscono lo snapshot di quell
 alla funzione cosa mostrerebbe. Il collaudo a mano sui browser veri resta, ed è il cancello di fase;
 ma non è più l'unico posto in cui questa logica viene esercitata.
 
+### Il sesto caso: l'asta non esiste più
+
+I cinque rientri di §8bis hanno una cosa in comune che non è scritta da nessuna parte: presuppongono
+tutti che l'asta ci sia. Da v1.13.0 esiste un sesto caso, e non è un rientro — è il contrario. Un
+amministratore può cancellare un'asta **mentre la si sta guardando**, e la domanda che nasce è quella
+della settima regola letta al rovescio: se ogni schermata è funzione dello snapshot corrente, cosa
+mostra una schermata il cui snapshot non arriverà mai più?
+
+Prima di v1.13.0 la risposta era la peggiore possibile, e non per una dimenticanza ma per il modo in
+cui è fatto il canale. Chi apre uno stream viene autorizzato **una volta**, all'apertura; dopo di che
+la connessione vive per conto suo e riceve gli snapshot che le mutazioni producono. Cancellata
+l'asta, di mutazioni non ce n'è più nessuna: la connessione resta iscritta a un registro che nessuno
+interroga più, il commento di keep-alive continua ad arrivare ogni quindici secondi, e il portale
+resta fermo sull'ultimo snapshot ricevuto con il countdown congelato. **Non sembra rotto: sembra
+lento.** È il sintomo che in una stanza con dieci persone produce dieci ricariche di pagina in
+trenta secondi, e chi ricarica trova una schermata che non si apre più — perché la pagina, quella,
+l'asta la cerca a database e non la trova. Il keep-alive, che esiste per tenere in vita la
+connessione attraverso i proxy delle reti mobili, è anche ciò che rendeva il guasto invisibile: la
+connessione era perfettamente sana, semplicemente non aveva più niente da dire.
+
+La cura è un **secondo tipo di evento** sul canale, il primo in tutta la storia dell'applicazione che
+non porta uno snapshot: il congedo. Dice una cosa sola — quest'asta non esiste più, e si chiama così
+— dopo la quale il server chiude lo stream. Non poteva essere uno snapshot con un campo dentro,
+perché uno snapshot è la fotografia di uno stato e di stato non ce n'è più; e non poteva essere il
+silenzio, perché il silenzio è esattamente il bug.
+
+Chi lo riceve fa due cose, **in quest'ordine**, e l'ordine è l'unica cosa di questa storia che si può
+sbagliare scrivendo codice che sembra funzionare. Prima chiude l'`EventSource`, poi va in dashboard.
+Invertirle non produce un errore visibile: produce un client che riconnette da sé — perché uno stream
+che finisce è, per la specifica di `EventSource`, un buon motivo per riprovare — e che va a battere su
+una rotta che ora risponde 404. Il modo di accorgersene non è guardare lo schermo, che in entrambi i
+casi finisce in dashboard: è guardare il pannello di rete e contare le richieste.
+
+In dashboard chi arriva legge che quell'asta, per nome, è stata cancellata da un amministratore. Il
+nome viaggia nell'URL, che è l'unico canale che sopravvive alla navigazione: la schermata dell'asta
+muore con l'asta, e con lei qualunque stato di React. Per il tempo che la navigazione impiega, la
+pagina dell'asta mostra un velo con la stessa frase, perché l'alternativa è far vedere per un istante
+il countdown di un'asta che non c'è — la stessa immagine falsa di prima, solo più breve.
+
+La **TV** è l'unico spettatore che non ha una dashboard dove andare: non ha una sessione, e mandarla
+al login vorrebbe dire proiettare una schermata di consenso in mezzo alla stanza. Si ferma dov'è, in
+bianco su nero come tutto il resto del tabellone, con il nome dell'asta ancora in cima e due righe che
+dicono cosa è successo. Lo stream l'ha già chiuso, quindi da lì non riparte niente.
+
+Sul lato server, il congedo tocca una disciplina che vale la pena capire, perché è la stessa che
+regge il broadcast: **il motore non sa che esiste un canale verso i client.** `deleteAuction` non
+importa nulla di `lib/realtime/`; chiama un hook che di default non fa niente e che il processo
+aggancia all'avvio, in `instrumentation.ts`, esattamente come fa da sempre con l'invio degli
+snapshot. Nei test, nel seed e nei bot quell'hook resta il no-op, e nessuno di quei processi ha
+connessioni aperte da congedare. Il congedo parte **dopo il commit**, fuori dalla transazione: se il
+`DELETE` fosse annullato, avremmo già mandato via dodici persone da un'asta ancora viva.
+
+L'hook fa due cose e non una, e la seconda spiega perché passare da lì non è solo una questione di
+pulizia. Oltre a congedare le connessioni, **cancella il timer di fase armato** su quell'asta. Un
+timer rimasto acceso è innocuo — quando scatta, la mutazione non trova la riga e si spegne con un
+rifiuto tipizzato, senza eccezioni e senza una riga di log — ma resterebbe in memoria per sempre,
+perché l'unica cosa che lo spegneva era la mutazione successiva di quell'asta, e mutazioni successive
+non ce ne saranno. Cancellarlo dall'interno del motore, però, non funzionerebbe: lo scheduler attivo
+è una variabile di modulo, e di quel modulo esistono due copie in due bundle diversi, quindi una
+chiamata partita da una Server Action girerebbe nella copia in cui non c'è nessun timer. La closure
+agganciata in `instrumentation.ts` nasce invece nel bundle dove lo scheduler è stato avviato: da lì il
+timer che vede è quello vero. È la stessa proprietà che anni di questo progetto hanno imparato a
+riconoscere, applicata a un caso nuovo.
+
 ### Il countdown, che non decide
 
 Ogni countdown della pagina è un orologio a muro: legge la scadenza dallo snapshot, la confronta con
@@ -1584,15 +1648,33 @@ Un elenco così è il modo in cui, fra sei mesi, si clicca sulla cosa sbagliata.
 Le difese sono tre. La cancellazione è **rifiutata su un'asta `LIVE` o `PAUSED`** — la pausa
 congela la fase, non azzera l'asta, e non si butta via qualcosa mentre dodici persone ci stanno
 dentro. Può chiederla l'owner, e da M6 anche un amministratore dell'applicazione, che è l'unica
-azione del pannello sopra un'asta di qualcun altro; il rifiuto sulle aste in corso **non si allenta
-per lui**. E la conferma non è un `confirm()`, che si clicca per riflesso: **si scrive il nome
-dell'asta**, così chi sta cancellando la cosa sbagliata se ne accorge mentre scrive il nome
-sbagliato.
+azione del pannello sopra un'asta di qualcun altro. E la conferma non è un `confirm()`, che si clicca
+per riflesso: **si scrive il nome dell'asta**, così chi sta cancellando la cosa sbagliata se ne
+accorge mentre scrive il nome sbagliato.
+
+Da v1.13.0 quel rifiuto ha **una strada in più, e non è dell'owner**. Fino a M11 un'asta in corso non
+si poteva chiudere in nessun modo: non esiste un'azione «termina asta», a `COMPLETED` si arriva solo
+giocando fino in fondo, e la cancellazione era rifiutata a tutti. Il giorno in cui una simulazione
+messa in pausa la sera prima ha bloccato un rilascio, quel vicolo cieco è diventato visibile — non
+c'era nessun gesto, in nessuna schermata, capace di togliere di mezzo quell'asta. Adesso c'è, ed è
+**solo dell'amministratore**: l'owner continua a sentirsi rispondere che l'asta è in corso, e il
+messaggio gli dice anche chi può interromperla. Non è avarizia — è che la sua asta la stanno guardando
+altre undici persone, e chi la interrompe deve essere qualcuno che non sta giocando. Il permesso si
+rilegge dal database dentro il lock: la sessione è un JWT e non sa niente di `is_admin`, quindi
+chiedere di forzare senza esserlo non cancella niente.
+
+Su un'asta in corso l'avviso è diverso, e la differenza non è il tono: **nomina quante persone sono
+collegate in quel momento**, contandole nel registro delle connessioni. «Ci sono tre persone collegate:
+verranno riportate alla dashboard» si legge; «questa azione è irreversibile» si clicca, perché
+l'abbiamo letto tutti mille volte. E con nessuno collegato la frase cambia ancora, perché scrivere
+«0 persone verranno riportate» farebbe sembrare una serata interrotta quella che è una prova buttata.
 
 Resta un fatto da guardare in faccia: su un'asta vera conclusa se ne vanno il verbale delle rose e
 lo storico, perché ogni tabella ha `cascade` su `auction_id` — `events` compresa. L'unica cosa che
-sopravvive è una riga su stdout, quella che si rilegge con `pm2 logs`. È scritto qui perché
-quella riga è tutto ciò che resterà da leggere.
+sopravvive è una riga su stdout, quella che si rilegge con `pm2 logs`, e da v1.13.0 quella riga dice
+anche se la cancellazione è stata forzata e **quante connessioni ha congedato**: è la differenza fra
+«ho buttato via una prova» e «ho interrotto una serata». È scritto qui perché quella riga è tutto ciò
+che resterà da leggere.
 
 ### Le tre azioni
 
@@ -1804,8 +1886,14 @@ niente riassegnazioni, niente rettifiche di budget. La plancia di comando è la 
 dell'owner. Un secondo posto da cui si comanda la stessa asta sono **due verità sullo stesso stato**,
 che è il modo in cui questa applicazione si romperebbe peggio — e sarebbe anche un secondo posto in
 cui ricordarsi le regole sulle fasi, cioè un secondo posto in cui sbagliarle. La cancellazione è
-l'unica eccezione, `deleteAuction` è la funzione che c'era già, e il rifiuto su un'asta `LIVE` o
-`PAUSED` vale per l'amministratore come per tutti.
+l'unica eccezione, e `deleteAuction` è la funzione che c'era già.
+
+Da v1.13.0 quell'eccezione è anche l'unico punto dell'applicazione in cui un'asta **in corso** può
+essere fermata, e resta dentro lo stesso perimetro invece di allargarlo: interrompere un'asta non è
+comandarla. Un amministratore non può metterla in pausa, non può farla avanzare e non può correggere
+una rosa — può soltanto farla finire di esistere, dicendo prima quante persone sta per mandare a casa.
+Il confine è lo stesso di prima, letto con attenzione: non «non toccare le aste degli altri», ma «non
+esistere come secondo posto da cui si gioca».
 
 **Nessuno stato di gioco nelle liste.** La lista aste mostra nome, owner con la sua email, stato,
 posti, membri, il marchio delle simulazioni e le date. Non i lotti, non le offerte, non le rose. Non

@@ -1,6 +1,8 @@
 "use client";
 
+import { useDeletedRedirect } from "@/app/auctions/use-deleted-redirect";
 import { Countdown } from "@/components/auction/countdown";
+import { DeletedCurtain } from "@/components/auction/deleted-curtain";
 import { PresenceDot, PRESENCE_LABELS } from "@/components/auction/presence-dot";
 import { RosterGrid } from "@/components/auction/roster-grid";
 import { Badge } from "@/components/ui/badge";
@@ -38,11 +40,18 @@ export function ManageConsole({
   /** Il listone dell'asta, per il pannello delle correzioni (F7-05). */
   pool: PoolPlayer[];
 }) {
-  const { snapshot, connected, offset } = useAuctionStream(auctionId);
+  const { snapshot, connected, offset, deleted } = useAuctionStream(auctionId);
   // ⚠ Se l'owner è anche un membro (⚠ P11 — di solito lo è) e conduce da qui,
   // senza questo la sua presence sarebbe OFFLINE e il cancello d'avvio
   // rifiuterebbe l'asta per colpa di chi la sta avviando.
   useHeartbeat(auctionId, ownerIsMember);
+  // M12 §3c — vale anche per la regia: un amministratore può cancellare l'asta
+  // di qualcun altro, e «qualcun altro» è chi sta guardando questa pagina.
+  useDeletedRedirect(deleted);
+
+  if (deleted !== null) {
+    return <DeletedCurtain auctionName={deleted.auctionName} />;
+  }
 
   if (snapshot === null) {
     return (

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { useDeletedRedirect } from "@/app/auctions/use-deleted-redirect";
 import { PresenceDot, PRESENCE_LABELS } from "@/components/auction/presence-dot";
 import {
   Card,
@@ -68,8 +69,12 @@ export function LobbyLive({
   viewerMemberId: string | null;
 }) {
   const router = useRouter();
-  const { snapshot, connected } = useAuctionStream(auctionId);
+  const { snapshot, connected, deleted } = useAuctionStream(auctionId);
   useHeartbeat(auctionId, viewerMemberId !== null);
+  // M12 §3c — dalla lobby si aspetta un'asta che potrebbe non arrivare mai: se
+  // viene cancellata mentre si aspetta, si torna in dashboard invece di restare
+  // a fissare una lista di partecipanti di un'asta che non esiste.
+  useDeletedRedirect(deleted);
 
   const running = snapshot !== null && snapshot.auction.status === "LIVE";
 

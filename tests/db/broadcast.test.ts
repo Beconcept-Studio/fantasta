@@ -89,14 +89,17 @@ describe.runIf(dbUp)("F4-03 — broadcast per viewer", () => {
     subscribe(game.auctionId, {
       viewerMemberId: game.memberIds[1],
       send: (s) => received.uno.push(s),
+      dismiss: () => {},
     });
     subscribe(game.auctionId, {
       viewerMemberId: game.memberIds[2],
       send: (s) => received.due.push(s),
+      dismiss: () => {},
     });
     subscribe(game.auctionId, {
       viewerMemberId: null,
       send: (s) => received.tv.push(s),
+      dismiss: () => {},
     });
 
     await broadcastSnapshot(game.auctionId);
@@ -121,6 +124,7 @@ describe.runIf(dbUp)("F4-03 — broadcast per viewer", () => {
     const unsubscribe = subscribe(game.auctionId, {
       viewerMemberId: null,
       send: () => {},
+      dismiss: () => {},
     });
     expect(connectionCount(game.auctionId)).toBe(1);
     unsubscribe();
@@ -136,10 +140,12 @@ describe.runIf(dbUp)("F4-03 — broadcast per viewer", () => {
       send: () => {
         throw new Error("controller chiuso");
       },
+      dismiss: () => {},
     });
     subscribe(game.auctionId, {
       viewerMemberId: game.memberIds[1],
       send: (s) => arrivati.push(s),
+      dismiss: () => {},
     });
     vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -154,6 +160,7 @@ describe.runIf(dbUp)("F4-03 — broadcast per viewer", () => {
     subscribe(game.auctionId, {
       viewerMemberId: game.memberIds[3],
       send: (s) => arrivati.push(s),
+      dismiss: () => {},
     });
     setBroadcastHook(scheduleSnapshot);
 

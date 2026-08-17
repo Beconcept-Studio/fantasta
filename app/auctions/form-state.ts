@@ -25,3 +25,14 @@ export const EMPTY_FORM_STATE: FormState = { error: null };
  * che l'ha prodotta e l'URL è l'unico canale che sopravvive.
  */
 export const LISTONE_NOTICE_PARAM = "listone";
+
+/**
+ * Il parametro con cui chi stava guardando un'asta cancellata arriva in
+ * dashboard sapendo perché (M12 §3c). Porta il **nome** dell'asta: chi ne segue
+ * due deve sapere quale delle due non c'è più.
+ *
+ * ⚠ Sta qui, accanto al suo gemello, per la stessa ragione: la schermata
+ * dell'asta muore con l'asta, quindi non c'è nessuno stato di React che possa
+ * sopravvivere alla navigazione — **l'URL è l'unico canale che resta**.
+ */
+export const DELETED_NOTICE_PARAM = "cancellata";
