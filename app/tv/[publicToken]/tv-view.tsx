@@ -469,6 +469,8 @@ function LotStage({
 
       {reveal !== null ? (
         <RevealStage snapshot={snapshot} offset={offset} />
+      ) : auction.phase === "LOT_SEALED" ? (
+        <SealedStage snapshot={snapshot} offset={offset} />
       ) : lot.tie !== null ? (
         <div className="space-y-2 text-center">
           <p className="text-sm text-white/70">
@@ -515,6 +517,54 @@ function SealedBids() {
     <p className="text-center text-sm text-white/60">
       Le buste sono segrete fino allo scadere
     </p>
+  );
+}
+
+/**
+ * Il cancello dei risultati, sullo schermo che la stanza sta guardando (M14 §4).
+ *
+ * ⚠ **Questo ramo va scritto, e la ragione è che senza di lui la TV non sbaglia in
+ * modo evidente: sbaglia in modo credibile.** Durante `LOT_SEALED` sia `reveal` sia
+ * `tie` sono `null`, quindi la colonna cadeva sul ramo del lotto vivo — «Le buste
+ * sono segrete fino allo scadere» e un countdown puntato su `lot.endsAt`, che è un
+ * istante **già passato**. Chi guarda avrebbe letto «in chiusura…» fermo per dieci
+ * secondi, cioè un tabellone che sembra piantato nel momento esatto in cui tutta la
+ * stanza lo sta fissando.
+ *
+ * Il tono non è quello di un'attesa tecnica, ed è deliberato: in un'asta a busta
+ * chiusa **questo è il momento**, e allungarlo un po' è precisamente ciò che l'owner
+ * ha chiesto di poter fare. Il countdown è il numero grande della colonna, come nel
+ * round di offerte: è la stessa domanda — «quanto manca?» — con una risposta diversa.
+ */
+function SealedStage({
+  snapshot,
+  offset,
+}: {
+  snapshot: Snapshot;
+  offset: number;
+}) {
+  const { auction } = snapshot;
+  return (
+    <div className="space-y-3 text-center">
+      <p className="text-xs tracking-[0.2em] text-white/50 uppercase">
+        Buste consegnate
+      </p>
+      <p className="text-2xl leading-tight font-semibold">
+        {auction.status === "PAUSED"
+          ? "Le buste restano chiuse"
+          : "Si aprono tutte insieme"}
+      </p>
+      <p className="text-sm text-white/60">
+        {auction.status === "PAUSED"
+          ? "L'asta è in pausa: nessuno sa ancora com'è finita."
+          : "Il round è chiuso. Nessuno sa ancora com'è finita."}
+      </p>
+      <BigCountdown
+        deadline={auction.phaseDeadline}
+        offset={offset}
+        pausedAt={auction.pausedAt}
+      />
+    </div>
   );
 }
 

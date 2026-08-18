@@ -93,6 +93,18 @@ export async function makeGameAuction({
       pickSeconds: 3,
       tiePrepSeconds: 2,
       revealSeconds: 1,
+      // ⚠ **Il cancello dei risultati spento, e serve dirlo qui** (M14). `createAuction`
+      // valida contro `DEFAULT_CONFIG`, che lo propone a 10: senza questa riga ogni
+      // asta di test nascerebbe con il cancello acceso e i test scritti prima di M14
+      // troverebbero `LOT_SEALED` dove si aspettano `LOT_REVEAL` — 28 rossi, tutti
+      // per una fase in più e nessuno per un bug.
+      //
+      // Ed è anche la scelta giusta e non solo la comoda: così **tutti i test già
+      // scritti restano la prova che con `X = 0` l'asta si comporta come a v1.14.0**
+      // (verifica 10 della spec), dimostrata dalle asserzioni che esistevano invece
+      // che da un test nuovo che lo racconta. Chi vuole il cancello lo chiede:
+      // `makeGameAuction({ config: { resultGateSeconds: 10 } })`.
+      resultGateSeconds: 0,
       slots: { P: 1, D: 1, C: 1, A: 1 },
       roleOrder: ["P", "D", "C", "A"],
       ...config,

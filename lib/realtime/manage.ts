@@ -70,6 +70,10 @@ export type ManagerControls = {
   canResume: boolean;
   /** «Prosegui asta»: chiudere il reveal senza aspettarne la scadenza. */
   canSkipReveal: boolean;
+  /** «Mostra risultati» (M14): aprire le buste senza aspettare il cancello. */
+  canShowResults: boolean;
+  /** «Annulla lotto» (M14): solo ad asta in pausa, e solo dentro il cancello. */
+  canCancelLot: boolean;
 };
 
 /**
@@ -85,6 +89,18 @@ export type ManagerControls = {
  * pausa, che congela la fase — e fase `LOT_REVEAL`. Come sempre, disabilitare
  * non è autorizzare: chi non possiede l'asta viene rifiutato dal server anche
  * se il pulsante gli comparisse davanti (regola 6).
+ *
+ * Le due leve del cancello dei risultati (M14) ripetono le guardie del motore, e la
+ * differenza fra loro è la cosa da leggere: **«Mostra risultati» vuole `LIVE`,
+ * «Annulla lotto» vuole `PAUSED`**, e sono la stessa fase. Non è una simmetria
+ * imperfetta — è il disegno: il cancello che scorre si può anticipare, il cancello
+ * fermo si può disfare. Annullare un lotto mentre il suo countdown corre sarebbe una
+ * corsa con il proprio timer.
+ *
+ * ⚠ **«Metti in pausa» non è un pulsante nuovo, e `canPause` non cambia**: guarda
+ * `status`, non la fase, quindi durante il cancello è già vero. M14 non aggiunge una
+ * pausa — si assicura che in quel momento sia a portata di pollice e che il testo
+ * accanto dica cosa succede *adesso*.
  */
 export function managerControls(snapshot: Snapshot): ManagerControls {
   const { status, phase } = snapshot.auction;
@@ -94,6 +110,8 @@ export function managerControls(snapshot: Snapshot): ManagerControls {
     canPause: status === "LIVE",
     canResume: status === "PAUSED",
     canSkipReveal: status === "LIVE" && phase === "LOT_REVEAL",
+    canShowResults: status === "LIVE" && phase === "LOT_SEALED",
+    canCancelLot: status === "PAUSED" && phase === "LOT_SEALED",
   };
 
   if (status === "LIVE" || status === "PAUSED") {

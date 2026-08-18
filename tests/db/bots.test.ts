@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { auctions, bids, lotRounds, lots, members, users } from "@/lib/db/schema";
 import { startAuction } from "@/lib/engine/actions";
 import {
+  BOT_NAMES,
   ensureBotUsers,
   realAuctionRunning,
   runBotTick,
@@ -128,7 +129,23 @@ describe.runIf(dbUp)("ensureBotUsers", () => {
   it("crea dodici bot e non li duplica", async () => {
     await ensureBotUsers();
     const again = await ensureBotUsers();
-    expect(again).toHaveLength(12);
+
+    // ⚠ **I dodici nomi ci sono, una volta ciascuno** — e non «le righe sono dodici».
+    // `ensureBotUsers` restituisce *tutti* gli utenti con `is_bot`, e altri file di
+    // test ne creano di propri con nomi loro (`tests/db/admin.test.ts` fa «Bot di
+    // prova» e «Bot 3»): un `toHaveLength(12)` è quindi un'asserzione su ciò che
+    // stanno facendo gli altri, non su questa funzione. Ed è già capitato: un giro
+    // interrotto ha lasciato quei due bot a database, e da lì in poi il test è
+    // diventato rosso a ogni esecuzione, per un residuo e non per un bug (2026-08-18,
+    // lavorando a M14).
+    //
+    // La proprietà vera è la **non duplicazione**: due chiamate di fila non creano
+    // dodici righe nuove.
+    const nomi = again.map((bot) => bot.displayName);
+    expect(new Set(nomi).size).toBe(nomi.length);
+    for (const name of BOT_NAMES) {
+      expect(nomi.filter((n) => n === name), name).toHaveLength(1);
+    }
     expect(again.every((bot) => bot.isBot)).toBe(true);
     // Nessuno di loro è impersonabile dal provider `dev`: quel filtro è su
     // `google_sub`, e i bot ce l'hanno nullo come gli utenti del seed — è

@@ -54,7 +54,8 @@ export function transition(
     case "SHOW_RESULTS":
       return showResults(state, now);
     case "CANCEL_LOT":
-      return cancelLot(state, now);
+      // ⚠ Senza `now`, ed è l'unica: vedi la firma di `cancelLot`.
+      return cancelLot(state);
     case "PAUSE":
       return pause(state, now);
     case "RESUME":
@@ -688,8 +689,16 @@ function showResults(state: AuctionState, now: Millis): Result<AuctionState> {
  * Con le tre condizioni in piedi il caso «il chiamante non può più chiamare» **non
  * esiste**, quindi lo si asserisce invece di gestirlo: i rifiuti previsti sono
  * `Result`, i bug sono eccezioni. Il precedente letterale è il `throw` di `nextTurn`.
+ *
+ * ⚠ **È l'unica transizione della macchina che non prende `now`**, e vale la pena
+ * saperlo perché dice una cosa vera sul disegno: l'asta è **ferma**, quindi non c'è
+ * nessun «adesso» che conti. Ogni istante che questa funzione scrive è ancorato a
+ * `pausedAt` (vedi il commento sulla scadenza qui sotto), il lotto annullato non
+ * prende nessun timestamp — `resolvedAt` resta `null` perché non è mai stato risolto
+ * — e *quando* è stato annullato lo dice la riga di `events`, che nasce fuori dal
+ * motore. Prendere un `now` per non usarlo sarebbe stato un parametro che finge.
  */
-function cancelLot(state: AuctionState, now: Millis): Result<AuctionState> {
+function cancelLot(state: AuctionState): Result<AuctionState> {
   if (state.status !== "PAUSED" || state.phase !== "LOT_SEALED") {
     return fail(
       "WRONG_PHASE",
