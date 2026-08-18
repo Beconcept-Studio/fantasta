@@ -12,32 +12,35 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-**[M14 — Il cancello dei risultati](14-cancello-risultati.md)**, aperta il **2026-08-18** su richiesta
-dell'owner. Fra la chiusura di un round e la rivelazione delle buste si infila `LOT_SEALED`, che dura
-`result_gate_seconds` e appartiene a chi conduce: si può mostrare, si può fermare, e — solo lì, ad asta
-in pausa — si può buttare via il lotto e rifarlo. È la prima fase nuova della macchina a stati dopo
-v1.0.0.
+Nessuna aperta. **M14 è in produzione da `v1.15.0`** (2026-08-18): aperta, lavorata, provata dall'owner e
+rilasciata **nella stessa giornata** in cui era stata pianificata — il secondo caso di fila, dopo M13.
+Gate verde con **860 test in 51 file** (da 815), typecheck, lint e build. Fra la chiusura di un round e
+la rivelazione delle buste c'è ora `LOT_SEALED`, la prima fase nuova della macchina a stati dopo v1.0.0.
 
-Codice, test e documentazione fatti; gate verde con **860 test in 51 file** (da 815), typecheck e lint.
-Restano **la prova a mano dell'owner** (M14-15: due dispositivi più la TV, con un cancello da 10 secondi)
-e il rilascio, che si fa **solo su richiesta esplicita**.
+⚠ **Il passo a mano sul server è stato dato**: `auctions.result_gate_seconds`, additiva con `DEFAULT 0`.
+**Nessun backfill**, e nessuno serviva — in produzione c'erano **0 aste** (32 utenti, 12 dei quali bot),
+quindi non esisteva una riga su cui quel default facesse differenza. La colonna è stata aggiunta
+**prima** del push su `main` e non dopo il deploy come dice la procedura: fra il `pm2 reload` del deploy
+e il `db:push` l'app girerebbe con il codice nuovo su uno schema vecchio, e ogni lettura di `auctions`
+fallirebbe. Essendo additiva con un default, il codice vecchio la tollera senza vederla, quindi
+anticiparla chiude quella finestra a costo zero. `pnpm db:push` è stato dato comunque dopo, e ha
+risposto «No changes detected»: è la verifica che schema e `schema.ts` combaciano.
 
-⚠ **Al rilascio serve un passo a mano sul server**: `pnpm db:push` per `auctions.result_gate_seconds` e
-`pm2 reload`. **Nessun backfill**, e non per fortuna: lo `0` della colonna *è* il comportamento di
-v1.14.0, quindi le aste già in tabella restano identiche a se stesse finché nessuno mette un numero in
-quel campo. Il changelog dovrà dirlo con parole semplici.
-
-⚠ **La cosa da non riscoprire da capo**: il cancello sta **prima** della risoluzione del lotto, e il modo
-ovvio — risolvere e nascondere `reveal` — è stato provato e non nasconde niente. Con la fase forzata a
-`LOT_SEALED` su un lotto già risolto, lo snapshot **della TV** porta `reveal: null` e `tie: null` e
-intanto il vincitore scende da 100 a 13 crediti, con `roster` che pubblica `price: 87` — cioè l'importo
-esatto della busta vincente, in un campo che non ha niente a che fare con il reveal. Il racconto sta in
-`docs/DECISIONS.md` alla data, e il capitolo per un lettore futuro in `docs/ARCHITECTURE.md`.
+⚠ **La cosa da non riscoprire da capo**: il cancello sta **prima** della risoluzione del lotto. Il modo
+ovvio — risolvere e nascondere `reveal` — è stato provato prima di scrivere il rimedio e non nasconde
+niente: nello snapshot della TV, con `reveal: null` e `tie: null`, il vincitore scende da 100 a 13
+crediti e `roster` pubblica `price: 87`, cioè l'**importo esatto** della busta vincente. Il racconto per
+un lettore futuro è in `docs/ARCHITECTURE.md`, le decisioni in `docs/DECISIONS.md` alla data.
 
 **Tre flake preesistenti sono stati corretti dentro questa macro** — `delete-auction`, `bots` e
 `scheduler` — dopo averli riprodotti e verificato che non fossero di M14: tutti e tre erano asserzioni
 su stato globale condiviso fra file di test che girano in parallelo. Dieci giri di suite di fila verdi
-dopo, contro uno rosso su otto prima. Il dettaglio è in `DECISIONS.md`.
+dopo, contro uno rosso su otto prima.
+
+⚠ **E una cosa sul collaudo locale, che non era scritta da nessuna parte**: l'asta prodotta da
+`pnpm db:seed` ha i posti occupati dai dodici utenti di prova, **non** dai bot, e `bot_strategy` è
+`NULL` su tutti — il tick interno muove solo i membri con una strategia, quindi lì non muove niente e
+l'asta sembra piantata. Serve `pnpm bots`. Sta ora in `docs/HOWTO-PROVA-LOCALE.md`.
 
 ---
 
@@ -243,6 +246,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M14](14-cancello-risultati.md) | Il cancello dei risultati: fra la chiusura di un round e la rivelazione delle buste un istante che appartiene a chi conduce, e un lotto che si può annullare | v1.15.0 — 2026-08-18 |
 | [M13](13-utenti-admin.md) | La pagina utenti: sei colonne in sola lettura con la ricerca, e un pannello laterale che modifica | v1.14.0 — 2026-08-18 |
 | [M12](12-cancellazione-aste.md) | Cancellare un'asta per forza, anche in corso, e il congedo di chi la stava guardando | v1.13.0 — 2026-08-18 |
 | [M11](11-refresh-giornaliero.md) | Il refresh giornaliero degli insight: le due fonti pubbliche si chiedono da sé, e il pannello dice quando non ci riesce | v1.12.0 — 2026-08-13 |

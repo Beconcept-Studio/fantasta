@@ -1,10 +1,9 @@
 # M14 — Il cancello dei risultati: le buste non si aprono da sole
 
-> **Stato:** **aperta** il 2026-08-18 su richiesta dell'owner, su `feature/14-cancello-risultati`.
-> Codice, test e documentazione **fatti**: gate verde con **860 test in 51 file** (baseline 815),
-> `pnpm typecheck`, `pnpm lint` e `pnpm build` verdi. **Merged `--no-ff` su `dev`.** Restano
-> **M14-15** (la prova a mano dell'owner) e il rilascio di **M14-17** — changelog, versione, `main`,
-> tag `v1.15.0` e `pnpm db:push` sul server — **solo su richiesta esplicita**.
+> **Stato:** **chiusa e in produzione da `v1.15.0`** (2026-08-18). Aperta, lavorata, provata
+> dall'owner («funziona tutto») e rilasciata nella stessa giornata. Gate verde con **860 test in 51
+> file** (baseline 815), typecheck, lint e build. Il passo a mano sul server —
+> `auctions.result_gate_seconds` — è stato dato, senza backfill (in produzione c'erano 0 aste).
 > **Indipendente da M13**, che sta prima solo per profilo di rischio: quella è tutta UI nel pannello,
 > questa apre la macchina a stati dell'asta.
 >
@@ -584,11 +583,19 @@ il modo di dimenticare metà dell'elenco. Verificato leggendo i chiamanti:
       ⚠ `pnpm build` **dato a dev server spento, e verde al primo tentativo** — l'inciampo noto
       («Failed to collect page data for /api/auctions/[id]/stream» alla prima build dopo una sessione
       di `pnpm dev`) non si è presentato.
-- [ ] **M14-15** — Prova a mano, che i test non sostituiscono: una simulazione con cancello a 10
+- [x] **M14-15** — Prova a mano, che i test non sostituiscono: una simulazione con cancello a 10
       secondi, **due dispositivi collegati** più la TV. Si guarda che per dieci secondi **nessuno dei
       tre** mostri qualcosa dei risultati (crediti compresi), poi «Mostra risultati»; poi un secondo
       lotto in cui si mette in pausa e si annulla, e si verifica che il turno torni a chi aveva
       chiamato e che il giocatore sia richiamabile
+      → **Fatta dall'owner il 2026-08-18: «funziona tutto».** Cancello alzato a 10 secondi dal campo
+      nuovo del setup, sei posti ai bot (`pnpm bots --count=6`) e due umani più la TV.
+      ⚠ **Una cosa da sapere per la prossima volta, e non era scritta da nessuna parte**: l'asta che
+      `pnpm db:seed` produce ha i posti occupati dai **dodici utenti di prova**, non dai bot, e
+      `bot_strategy` è `NULL` su tutti. Il tick dei bot dentro l'app muove solo i membri con una
+      strategia, quindi su quell'asta non muoverebbe niente e sembrerebbe piantata: serve `pnpm bots`,
+      che entra col provider `dev` e manda anche gli heartbeat. Sta ora in
+      `docs/HOWTO-PROVA-LOCALE.md`.
 - [x] **M14-16** — `docs/ARCHITECTURE.md`: il capitolo della macchina a stati — è la prima fase nuova
       dopo v1.0.0, e il racconto di §3 è la parte che serve a chi leggerà fra sei mesi.
       `docs/DECISIONS.md`: il cancello prima della risoluzione **con la trappola dei crediti**, il
@@ -604,12 +611,25 @@ il modo di dimenticare metà dell'elenco. Verificato leggendo i chiamanti:
       scelte della spec **più** le tre che sono nate lavorando (l'ancoraggio a `pausedAt`, il seed che
       `tsc` non segnala, gli helper dei test col cancello spento). `CLAUDE.md`: le due righe corrette.
       `features/README.md`: M14 in «In corso» e la sezione «Da pianificare» che non la elenca più.
-- [ ] **M14-17** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
+- [x] **M14-17** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       esplicita** — `CHANGELOG.md`, `package.json`, merge su `main`, tag `v1.15.0`, push. ⚠ **E poi
       `pnpm db:push` sul server**, che senza è un'asta che non parte: la colonna non esiste e ogni
       lettura di `auctions` fallisce. Nessun backfill (§ intestazione), e il changelog deve dire con
       parole semplici che le aste già create **non cambiano** finché non si mette un numero in quel
       campo
+      → **Rilasciata come `v1.15.0` il 2026-08-18.** Changelog datato, `package.json` a 1.15.0, merge
+      `--no-ff` su `main`, tag `v1.15.0`, push. Branch `feature/14-cancello-risultati` cancellato.
+      ⚠ **La colonna è stata aggiunta in produzione PRIMA del push su `main`**, e non è la lettera
+      della procedura: `pnpm db:push` si dà *dopo* il deploy, ma fra il `pm2 reload` del deploy e quel
+      comando l'applicazione gira con il codice nuovo su uno schema vecchio — e ogni lettura di
+      `auctions` fallisce, cioè l'app è **rotta** per quella finestra. Essendo la modifica additiva con
+      `DEFAULT 0`, il codice **vecchio** la tollera senza accorgersene (non seleziona quella colonna),
+      quindi anticiparla costa zero e chiude la finestra. `pnpm db:push` è stato dato comunque dopo il
+      deploy, e ha confermato «No changes detected» — che è la verifica che schema e `schema.ts`
+      combaciano. `pg_dump` preso prima di toccare qualsiasi cosa, malgrado la modifica non fosse
+      distruttiva.
+      **Nessun backfill**, e nessuno serviva: in produzione c'erano **0 aste** (32 utenti, di cui 12
+      bot), quindi non esisteva nemmeno una riga su cui lo `0` di default facesse differenza.
 
 ## Verifica
 
