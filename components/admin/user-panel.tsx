@@ -61,9 +61,18 @@ const ENTRY_LABELS: Record<AdminEntry, string> = {
 export function UserPanel({
   user,
   onClose,
+  onResult,
 }: {
   user: AdminUserView;
   onClose: () => void;
+  /**
+   * L'esito, riportato **a chi sopravvive alla chiusura** (`UsersTable`).
+   *
+   * ⚠ È lui a decidere se chiudere, non questo componente: a pieno successo il
+   * pannello se ne va, e un messaggio che se ne va insieme al pannello è un
+   * messaggio che nessuno ha letto — era esattamente il buco che il toast chiude.
+   */
+  onResult: (state: UserSaveState) => void;
 }) {
   const [state, save, saving] = useActionState(
     saveUserAction,
@@ -77,11 +86,15 @@ export function UserPanel({
   const [isAdmin, setIsAdmin] = useState(user.isAdmin);
   const [isPro, setIsPro] = useState(user.isPro);
 
-  // Solo su `done`: un salvataggio riuscito a metà lascia il pannello aperto col
-  // suo messaggio, ed è il punto di §5 su cui questa macro può fare più danno.
+  // Ogni ritorno dell'azione scrive `done` oppure un `error`: l'assenza di entrambi
+  // è lo stato iniziale di `useActionState`, cioè «nessuno ha ancora premuto Salva».
+  const settled = state.done !== undefined || state.error !== null;
   useEffect(() => {
-    if (state.done === true) onClose();
-  }, [state.done, onClose]);
+    if (settled) onResult(state);
+    // ⚠ Chi chiude è `UsersTable`, e **solo** su `done`: un salvataggio riuscito a
+    // metà lascia il pannello aperto col suo esito per campo, ed è il punto di §5 su
+    // cui questa macro può fare più danno.
+  }, [state, settled, onResult]);
 
   const trimmed = name.trim();
   const nameChanged = trimmed !== (user.displayName ?? "").trim();

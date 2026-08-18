@@ -2544,3 +2544,42 @@ questa macro: cambiare la `fold` del Centro dati vuol dire cambiare il comportam
 cinquecento righe per una questione di forma, dentro una macro che non c'entra. Sta scritto qui perché il commento su
 `portal.ts` dice «due ricerche che rispondono diversamente sono una piccola bugia» e la terza ricerca
 adesso lo rispetta, mentre la seconda non lo sa.
+
+⚠ **Le quattro azioni vecchie sono state tolte, e il paragrafo qui sopra è stato ribaltato nella stessa
+sessione.** L'owner, letta la nota, ha deciso il contrario: pulizia. Resta scritto com'era perché è
+append-only e perché la ragione del ribaltamento è più chiara col «prima» accanto — la spec dice «ne
+aggiunge una» e **non si era pronunciata sul togliere**, quindi lasciarle era il default prudente, non una
+scelta. Il default prudente qui era sbagliato: quattro endpoint scrivibili che nessuna schermata apre più
+non sono codice morto inerte, sono superficie che nessuno guarda. `app/admin/actions.ts` passa da undici
+export a sette, `lib/engine/admin.ts` resta intatto — il potere è lo stesso, chiamato da un posto invece
+che da quattro — e i file di M6 e M8 **non** sono stati riscritti: sono l'archivio di due macro chiuse, e
+la ratifica di un cambio di idea sta qui, come per M6 §8 sulla ricerca.
+
+⚠ **E l'elenco esatto degli export ha funzionato al contrario, per la prima volta in cinque macro.** Era
+nato per rompersi quando un'azione *nasce* senza guardia; qui ha confermato che le quattro tolte non
+lasciavano nessun riferimento in giro, e che quella rimasta è una sola. Il conteggio dei test **scende**
+di quattro casi (l'`it.each` sugli export), ed è la prima volta che accade: 813 → 815 con sei test nuovi
+del toast dentro.
+
+**Il toast dell'esito, e perché non sta nel pannello** (richiesta dell'owner del 2026-08-18, dopo aver
+guardato la pagina: «non si capisce se vada in errore o effettua la modifica»). L'esito per campo dentro
+il modale è la cosa giusta **quando il modale resta aperto**, cioè in caso di errore — ma a pieno
+successo il modale si chiude, e il messaggio se ne andava con lui: la tabella si aggiornava e nient'altro,
+quindi un salvataggio riuscito era indistinguibile da un click andato perso. Il toast vive quindi in
+`UsersTable`, che è ciò che sopravvive alla chiusura, e il pannello **riporta** l'esito invece di
+decidere da sé di chiudersi (`onResult`). Tre toni e non due: riuscito, **riuscito a metà** e rifiutato —
+il caso di mezzo è quello che va detto meglio, perché «errore» farebbe riprovare tutto e «salvato»
+nasconderebbe il campo non passato. La riduzione da esito a toast è una funzione pura con i suoi test
+(`saveToast`), per la stessa ragione del filtro: il caso a metà è il più difficile da vedere a mano.
+
+**E il toast è `Toast` di `radix-ui`, non quello di shadcn.** La pagina «Toast» di `ui.shadcn.com` oggi è
+un involucro attorno a **`sonner`**, cioè una dipendenza nuova per un avviso, mentre la libreria di
+primitive che il progetto usa in ogni componente ne ha già uno. È la **stessa** decisione dello `Switch`
+presa qualche ora prima, e le due volte non sono una coincidenza: entrambe le richieste dell'owner
+linkavano shadcn, e shadcn oggi impacchetta primitive di terzi — quindi «usa il componente di shadcn» va
+letto come «voglio quel comportamento», non come «monta quella dipendenza». Due cose sapute e accettate:
+la ✕ del toast non risponde mentre il modale è aperto (un `Dialog` modale di Radix rende inerte ciò che
+gli sta fuori) — per questo il messaggio autorevole dell'errore resta quello per campo dentro il
+pannello, e il toast dell'errore dura dieci secondi invece di quattro; e il `Toast.Root` ha una `key` che
+avanza a ogni esito, perché due errori identici di fila lascerebbero il primo toast fermo com'è, che si
+legge come un secondo Salva che non ha fatto niente.
