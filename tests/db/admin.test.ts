@@ -124,10 +124,10 @@ suite("ogni server action del pannello rifiuta chi non è amministratore", () =>
       // stata aggiunta **dopo** aver visto il test rompersi, e insieme alla
       // guardia in cima all'azione. L'uguaglianza è rimasta esatta.
       "downloadCampionciniAction",
-      "forceVerifyEmailAction",
-      // M8 — le tre azioni degli insight sul listone. Come per M7, le righe qui
-      // sotto sono state aggiunte **dopo** aver visto il test rompersi, insieme
-      // alla guardia in cima a ognuna delle tre.
+      // M8 — due delle tre azioni degli insight sul listone. Come per M7, le
+      // righe qui sotto sono state aggiunte **dopo** aver visto il test
+      // rompersi, insieme alla guardia in cima a ognuna. La terza era
+      // `setUserProAction`, e da M13 non esiste più (vedi qui sotto).
       "refreshListoneInsightsAction",
       "refreshSetPiecesAction",
       // M13 — il salvataggio del pannello laterale della pagina utenti. Quinta
@@ -136,15 +136,19 @@ suite("ogni server action del pannello rifiuta chi non è amministratore", () =>
       // §5 lo aveva previsto per iscritto («c'è un test che si romperà, di
       // proposito») e non è un intoppo: è il meccanismo che funziona.
       //
-      // ⚠ Questa azione **non aggiunge nessun potere**: chiama le quattro
-      // funzioni del motore che esistevano già, e le tre azioni per campo qui
-      // sopra restano al loro posto. Il salvataggio a più campi ha un file di
-      // test suo — `admin-save.test.ts` — perché lì la guardia deve *passare*, e
-      // il finto di questo file la fa sempre fallire.
+      // ⚠ **E questa volta l'elenco si è anche accorciato di quattro righe**, che
+      // è la direzione in cui questo test non era mai stato usato:
+      // `setUserDisplayNameAction`, `forceVerifyEmailAction`,
+      // `setUserAdminAction` e `setUserProAction` sono state tolte quando il
+      // pannello ha smesso di chiamarle. Il potere non è cambiato — le funzioni
+      // del motore sono le stesse — ma quattro endpoint scrivibili senza nessuna
+      // schermata che li apra sono quattro endpoint di cui nessuno si accorge se
+      // smettono di comportarsi bene.
+      //
+      // Il salvataggio ha un file di test suo — `admin-save.test.ts` — perché lì
+      // la guardia deve *passare*, e il finto di questo file la fa sempre
+      // fallire.
       "saveUserAction",
-      "setUserAdminAction",
-      "setUserDisplayNameAction",
-      "setUserProAction",
       // M10 — il caricamento del listone a sistema. Come per M7 e M8, la riga è
       // stata aggiunta **dopo** aver visto il test rompersi, insieme alla
       // guardia in cima all'azione. ⚠ La spec di M10 §5 diceva che questo test

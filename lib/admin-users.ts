@@ -111,3 +111,72 @@ export type UserSaveState = {
 };
 
 export const EMPTY_USER_SAVE_STATE: UserSaveState = { error: null };
+
+// ─── Il toast, cioè l'esito detto a chi ha smesso di guardare il pannello ────
+
+/**
+ * L'esito di un salvataggio, ridotto a ciò che sta in un toast.
+ *
+ * ⚠ **Serve perché il pannello, quando tutto va bene, se ne va.** L'esito per campo
+ * è dentro il modale, che è il posto giusto quando il modale resta aperto — cioè in
+ * caso di errore. A pieno successo però il modale si chiude, e fino a questo punto
+ * il salvataggio riuscito era indistinguibile da un click andato perso: la tabella
+ * si aggiornava e nient'altro. Il toast è la mezza riga che dice *cosa* è stato
+ * salvato, e sopravvive alla chiusura perché non vive nel pannello.
+ *
+ * È una funzione pura e non tre `if` nel componente per la ragione di sempre in
+ * questo file: il caso che conta è quello **a metà**, ed è anche il più raro da
+ * vedere a mano.
+ */
+export type SaveToast = {
+  /** `partial` non è un errore e non è un successo: è la cosa che va detta meglio. */
+  kind: "ok" | "partial" | "error";
+  title: string;
+  /** Già in italiano e già leggibile: i messaggi vengono dal motore. */
+  description: string | null;
+};
+
+const label = (outcome: UserFieldOutcome) => USER_FIELD_LABELS[outcome.field];
+const listOf = (outcomes: UserFieldOutcome[]) => outcomes.map(label).join(" · ");
+const detailOf = (outcomes: UserFieldOutcome[]) =>
+  outcomes.map((outcome) => `${label(outcome)}: ${outcome.message}`).join(" ");
+
+export function saveToast(state: UserSaveState): SaveToast | null {
+  // Lo stato iniziale di `useActionState` non è un esito: niente toast finché
+  // qualcuno non ha premuto Salva. Ogni ritorno dell'azione scrive `done` oppure
+  // un `error`, quindi l'assenza di entrambi è il solo modo di essere «prima».
+  if (state.done === undefined && state.error === null) return null;
+
+  const outcomes = state.outcomes ?? [];
+  if (outcomes.length === 0) {
+    return state.error === null
+      ? { kind: "ok", title: "Non c'era niente da salvare", description: null }
+      : { kind: "error", title: "Non salvato", description: state.error };
+  }
+
+  const done = outcomes.filter((outcome) => outcome.ok);
+  const failed = outcomes.filter((outcome) => !outcome.ok);
+
+  if (failed.length === 0) {
+    return {
+      kind: "ok",
+      title: done.length === 1 ? "Modifica salvata" : "Modifiche salvate",
+      description: listOf(done),
+    };
+  }
+  if (done.length === 0) {
+    return {
+      kind: "error",
+      title: "Niente è stato salvato",
+      description: detailOf(failed),
+    };
+  }
+  // ⚠ Il caso che il titolo deve nominare per primo: **una parte è passata**. Dire
+  // «errore» qui farebbe riprovare tutto, dire «salvato» nasconderebbe metà del
+  // lavoro non fatto — ed è il motivo per cui l'azione non è atomica e non finge.
+  return {
+    kind: "partial",
+    title: "Salvato solo in parte",
+    description: `Fatto: ${listOf(done)}. Non fatto — ${detailOf(failed)}`,
+  };
+}

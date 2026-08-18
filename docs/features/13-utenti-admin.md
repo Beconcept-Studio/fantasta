@@ -83,6 +83,17 @@ Non è un'analisi da fare all'apertura: è stato letto il 2026-08-18.
 | La ricerca | — | **Non c'è, ed era esclusa per iscritto** (§4) |
 | Un modale laterale | — | **Non c'è nessun modale nel pannello** (§5) |
 
+⚠ **Aggiornamento del 2026-08-18, a macro aperta — decisione dell'owner: le quattro Server Action per
+campo sono state tolte.** La riga qui sopra dice «§5 ne aggiunge **una**», e per mezza giornata sono
+state cinque: `saveUserAction` più le quattro che nessuna schermata chiamava più. Erano quattro endpoint
+scrivibili senza nessun chiamante, e un endpoint senza chiamanti è un endpoint di cui nessuno si accorge
+se un giorno smette di comportarsi bene. **Il potere non è cambiato**: le funzioni del motore che
+scrivono sono le stesse quattro, chiamate da un posto invece che da quattro — e `lib/engine/admin.ts`
+resta intatto. Chi cerca quelle azioni nella storia le trova in `v1.13.0`; il meccanismo che ha reso la
+pulizia sicura è l'elenco **esatto** degli export in `tests/db/admin.test.ts`, usato per la prima volta
+in questa direzione: si sono tolte quattro righe e il test ha confermato che non ne restava in giro
+nessun'altra.
+
 Quindi il cuore della macro è **spostare quattro form da trentadue celle a un pannello solo**, e le
 due cose nuove sono la ricerca e il modale. Il motore non si apre nemmeno per guardare: se durante
 questa macro qualcuno si trova a modificare `lib/engine/admin.ts`, è il momento di fermarsi e
@@ -221,6 +232,24 @@ l'unico pannello di amministrazione che c'è.
 qui obbliga a guardare in faccia la riga della guardia»*. L'azione nuova deve avere
 `requireAppAdmin()` in prima riga, prima di leggere un solo campo, e l'elenco del test va aggiornato
 a mano. Non è un intoppo: è il meccanismo che funziona.
+
+⚠ **E c'è un feedback che al primo giro mancava, chiesto dall'owner dopo aver guardato la
+pagina** (2026-08-18): **un toast**. L'esito per campo dentro il modale è la cosa giusta quando il
+modale **resta aperto**, cioè in caso di errore — ma a pieno successo il modale si chiude, e con lui se
+ne andava il messaggio: la tabella si aggiornava e nient'altro, quindi un salvataggio riuscito era
+indistinguibile da un click andato perso. Il toast vive **fuori dal pannello**, in `UsersTable`, che è
+ciò che sopravvive alla chiusura, e dice *cosa* è stato salvato. Tre toni, che sono i tre esiti che
+`saveUserAction` sa produrre: riuscito, **riuscito a metà** — quello che va detto meglio di tutti, perché
+«errore» farebbe riprovare tutto e «salvato» nasconderebbe il campo non passato — e rifiutato. La
+riduzione da esito a toast è una funzione pura con i suoi test, per la stessa ragione del filtro: il caso
+a metà è il più difficile da vedere a mano.
+
+⚠ **Il toast si fa con `Toast` di `radix-ui`, non con quello di shadcn.** La pagina «Toast» di
+`ui.shadcn.com` oggi è un involucro attorno a **`sonner`**, cioè una dipendenza nuova per un avviso,
+mentre la libreria di primitive che il progetto usa in ogni componente ne ha già uno. È la **stessa**
+decisione dello `Switch` presa qualche ora prima in questa macro, e non è una coincidenza: le due
+richieste sono arrivate linkando shadcn, e shadcn oggi impacchetta primitive di terzi. Il comportamento
+chiesto — un avviso che compare, si legge e se ne va — è lo stesso.
 
 **La forma: uno sheet da destra, costruito con `radix-ui` direttamente.**
 
@@ -434,6 +463,40 @@ a mano. Non è un intoppo: è il meccanismo che funziona.
       poi, **solo su richiesta esplicita**, `CHANGELOG.md`, `package.json`, merge su `main`, tag
       `v1.14.0`, push. **Nessun `db:push`, nessun passo a mano sul server**
 
+- [x] **M13-12** — **Pulizia**: togliere le quattro Server Action per campo che nessuna schermata chiama
+      più (`setUserDisplayNameAction`, `forceVerifyEmailAction`, `setUserAdminAction`,
+      `setUserProAction`), aggiornare l'elenco **esatto** degli export in `tests/db/admin.test.ts` e
+      allineare le spec. ⚠ Decisione dell'owner del 2026-08-18, **a macro aperta**: la spec diceva «ne
+      aggiunge una» e non si era pronunciata sul togliere
+      → Fatto: `app/admin/actions.ts` passa da undici export a sette. **Nessun altro chiamante** in
+      tutto il repo — verificato con un `grep` sui quattro nomi prima di cancellare, non dopo.
+      → ⚠ **L'elenco esatto del test ha funzionato anche al contrario**, ed è la prima volta: era nato
+      per fermare l'azione *aggiunta* senza guardia, e qui ha confermato che le quattro tolte non
+      lasciavano riferimenti in giro. Il conteggio dei test **scende** di quattro, perché l'`it.each`
+      sugli export ha perso quattro casi.
+      → Non ho toccato `docs/features/06-amministrazione.md` né `08-insight-listone.md`: sono
+      l'**archivio** di due macro chiuse e dicono il vero su cosa fecero allora. È lo stesso trattamento
+      che questa macro riserva a M6 §8 — la ricerca ribalta quella decisione e la ratifica sta in
+      `DECISIONS.md`, non in una riscrittura del file di M6.
+- [x] **M13-13** — **Il toast dell'esito** (§5, richiesta dell'owner del 2026-08-18 dopo aver guardato la
+      pagina): un avviso che sopravvive alla chiusura del modale e dice cosa è stato salvato, con il caso
+      «riuscito a metà» detto per quello che è. ⚠ `Toast` di `radix-ui`, **non `sonner`**
+      → `saveToast()` in `lib/admin-users.ts`, pura, con sei test suoi: nessun toast prima del primo
+      Salva, tutto riuscito al singolare e al plurale, tutto rifiutato, **riuscito a metà**, «non c'era
+      niente da salvare», e il rifiuto secco senza utente.
+      → Il toast sta in `UsersTable` e non nel pannello, perché è il pannello a chiudersi: il pannello
+      **riporta** l'esito con `onResult` e non decide più di chiudersi da sé. ⚠ `onResult` è un
+      `useCallback` con dipendenze vuote **di proposito**: una funzione nuova a ogni render della tabella
+      farebbe rieseguire l'effetto del pannello, cioè un toast doppio a ogni salvataggio. E il
+      `Toast.Root` ha una `key` che avanza a ogni esito, altrimenti due errori identici di fila
+      lascerebbero il primo toast fermo com'è — sembrando un secondo Salva che non ha fatto niente.
+      → ⚠ **Una cosa da sapere, non un difetto da inseguire**: nel caso d'errore il pannello resta
+      aperto, e un `Dialog` modale di Radix rende inerte ciò che gli sta fuori — quindi la ✕ del toast
+      non risponde finché il modale è aperto (si chiude da sé, e ha dieci secondi invece di quattro
+      quando c'è qualcosa da leggere). Il messaggio **autorevole** dell'errore resta quello per campo
+      dentro il pannello, che è dove stanno gli occhi; il toast è la copia che serve nell'altro caso,
+      quello in cui il pannello non c'è più.
+
 ## Verifica
 
 1. `pnpm test`, `pnpm typecheck` e `pnpm build` verdi.
@@ -448,10 +511,15 @@ a mano. Non è un intoppo: è il meccanismo che funziona.
    c'è.
 7. **Su un bot non c'è nessuno switch.**
 8. **Lo switch della verifica, una volta acceso, non si spegne**, e lo dice.
-9. **Salvato: il modale si chiude e la tabella mostra il valore nuovo** senza ricaricare la pagina a
-   mano.
+9. **Salvato: il modale si chiude, compare il toast che dice cosa è stato salvato, e la tabella mostra
+   il valore nuovo** senza ricaricare la pagina a mano.
 10. **Un salvataggio rifiutato lascia il modale aperto** con il messaggio del server, e a database non
     è cambiato niente di ciò che era valido — cioè l'esito è per campo, non tutto-o-niente.
-11. **Un non-amministratore che chiama l'azione nuova direttamente è rifiutato**, e a database non
+11. **Un salvataggio riuscito a metà** — nome fuori dai limiti e uno switch girato nello stesso Salva —
+    lascia il modale aperto, scrive lo switch, e il toast dice **«Salvato solo in parte»** nominando
+    prima ciò che è passato: né un «errore» che farebbe riprovare tutto, né un «salvato» che nasconde.
+12. **Nel pannello utenti non esiste più nessuna azione per campo**: `app/admin/actions.ts` ha una sola
+    azione che scrive su `users`, e l'elenco esatto in `tests/db/admin.test.ts` lo dice.
+13. **Un non-amministratore che chiama l'azione nuova direttamente è rifiutato**, e a database non
     cambia niente. È la verifica che il layout non protegge nessuno.
-12. **Il resto del pannello è intatto**: lista aste, listone, Centro dati, figurine.
+14. **Il resto del pannello è intatto**: lista aste, listone, Centro dati, figurine.

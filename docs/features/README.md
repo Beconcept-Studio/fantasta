@@ -13,7 +13,7 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 ## In corso
 
 **M13 — la pagina utenti** ([13-utenti-admin.md](13-utenti-admin.md)), aperta il **2026-08-18** su
-richiesta dell'owner e lavorata per intero su `feature/13-utenti-admin`: gate verde con **813 test**,
+richiesta dell'owner e lavorata per intero su `feature/13-utenti-admin`: gate verde con **815 test**,
 typecheck e build, poi merge `--no-ff` su `dev`. La tabella del pannello è diventata sei colonne in sola
 lettura con una ricerca in testa, e le modifiche stanno in un pannello laterale che si apre da «Vedi».
 Non tocca lo schema, non tocca il motore, non tocca nessuna asta: **nessun `pnpm db:push`, nessun
@@ -28,11 +28,29 @@ utenti veri in produzione, 32 contando i bot. «Niente paginazione» regge, e la
 lato client su righe già arrivate. Il giorno in cui quel numero cresce, ricerca lato server e
 paginazione arrivano **insieme** (M13 §4) — separate, la prima diventerebbe una bugia.
 
-⚠ **Quattro Server Action sono rimaste in piedi senza nessun chiamante**: le tre per campo di M6 più
-`setUserProAction` di M8. La spec dice che M13 «ne aggiunge una», non che ne toglie quattro, e ognuna ha
-la sua guardia e il suo test — ma sono la prima cosa da guardare il giorno in cui si vuole togliere del
-codice morto dal pannello, ricordando che l'elenco esatto di `tests/db/admin.test.ts` va aggiornato
-anche in quella direzione.
+**Due cose sono entrate a macro aperta, su decisione dell'owner del 2026-08-18** — la spec non le
+prevedeva, e i task `M13-12` e `M13-13` le raccontano per esteso.
+
+⚠ **Le quattro Server Action per campo sono state tolte**, non lasciate in piedi: `app/admin/actions.ts`
+adesso ha **una sola** azione che scrive su una riga di `users`. Quattro endpoint scrivibili che nessuna
+schermata apriva più sono quattro endpoint di cui nessuno si accorge se un giorno smettono di
+comportarsi bene. Il potere non è cambiato — le funzioni del motore sono le stesse quattro — e
+`lib/engine/admin.ts` è rimasto intatto. **L'elenco esatto degli export in `tests/db/admin.test.ts` ha
+funzionato per la prima volta al contrario**: era nato per fermare l'azione aggiunta senza guardia, e qui
+ha confermato che le quattro tolte non lasciavano riferimenti in giro.
+
+⚠ **E c'è un toast**, perché il primo giro non dava nessun feedback: l'esito per campo dentro il modale
+è giusto quando il modale resta aperto, ma a pieno successo il modale si chiude e il messaggio se ne
+andava con lui — un salvataggio riuscito era indistinguibile da un click andato perso. Il toast vive in
+`UsersTable`, che sopravvive alla chiusura, e ha tre toni: riuscito, **riuscito a metà** e rifiutato. È
+fatto con `Toast` di `radix-ui` e **non** con quello di shadcn, che oggi è un involucro attorno a
+`sonner`: è la stessa decisione dello `Switch`, presa due volte nello stesso giorno perché entrambe le
+richieste linkavano shadcn.
+
+⚠ **`docs/features/06-amministrazione.md` e `08-insight-listone.md` non sono stati riscritti**: sono
+l'archivio di due macro chiuse e dicono il vero su cosa fecero allora. È lo stesso trattamento che M13
+riserva a M6 §8 sulla ricerca — la ratifica di un cambio di idea sta in `docs/DECISIONS.md` e in
+`docs/ARCHITECTURE.md`, non in una riscrittura del file di una macro chiusa.
 
 **M12 è in produzione da `v1.13.0`** (2026-08-18): chiusa su `dev` il 17, provata a due
 dispositivi il 18, rilasciata subito dopo. Gate verde con **791 test**, typecheck e build.

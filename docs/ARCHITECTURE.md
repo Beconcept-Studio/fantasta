@@ -1959,8 +1959,18 @@ amministratore vede gli insight comunque. Su un bot i due flag sono rifiutati pr
 comunque lo rifiuterebbe il `CHECK` a database: il controllo esplicito serve a rispondere con una
 frase leggibile invece che con un 500.
 
-Da v1.14.0 **nessuna di queste quattro funzioni è cambiata**. È cambiato *da dove si danno*, e vale la
-pena raccontarlo perché l'errore che c'era è di quelli che si commettono senza accorgersene.
+Da v1.14.0 **nessuna di queste quattro funzioni del motore è cambiata**. È cambiato *da dove si danno*:
+dove c'erano quattro Server Action, una per campo, adesso ce n'è **una sola**, ed è l'unica azione
+dell'applicazione che scrive su una riga di `users`. Le quattro vecchie sono state tolte nello stesso
+momento in cui la schermata ha smesso di chiamarle, e vale la pena dire perché non sono state lasciate
+lì: una server action senza chiamanti non è codice morto inerte, è un endpoint scrivibile che nessuna
+schermata apre più — cioè superficie di cui nessuno si accorge se un giorno smette di comportarsi bene.
+Il meccanismo che ha reso sicura la pulizia è lo stesso test che di solito fa il rumore opposto: l'elenco
+**esatto** degli export del modulo, che era nato per rompersi quando un'azione nasce senza guardia, e che
+qui ha confermato che non restava in giro nessun riferimento.
+
+E vale la pena raccontare anche cos'era sbagliato nella forma di prima, perché è un errore di quelli che
+si commettono senza accorgersene.
 
 Fino a v1.13.0 la pagina era una tabella di otto colonne, e in quattro di quelle colonne c'era un
 form: un campo di testo col suo «Salva», «Verifica a mano», «Rendi admin», «Dai insight». Ogni riga
@@ -2042,6 +2052,19 @@ nella `FormData`: il pannello monta l'input nascosto solo quando quel valore dif
 gli era arrivato, perché l'azione non legge il database e non può fare nessun confronto — e non deve,
 dato che l'autorizzazione la fa il motore rileggendo `is_admin` a ogni mutazione. Un client che
 mentisse otterrebbe una `UPDATE` che riscrive il valore che c'era già.
+
+E c'è **un toast**, che è arrivato guardando la pagina invece che leggendo la spec: l'esito per campo
+dentro il pannello è la cosa giusta finché il pannello **resta aperto**, cioè quando qualcosa è andato
+storto — ma a pieno successo il pannello si chiude, e il messaggio se ne andava con lui. Restava una
+tabella che si aggiornava e nient'altro, quindi un salvataggio riuscito era indistinguibile da un click
+andato perso. Il toast vive perciò **fuori** dal pannello, in `UsersTable`, che è ciò che sopravvive alla
+chiusura: il pannello riporta il proprio esito verso l'alto e non decide più di chiudersi da sé. Ha tre
+toni e non due — riuscito, **riuscito a metà**, rifiutato — perché il caso di mezzo è quello che va detto
+meglio: «errore» farebbe riprovare tutto, «salvato» nasconderebbe il campo che non è passato. È fatto con
+`Toast` di `radix-ui` e non con quello di shadcn, che oggi è un involucro attorno a `sonner`: la stessa
+decisione dello `Switch`, presa due volte nello stesso giorno perché entrambe le richieste linkavano
+shadcn — e «usa il componente di shadcn» significa «voglio quel comportamento», non «monta quella
+dipendenza».
 
 I **bot stanno dietro un filtro** e per default non ci sono: sette righe «Bot 3» per ogni asta
 simulata sono l'unico modo in cui una lista di dodici amici può diventare illeggibile. E i due numeri

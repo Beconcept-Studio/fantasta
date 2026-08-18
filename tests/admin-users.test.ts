@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { filterUsers, userSearchText } from "@/lib/admin-users";
+import {
+  EMPTY_USER_SAVE_STATE,
+  filterUsers,
+  saveToast,
+  userSearchText,
+} from "@/lib/admin-users";
 
 /**
  * M13 §4 — la ricerca della pagina utenti, provata senza browser e senza database.
@@ -94,5 +99,95 @@ describe("la ricerca per nome o email", () => {
   it("il testo cercabile ripiega gli accenti e le maiuscole di entrambi i campi", () => {
     expect(userSearchText(ROWS[0])).toBe("paolo.rossi@example.com paolo rossi");
     expect(userSearchText({ email: null, displayName: null })).toBe(" ");
+  });
+});
+
+/**
+ * M13 — l'esito ridotto a un toast.
+ *
+ * ⚠ **Il caso che conta è quello a metà**, ed è anche il più difficile da vedere a
+ * mano: dire «errore» farebbe riprovare tutto, dire «salvato» nasconderebbe il campo
+ * che non è passato. Il salvataggio non è atomico — quattro `UPDATE` distinti — e il
+ * toast è il posto in cui quella verità arriva a chi ha smesso di guardare il
+ * pannello, perché a pieno successo il pannello si chiude.
+ */
+describe("il toast dell'esito", () => {
+  it("prima di premere Salva non c'è nessun toast", () => {
+    expect(saveToast(EMPTY_USER_SAVE_STATE)).toBeNull();
+  });
+
+  it("tutto riuscito: dice quali campi, al singolare o al plurale", () => {
+    const uno = saveToast({
+      error: null,
+      done: true,
+      outcomes: [{ field: "isPro", ok: true, message: "adesso vede gli insight." }],
+    });
+    expect(uno).toEqual({
+      kind: "ok",
+      title: "Modifica salvata",
+      description: "Pro",
+    });
+
+    const due = saveToast({
+      error: null,
+      done: true,
+      outcomes: [
+        { field: "displayName", ok: true, message: "adesso è «Anna»." },
+        { field: "verified", ok: true, message: "verificata a mano." },
+      ],
+    });
+    expect(due?.title).toBe("Modifiche salvate");
+    expect(due?.description).toBe("Nome · Email verificata");
+  });
+
+  it("tutto rifiutato: lo dice, e riporta i messaggi del motore", () => {
+    const toast = saveToast({
+      error: "Questo utente non esiste.",
+      done: false,
+      outcomes: [
+        { field: "displayName", ok: false, message: "Questo utente non esiste." },
+      ],
+    });
+
+    expect(toast?.kind).toBe("error");
+    expect(toast?.title).toBe("Niente è stato salvato");
+    expect(toast?.description).toContain("Questo utente non esiste.");
+  });
+
+  it("riuscito a metà: nomina prima ciò che è passato, poi ciò che no", () => {
+    const toast = saveToast({
+      error: "Il nome deve stare fra 3 e 60 caratteri.",
+      done: false,
+      outcomes: [
+        {
+          field: "displayName",
+          ok: false,
+          message: "Il nome deve stare fra 3 e 60 caratteri.",
+        },
+        { field: "isPro", ok: true, message: "adesso vede gli insight." },
+      ],
+    });
+
+    expect(toast?.kind).toBe("partial");
+    expect(toast?.title).toBe("Salvato solo in parte");
+    expect(toast?.description).toBe(
+      "Fatto: Pro. Non fatto — Nome: Il nome deve stare fra 3 e 60 caratteri.",
+    );
+  });
+
+  it("un form senza campi non è un errore, ed è un toast che non allarma", () => {
+    expect(saveToast({ error: null, ok: "Non c'era niente da salvare.", done: true })).toEqual({
+      kind: "ok",
+      title: "Non c'era niente da salvare",
+      description: null,
+    });
+  });
+
+  it("un rifiuto prima dei campi (nessun utente) è un errore secco", () => {
+    expect(saveToast({ error: "Utente non indicato." })).toEqual({
+      kind: "error",
+      title: "Non salvato",
+      description: "Utente non indicato.",
+    });
   });
 });

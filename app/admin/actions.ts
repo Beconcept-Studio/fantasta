@@ -48,6 +48,14 @@ import { deleteAuction } from "@/lib/engine/setup";
  * La sessione è un JWT e non sa niente dei permessi (P17), quindi la guardia qui
  * e il controllo là non sono lo stesso controllo scritto due volte: uno decide
  * chi entra, l'altro chi comanda ancora nel momento in cui scrive.
+ *
+ * ⚠ **Da M13 le azioni sugli utenti sono una sola, `saveUserAction`.** Le quattro
+ * per campo — nome, verifica, `is_admin`, `is_pro` — sono state **tolte** quando
+ * il pannello laterale ha smesso di chiamarle: erano quattro endpoint scrivibili
+ * che nessuna schermata apriva più, e un endpoint senza chiamanti è un endpoint di
+ * cui nessuno si accorge se un giorno smette di comportarsi bene. Il potere non è
+ * cambiato: le funzioni del motore che scrivono sono le stesse quattro, chiamate da
+ * un posto invece che da quattro.
  */
 
 function text(form: FormData, key: string): string | undefined {
@@ -73,71 +81,10 @@ const AUCTIONS_PATH = `${ADMIN_ROOT}/auctions`;
 const LISTONE_PATH = `${ADMIN_ROOT}/listone`;
 const DATI_PATH = `${ADMIN_ROOT}/listone/dati`;
 
-/** Correggere il nome scritto male da qualcun altro. */
-export async function setUserDisplayNameAction(
-  _prev: FormState,
-  form: FormData,
-): Promise<FormState> {
-  const admin = await requireAppAdmin();
-  const userId = text(form, "userId");
-  if (!userId) return { error: "Utente non indicato." };
-
-  const result = await setUserDisplayName(
-    admin.id,
-    userId,
-    form.get("displayName"),
-  );
-  if (!result.ok) return { error: result.error.message };
-
-  revalidatePath(USERS_PATH);
-  return { error: null, ok: `Nome aggiornato: ${result.value.displayName}.` };
-}
-
-/** Il pulsante che chiude la finestra di M5 §9. */
-export async function forceVerifyEmailAction(
-  _prev: FormState,
-  form: FormData,
-): Promise<FormState> {
-  const admin = await requireAppAdmin();
-  const userId = text(form, "userId");
-  if (!userId) return { error: "Utente non indicato." };
-
-  const result = await forceVerifyEmail(admin.id, userId);
-  if (!result.ok) return { error: result.error.message };
-
-  revalidatePath(USERS_PATH);
-  return { error: null, ok: "Indirizzo verificato a mano: ora può entrare." };
-}
-
 /**
- * Dare o togliere il permesso di amministratore.
- *
- * L'intenzione arriva come stringa e diventa un booleano **qui**: il motore
- * riceve `unknown` e rifiuta ciò che non è un booleano, perché è lui a dover
- * restare vero anche se un giorno lo chiamasse qualcun altro (regola 6).
- */
-export async function setUserAdminAction(
-  _prev: FormState,
-  form: FormData,
-): Promise<FormState> {
-  const admin = await requireAppAdmin();
-  const userId = text(form, "userId");
-  if (!userId) return { error: "Utente non indicato." };
-
-  const result = await setUserAdmin(admin.id, userId, flag(form, "isAdmin"));
-  if (!result.ok) return { error: result.error.message };
-
-  revalidatePath(USERS_PATH);
-  return {
-    error: null,
-    ok: result.value.isAdmin
-      ? "Adesso è amministratore dell'applicazione."
-      : "Non è più amministratore dell'applicazione.",
-  };
-}
-
-/**
- * Il salvataggio del pannello laterale della pagina utenti (M13 §5).
+ * Il salvataggio del pannello laterale della pagina utenti (M13 §5), e **l'unica
+ * azione che scrive su una riga di `users`**: ha preso il posto delle quattro per
+ * campo di M6 e M8.
  *
  * ⚠ **`requireAppAdmin()` in prima riga, prima di leggere un solo campo**, come le
  * altre: `tests/db/admin.test.ts` enumera gli export di questo file con
@@ -450,34 +397,6 @@ export async function uploadCarmyAction(
 }
 
 // ─── Gli insight sul listone (M8) ────────────────────────────────────────────
-
-/**
- * Dare o togliere `is_pro`, cioè gli insight sul listone.
- *
- * Stessa forma di `setUserAdminAction`, e la differenza sta nel motore: là
- * toccare la propria riga è vietato — togliersi `is_admin` chiude fuori — qui no,
- * perché il flag non apre nessuna porta e un amministratore vede gli insight
- * comunque.
- */
-export async function setUserProAction(
-  _prev: FormState,
-  form: FormData,
-): Promise<FormState> {
-  const admin = await requireAppAdmin();
-  const userId = text(form, "userId");
-  if (!userId) return { error: "Utente non indicato." };
-
-  const result = await setUserPro(admin.id, userId, flag(form, "isPro"));
-  if (!result.ok) return { error: result.error.message };
-
-  revalidatePath(USERS_PATH);
-  return {
-    error: null,
-    ok: result.value.isPro
-      ? "Adesso vede gli insight sul listone."
-      : "Non vede più gli insight sul listone.",
-  };
-}
 
 /**
  * Il refresh della fonte A: titolarità, minuti, rigori storici.
