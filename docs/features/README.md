@@ -12,7 +12,36 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M13 è in produzione da `v1.14.0`** (2026-08-18): aperta, lavorata, provata dall'owner e
+**[M14 — Il cancello dei risultati](14-cancello-risultati.md)**, aperta il **2026-08-18** su richiesta
+dell'owner. Fra la chiusura di un round e la rivelazione delle buste si infila `LOT_SEALED`, che dura
+`result_gate_seconds` e appartiene a chi conduce: si può mostrare, si può fermare, e — solo lì, ad asta
+in pausa — si può buttare via il lotto e rifarlo. È la prima fase nuova della macchina a stati dopo
+v1.0.0.
+
+Codice, test e documentazione fatti; gate verde con **860 test in 51 file** (da 815), typecheck e lint.
+Restano **la prova a mano dell'owner** (M14-15: due dispositivi più la TV, con un cancello da 10 secondi)
+e il rilascio, che si fa **solo su richiesta esplicita**.
+
+⚠ **Al rilascio serve un passo a mano sul server**: `pnpm db:push` per `auctions.result_gate_seconds` e
+`pm2 reload`. **Nessun backfill**, e non per fortuna: lo `0` della colonna *è* il comportamento di
+v1.14.0, quindi le aste già in tabella restano identiche a se stesse finché nessuno mette un numero in
+quel campo. Il changelog dovrà dirlo con parole semplici.
+
+⚠ **La cosa da non riscoprire da capo**: il cancello sta **prima** della risoluzione del lotto, e il modo
+ovvio — risolvere e nascondere `reveal` — è stato provato e non nasconde niente. Con la fase forzata a
+`LOT_SEALED` su un lotto già risolto, lo snapshot **della TV** porta `reveal: null` e `tie: null` e
+intanto il vincitore scende da 100 a 13 crediti, con `roster` che pubblica `price: 87` — cioè l'importo
+esatto della busta vincente, in un campo che non ha niente a che fare con il reveal. Il racconto sta in
+`docs/DECISIONS.md` alla data, e il capitolo per un lettore futuro in `docs/ARCHITECTURE.md`.
+
+**Tre flake preesistenti sono stati corretti dentro questa macro** — `delete-auction`, `bots` e
+`scheduler` — dopo averli riprodotti e verificato che non fossero di M14: tutti e tre erano asserzioni
+su stato globale condiviso fra file di test che girano in parallelo. Dieci giri di suite di fila verdi
+dopo, contro uno rosso su otto prima. Il dettaglio è in `DECISIONS.md`.
+
+---
+
+**M13 è in produzione da `v1.14.0`** (2026-08-18): aperta, lavorata, provata dall'owner e
 rilasciata **nella stessa giornata** in cui era stata pianificata. Gate verde con **815 test**, typecheck
 e build. La tabella di Admin → Utenti è diventata sei colonne in sola lettura con una ricerca in testa, e
 le modifiche stanno in un pannello laterale che si apre da «Vedi».
@@ -121,13 +150,12 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-Due sono state pianificate insieme il **2026-08-18**, dalle due richieste che l'owner aveva nel
-quaderno. **M13 è stata aperta e rilasciata lo stesso giorno** (`v1.14.0`); resta **M14**, che si apre su
-richiesta esplicita come tutte. **`docs/REQUESTS.md` resta vuoto.**
+Nessuna. **Il quaderno è vuoto e non c'è niente in attesa**: le due macro pianificate il **2026-08-18**
+dalle richieste dell'owner sono state entrambe aperte — M13 rilasciata in `v1.14.0` lo stesso giorno,
+**M14 è quella in corso** qui sopra. **`docs/REQUESTS.md` resta vuoto.**
 
-| Macro | Tema | Schema? |
-|---|---|---|
-| [M14](14-cancello-risultati.md) | Il cancello dei risultati: le buste non si aprono da sole, e un lotto si può annullare | ⚠ **Sì** — una colonna additiva, `pnpm db:push`, **nessun backfill** |
+Quello che segue è il ragionamento con cui le due erano state tagliate, e resta come archivio: dice il
+vero su perché sono due macro e non una.
 
 **Perché due e non una.** Non hanno niente in comune: la prima è tutta UI dentro il pannello di
 amministrazione, la seconda apre la **macchina a stati dell'asta** e aggiunge la prima fase nuova dopo

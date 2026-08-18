@@ -2583,3 +2583,146 @@ gli sta fuori) — per questo il messaggio autorevole dell'errore resta quello p
 pannello, e il toast dell'errore dura dieci secondi invece di quattro; e il `Toast.Root` ha una `key` che
 avanza a ogni esito, perché due errori identici di fila lascerebbero il primo toast fermo com'è, che si
 legge come un secondo Salva che non ha fatto niente.
+
+## 2026-08-18 — M14, il cancello dei risultati
+
+**Il cancello sta prima della risoluzione, e la ragione è misurata.** La forma ovvia era lasciare il
+motore com'era — round chiuso, esito calcolato, assegnazione committata — e nascondere `reveal` nello
+snapshot finché il cancello è aperto: una riga in `serializeLot`, ed è fatta. Non tiene, e il buco non
+è dove si guarda. Prima di scrivere una riga di rimedio è stato riprodotto (M14-02, test usa e getta):
+asta a 8 con budget 100, offerta vincente 87, la fase forzata a `LOT_SEALED` con l'assegnazione già a
+database. Nello snapshot **della TV** (`viewerMemberId = null`, quindi nemmeno `myBid`) `reveal` e `tie`
+erano entrambi `null` — la sanificazione funzionava — e intanto il vincitore passava da `credits: 100`
+a `13`, da `maxBid: 97` a `11`, da `slotsFilled.P: 0` a `1`, con gli altri sette fermi a 100.
+⚠ **E `roster` portava `{ name: "Giocatore 1", price: 87 }`**, cioè l'importo esatto della busta
+vincente, in un campo che non ha nessun rapporto con `reveal`. Quindi non è «un quiz con una risposta
+sola» come la spec prudentemente diceva: è la risposta scritta. `serializeMembers` deriva `credits`,
+`maxBid`, `slotsFilled` e `roster` da `state.assignments`, e quei quattro campi stanno in **ogni**
+snapshot per **tutti**. Sigillare dopo la risoluzione sarebbe stato inutile per costruzione, non per
+distrazione.
+
+**Le tre conseguenze del metterlo prima, e sono tutte a favore.** (a) L'annullamento non sfiora la
+regola 5: nel cancello l'assegnazione non esiste, quindi non c'è nessun `voided_at` da scrivere e
+nessun credito da rimettere a posto — il giocatore torna disponibile da sé, perché la disponibilità è
+derivata. Nel modo ovvio l'avrebbe sfiorata davvero. (b) La barriera I8 dello storico continua a valere
+gratis: `isPublicLot` è `status === "RESOLVED"`, un lotto sigillato è ancora `OPEN`, e nessuno ha
+dovuto aggiungere una condizione. (c) Il prezzo, dichiarato: l'assegnazione era committata all'ingresso
+del reveal perché «un crash durante il reveal non deve poter perdere un lotto già deciso», e adesso
+davanti a quella proprietà c'è una finestra in cui il lotto è deciso **dalle offerte** ma non
+committato. Non è una perdita — l'esito non è un dato ma una funzione — e **non è stato assunto**: c'è
+un test che sigilla un lotto, retrodata la scadenza, e verifica che lo `sweep` (il boot recovery)
+produca lo stesso vincitore allo stesso prezzo di un'asta gemella col cancello spento.
+
+**Il cancello a ogni chiusura di round, non solo quando c'è un vincitore** (decisione dell'owner, e
+allarga la richiesta del quaderno). La misura che la giustifica: oggi un pareggio nel round 1 svela
+l'importo pareggiato a chi ha pareggiato — `LOT_TIE_PREP` porta `tie`, e `snapshot.ts` lo dichiara come
+«l'unica informazione che esce prima del reveal», motivandolo col fatto che fra due secondi sarà il
+`min_amount` pubblico del round 2. Quella motivazione regge finché il round 2 parte davvero: la
+disconnessione da cui nasce questa macro esporrebbe comunque quella cifra. Ed è anche **un punto solo
+nel codice invece di due**.
+
+**`resultGateSeconds = 0` non è una fase da zero secondi: è l'assenza della fase.** Il ramo nel motore
+è una `if`, e vale la pena averla scritta. Una fase da zero è uno stato osservabile — un timer armato
+sull'istante presente, uno snapshot in più per lotto mandato a dodici persone, un `ADVANCE` in ritardo
+di un tick che fa lampeggiare una schermata d'attesa. È anche l'unico timer di `TIMER_LIMITS` con
+minimo 0, e la nota sta accanto al limite: chi «uniformasse» quel minimo a 1 per simmetria spegnerebbe
+l'unico modo di tornare al comportamento di v1.14.0.
+
+**I due default sono diversi di proposito e non vanno allineati.** La colonna ha `DEFAULT 0` — è ciò
+che vale per le righe che esistono già, e le lascia identiche a se stesse **senza backfill**, che è la
+differenza fra questa macro e M5 (dove il default «ragionevole» era quello sbagliato per ogni riga
+esistente). `DEFAULT_CONFIG` ha `10` — è ciò che si propone a chi crea un'asta adesso. Uno risponde a
+«cosa c'era prima», l'altro a «cosa proponiamo».
+
+**`VOIDED` non sarà mai `RESOLVED`, e i due predicati non si toccano.** Un lotto annullato è l'unico
+caso dell'applicazione in cui un lotto finisce senza che le buste siano mai uscite. `isPublicLot`
+equipara `RESOLVED` a «le buste sono già state pubbliche» *per costruzione* — `enterReveal` scrive
+quello status nell'istante in cui gli importi diventano pubblici — quindi dare `RESOLVED` a un lotto
+annullato «per coerenza» farebbe pubblicare dallo storico esattamente le offerte che il cancello esiste
+per non svelare. La seconda rete di `lib/engine/log.ts` (un lotto senza vincitore o senza prezzo viene
+scartato comunque) resta dov'è: le due si sovrappongono di proposito.
+
+**Gli override sono rifiutati anche dentro il cancello**, in `lib/engine/override.ts` e in
+`overrideControls`. Non è una precauzione: è il **presupposto** di «Annulla lotto». Quell'azione riporta
+il turno al chiamante e regge su tre condizioni, e la terza — «il ruolo del chiamante non può essersi
+riempito nel frattempo» — è vera solo perché l'unica cosa che riempie un ruolo fuori da un lotto è
+`manualAssign`, che lì è vietata. Chi un giorno togliesse `LOT_SEALED` da quell'elenco romperebbe una
+funzione di `machine.ts` da un altro file, in silenzio; per questo il test di `overrideControls` lo dice
+per iscritto. E un lotto sigillato **è** un lotto in contesa: è il momento più in contesa che ci sia,
+perché l'esito è già deciso e nessuno lo conosce.
+
+**Niente cancello sui lotti a idoneo unico.** Lì non c'è nessuna busta da proteggere — l'unica offerta
+in campo è l'auto-bid a 1 del chiamante, e «prezzo 1» è già implicito nel fatto che nessun altro
+potesse offrire. Metterlo vorrebbe dire pagare X secondi per lotto, molti di fila a fine ruolo, per un
+esito incontestabile: cioè disfare l'ottimizzazione che il commento di `openLot` descrive.
+
+⚠ **La scadenza del pick dopo un annullamento è ancorata a `pausedAt`, non a `now`, e la spec diceva
+`now`.** È l'unica deviazione di sostanza dalla lettera di M14 §6, e la ragione è che l'asta è **ferma**:
+`resume` trasla ogni scadenza di quanto è durata la pausa, quindi un `now + pickSeconds` scritto durante
+la pausa verrebbe traslato **una seconda volta**, e alla ripresa il chiamante avrebbe più tempo di
+`pickSeconds`. Peggio, si vedrebbe subito: durante la pausa il client disegna
+`pausedRemaining(deadline, pausedAt)`, che con `now` mostrerebbe «`pickSeconds` più i secondi già
+passati in pausa» — un 30s configurato che a schermo dice 80. Ancorando a `pausedAt` il conto torna in
+tutti e due i posti, e c'è un test con quei numeri dentro. Conseguenza notevole: **`cancelLot` è l'unica
+transizione della macchina che non prende `now`**, e non prenderlo è più onesto che prenderlo per non
+usarlo — l'ha fatto notare ESLint, non un ragionamento.
+
+⚠ **`scripts/seed.ts` non viene segnalato da `tsc`, al contrario di quanto §8 della spec prevedeva.**
+La spec diceva che rendere il campo obbligatorio in `AuctionConfig` avrebbe fatto fallire il letterale
+`DEV_TIMERS`; non succede, perché `createAuction` prende `AuctionConfigInput`, dove ogni campo è
+opzionale, e quell'oggetto non viene mai confrontato con `AuctionConfig`. Quindi il cancello corto nel
+seed è entrato **a mano** e nient'altro lo avrebbe ricordato — che è esattamente il rischio che §8
+segnalava, per una ragione diversa da quella che dava. **Provato per falsificazione** invece che
+dedotto: commentando il `case "LOT_SEALED"` dello `switch` di `simulate`,
+`pnpm db:seed --auction-status=mid` muore con `simulazione: fase inattesa LOT_SEALED`. Cioè quel
+collaudo attraversa davvero la fase nuova, e ci passa **solo** grazie al cancello in `DEV_TIMERS`:
+senza, avrebbe continuato a funzionare senza provare niente di ciò che la macro aggiunge. Con
+`--auction-status=completed`: 200 lotti, tutti `RESOLVED`, asta `COMPLETED`.
+
+**Gli helper dei test nascono con il cancello spento, e non è pigrizia.** `makeState`
+(`tests/engine/helpers.ts`) e `makeGameAuction` (`tests/db/game-helpers.ts`) hanno
+`resultGateSeconds: 0`. Serviva perché `createAuction` valida contro `DEFAULT_CONFIG`, che propone 10:
+senza quella riga 28 test scritti prima di M14 trovavano `LOT_SEALED` dove si aspettavano
+`LOT_REVEAL`. Ma è anche la scelta giusta e non solo la comoda: così **tutte le asserzioni che
+esistevano prima del cancello sono la prova che con `X = 0` l'asta si comporta come a v1.14.0** — la
+verifica 10 della spec, dimostrata da 815 test esistenti invece che da un test nuovo che lo racconta.
+
+**`LotClosedCard` impara uno stato invece di nascere una terza card**, ed è la lezione di M1 applicata
+al contrario. M1 diceva: il lotto vivo e il lotto chiuso devono avere due facce diverse, perché chi
+guarda il telefono per tre secondi non deve dover *leggere* per capire che il lotto è finito. Qui il
+lotto sigillato e il lotto aperto sono la stessa faccia in due istanti: la cosa già accaduta — «non si
+offre più» — è la stessa, e ciò che cambia è solo se il risultato si conosce. Il prezzo appare **dove
+prima scorreva il countdown**, quindi chi sta guardando nell'istante in cui le buste si aprono non ha
+niente da ritrovare: il numero grande resta dov'è e cambia significato.
+
+⚠ **La TV ha avuto bisogno di un ramo suo, e senza sbagliava in modo credibile.** Durante `LOT_SEALED`
+`reveal` e `tie` sono entrambi `null`, quindi la colonna del lotto cadeva sul ramo del lotto vivo:
+«Le buste sono segrete fino allo scadere» e un countdown puntato su `lot.endsAt`, che è un istante
+**già passato**. Chi guarda avrebbe letto «in chiusura…» fermo per dieci secondi — un tabellone che
+sembra piantato, nel momento esatto in cui tutta la stanza lo sta fissando.
+
+**Tre flake preesistenti, trovati per strada e corretti qui.** Nessuno dei tre è di M14 — è stato
+verificato riproducendoli — ma tutti e tre sono emersi perché un file di test in più ha cambiato
+l'ordine dei lavori, e un rosso intermittente che si impara a ignorare è peggio di un rosso.
+(1) `delete-auction.test.ts` confrontava il **conteggio** globale di `listone_players` e
+`player_insights`, che due altri file scrivono in parallelo: la domanda vera è «la cascata ha portato
+via qualcosa?», e a quella risponde il contenimento — ogni riga che c'era prima c'è anche dopo.
+(2) `bots.test.ts` asseriva `toHaveLength(12)` su *tutte* le righe `is_bot`, che altri file creano con
+nomi loro (`admin.test.ts` fa «Bot di prova» e «Bot 3»): un giro interrotto li ha lasciati a database e
+da lì il test è diventato rosso a ogni esecuzione — si asserisce che i dodici nomi ci siano una volta
+ciascuno, che è la non-duplicazione, cioè la proprietà vera.
+(3) `scheduler.test.ts` teneva un orologio finto **dodici secondi avanti** a quello reale mentre
+`startScheduler` accende anche lo sweep periodico, che interroga il database con l'orologio **vero**:
+bastava che la suite durasse più di quei dodici secondi perché lo sweep facesse avanzare l'asta da sé e
+la spia registrasse una chiamata che il timer non aveva fatto. La linea temporale è stata spostata di
+un'ora, con la presence riscritta a quel momento. Dopo: dieci giri di suite di fila verdi, contro uno
+rosso su otto prima.
+
+**E un test nuovo è nato antisociale, corretto sul posto.** `sweep()` è globale — interroga tutte le
+aste `LIVE` con la deadline scaduta — quindi passargli `advancePhase` così com'è significa far avanzare
+anche le aste degli altri file: `scheduler.test.ts` è diventato rosso da lì («expected [] to include
+…») per colpa di `cancello.test.ts` e non per un bug. La query resta quella vera, che è il pezzo di
+boot recovery da collaudare; l'`advance` è filtrato sull'asta del test. Per la stessa ragione i due
+test del crash **non asseriscono su quale sweep abbia pescato l'asta** — non è una proprietà nostra —
+ma sull'esito, che è identico qualunque sweep l'abbia risolta: ed è precisamente la proprietà sotto
+esame.

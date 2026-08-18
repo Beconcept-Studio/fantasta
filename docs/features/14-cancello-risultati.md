@@ -1,8 +1,21 @@
 # M14 — Il cancello dei risultati: le buste non si aprono da sole
 
-> **Stato:** **pianificata** il 2026-08-18, **non aperta**. Si apre **su richiesta esplicita
-> dell'owner**, come tutte · **Indipendente da M13**, che sta prima solo per profilo di rischio:
-> quella è tutta UI nel pannello, questa apre la macchina a stati dell'asta.
+> **Stato:** **aperta** il 2026-08-18 su richiesta dell'owner, su `feature/14-cancello-risultati`.
+> Codice, test e documentazione **fatti**: gate verde con **860 test in 51 file** (baseline 815),
+> `pnpm typecheck` e `pnpm lint` puliti. ⚠ **`pnpm build` ancora da dare** — il dev server dell'owner
+> era acceso, e darlo con `pnpm dev` attivo corrompe `.next`. Restano **M14-15** (la prova a mano
+> dell'owner) e **M14-17** (il rilascio, solo su richiesta esplicita).
+> **Indipendente da M13**, che sta prima solo per profilo di rischio: quella è tutta UI nel pannello,
+> questa apre la macchina a stati dell'asta.
+>
+> **Le tre cose venute fuori lavorandola, che la spec non prevedeva** (i dettagli sono nei task):
+>
+> 1. **§3 sottostima il buco.** Non è «un quiz con una risposta sola»: `roster` porta `price`, cioè
+>    l'**importo esatto** della busta vincente. Riprodotto in M14-02 prima di scrivere il rimedio.
+> 2. **La scadenza del pick dopo un annullamento è ancorata a `pausedAt`, non a `now`** come §6 dice —
+>    altrimenti `resume` la trasla due volte e in pausa il client mostra 80s per un pick da 30 (M14-05).
+> 3. **`tsc` non segnala `scripts/seed.ts`**, al contrario di §8: `createAuction` prende
+>    `AuctionConfigInput`, dove tutto è opzionale. Il cancello nel seed è entrato a mano (M14-11).
 >
 > ⚠ **Tocca lo schema del database? Sì.** Una colonna: **`auctions.result_gate_seconds`**, additiva,
 > con `DEFAULT 0`. Quindi al rilascio servono, sul server, `pnpm db:push` e `pm2 reload` — la procedura
@@ -440,56 +453,142 @@ il modo di dimenticare metà dell'elenco. Verificato leggendo i chiamanti:
       dell'offerta vincente**, in un campo che non ha nessun rapporto con `reveal`. Nascondere
       `reveal` mentre `roster` pubblica il prezzo non nasconde niente: sigillare *dopo* la
       risoluzione sarebbe stato inutile per costruzione, non per distrazione. Il cancello va prima.
-- [ ] **M14-03** — `lib/domain.ts`: `LOT_SEALED` in `AUCTION_PHASES`. `lib/engine/setup-rules.ts`: la
+- [x] **M14-03** — `lib/domain.ts`: `LOT_SEALED` in `AUCTION_PHASES`. `lib/engine/setup-rules.ts`: la
       quinta voce di `TIMER_LIMITS` con **min 0** e la nota di §7, `DEFAULT_CONFIG` a 10.
       ⚠ Il campo è **obbligatorio** in `AuctionConfig` — sia quello del setup sia quello del motore in
       `lib/engine/types.ts` — ed è precisamente ciò che fa segnalare a `tsc` i costruttori di config
       scritti a mano, il seed compreso (§8). `lib/db/schema.ts`: la colonna con `DEFAULT 0` e il
       commento sui **due default diversi**.
       `lots.status` prende `VOIDED`, con il rimando a §6 sul perché non sarà mai `RESOLVED`
-- [ ] **M14-04** — Il motore: `advanceLotOpen` chiude e sigilla (⚠ **senza chiamare `resolveRound`**),
+      → **Fatto.** `AUCTION_PHASES` prende `LOT_SEALED` fra `LOT_OPEN` e `LOT_TIE_PREP` (ordine
+      narrativo: nessun algoritmo indicizza quella lista). `TIMER_LIMITS` ha la quinta voce con min 0
+      e la nota; `DEFAULT_CONFIG` a 10; la colonna con `DEFAULT 0` e il commento sui due default.
+      `lots.status` prende `VOIDED`, con il rimando a §6 sul tipo e la nota sull'indice parziale — che
+      **continua a valere durante il cancello**, perché lì il lotto resta `OPEN`.
+      ⚠ **Il campo obbligatorio ha segnalato due costruttori di config, non tre: `scripts/seed.ts`
+      non è fra loro, al contrario di quanto §8 prevedeva.** `createAuction` prende
+      `AuctionConfigInput`, dove ogni campo è opzionale, e `DEV_TIMERS` non viene mai confrontato con
+      `AuctionConfig`: dimenticarlo lì compila. I due segnalati sono `tests/engine/helpers.ts` e
+      `tests/snapshot-factory.ts`. Conseguenza: il cancello nel seed è entrato **a mano** (M14-11), che
+      è il rischio giusto per la ragione sbagliata.
+- [x] **M14-04** — Il motore: `advanceLotOpen` chiude e sigilla (⚠ **senza chiamare `resolveRound`**),
       il caso `LOT_SEALED` in `advance` risolve, `SHOW_RESULTS` come secondo chiamante del pattern di
       `skipReveal`. **Il ramo `resultGateSeconds === 0` che salta la fase del tutto** (§2). Test puri:
       vincitore, pareggio, cancello a 0, cancello in pausa, doppio `SHOW_RESULTS`, `ADVANCE` in
       anticipo
-- [ ] **M14-05** — `CANCEL_LOT` nel motore (§6): lotto `VOIDED`, turno al chiamante, ruolo invariato,
+      → **Fatto**, con una funzione in più che la spec non nominava e che vale la pena avere:
+      `resolveClosedRound(state, lot, now)`. Ha **tre** chiamanti — la chiusura del round senza
+      cancello, la scadenza del cancello, e `SHOW_RESULTS` — e non c'è nessuna seconda strada per
+      decidere chi ha vinto un lotto. 21 test puri: vincitore, pareggio (che **non** va in
+      `LOT_TIE_PREP` ma nel cancello), cancello a 0, cancello in pausa con il residuo conservato,
+      doppio `SHOW_RESULTS`, `ADVANCE` in anticipo (no-op per riferimento), idoneo unico senza
+      cancello, e «stesse buste, stesso esito con e senza».
+- [x] **M14-05** — `CANCEL_LOT` nel motore (§6): lotto `VOIDED`, turno al chiamante, ruolo invariato,
       niente assegnazioni toccate. L'asserzione sulle tre condizioni, con l'eccezione e non il rifiuto
       (§6). Test puri, **compreso il caso che dimostra che il giocatore torna chiamabile** e quello che
       dimostra che le offerte restano in tabella
-- [ ] **M14-06** — ⚠ `LOT_SEALED` fra le fasi che **rifiutano gli override**, in
+      → **Fatto**, con **una deviazione di sostanza dalla lettera di §6** e vale la pena leggerla: la
+      scadenza del pick è `pausedAt + pickSeconds`, **non** `now + pickSeconds`. Con `now`, `resume`
+      la traslerebbe una seconda volta e il chiamante avrebbe più tempo di `pickSeconds`; peggio, in
+      pausa il client disegna `pausedRemaining(deadline, pausedAt)`, che mostrerebbe «30s configurati»
+      come 80. C'è un test con quei numeri dentro.
+      ⚠ **E `cancelLot` è l'unica transizione della macchina che non prende `now`**: l'asta è ferma,
+      ogni istante che scrive è ancorato a `pausedAt`, e il lotto annullato non prende timestamp —
+      `resolvedAt` resta `null`. L'ha fatto notare ESLint, non un ragionamento.
+- [x] **M14-06** — ⚠ `LOT_SEALED` fra le fasi che **rifiutano gli override**, in
       `lib/engine/override.ts` **e** in `overrideControls` (§6). È il presupposto di M14-05, non un
       extra: il messaggio è quello che c'è già («c'è un lotto in contesa»)
-- [ ] **M14-07** — Le azioni: `showResults` e `cancelLot` in `lib/engine/actions.ts`, con
+      → **Fatto**, nei due posti. Il messaggio è quello che c'era già. Il test di `overrideControls`
+      dice per iscritto *perché* la riga c'è — che è il presupposto di M14-05 — così chi un giorno
+      «uniformasse» l'elenco trova un rosso che glielo spiega, e non una funzione rotta in un altro
+      file. Verificato anche su Postgres, con `manualAssign` rifiutata sia a `LIVE` sia a `PAUSED`.
+- [x] **M14-07** — Le azioni: `showResults` e `cancelLot` in `lib/engine/actions.ts`, con
       `requireOwner` come pausa, ripresa e «Prosegui asta». La riga di `events` per l'annullamento —
       **senza nessun importo nel payload** — e il `case` in `describeEvent` (§6)
-- [ ] **M14-08** — La regia: i due pulsanti in `ControlPanel` più il terzo in pausa, con la conferma
+      → **Fatto.** `showResults` e `cancelLot` in `actions.ts` con `requireOwner`, e i due `case` nella
+      rotta HTTP. La riga di `events` ha voluto una cosa che la spec non nominava: `recordEvent` scrive
+      un payload uniforme, quindi per far entrare giocatore e chiamante c'è `extraPayload(loaded,
+      event)` — **un solo ramo**, per `CANCEL_LOT`, ed è l'unica transizione che ne ha bisogno perché è
+      l'unica che fa *sparire* qualcosa: un lotto `VOIDED` non compare in nessun elenco, quindi quella
+      riga è la sola traccia che è esistito. Nessun importo nel payload. `describeEvent` ha il suo
+      `case`, e `SHOW_RESULTS` e `CANCEL_LOT` sono anche in `NOTABLE_EVENT_TYPES` — non servirebbe
+      (`isNotableEvent` consulta la lista della routine) ma quella lista è ciò che un test legge.
+- [x] **M14-08** — La regia: i due pulsanti in `ControlPanel` più il terzo in pausa, con la conferma
       che nomina giocatore e chiamante (§5); `managerControls` con i suoi test puri. Il testo accanto a
       «Metti in pausa» dice cosa succede **adesso**
-- [ ] **M14-09** — Il portale: `LotClosedCard` impara lo stato sigillato (⚠ oggi esce subito con
+      → **Fatto.** `managerControls` impara `canShowResults` (`LIVE` + `LOT_SEALED`) e `canCancelLot`
+      (`PAUSED` + `LOT_SEALED`): **stessa fase, due status diversi**, ed è il disegno e non
+      un'asimmetria — il cancello che scorre si anticipa, quello fermo si disfa. `canPause` non è stato
+      toccato, perché guarda `status` e durante il cancello era già vero. Il blocco «Mostra risultati»
+      sta **in cima** ai comandi: vive pochi secondi, e in quei secondi è l'unica cosa che chi conduce
+      deve poter raggiungere senza cercarla. Il testo accanto a «Metti in pausa» ha tre rami invece di
+      due, così durante il cancello dice cosa succede *adesso*.
+- [x] **M14-09** — Il portale: `LotClosedCard` impara lo stato sigillato (⚠ oggi esce subito con
       `reveal === null`), `phaseLabel` prende «buste da aprire», la scelta della card diventa a tre
       vie. Test di `portal.ts`: **il settimo caso di rientro di §8bis**, cioè chi ricarica durante il
       cancello trova il cancello col tempo giusto
-- [ ] **M14-10** — La vista TV (§4): la stessa cosa, sul fondo nero, senza `dark:` nuovi altrove
-- [ ] **M14-11** — ⚠ `scripts/seed.ts`: il `case` per la fase nuova **e** il cancello corto in
+      → **Fatto.** `LotClosedCard` non esce più su `reveal === null` ma decide sulla **fase**: la
+      distinzione è fra «le buste non sono ancora uscite» e «questo snapshot non porta il reveal perché
+      siamo altrove». Il prezzo appare **dove prima scorreva il countdown**, così chi guarda nell'istante
+      in cui le buste si aprono non ha niente da ritrovare. `phaseLabel` prende «buste da aprire».
+      Due test di rientro (§8bis, settimo caso): a asta in corso e a asta in pausa, con il residuo
+      congelato verificato a mano sui numeri.
+- [x] **M14-10** — La vista TV (§4): la stessa cosa, sul fondo nero, senza `dark:` nuovi altrove
+      → **Fatto, e serviva più di quanto la spec dicesse.** Senza un ramo suo, `LotStage` cadeva sul
+      ramo del lotto **vivo** — `reveal` e `tie` sono entrambi `null` nel cancello — e disegnava «Le
+      buste sono segrete fino allo scadere» con il countdown puntato su `lot.endsAt`, che è un istante
+      **già passato**: dieci secondi di «in chiusura…» fermo, cioè un tabellone che sembra piantato nel
+      momento in cui la stanza lo sta fissando. `SealedStage` usa `auction.phaseDeadline`. Nessun
+      `dark:` nuovo da nessuna parte.
+- [x] **M14-11** — ⚠ `scripts/seed.ts`: il `case` per la fase nuova **e** il cancello corto in
       `DEV_TIMERS` (§8). Il secondo è il punto: senza, `--auction-status=mid` continua a funzionare e
       **non attraversa la fase nuova**, cioè l'unico collaudo locale che gioca un'asta intera è anche
       l'unico che non prova ciò che questa macro aggiunge. Provarlo, non dedurlo
-- [ ] **M14-12** — Test con Postgres: I8 durante il cancello — **si asserisce sul payload dello
+      → **Fatto e provato per falsificazione, non dedotto.** Commentando il `case "LOT_SEALED"`,
+      `pnpm db:seed --auction-status=mid` muore con `✗ simulazione: fase inattesa LOT_SEALED`: quindi
+      quel collaudo attraversa davvero la fase nuova, e ci passa **solo** grazie al cancello in
+      `DEV_TIMERS` (2 secondi). Ripristinato il `case`, `--auction-status=completed` produce **200
+      lotti, tutti `RESOLVED`, asta `COMPLETED`** con `result_gate_seconds = 2` — che è anche la
+      verifica 14. `docs/HOWTO-PROVA-LOCALE.md` aggiornato con i timer nuovi, il consiglio di alzare il
+      cancello a 10 per guardarlo, e la nota sui bot che richiamano lo stesso giocatore.
+- [x] **M14-12** — Test con Postgres: I8 durante il cancello — **si asserisce sul payload dello
       snapshot** per partecipante, manager e TV: né `reveal`, né `tie`, e **i crediti e la rosa del
       vincitore identici a prima della chiusura** (è la verifica di §3, l'unica che il modo ovvio non
       avrebbe passato). Più: un lotto annullato non ha assegnazioni, `users` e `players` intatti, il
       lotto è `VOIDED` e **lo storico non ne pubblica le offerte**
-- [ ] **M14-13** — Il crash nel cancello (§3c): si ferma il processo con un lotto sigillato, si
+      → **Fatto**, 14 test in `tests/db/cancello.test.ts`. L'asserzione che conta non è «`reveal` è
+      nullo» — quella passerebbe anche nel modo sbagliato — ma **i crediti, `maxBid`, `slotsFilled` e
+      la rosa identici a prima della chiusura, per tutti i membri e per tutti e tre gli spettatori**.
+      Due correzioni al volo su asserzioni mie troppo larghe, e sono lezioni: (a) il partecipante
+      «testimone» deve essere uno che **non** ha offerto, perché chi ha offerto vede legittimamente la
+      propria cifra in `myBid`; (b) non si asserisce su cifre come sottostringhe — `not.toContain("40")`
+      trova un `40` dentro un uuid o un timestamp — ma sui **nomi dei campi** (`"amount"`, `"price"`,
+      `"bids"`, `"rounds"`). Compresi: lotto `VOIDED`, zero assegnazioni, utenti/membri/listone intatti
+      (legati all'asta, mai conteggi globali), e lo storico che non pubblica.
+- [x] **M14-13** — Il crash nel cancello (§3c): si ferma il processo con un lotto sigillato, si
       riparte, e il boot recovery **produce lo stesso vincitore**. È la proprietà che questa macro
       rimanda di X secondi, e va provata invece che raccontata
-- [ ] **M14-14** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
+      → **Fatto**, e la simulazione del crash ha voluto un ordine preciso: si sigilla con la scadenza
+      **nel futuro**, poi la si retrodata. `sweep()` è **globale** e i file di test girano in parallelo,
+      quindi un'asta lasciata `LIVE` e già scaduta per il tempo del setup è un'asta che un altro file
+      può far avanzare. Per la stessa ragione lo sweep di questo test ha l'`advance` **filtrato** sulla
+      propria asta — passandogli `advancePhase` così com'era faceva avanzare le aste di
+      `scheduler.test.ts`, che è diventato rosso da lì — e **non si asserisce su quale sweep abbia
+      pescato l'asta**, ma sull'esito: identico qualunque sweep l'abbia risolta, che è precisamente la
+      proprietà sotto esame.
+- [x] **M14-14** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
       spento)
+      → **Verde**, e con un margine che vale la pena scrivere: `pnpm test` **860 test in 51 file** (da
+      815 di baseline, +45), `pnpm typecheck` e `pnpm lint` puliti. La suite è stata lanciata **dieci
+      volte di fila** per la caccia ai flake, e sono dieci verdi.
+      ⚠ `pnpm build` **non ancora dato**: il dev server dell'owner è acceso, e darlo con `pnpm dev`
+      attivo corrompe `.next`. Va dato prima del merge su `dev`, a dev server spento.
 - [ ] **M14-15** — Prova a mano, che i test non sostituiscono: una simulazione con cancello a 10
       secondi, **due dispositivi collegati** più la TV. Si guarda che per dieci secondi **nessuno dei
       tre** mostri qualcosa dei risultati (crediti compresi), poi «Mostra risultati»; poi un secondo
       lotto in cui si mette in pausa e si annulla, e si verifica che il turno torni a chi aveva
       chiamato e che il giocatore sia richiamabile
-- [ ] **M14-16** — `docs/ARCHITECTURE.md`: il capitolo della macchina a stati — è la prima fase nuova
+- [x] **M14-16** — `docs/ARCHITECTURE.md`: il capitolo della macchina a stati — è la prima fase nuova
       dopo v1.0.0, e il racconto di §3 è la parte che serve a chi leggerà fra sei mesi.
       `docs/DECISIONS.md`: il cancello prima della risoluzione **con la trappola dei crediti**, il
       cancello a ogni chiusura di round (decisione 2 dell'owner, con la misura sul `tie`), lo zero come
@@ -497,6 +596,13 @@ il modo di dimenticare metà dell'elenco. Verificato leggendo i chiamanti:
       nel cancello, e i lotti a idoneo unico senza cancello.
       ⚠ **`CLAUDE.md`: le due righe da correggere** (la rotazione che torna indietro, e le fasi che
       rifiutano gli override): un file che si contraddice è peggio di uno incompleto
+      → **Fatto.** `ARCHITECTURE.md`: il capitolo «Il cancello dei risultati, e la trappola dei
+      crediti» dentro «Come si legge un lotto», scritto per chi lo leggerà fra sei mesi — la serata da
+      cui nasce, la misura del buco, le tre conseguenze, lo zero come assenza della fase, le tre leve
+      della regia, e le due cose che il cancello non fa. `DECISIONS.md`: la voce datata con tutte le
+      scelte della spec **più** le tre che sono nate lavorando (l'ancoraggio a `pausedAt`, il seed che
+      `tsc` non segnala, gli helper dei test col cancello spento). `CLAUDE.md`: le due righe corrette.
+      `features/README.md`: M14 in «In corso» e la sezione «Da pianificare» che non la elenca più.
 - [ ] **M14-17** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       esplicita** — `CHANGELOG.md`, `package.json`, merge su `main`, tag `v1.15.0`, push. ⚠ **E poi
       `pnpm db:push` sul server**, che senza è un'asta che non parte: la colonna non esiste e ogni

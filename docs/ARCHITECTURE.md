@@ -672,9 +672,11 @@ inserimento delle offerte.
 
 Il giro di un lotto, dall'alto: si è in `WAITING_PICK` e tocca a un seat; la chiamata (o il
 timeout, che chiama d'ufficio il miglior valore di mercato rimasto) apre il lotto e lo porta in
-`LOT_OPEN`; le buste si chiudono allo scadere; se il massimo è unico si passa al `LOT_REVEAL`,
-altrimenti c'è lo spareggio (`LOT_TIE_PREP`, poi di nuovo `LOT_OPEN` come round 2); il reveal
-scade e il turno avanza — o l'asta finisce.
+`LOT_OPEN`; le buste si chiudono allo scadere; **da M14 c'è un istante in mezzo, `LOT_SEALED`**,
+in cui il round è chiuso e l'esito non è ancora stato calcolato (è il capitolo dopo questo);
+passato quello, se il massimo è unico si va al `LOT_REVEAL`, altrimenti c'è lo spareggio
+(`LOT_TIE_PREP`, poi di nuovo `LOT_OPEN` come round 2); il reveal scade e il turno avanza — o
+l'asta finisce.
 
 Dentro questo giro ci sono quattro scelte che meritano una spiegazione.
 
@@ -709,6 +711,110 @@ offrire è il chiamante stesso — succede a fine ruolo, quando gli altri hanno 
 l'esito è già scritto, e il motore salta il countdown: il lotto va dritto al reveal, assegnato
 a 1. Trenta secondi di attesa con l'esito noto, moltiplicati per gli ultimi lotti di ogni ruolo,
 sarebbero minuti persi in diretta.
+
+### Il cancello dei risultati, e la trappola dei crediti
+
+Questa è la prima fase nuova della macchina a stati dopo la messa in produzione, e la ragione per
+cui è fatta come è fatta non si vede leggendo il codice: va raccontata.
+
+Il problema nasce da una serata vera. Fra «il round è chiuso» e «tutti sanno tutto» non c'era
+nessun istante: era una transizione sola, che nella stessa frazione di secondo calcolava il
+vincitore, scriveva l'assegnazione e mandava a dodici telefoni — e al proiettore — le buste di
+tutti. Se qualcuno perdeva la connessione negli ultimi secondi, non per colpa sua, nel momento in
+cui lo diceva a voce le offerte erano già sullo schermo. Non c'era niente da fermare: il lotto era
+assegnato, il prezzo pubblico, e l'unico rimedio era una correzione a mano che lasciava comunque
+tutti a conoscenza di quanto ciascuno aveva offerto — cioè, in un'asta a busta chiusa fra amici che
+si guardano in faccia, l'informazione che decide i lotti successivi.
+
+Il rimedio è un istante che appartiene a chi conduce. Per `result_gate_seconds` il round è chiuso e
+nessuno sa niente: si può mostrare, si può fermare, e — solo lì — si può buttare via il lotto e
+rifarlo.
+
+**Il modo ovvio non funziona, e il perché è la cosa da ricordare.** Verrebbe naturale lasciare il
+motore come stava — round chiuso, esito calcolato, assegnazione scritta — e semplicemente *non
+mostrare* le buste finché il cancello è aperto. Una riga nella serializzazione, e sembra fatta. È
+stato provato, e non nasconde niente: il buco non è nel pannello delle buste, **è nei crediti**.
+Per ogni partecipante lo snapshot porta sempre i crediti residui, l'offerta massima possibile, gli
+slot riempiti e la rosa, e li porta a *tutti*, TV compresa, perché sono tutti derivati dalle
+assegnazioni. Nascondere le buste mentre i crediti di qualcuno scendono di 87 e un nome nuovo
+compare nella sua rosa non è nascondere: è un quiz con una risposta sola. E la misura fatta il
+2026-08-18 su un'asta di prova dice che è peggio ancora — nella rosa c'è anche il *prezzo pagato*,
+cioè l'importo esatto della busta vincente, in un campo che non ha nessun rapporto con il pannello
+del reveal. Sul proiettore, in tempo reale, prima che chiunque possa premere un pulsante.
+
+Quindi **il cancello sta prima della risoluzione**: alla chiusura del round il motore scrive
+`closed_at` e si ferma, e la funzione che decide chi ha vinto non viene chiamata affatto. Non è una
+differenza di ordine, è la differenza fra «l'esito esiste e non lo mostriamo» e «l'esito non esiste
+ancora». Da questa scelta discendono tre conseguenze, tutte a favore.
+
+La prima: **annullare un lotto non tocca la regola dei dati mai distruttivi.** Nel cancello
+l'assegnazione non esiste, quindi non c'è nessuna riga da marcare come annullata, nessuna
+compensazione da inventare, nessun credito da rimettere a posto. Il giocatore torna disponibile da
+sé, perché «disponibile» è derivato dalle assegnazioni non annullate. Ciò che non si scrive non si
+può scrivere male.
+
+La seconda: **lo storico resta a posto gratis.** La pagina della storia di un'asta pubblica le
+buste dei soli lotti risolti, e quel confine non è una convenzione della pagina — è il momento
+esatto in cui il motore scrive `RESOLVED`, cioè quando gli importi diventano pubblici. Un lotto
+sigillato è ancora aperto, quindi lo storico non lo guarda, senza che nessuno abbia dovuto
+aggiungere una condizione. È anche il motivo per cui **un lotto annullato prende `VOIDED` e non
+diventerà mai `RESOLVED`**: è l'unico caso dell'applicazione in cui un lotto finisce senza che le
+buste siano mai uscite, e dargli `RESOLVED` per coerenza — «è finito, no?» — farebbe pubblicare
+dallo storico esattamente le offerte che il cancello esiste per non svelare.
+
+La terza è un prezzo, e va detto: l'assegnazione si scriveva all'ingresso del reveal proprio perché
+un crash non potesse perdere un lotto già deciso, e adesso davanti a quella proprietà c'è una
+finestra di qualche secondo in cui il lotto è deciso **dalle offerte** ma non committato. Non è una
+perdita, perché l'esito non è un dato ma una funzione: le offerte sono righe a database, la
+funzione che le risolve è pura, e al primo avanzamento successivo — il timer riarmato, o lo sweep
+di sicurezza dopo un riavvio — gli stessi bit producono la stessa risposta. Questa non è
+un'affermazione da credere: c'è un test che spegne il processo con un lotto sigillato, riparte, e
+verifica che il boot recovery produca lo stesso vincitore allo stesso prezzo.
+
+**Lo zero non è una fase da zero secondi: è l'assenza della fase.** Con `result_gate_seconds = 0`
+il motore risolve nella stessa transizione, come prima di M14 — è una `if`, e vale la pena averla
+scritta. Una fase da zero sarebbe uno stato osservabile: un timer armato sull'istante presente, uno
+snapshot in più per lotto spedito a dodici persone, e una schermata d'attesa che lampeggia se un
+avanzamento arriva un tick in ritardo. Lo zero è anche il valore che hanno le aste già in tabella,
+ed è per questo che M14 si è potuta rilasciare senza toccare nessuna riga esistente: quelle aste si
+comportano esattamente come si comportavano. Una **nuova** asta invece propone dieci secondi, e i
+due default sono diversi di proposito — uno risponde a «cosa c'era prima», l'altro a «cosa
+proponiamo adesso».
+
+**Chi comanda è l'owner, in regia.** Durante il cancello ha tre leve, e la differenza fra le prime
+due è tutto il disegno: «Mostra risultati» funziona ad asta in corso e anticipa una scadenza che
+c'è comunque; «Metti in pausa» — che esisteva già — congela il cancello; e solo ad asta in pausa
+compare la terza, «Annulla lotto». Il cancello che scorre si può anticipare, quello fermo si può
+disfare: annullare un lotto mentre il suo countdown corre sarebbe una corsa con il proprio timer, e
+ad asta ferma i timer sono fermi per definizione.
+
+«Mostra risultati» è la gemella di «Prosegui asta», e sta accanto ad `ADVANCE` per la stessa
+ragione: la guardia sulla scadenza serve ai timer e allo sweep, e allentarla per fare spazio a un
+pulsante la renderebbe inutile per entrambi. Premuto due volte non apre due volte, perché al
+secondo colpo la fase non è più quella.
+
+**«Annulla lotto» è l'unico posto dell'applicazione in cui il turno torna indietro**, e la regola
+operativa che dice il contrario resta vera in tutti gli altri: dopo il reveal la strada è quella di
+sempre — si annulla l'assegnazione e si riassegna a mano — e lì la rotazione non torna indietro. Qui
+può, e regge su tre condizioni insieme: quel lotto non ha creato nessuna assegnazione, la rotazione
+non è ancora avanzata, e il ruolo del chiamante non può essersi riempito nel frattempo. La terza è
+vera **perché gli override sono rifiutati anche durante il cancello**: l'unica cosa che riempie un
+ruolo fuori da un lotto è un'assegnazione manuale, e durante il cancello è vietata. Non è una
+precauzione in più — è il presupposto, e un lotto sigillato *è* un lotto in contesa, il più in
+contesa che ci sia: l'esito è già deciso e nessuno lo conosce. Con le tre condizioni in piedi, il
+caso «il chiamante non può più chiamare» non esiste, e il motore lo asserisce invece di gestirlo.
+
+Due cose che il cancello **non** fa, e sapendolo si evita di cercarle. Non riapre le offerte: chi
+era disconnesso durante il round ha perso il round, e il cancello serve a non svelare, non a
+rimediare — l'unico rimedio vero è buttare il lotto e rifarlo. E non si mette in pausa da solo per
+nessuna ragione, che è la stessa scelta dell'avviso di presenza: un'asta che si ferma da sé perché
+un telefono è andato in standby si bloccherebbe ogni due minuti. Se nessuno preme e nessuno segnala,
+i risultati escono. Il cancello sposta la decisione, non la sospende.
+
+Un'ultima nota, perché è una domanda che si farà chi guarda una simulazione: **i lotti a idoneo
+unico non passano dal cancello.** Lì non c'è nessuna busta da proteggere — l'unica offerta in campo
+è l'auto-offerta a 1 del chiamante — e mettere il cancello vorrebbe dire pagare qualche secondo per
+lotto, molti di fila a fine ruolo, per un esito che nessuno può contestare.
 
 ### L'evento del tempo, e l'idempotenza
 
