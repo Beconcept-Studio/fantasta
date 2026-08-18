@@ -420,13 +420,26 @@ il modo di dimenticare metà dell'elenco. Verificato leggendo i chiamanti:
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M14-01** — Aprire `feature/14-cancello-risultati` da `dev`; rileggere questo file, e in
+- [x] **M14-01** — Aprire `feature/14-cancello-risultati` da `dev`; rileggere questo file, e in
       particolare **§3**: la scelta di mettere il cancello prima della risoluzione è l'unica decisione
       da cui dipende tutto il resto, e il modo ovvio ha un buco che non si vede leggendo
       `serializeLot`. `pnpm test` verde come baseline, con il conteggio annotato (791 a v1.13.0)
-- [ ] **M14-02** — Riprodurre §3 **prima di scrivere il rimedio**: sigillare a mano un lotto risolto
+      → **Baseline: 815 test in 50 file**, verdi. Il 791 del testo era di v1.13.0: M13 ne ha aggiunti
+      24. Branch aperto da `dev` allineato a `origin/dev`.
+- [x] **M14-02** — Riprodurre §3 **prima di scrivere il rimedio**: sigillare a mano un lotto risolto
       (fase forzata a un valore che non mostra `reveal`) e guardare **i crediti del vincitore nello
       snapshot**. È il buco che decide la forma della macro, e va visto una volta
+      → **Visto, e §3 sottostima il buco.** Test usa-e-getta: asta a 8 con budget 100, il seat 0
+      chiama un portiere, due offerte (40 e 87), `ADVANCE` chiude il round, poi `phase` forzata a
+      `'LOT_SEALED'` con una `UPDATE` grezza. Nello snapshot **della TV** (`viewerMemberId = null`,
+      quindi nemmeno `myBid`): `reveal` e `tie` sono entrambi `null` — la sanificazione di
+      `serializeLot` funziona — e intanto il vincitore passa da `credits: 100` a `13`, da
+      `maxBid: 97` a `11`, da `slotsFilled.P: 0` a `1`, mentre gli altri sette restano a 100.
+      ⚠ **E c'è di più di quanto §3 dica**: non è «un quiz con una risposta sola», è la risposta
+      scritta. `roster` porta `{ name: "Giocatore 1", price: 87 }` — cioè **l'importo esatto
+      dell'offerta vincente**, in un campo che non ha nessun rapporto con `reveal`. Nascondere
+      `reveal` mentre `roster` pubblica il prezzo non nasconde niente: sigillare *dopo* la
+      risoluzione sarebbe stato inutile per costruzione, non per distrazione. Il cancello va prima.
 - [ ] **M14-03** — `lib/domain.ts`: `LOT_SEALED` in `AUCTION_PHASES`. `lib/engine/setup-rules.ts`: la
       quinta voce di `TIMER_LIMITS` con **min 0** e la nota di §7, `DEFAULT_CONFIG` a 10.
       ⚠ Il campo è **obbligatorio** in `AuctionConfig` — sia quello del setup sia quello del motore in

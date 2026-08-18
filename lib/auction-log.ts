@@ -130,6 +130,12 @@ export const NOTABLE_EVENT_TYPES = [
   "PAUSE",
   "RESUME",
   "SKIP_REVEAL",
+  // M14 — il cancello dei risultati. `SHOW_RESULTS` dice che le buste sono state
+  // aperte in anticipo da un umano; `CANCEL_LOT` è l'unica traccia che un lotto
+  // annullato è esistito, dato che `VOIDED` non è `RESOLVED` e quindi quel lotto
+  // non compare nell'elenco qui sopra.
+  "SHOW_RESULTS",
+  "CANCEL_LOT",
   "MANUAL_ASSIGN",
   "VOID_ASSIGNMENT",
   "ADJUST_BUDGET",
@@ -207,6 +213,14 @@ export function describeEvent({ type, payload, lotSeq }: LogEventInput): string 
       return "Asta ripresa.";
     case "SKIP_REVEAL":
       return `Buste chiuse in anticipo con «Prosegui asta»${ofLot(lotSeq)}.`;
+    case "SHOW_RESULTS":
+      return `Buste aperte in anticipo con «Mostra risultati»${ofLot(lotSeq)}.`;
+    // ⚠ Nomina il giocatore e chi l'aveva chiamato, e **nessun importo**: sono i due
+    // fatti che l'operazione cambia, e sono anche i soli che si possono scrivere. Le
+    // buste di quel lotto non sono mai state pubbliche e questa riga sopravvive a
+    // loro, quindi una cifra qui sarebbe l'unica a scavalcare il cancello (M14 §6).
+    case "CANCEL_LOT":
+      return `Lotto annullato: ${player}, chiamato da ${team}${ofLot(lotSeq)}. Il turno torna a chi aveva chiamato e il giocatore è di nuovo disponibile.`;
     case "MANUAL_ASSIGN": {
       const forced = payload?.force === true ? ", forzando un vincolo" : "";
       const perPrice = price === null ? "" : ` per ${price} crediti`;

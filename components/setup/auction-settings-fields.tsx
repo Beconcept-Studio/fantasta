@@ -158,6 +158,27 @@ export function AuctionSettingsFields({
             defaultValue={defaults.revealSeconds}
           />
         </div>
+
+        {/*
+          Il cancello dei risultati (M14) sta sotto e non nella griglia dei
+          quattro, e non è per larghezza: è l'unico timer che ammette lo zero, e
+          lo zero **cambia il numero di fasi dell'asta**. Un campo che in un caso
+          accorcia una pausa e in un altro la fa sparire ha bisogno di una riga
+          accanto, e in una cella da un quarto di riga quella riga non ci sta.
+        */}
+        <div className="max-w-xs space-y-1">
+          <TimerField
+            name="resultGateSeconds"
+            label="Prima dei risultati"
+            defaultValue={defaults.resultGateSeconds}
+          />
+          <p className="text-muted-foreground text-xs">
+            Quando un round si chiude, le buste restano chiuse per questi
+            secondi: puoi mostrarle prima, o mettere in pausa se qualcuno segnala
+            un problema. Con <strong>0</strong> non c&apos;è nessuna attesa — i
+            risultati escono appena il round chiude, come prima.
+          </p>
+        </div>
       </fieldset>
 
       <Separator />

@@ -76,6 +76,7 @@ function configFrom(form: FormData) {
     pickSeconds: number(form, "pickSeconds"),
     tiePrepSeconds: number(form, "tiePrepSeconds"),
     revealSeconds: number(form, "revealSeconds"),
+    resultGateSeconds: number(form, "resultGateSeconds"),
     slots: slots(form),
     roleOrder: roleOrder(form),
   };

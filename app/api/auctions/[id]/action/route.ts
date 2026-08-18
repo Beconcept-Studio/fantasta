@@ -1,10 +1,12 @@
 import { errorResponse } from "@/app/api/http";
 import { currentUser } from "@/lib/auth";
 import {
+  cancelLot,
   pauseAuction,
   pickPlayer,
   placeBid,
   resumeAuction,
+  showResults,
   skipReveal,
   startAuction,
   withdrawBid,
@@ -105,6 +107,17 @@ export async function POST(
     // il server. `skipReveal` verifica da sé la proprietà dell'asta.
     case "SKIP_REVEAL": {
       result = await skipReveal(user.id, id);
+      break;
+    }
+    // Il cancello dei risultati (M14). Nessun payload nemmeno qui: quale lotto è
+    // sigillato lo sa solo il server, e le due guardie — proprietà dell'asta, fase
+    // giusta — stanno una in `actions.ts` e una nel motore.
+    case "SHOW_RESULTS": {
+      result = await showResults(user.id, id);
+      break;
+    }
+    case "CANCEL_LOT": {
+      result = await cancelLot(user.id, id);
       break;
     }
     // Gli override del manager (Fase 7). Passano di qui e non da una rotta

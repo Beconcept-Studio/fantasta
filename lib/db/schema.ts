@@ -189,6 +189,20 @@ export const auctions = pgTable(
     pickSeconds: integer("pick_seconds").notNull().default(30),
     tiePrepSeconds: integer("tie_prep_seconds").notNull().default(10),
     revealSeconds: integer("reveal_seconds").notNull().default(10),
+    /**
+     * Il cancello dei risultati (M14): quanti secondi passano fra la chiusura di
+     * un round e l'apertura delle buste. `0` = nessun cancello.
+     *
+     * ⚠ **Il `DEFAULT 0` è diverso dal `10` di `DEFAULT_CONFIG`, e i due non vanno
+     * allineati.** Questo default risponde a «cosa vale per le righe che esistono
+     * già»: lo zero *è* il comportamento di v1.14.0, quindi le aste in tabella
+     * restano identiche a se stesse e M14 si rilascia con un `pnpm db:push` e
+     * **nessun backfill**. Il `10` di `setup-rules.ts` risponde a «cosa proponiamo
+     * a chi crea un'asta adesso», che è un'altra domanda. È la differenza fra
+     * questa macro e M5, dove il default «ragionevole» era quello sbagliato per
+     * ogni riga esistente.
+     */
+    resultGateSeconds: integer("result_gate_seconds").notNull().default(0),
     slotsP: integer("slots_p").notNull().default(3),
     slotsD: integer("slots_d").notNull().default(8),
     slotsC: integer("slots_c").notNull().default(8),
@@ -648,7 +662,20 @@ export const lots = pgTable(
       .notNull()
       .references(() => members.id, { onDelete: "cascade" }),
     autoCalled: boolean("auto_called").notNull().default(false),
-    status: text("status").$type<"OPEN" | "RESOLVED">().notNull(),
+    /**
+     * `OPEN` finché il lotto vive — round di offerte **e** cancello dei risultati
+     * (M14) — `RESOLVED` all'apertura delle buste, `VOIDED` se l'owner lo butta via
+     * dal cancello.
+     *
+     * ⚠ **`VOIDED` non è una modifica di schema**: la colonna è `text` senza
+     * `CHECK`, quindi non c'è niente da migrare. È una modifica del **tipo**, e i
+     * due predicati che la guardano — `isPublicLot` in `lib/auction-log.ts` e la
+     * seconda rete di `lib/engine/log.ts` — **restano come sono**: un lotto
+     * annullato deve continuare a non essere `RESOLVED`, o lo storico pubblicherebbe
+     * le buste che il cancello esiste per non svelare (M14 §6, e il tipo `LotStatus`
+     * in `lib/engine/types.ts` lo racconta per esteso).
+     */
+    status: text("status").$type<"OPEN" | "RESOLVED" | "VOIDED">().notNull(),
     currentRound: integer("current_round").notNull().default(1),
     winnerMemberId: uuid("winner_member_id").references(() => members.id, {
       onDelete: "cascade",
@@ -661,7 +688,11 @@ export const lots = pgTable(
   },
   (t) => [
     unique("lots_auction_seq_unique").on(t.auctionId, t.seq),
-    // I1 — al massimo un lotto aperto per asta, garantito dal database.
+    // I1 — al massimo un lotto aperto per asta, garantito dal database. ⚠ Il
+    // cancello dei risultati (M14) **tiene il lotto `OPEN`**, quindi questo indice
+    // continua a valere e a proteggere per tutta la durata del cancello: nessun
+    // lotto nuovo può nascere mentre un altro è sigillato. Un lotto annullato
+    // diventa `VOIDED` ed esce dall'indice, che è ciò che permette di rifarlo.
     uniqueIndex("one_open_lot_per_auction")
       .on(t.auctionId)
       .where(sql`${t.status} = 'OPEN'`),

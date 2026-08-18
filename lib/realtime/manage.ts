@@ -146,17 +146,28 @@ export type OverrideControls = {
 
 /**
  * Se è il momento di correggere (PLAN §9): **mai con un lotto in contesa**,
- * cioè con `phase ∈ {LOT_OPEN, LOT_TIE_PREP}`, e la pausa non cambia niente
- * perché congela la fase invece di azzerarla.
+ * cioè con `phase ∈ {LOT_OPEN, LOT_SEALED, LOT_TIE_PREP}`, e la pausa non cambia
+ * niente perché congela la fase invece di azzerarla.
  *
  * È la copia client del rifiuto che `lib/engine/override.ts` fa comunque
  * (regola 6): serve a spiegare *prima* del round trip, non ad autorizzare. Il
  * messaggio dice quanto bisogna aspettare, perché «non si può adesso» senza un
  * «fra dieci secondi sì» in diretta genera solo un secondo tentativo.
+ *
+ * ⚠ **`LOT_SEALED` è il caso in cui questa copia conta più che mai** (M14 §6). Il
+ * cancello dei risultati è il momento in cui l'owner sta guardando la regia con il
+ * dito sopra i pulsanti, e i pannelli delle correzioni sono nella stessa pagina: se
+ * qui restassero abilitati, l'unico modo di scoprire il divieto sarebbe premere. E
+ * quel divieto non è cortesia — è ciò che rende sicuro «Annulla lotto», che riporta
+ * il turno al chiamante contando sul fatto che nessuno gli abbia riempito il ruolo.
  */
 export function overrideControls(snapshot: Snapshot): OverrideControls {
   const { phase } = snapshot.auction;
-  if (phase === "LOT_OPEN" || phase === "LOT_TIE_PREP") {
+  if (
+    phase === "LOT_OPEN" ||
+    phase === "LOT_SEALED" ||
+    phase === "LOT_TIE_PREP"
+  ) {
     return {
       allowed: false,
       blocked:
