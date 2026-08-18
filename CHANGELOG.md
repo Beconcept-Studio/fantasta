@@ -4,6 +4,61 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.13.0] — 2026-08-18
+
+**M12 — Cancellare un'asta per forza, e dirlo a chi la stava guardando.** Fino a ieri un'asta iniziata
+non si poteva togliere di mezzo in nessun modo. Non era una svista: non esiste un pulsante «termina
+asta», a «conclusa» ci si arriva solo giocando fino in fondo, e la cancellazione era rifiutata a
+tutti — anche a chi amministra, anche a chi l'aveva creata. Il risultato era che una **simulazione
+lasciata in pausa** restava lì per sempre, e il 12 agosto una di queste ha bloccato un rilascio senza
+che ci fosse un gesto, in nessuna schermata, capace di chiuderla.
+
+Adesso **un amministratore può cancellare qualunque asta, in qualunque stato**, da Admin → Aste. Chi ha
+creato l'asta no: a lui l'applicazione continua a dire che è in corso, e gli dice anche chi può
+interromperla. Non è avarizia — la sua asta la stanno guardando altre undici persone, e chi la
+interrompe è meglio che non sia uno che sta giocando.
+
+### Chi era collegato non resta a fissare uno schermo fermo
+
+È la metà più importante di questa versione, e riguarda un guasto che c'era già. Cancellando un'asta,
+prima, chi la stava guardando **non veniva avvisato di niente**: la pagina restava ferma sull'ultimo
+momento ricevuto, con il countdown congelato. Non sembrava rotta — sembrava **lenta**. In una stanza con
+dieci persone, questo vuol dire dieci ricariche di pagina in trenta secondi e nessuna che funziona.
+
+Adesso, nell'istante in cui l'asta viene cancellata:
+
+- **chi stava giocando** si ritrova sulle sue aste, con scritto che quell'asta — per nome — è stata
+  cancellata da un amministratore;
+- **il tabellone in TV** si ferma dove è e lo dice a schermo pieno, perché lì non c'è nessuna
+  dashboard dove andare e nessuno che possa fare login davanti a un proiettore;
+- **nessuno dei due continua a tentare** di riattaccarsi a un'asta che non c'è più.
+
+**Prima di cancellare un'asta in corso, l'avviso dice quante persone sono collegate in quel momento** —
+«ci sono tre persone collegate: verranno riportate alla dashboard» — perché un avviso che nomina un
+numero si legge, e uno che dice «questa azione è irreversibile» si clicca. Se non c'è nessuno, lo dice
+anche quello. Resta il nome dell'asta da scrivere a mano per confermare: quello non è cambiato.
+
+### ⚠ Quello che nessun pulsante può impedire, ed è la riga da rileggere
+
+**Cancellare un'asta vera e conclusa si porta via il verbale delle rose e tutto il suo storico. Per
+sempre.** Chi ha comprato chi, a quanto, in che ordine, le rettifiche, il registro dei lotti: tutto
+quello che serve per raccontare com'è andata la serata. Non c'è un annulla, non c'è un cestino, non
+c'è un export automatico che ti salvi prima. **L'unica copia che resta è il backup notturno**, e se la
+cancellazione è di oggi il backup è di stanotte: manca la serata di oggi.
+
+Quindi, prima di cancellare un'asta a cui tieni, si fa un backup a mano:
+
+```bash
+cd /home/ploi/fantasta.rggndr.it && ./deploy/db-backup.sh
+```
+
+Per le simulazioni — che sono il motivo per cui questa versione esiste — non serve niente: sono aste di
+prova, e buttarle via è tutto ciò che si vuole fare.
+
+**Nessun passo a mano su questa versione.** Niente da caricare, nessuna modifica al database: il deploy
+finisce e la versione è completa. Era da sei rilasci che non succedeva, e questa riga c'è proprio perché
+le cinque precedenti dicevano il contrario.
+
 ## [1.12.0] — 2026-08-13
 
 **M11 — Il refresh giornaliero degli insight.** I numeri delle due fonti pubbliche si aggiornavano

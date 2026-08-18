@@ -1,8 +1,7 @@
 # M12 — Cancellare un'asta per forza
 
-> **Stato:** **chiusa su `dev`** il 2026-08-17, **non ancora rilasciata** — il merge su `main`, il tag
-> `v1.13.0` e il `CHANGELOG.md` aspettano una richiesta esplicita dell'owner. Resta aperta la sola
-> M12-10, la prova a due browser veri. Pianificata il 2026-08-12 ·
+> **Stato:** **chiusa e in produzione da `v1.13.0`** (2026-08-18). Chiusa su `dev` il 2026-08-17,
+> rilasciata il giorno dopo, a prova a due dispositivi fatta. Pianificata il 2026-08-12 ·
 > **Indipendente da M9, M10 e M11**: può scivolare dove serve. Sta per ultima perché è l'unica macro
 > dopo la quale un errore non si corregge con un `git reset`.
 >
@@ -288,11 +287,16 @@ voci in fila deve trovare la domanda già posta, non doversela fare.
       cancellare. → **Il nome sbagliato non è coperto da un test**, e non per dimenticanza: il
       confronto sta nella Server Action, dietro `requireAppAdmin`, che nei test del pannello è un
       finto che interrompe. È codice che M12 non ha toccato, e resta nella verifica a mano (n. 6).
-- [ ] **M12-10** — Prova a mano, che i test non sostituiscono: **due dispositivi collegati** a una
+- [x] **M12-10** — Prova a mano, che i test non sostituiscono: **due dispositivi collegati** a una
       simulazione `LIVE` — uno su `/play`, uno su `/tv/` — e la cancellazione mentre guardano. Il primo
       finisce in dashboard con il messaggio, il secondo si ferma con il suo, **e nessuno dei due
       riprova a connettersi** (si guarda la rete, non lo schermo)
-      → **Lato server già verificato, lato browser no.** Due stream TV aperti con `curl` su un'asta
+      → **Fatta dall'owner il 2026-08-18 con due dispositivi veri: il comportamento atteso è quello
+      giusto**, in tutti e tre i punti. → Un inciampo che non c'entra con la macro ma che conviene
+      ricordare: `pnpm dev:lan` è morto con `EADDRINUSE` su 3000 perché era rimasto acceso un
+      **`next-server`** dal `pnpm build` del gate. È l'orfano descritto in `CLAUDE.md`, e la diagnosi è
+      sempre `lsof -nP -iTCP:3000 -sTCP:LISTEN`.
+      → Il lato server era già stato verificato prima. Due stream TV aperti con `curl` su un'asta
       simulata `LIVE` usa e getta, cancellazione forzata *dentro il processo dell'app*: entrambi hanno
       ricevuto `event: deleted` con `{"auctionName":"M12 congedo"}` allo stesso secondo e il server ha
       chiuso lo stream — `curl` è uscito subito invece di aspettare il timeout, che è la differenza
@@ -311,13 +315,14 @@ voci in fila deve trovare la domanda già posta, non doversela fare.
       → Toccati anche i due punti di `ARCHITECTURE.md` che dicevano «il rifiuto vale per
       l'amministratore come per tutti»: restavano veri a metà, e un documento che si contraddice da
       solo è peggio di uno incompleto. E `HOWTO-PROVA-LOCALE.md` ha una §9 nuova.
-- [ ] **M12-13** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
+- [x] **M12-13** — Chiusura: merge `--no-ff` su `dev`, prova in locale, poi — **solo su richiesta
       esplicita** — `CHANGELOG.md`, `package.json`, merge su `main`, tag `v1.13.0`, push. **Nessun
       `db:push`**; ma il changelog deve dire, con parole semplici, che cancellare un'asta conclusa
       cancella il suo verbale e che prima si fa un backup (§4)
-      → Merge su `dev` fatto. **Il rilascio no**, aspetta la richiesta esplicita. `pnpm db:push`
-      **non serve**, verificato e non dato per scontato: `git diff dev..feature/12-cancellazione-aste`
-      non tocca `lib/db/schema.ts`.
+      → Merge su `dev` il 2026-08-17, rilascio `v1.13.0` il 2026-08-18 su richiesta dell'owner dopo la
+      prova a due dispositivi. `pnpm db:push` **non serve**, verificato e non dato per scontato:
+      `git diff` non tocca `lib/db/schema.ts` e non c'è nessun backfill. **È il primo rilascio da sei
+      senza un passo a mano sul server.**
 
 ## Verifica
 

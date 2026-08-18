@@ -12,21 +12,18 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-**M12 è chiusa su `dev`** (2026-08-17) e **non è ancora rilasciata**: il merge su `main`, il tag
-`v1.13.0` e il changelog aspettano una richiesta esplicita dell'owner. Gate verde con **791 test**,
-typecheck e build, e **nessun `pnpm db:push`** — verificato, non dato per scontato: `git diff` non tocca
-`lib/db/schema.ts`, le cascate verso `auctions` esistono per intero dal 2026-08-07, e non c'è nessun
-backfill. È il primo rilascio da sei senza nessun passo a mano sul server.
+Nessuna aperta. **M12 è in produzione da `v1.13.0`** (2026-08-18): chiusa su `dev` il 17, provata a due
+dispositivi il 18, rilasciata subito dopo. Gate verde con **791 test**, typecheck e build.
 
-⚠ **Ma il changelog dovrà dire la cosa che nessun pulsante può impedire**: cancellare un'asta **reale**
-`COMPLETED` si porta via il verbale delle rose e tutto lo storico di M3, per sempre, e prima si dà
-`deploy/db-backup.sh`. È l'unico posto che qualcuno rileggerà.
+⚠ **È il primo rilascio da sei senza nessun passo a mano sul server**: nessun `pnpm db:push`, nessun
+backfill, nessun file da caricare. Verificato invece di darlo per scontato — `git diff` non tocca
+`lib/db/schema.ts`, e le cascate verso `auctions` esistono per intero dal 2026-08-07. Se un giorno una
+cancellazione sembrasse incompleta in produzione, **non è un passo dimenticato** il sospetto da
+coltivare per primo.
 
-⚠ **Resta da fare la prova a due dispositivi** (M12-10): telefono su `/play`, computer sulla vista TV,
-cancellazione mentre guardano, e **il pannello di rete** per vedere che nessuno dei due riprova a
-connettersi. Il lato server è già verificato con due stream aperti — il congedo arriva a entrambi e lo
-stream si chiude — ma la parte «nessuno riprova» si distingue solo guardando le richieste di un browser
-vero. La procedura è in `docs/HOWTO-PROVA-LOCALE.md` §9.
+⚠ **E c'è una cosa che nessun pulsante può impedire**, scritta nel `CHANGELOG.md` di `v1.13.0` perché è
+l'unico posto che qualcuno rileggerà: cancellare un'asta **reale** `COMPLETED` si porta via il verbale
+delle rose e tutto lo storico di M3, **per sempre**. Prima si dà `deploy/db-backup.sh`.
 
 **M11 è in produzione da `v1.12.0`** (2026-08-13), aperta e chiusa nella stessa
 giornata: gate verde con **777 test**, typecheck e build.
@@ -152,6 +149,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M12](12-cancellazione-aste.md) | Cancellare un'asta per forza, anche in corso, e il congedo di chi la stava guardando | v1.13.0 — 2026-08-18 |
 | [M11](11-refresh-giornaliero.md) | Il refresh giornaliero degli insight: le due fonti pubbliche si chiedono da sé, e il pannello dice quando non ci riesce | v1.12.0 — 2026-08-13 |
 | [M10B](10b-insight-da-carmy.md) | Gli insight che vengono da un umano: il foglio di Carmy, la titolarità letta invece che dedotta, i filtri per chi ha `is_pro` | v1.11.0 — 2026-08-12 |
 | [M10](10-listone-a-sistema.md) | Il listone a sistema: la sezione admin, il Centro dati, la proposta alla creazione di un'asta | v1.11.0 — 2026-08-12 |
