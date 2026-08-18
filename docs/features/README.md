@@ -12,21 +12,15 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-**M13 — la pagina utenti** ([13-utenti-admin.md](13-utenti-admin.md)), aperta il **2026-08-18** su
-richiesta dell'owner e lavorata per intero su `feature/13-utenti-admin`: gate verde con **815 test**,
-typecheck e build, poi merge `--no-ff` su `dev`. La tabella del pannello è diventata sei colonne in sola
-lettura con una ricerca in testa, e le modifiche stanno in un pannello laterale che si apre da «Vedi».
-Non tocca lo schema, non tocca il motore, non tocca nessuna asta: **nessun `pnpm db:push`, nessun
-backfill, nessun passo a mano sul server.**
+Nessuna aperta. **M13 è in produzione da `v1.14.0`** (2026-08-18): aperta, lavorata, provata dall'owner e
+rilasciata **nella stessa giornata** in cui era stata pianificata. Gate verde con **815 test**, typecheck
+e build. La tabella di Admin → Utenti è diventata sei colonne in sola lettura con una ricerca in testa, e
+le modifiche stanno in un pannello laterale che si apre da «Vedi».
 
-Resta da fare **la prova in locale davanti alla pagina, anche su uno schermo stretto**: è l'unica cosa
-che questa macro può rompere senza che nessun test se ne accorga (M13-11). Poi il rilascio, che parte
-**solo su richiesta esplicita**: `CHANGELOG.md`, `package.json`, merge su `main`, tag `v1.14.0`.
-
-⚠ **La misura che la spec chiedeva è stata fatta, e ha confermato la scelta invece di ereditarla**: 20
-utenti veri in produzione, 32 contando i bot. «Niente paginazione» regge, e la ricerca resta un filtro
-lato client su righe già arrivate. Il giorno in cui quel numero cresce, ricerca lato server e
-paginazione arrivano **insieme** (M13 §4) — separate, la prima diventerebbe una bugia.
+⚠ **Nessun passo a mano sul server, e nessuna dipendenza nuova**: niente `pnpm db:push`, niente backfill,
+niente file da caricare. Secondo rilascio di fila senza niente in sospeso — e la cosa è stata verificata,
+non dedotta: `git diff` non tocca `lib/db/schema.ts` e `package.json` ha le stesse dipendenze di
+`v1.13.0`.
 
 **Due cose sono entrate a macro aperta, su decisione dell'owner del 2026-08-18** — la spec non le
 prevedeva, e i task `M13-12` e `M13-13` le raccontano per esteso.
@@ -128,8 +122,8 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 ## Da pianificare
 
 Due sono state pianificate insieme il **2026-08-18**, dalle due richieste che l'owner aveva nel
-quaderno. **M13 è stata aperta** e sta qui sopra, in «In corso»; resta **M14**, che si apre su richiesta
-esplicita come tutte. **`docs/REQUESTS.md` resta vuoto.**
+quaderno. **M13 è stata aperta e rilasciata lo stesso giorno** (`v1.14.0`); resta **M14**, che si apre su
+richiesta esplicita come tutte. **`docs/REQUESTS.md` resta vuoto.**
 
 | Macro | Tema | Schema? |
 |---|---|---|
@@ -221,6 +215,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M13](13-utenti-admin.md) | La pagina utenti: sei colonne in sola lettura con la ricerca, e un pannello laterale che modifica | v1.14.0 — 2026-08-18 |
 | [M12](12-cancellazione-aste.md) | Cancellare un'asta per forza, anche in corso, e il congedo di chi la stava guardando | v1.13.0 — 2026-08-18 |
 | [M11](11-refresh-giornaliero.md) | Il refresh giornaliero degli insight: le due fonti pubbliche si chiedono da sé, e il pannello dice quando non ci riesce | v1.12.0 — 2026-08-13 |
 | [M10B](10b-insight-da-carmy.md) | Gli insight che vengono da un umano: il foglio di Carmy, la titolarità letta invece che dedotta, i filtri per chi ha `is_pro` | v1.11.0 — 2026-08-12 |

@@ -4,6 +4,62 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.14.0] — 2026-08-18
+
+**M13 — La pagina utenti: una tabella che si legge, un pannello che modifica.** Admin → Utenti era una
+tabella di otto colonne in cui quattro colonne contenevano un form: un campo per il nome col suo
+«Salva», «Verifica a mano», «Rendi admin», «Dai insight». Scorreva in orizzontale su qualunque schermo,
+perché ogni cella doveva contenere un comando invece di un dato. Il risultato è che la domanda che ci si
+fa quasi sempre — *chi è questa persona, e le manca qualcosa per entrare?* — si rispondeva peggio di
+quella che ci si fa quasi mai, cioè *cambiamo qualcosa a questa persona*.
+
+Adesso le due domande hanno due posti.
+
+**La tabella è un elenco**: indirizzo, nome, e tre `Sì`/`No` — email verificata, admin, pro — più un
+pulsante «Vedi». Niente da compilare, e su un portatile non scorre più di lato. Un solo valore è scritto
+in modo che si veda da lontano: **«Email verificata: No»**, che è l'unica riga della tabella su cui
+qualcuno deve fare qualcosa — di solito è chi si è appena iscritto e non riesce a entrare, ed è anche il
+motivo per cui la lista è ordinata dal più recente.
+
+**In testa alla tabella c'è una ricerca**, per nome o per indirizzo. Filtra mentre si digita, tollera
+accenti e maiuscole in tutte due le direzioni — chi cerca «rossi» trova «Rossì», e chi scrive «ROSSÌ»
+trova anche gli indirizzi senza accento — e il conteggio in cima segue il filtro invece di continuare a
+dire quante righe ci sono in tutto. Con zero risultati c'è una frase, non una tabella vuota che sembra
+guasta. Il filtro «mostra anche i bot» è dov'era e funziona come prima: la ricerca lavora su ciò che
+quel filtro ha lasciato.
+
+**«Vedi» apre un pannello laterale con tutto dentro**, comprese le tre cose che se ne sono andate dalla
+tabella — da quale porta entra quella persona, quante aste possiede e quante ne gioca, quando si è
+iscritta — più una che non c'era mai stata: **quando** l'indirizzo è stato verificato, non solo se. Le
+modifiche si fanno da qui, con degli interruttori, e si salvano in un colpo solo.
+
+### Tre cose del pannello che conviene sapere prima di usarlo
+
+**L'interruttore della verifica va in una direzione sola.** Una volta che l'indirizzo è dimostrato non
+si torna indietro, e l'interruttore resta acceso e bloccato dicendolo: spegnerlo vorrebbe dire rispedire
+una persona alla schermata del codice, cioè chiuderla fuori dall'applicazione con un click. Su una riga
+senza indirizzo l'interruttore è spento e bloccato, perché non c'è niente da verificare.
+
+**Sulla propria riga l'interruttore «Admin» non c'è**, e c'è scritto perché: se ti togli il permesso non
+esiste un'altra porta da cui rientrare nel pannello — lo fa un altro amministratore. Quello «Pro» invece
+c'è, perché non apre nessuna porta e un amministratore vede gli insight comunque. Su un bot non c'è
+nessun interruttore: non ha un nome da correggere né un indirizzo da verificare.
+
+**Il salvataggio può riuscire a metà, e te lo dice.** I quattro campi si scrivono uno per uno, quindi se
+uno viene rifiutato — il caso realistico è un nome fuori dai 3–60 caratteri — gli altri sono comunque
+salvati. In quel caso **il pannello resta aperto** con l'esito campo per campo, e l'avviso in basso dice
+«Salvato solo in parte» nominando prima ciò che è passato. A pieno successo il pannello si chiude, la
+tabella si aggiorna da sé e l'avviso dice cosa è stato salvato.
+
+**Nessun potere nuovo.** Le cose modificabili sono le quattro che si modificavano già — nome, verifica
+dell'indirizzo, admin, pro — e l'indirizzo email resta in sola lettura, per la ragione di sempre: da
+quando si entra anche con una password è la chiave d'identità, e cambiarlo cambia *chi può entrare* in
+quell'account. Niente cancellazione di un utente e nessun reset della password da parte di un
+amministratore.
+
+**Nessun passo a mano su questa versione.** Niente da caricare, nessuna modifica al database, nessuna
+dipendenza nuova: il deploy finisce e la versione è completa.
+
 ## [1.13.0] — 2026-08-18
 
 **M12 — Cancellare un'asta per forza, e dirlo a chi la stava guardando.** Fino a ieri un'asta iniziata

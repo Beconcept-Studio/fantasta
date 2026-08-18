@@ -458,10 +458,20 @@ chiesto — un avviso che compare, si legge e se ne va — è lo stesso.
       quelle prese **scrivendola**: la misura in produzione, il protocollo «campo presente = campo
       cambiato», l'esito per campo in `lib/admin-users.ts`, il file di test separato, le quattro
       azioni vecchie lasciate in piedi e la `fold` duplicata.
-- [ ] **M13-11** — Chiusura: merge `--no-ff` su `dev`, prova in locale — **anche su uno schermo
+- [x] **M13-11** — Chiusura: merge `--no-ff` su `dev`, prova in locale — **anche su uno schermo
       stretto**, che è l'unica cosa che questa macro può rompere senza che nessun test se ne accorga —
       poi, **solo su richiesta esplicita**, `CHANGELOG.md`, `package.json`, merge su `main`, tag
       `v1.14.0`, push. **Nessun `db:push`, nessun passo a mano sul server**
+      → Merge su `dev` **due volte**, perché la macro ha avuto due tempi: il primo con la tabella, la
+      ricerca e il pannello, il secondo con la pulizia delle azioni e il toast chiesti dall'owner dopo
+      aver guardato la pagina (M13-12, M13-13). Gate verde entrambe le volte.
+      → **Prova in locale fatta dall'owner il 2026-08-18: funziona.** È la parte che nessun test copre —
+      la larghezza della tabella su uno schermo stretto e i tre toni del toast — e la conferma è
+      arrivata da lì, non da un'asserzione.
+      → Rilasciata come **`v1.14.0`**: `CHANGELOG.md` datato e `package.json` alla nuova versione su
+      `dev`, poi merge `--no-ff` su `main`, tag, push. **Nessun `db:push`, nessun backfill, nessun file
+      da caricare, nessuna dipendenza nuova**: il deploy finisce e la versione è completa. Secondo
+      rilascio di fila senza niente in sospeso sul server.
 
 - [x] **M13-12** — **Pulizia**: togliere le quattro Server Action per campo che nessuna schermata chiama
       più (`setUserDisplayNameAction`, `forceVerifyEmailAction`, `setUserAdminAction`,
