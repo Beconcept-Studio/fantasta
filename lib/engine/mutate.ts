@@ -417,6 +417,7 @@ export async function loadAuctionState(
       pickSeconds: auction.pickSeconds,
       tiePrepSeconds: auction.tiePrepSeconds,
       revealSeconds: auction.revealSeconds,
+      resultGateSeconds: auction.resultGateSeconds,
       slots: {
         P: auction.slotsP,
         D: auction.slotsD,

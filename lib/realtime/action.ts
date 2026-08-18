@@ -26,6 +26,17 @@ export type ActionPayload =
   /** Solo l'owner: chiude il reveal senza aspettarne la scadenza. */
   | { type: "SKIP_REVEAL" }
   /**
+   * Solo l'owner (M14): apre le buste senza aspettare la scadenza del cancello dei
+   * risultati. Nessun payload — quale lotto lo sa il server, ed è l'unico a saperlo.
+   */
+  | { type: "SHOW_RESULTS" }
+  /**
+   * Solo l'owner, e **solo ad asta in pausa dentro il cancello** (M14): butta via il
+   * lotto e riporta il turno a chi aveva chiamato. Le condizioni di fase le verifica
+   * il motore; qui si sceglie solo cosa mandare.
+   */
+  | { type: "CANCEL_LOT" }
+  /**
    * Gli override del manager (Fase 7), consentiti solo senza un lotto in
    * contesa. Il server rifiuta comunque: qui si sceglie solo cosa mandare.
    */

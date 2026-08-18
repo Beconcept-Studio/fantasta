@@ -531,9 +531,22 @@ Gli altri quattro utenti del seed (Giulia Greco, Chiara Bruno, Sara Gallo, Elena
 database ma **non sono seduti**: servono a provare gli inviti e i join.
 
 L'asta di prova nasce con 8 posti, 500 crediti, slot 3/8/8/6 e **timer corti** — 3 secondi per
-offrire, 3 per chiamare, 2 di preparazione spareggio, 2 di rivelazione. Non è una scorciatoia di
-ambiente: sono proprio i parametri con cui l'asta viene creata, il motore è identico a quello di
-produzione.
+offrire, 3 per chiamare, 2 di preparazione spareggio, **2 di cancello dei risultati** e 2 di
+rivelazione. Non è una scorciatoia di ambiente: sono proprio i parametri con cui l'asta viene creata,
+il motore è identico a quello di produzione.
+
+⚠ **Il cancello a 2 secondi è quello che rende utile questo seed, e va saputo** (M14). È l'istante fra
+la chiusura di un round e l'apertura delle buste, e il seed lo accende **di proposito**: la colonna a
+database ha `DEFAULT 0`, quindi senza quella riga in `DEV_TIMERS` l'asta di prova non attraverserebbe
+mai la fase nuova — cioè l'unico collaudo locale che gioca un'asta intera sarebbe anche l'unico che non
+prova ciò che il cancello aggiunge. Due secondi bastano al motore e ai bot; **per guardarlo con gli
+occhi** conviene alzarlo a 10 da `/auctions/<id>/setup`, campo «Prima dei risultati (s)» — si cambia
+anche ad asta iniziata, e vale dal lotto successivo.
+
+⚠ **E in simulazione l'annullamento di un lotto produce spesso lo stesso lotto una seconda volta.** Se
+il chiamante era un bot, riprende il turno e richiama — molto probabilmente **lo stesso giocatore**,
+perché l'auto-pick è deterministico (`fvm DESC`). Non è un guaio ed è anche il modo di provare la cosa;
+ma chi lo vede senza saperlo penserà a un bug.
 
 ---
 

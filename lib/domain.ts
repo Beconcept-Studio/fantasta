@@ -42,9 +42,27 @@ export const AUCTION_STATUSES = [
 ] as const;
 export type AuctionStatus = (typeof AUCTION_STATUSES)[number];
 
+/**
+ * Le fasi di un lotto, **nell'ordine in cui si attraversano**.
+ *
+ * ⚠ `LOT_SEALED` è **il cancello dei risultati** (M14), e sta fra la chiusura del
+ * round e la rivelazione delle buste: il round è chiuso, l'esito è deciso dalle
+ * offerte, e per `result_gate_seconds` nessuno lo conosce — nemmeno il server, che
+ * non ha ancora chiamato `resolveRound`. È l'unico posto da cui si può buttare via
+ * un lotto e rifarlo, perché è l'unico momento in cui non ha ancora prodotto niente.
+ *
+ * ⚠ **Con `result_gate_seconds = 0` questa fase non esiste**, e non «dura zero
+ * secondi»: `advanceLotOpen` risolve nella stessa transizione, come prima di M14.
+ * Il perché sta su `TIMER_LIMITS` in `lib/engine/setup-rules.ts`.
+ *
+ * L'ordine di questa lista è narrativo e non lo legge nessun algoritmo — nessuno
+ * indicizza `AUCTION_PHASES` per decidere cosa viene dopo, e la macchina a stati
+ * lo dice da sé con uno `switch`. Serve a chi la rilegge.
+ */
 export const AUCTION_PHASES = [
   "WAITING_PICK",
   "LOT_OPEN",
+  "LOT_SEALED",
   "LOT_TIE_PREP",
   "LOT_REVEAL",
 ] as const;

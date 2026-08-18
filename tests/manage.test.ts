@@ -219,6 +219,20 @@ describe("etichetta della fase", () => {
     expect(phaseLabel(s)).toBe("buste aperte");
   });
 
+  it("⚠ «buste da aprire» e «buste aperte» si leggono in fila e dicono cose diverse", () => {
+    const sigillato = snapshot({
+      auction: { ...snapshot().auction, phase: "LOT_SEALED" },
+    });
+    expect(phaseLabel(sigillato)).toBe("buste da aprire");
+    // La voce va aggiunta a mano perché `phaseLabel` ha un `default`: senza,
+    // avrebbe scritto «in corso» su un cartello proiettato, nel momento esatto in
+    // cui la cosa da capire è che le buste **non** sono aperte.
+    expect(phaseLabel(sigillato)).not.toBe("in corso");
+    expect(phaseLabel(sigillato)).not.toBe(
+      phaseLabel(snapshot({ auction: { ...snapshot().auction, phase: "LOT_REVEAL" } })),
+    );
+  });
+
   it("la pausa vince su tutto: è la prima cosa da leggere in proiezione", () => {
     const s = snapshot({
       auction: { ...snapshot().auction, status: "PAUSED", pausedAt: iso(-1_000) },
@@ -251,6 +265,31 @@ describe("overrideControls — quando si può correggere", () => {
       auction: { ...snapshot().auction, phase: "LOT_TIE_PREP" },
     });
     expect(overrideControls(s).allowed).toBe(false);
+  });
+
+  /**
+   * ⚠ Il cancello dei risultati (M14) è il caso in cui questo divieto **regge
+   * un'altra funzione**: `cancelLot` riporta il turno al chiamante contando sul fatto
+   * che nessuno gli abbia riempito il ruolo nel frattempo, e l'unica cosa che riempie
+   * un ruolo fuori da un lotto è `manualAssign`. Questo test è ciò che se ne accorge
+   * se un giorno qualcuno «uniformasse» l'elenco.
+   */
+  it("⚠ nemmeno dentro il cancello dei risultati: è il momento più in contesa che ci sia", () => {
+    const s = snapshot({ auction: { ...snapshot().auction, phase: "LOT_SEALED" } });
+    expect(overrideControls(s).allowed).toBe(false);
+    expect(overrideControls(s).blocked).toMatch(/busta/i);
+
+    // E nemmeno ad asta in pausa, che è precisamente il momento in cui l'owner ha
+    // «Annulla lotto» davanti e i pannelli delle correzioni nella stessa pagina.
+    const inPausa = snapshot({
+      auction: {
+        ...snapshot().auction,
+        status: "PAUSED",
+        pausedAt: iso(-1_000),
+        phase: "LOT_SEALED",
+      },
+    });
+    expect(overrideControls(inPausa).allowed).toBe(false);
   });
 
   it("⚠ P1 — la pausa non apre la porta: congela la fase, non la azzera", () => {
@@ -357,5 +396,79 @@ describe("prosegui asta", () => {
     });
     expect(managerControls(paused).canSkipReveal).toBe(false);
     expect(managerControls(paused).canResume).toBe(true);
+  });
+});
+
+// ─── Il cancello dei risultati: le due leve della regia (M14 §5) ─────────────
+
+/**
+ * ⚠ **Le due leve vogliono lo stesso `phase` e due `status` diversi**, e non è una
+ * simmetria imperfetta: il cancello che scorre si può anticipare, il cancello fermo
+ * si può disfare. Annullare un lotto mentre il suo countdown corre sarebbe una corsa
+ * con il proprio timer, e a asta in pausa i timer sono fermi per definizione.
+ */
+describe("il cancello dei risultati", () => {
+  const sealed = (status: "LIVE" | "PAUSED" = "LIVE") =>
+    snapshot({
+      auction: {
+        ...snapshot().auction,
+        status,
+        phase: "LOT_SEALED",
+        phaseDeadline: iso(6_000),
+        pausedAt: status === "PAUSED" ? iso(-1_000) : null,
+      },
+      currentLot: lot({ closedAt: iso(-4_000) }),
+    });
+
+  it("«Mostra risultati» solo ad asta in corso, dentro il cancello", () => {
+    expect(managerControls(sealed("LIVE")).canShowResults).toBe(true);
+    expect(managerControls(sealed("PAUSED")).canShowResults).toBe(false);
+    for (const phase of ["LOT_OPEN", "LOT_TIE_PREP", "LOT_REVEAL", "WAITING_PICK"] as const) {
+      const s = snapshot({ auction: { ...snapshot().auction, phase } });
+      expect(managerControls(s).canShowResults, phase).toBe(false);
+    }
+  });
+
+  it("«Annulla lotto» solo ad asta in pausa, dentro il cancello", () => {
+    expect(managerControls(sealed("PAUSED")).canCancelLot).toBe(true);
+    expect(managerControls(sealed("LIVE")).canCancelLot).toBe(false);
+  });
+
+  it("⚠ non si annulla in nessun'altra fase, nemmeno in pausa", () => {
+    for (const phase of ["LOT_OPEN", "LOT_TIE_PREP", "LOT_REVEAL", "WAITING_PICK"] as const) {
+      const inPausa = snapshot({
+        auction: {
+          ...snapshot().auction,
+          status: "PAUSED",
+          pausedAt: iso(-1_000),
+          phase,
+        },
+      });
+      expect(managerControls(inPausa).canCancelLot, phase).toBe(false);
+      // Dopo il reveal la strada resta `voidAssignment` + `manualAssign`, e lì la
+      // rotazione dei turni non torna indietro.
+      expect(managerControls(inPausa).canResume, phase).toBe(true);
+    }
+  });
+
+  it("⚠ «Metti in pausa» c'è già durante il cancello: guarda lo status, non la fase", () => {
+    // M14 non aggiunge una pausa. Si assicura che in quel momento sia a portata di
+    // pollice, e che il testo accanto dica cosa succede adesso.
+    expect(managerControls(sealed("LIVE")).canPause).toBe(true);
+    expect(managerControls(sealed("PAUSED")).canResume).toBe(true);
+  });
+
+  it("le due leve non sono mai vere insieme", () => {
+    for (const status of ["LIVE", "PAUSED"] as const) {
+      const controls = managerControls(sealed(status));
+      expect(controls.canShowResults && controls.canCancelLot, status).toBe(false);
+    }
+  });
+
+  it("e «Prosegui asta» resta cosa sua: il reveal è un'altra fase", () => {
+    expect(managerControls(sealed("LIVE")).canSkipReveal).toBe(false);
+    const reveal = snapshot({ auction: { ...snapshot().auction, phase: "LOT_REVEAL" } });
+    expect(managerControls(reveal).canShowResults).toBe(false);
+    expect(managerControls(reveal).canSkipReveal).toBe(true);
   });
 });

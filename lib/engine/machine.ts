@@ -51,6 +51,11 @@ export function transition(
       return advance(state, now);
     case "SKIP_REVEAL":
       return skipReveal(state, now);
+    case "SHOW_RESULTS":
+      return showResults(state, now);
+    case "CANCEL_LOT":
+      // ⚠ Senza `now`, ed è l'unica: vedi la firma di `cancelLot`.
+      return cancelLot(state);
     case "PAUSE":
       return pause(state, now);
     case "RESUME":
@@ -192,6 +197,16 @@ function pick(
  * chiamante, l'esito è già scritto — niente countdown, il lotto passa dritto
  * a LOT_REVEAL assegnato a 1. A fine ruolo questi lotti possono essere molti
  * di fila, e trenta secondi ciascuno sarebbero minuti persi in diretta.
+ *
+ * ⚠ **E non passa nemmeno dal cancello dei risultati** (M14 §2, ultimo capoverso):
+ * `enterReveal` è chiamata qui, diritta, qualunque sia `resultGateSeconds`. Non è
+ * una dimenticanza — è che **non c'è nessuna busta da proteggere**: l'unica offerta
+ * in campo è l'auto-bid a 1 del chiamante, e «prezzo 1» è già implicito nel fatto
+ * che nessun altro potesse offrire. Metterci il cancello vorrebbe dire pagare X
+ * secondi per lotto, molti di fila a fine ruolo, per un esito che nessuno può
+ * contestare: cioè disfare esattamente l'ottimizzazione che questo commento
+ * descrive. La conseguenza va accettata sapendola — in questi lotti i risultati
+ * compaiono subito, come prima di M14.
  */
 function openLot(
   state: AuctionState,
@@ -380,6 +395,8 @@ function advance(state: AuctionState, now: Millis): Result<AuctionState> {
       return ok(advanceWaitingPick(state, now));
     case "LOT_OPEN":
       return ok(advanceLotOpen(state, now));
+    case "LOT_SEALED":
+      return ok(resolveClosedRound(state, openLotOf(state), now));
     case "LOT_TIE_PREP":
       return ok(advanceTiePrep(state, now));
     case "LOT_REVEAL":
@@ -520,25 +537,207 @@ function resume(state: AuctionState, now: Millis): Result<AuctionState> {
 }
 
 /**
- * Timeout del round di offerte (PLAN §4, `LOT_OPEN → …`): si aprono le buste.
- * Massimo unico → reveal; pareggio nel round 1 → preparazione dello
- * spareggio; pareggio nel round 2 → lo risolve `resolveRound` per
- * `amount_set_at`, quindi comunque reveal.
+ * Timeout del round di offerte (PLAN §4, `LOT_OPEN → …`): il round si **chiude**.
+ *
+ * ⚠ **Da M14 chiudere non è più risolvere**, e la differenza è tutta la macro. Con
+ * un cancello dei risultati configurato si scrive `closed_at` sul round e si entra
+ * in `LOT_SEALED`: `resolveRound` **non viene chiamata**. Non è un dettaglio
+ * d'ordine — è la differenza fra «l'esito esiste e non lo mostriamo» e «l'esito non
+ * esiste ancora», e solo la seconda tiene.
+ *
+ * Il modo ovvio sarebbe stato risolvere come prima e nascondere `reveal` nello
+ * snapshot. **Non funziona, e il buco non è nel pannello delle buste: è nei
+ * crediti.** `serializeMembers` calcola `credits`, `maxBid`, `slotsFilled` e
+ * `roster` da `state.assignments`, e quei campi stanno in **ogni** snapshot per
+ * **tutti**, TV compresa. Misurato il 2026-08-18 su un'asta a 8 con budget 100 e
+ * offerta vincente 87, con la fase forzata a `LOT_SEALED` e l'assegnazione già
+ * committata: `reveal` e `tie` erano entrambi `null`, e il vincitore passava da 100
+ * a 13 crediti, da `maxBid` 97 a 11, da `slotsFilled.P` 0 a 1, con gli altri sette
+ * fermi a 100. E `roster` portava `{ name: "Giocatore 1", price: 87 }` — cioè
+ * **l'importo esatto della busta vincente**, in un campo che non ha nessun rapporto
+ * con `reveal`. Sul proiettore, in tempo reale, prima che chiunque potesse premere
+ * un pulsante.
+ *
+ * ⚠ **Con `resultGateSeconds = 0` la fase non esiste**, e non è «una fase che dura
+ * zero secondi». Una fase da zero è uno stato osservabile: un timer armato
+ * sull'istante presente, uno snapshot in più per lotto mandato a dodici persone, un
+ * `ADVANCE` in ritardo di un tick che fa lampeggiare una schermata di attesa. Il
+ * ramo è una `if`, e vale la pena scriverla: le aste che esistevano prima di M14
+ * hanno `0` sulla colonna e si comportano **esattamente** come a v1.14.0.
  */
 function advanceLotOpen(state: AuctionState, now: Millis): AuctionState {
   const lot = openLotOf(state);
   const round = currentRoundOf(lot);
-  const outcome = resolveRound(round);
   const closed = withCurrentRound(lot, { ...round, closedAt: now });
 
+  if (state.config.resultGateSeconds > 0) {
+    return {
+      ...withLot(state, closed),
+      phase: "LOT_SEALED",
+      phaseDeadline: now + state.config.resultGateSeconds * 1000,
+    };
+  }
+  return resolveClosedRound(state, closed, now);
+}
+
+/**
+ * **L'apertura delle buste**: massimo unico → reveal; pareggio nel round 1 →
+ * preparazione dello spareggio; pareggio nel round 2 → lo risolve `resolveRound`
+ * per `amount_set_at`, quindi comunque reveal.
+ *
+ * Ha tre chiamanti e fa per tutti e tre la stessa cosa: la chiusura del round senza
+ * cancello, la scadenza del cancello, e «Mostra risultati». **Non esiste una seconda
+ * strada per decidere chi ha vinto un lotto**, che è lo stesso criterio con cui è
+ * stato scritto «Prosegui asta» — e qui vale doppio, perché la funzione che si
+ * sposta di un passo è quella che assegna il giocatore.
+ *
+ * Il lotto arriva come parametro, con il round già chiuso: chi chiama sa se lo ha
+ * appena chiuso lui (`advanceLotOpen`) o se lo ha trovato chiuso da prima (le altre
+ * due), e questa funzione non ha bisogno di distinguere.
+ */
+function resolveClosedRound(
+  state: AuctionState,
+  lot: Lot,
+  now: Millis,
+): AuctionState {
+  const outcome = resolveRound(currentRoundOf(lot));
+
   if (outcome.kind === "WINNER") {
-    return enterReveal(state, closed, outcome.bid.memberId, outcome.bid.amount, now);
+    return enterReveal(state, lot, outcome.bid.memberId, outcome.bid.amount, now);
   }
   return {
-    ...withLot(state, closed),
+    ...withLot(state, lot),
     phase: "LOT_TIE_PREP",
     phaseDeadline: now + state.config.tiePrepSeconds * 1000,
   };
+}
+
+/**
+ * «Mostra risultati» (regia): l'owner apre le buste senza aspettare la scadenza del
+ * cancello.
+ *
+ * ⚠ **È il secondo chiamante del pattern di `skipReveal`, e sta qui per la stessa
+ * ragione per cui sta qui quello.** La guardia `now < phaseDeadline` dentro `advance`
+ * esiste perché timer e sweep possano chiamare `ADVANCE` quante volte vogliono senza
+ * combinare guai (I7): allentarla per fare spazio a un pulsante la renderebbe
+ * inutile per tutti e due i chiamanti. Quindi «un umano fa avanzare una fase in
+ * anticipo» è un evento suo, con la sua guardia, e l'effetto è **la stessa funzione**
+ * che gira alla scadenza.
+ *
+ * Idempotenza (I7): dopo il primo click la fase non è più `LOT_SEALED`, quindi il
+ * secondo trova questa guardia e viene rifiutato senza effetti. In pausa lo stato è
+ * `PAUSED` e non `LIVE`: da lì si riparte con RESUME, o si annulla il lotto.
+ *
+ * Chi può premere non si decide qui — il motore non sa chi possiede l'asta: la
+ * verifica di proprietà sta in `showResults` di `actions.ts`, come per PAUSE, RESUME
+ * e «Prosegui asta».
+ */
+function showResults(state: AuctionState, now: Millis): Result<AuctionState> {
+  if (state.status !== "LIVE" || state.phase !== "LOT_SEALED") {
+    return fail(
+      "WRONG_PHASE",
+      "Si mostrano i risultati solo mentre le buste sono ancora chiuse.",
+    );
+  }
+  return ok(resolveClosedRound(state, openLotOf(state), now));
+}
+
+/**
+ * «Annulla lotto» (M14 §6): il lotto muore senza essere mai stato risolto, e il turno
+ * torna a chi aveva chiamato.
+ *
+ * **Solo a asta in pausa, e solo dentro il cancello.** Che sia solo in pausa non è
+ * soltanto la lettera della richiesta: è anche la guardia giusta, perché annullare un
+ * lotto mentre il suo countdown corre sarebbe una corsa con il proprio timer — a asta
+ * in pausa i timer sono fermi per definizione.
+ *
+ * **Cosa cambia, e cosa no.** Il lotto prende `status: "VOIDED"`; `winnerMemberId`,
+ * `finalPrice` e `resolvedAt` restano `null`, perché non è mai stato risolto e
+ * scrivere `resolved_at` significherebbe dire il contrario — *quando* è stato
+ * annullato lo dice la riga di `events`, che è il posto dove stanno i fatti
+ * dell'asta. Offerte e round **restano**: sono il verbale di ciò che è accaduto, ed è
+ * ciò che rende l'annullamento verificabile domani. Semplicemente non diventano mai
+ * pubbliche.
+ *
+ * ⚠ **Nessuna assegnazione viene toccata, e non c'è nulla da toccare** — è la
+ * conseguenza migliore del mettere il cancello *prima* della risoluzione. Nel
+ * cancello l'assegnazione **non esiste ancora**: nessun `voided_at` da scrivere,
+ * nessuna riga compensativa da inventare, nessun credito da rimettere a posto. La
+ * regola 5 non viene sfiorata, e nel modo ovvio l'avrebbe sfiorata davvero. Il
+ * giocatore torna disponibile **da sé**, perché la disponibilità è derivata dalle
+ * assegnazioni non annullate — `takenPlayerIds`, `autoPick` e il controllo dentro
+ * `pick` guardano tutti la stessa cosa. Ciò che non si scrive non si può scrivere
+ * male.
+ *
+ * ⚠ **Il turno va indietro, ed è l'unico posto dell'applicazione in cui succede.**
+ * La regola operativa di `CLAUDE.md` — «la rotazione dei turni non torna mai
+ * indietro» — resta vera in tutti gli altri casi, e qui regge per tre condizioni,
+ * tutte e tre necessarie:
+ *
+ * 1. **quel lotto non ha creato nessuna assegnazione**, quindi il ritorno indietro
+ *    non deve tenere conto di niente;
+ * 2. **la rotazione non è ancora avanzata**: `nextTurn` gira all'uscita dal reveal,
+ *    che qui non è mai arrivata;
+ * 3. **il ruolo del chiamante non può essersi riempito nel frattempo**. Il chiamante
+ *    aveva uno slot libero quando ha chiamato (`pick` lo verifica, ⚠ §12.19),
+ *    nessun altro lotto può esistere (I1), e l'unica cosa che riempie un ruolo fuori
+ *    da un lotto è `manualAssign` — che durante `LOT_SEALED` è **rifiutata**
+ *    (`lib/engine/override.ts`). La terza condizione è vera *perché* quel rifiuto
+ *    c'è: se qualcuno un giorno togliesse `LOT_SEALED` da quell'elenco, romperebbe
+ *    questa funzione da un altro file.
+ *
+ * Con le tre condizioni in piedi il caso «il chiamante non può più chiamare» **non
+ * esiste**, quindi lo si asserisce invece di gestirlo: i rifiuti previsti sono
+ * `Result`, i bug sono eccezioni. Il precedente letterale è il `throw` di `nextTurn`.
+ *
+ * ⚠ **È l'unica transizione della macchina che non prende `now`**, e vale la pena
+ * saperlo perché dice una cosa vera sul disegno: l'asta è **ferma**, quindi non c'è
+ * nessun «adesso» che conti. Ogni istante che questa funzione scrive è ancorato a
+ * `pausedAt` (vedi il commento sulla scadenza qui sotto), il lotto annullato non
+ * prende nessun timestamp — `resolvedAt` resta `null` perché non è mai stato risolto
+ * — e *quando* è stato annullato lo dice la riga di `events`, che nasce fuori dal
+ * motore. Prendere un `now` per non usarlo sarebbe stato un parametro che finge.
+ */
+function cancelLot(state: AuctionState): Result<AuctionState> {
+  if (state.status !== "PAUSED" || state.phase !== "LOT_SEALED") {
+    return fail(
+      "WRONG_PHASE",
+      "Un lotto si annulla solo ad asta in pausa, mentre le buste sono ancora chiuse.",
+    );
+  }
+  const lot = openLotOf(state);
+  const caller = state.members.find((m) => m.id === lot.calledByMemberId);
+  if (!caller) throw new Error("lotto chiamato da un membro sconosciuto");
+  if (state.pausedAt === null) {
+    throw new Error("asta in pausa senza `pausedAt`: invariante rotta");
+  }
+
+  // Il ruolo non cambia: è il ruolo del giocatore chiamato, per costruzione.
+  const role = state.currentRole!;
+  if (ownedByRole(state, caller.id)[role] >= state.config.slots[role]) {
+    throw new Error(
+      `il chiamante del lotto annullato non ha slot liberi nel ruolo ${role}`,
+    );
+  }
+
+  // ⚠ **La scadenza parte da `pausedAt`, non da `now`**, e la spec dice `now`.
+  // Il motivo è che l'asta è ferma: `resume` trasla ogni scadenza di quanto è durata
+  // la pausa, quindi un `now + pickSeconds` scritto qui verrebbe traslato **una
+  // seconda volta** e chi deve richiamare si troverebbe più tempo di `pickSeconds`.
+  // Peggio, si vedrebbe subito: durante la pausa il client disegna
+  // `pausedRemaining(deadline, pausedAt)`, che con `now` mostrerebbe
+  // «pickSeconds + quanto si è già stati in pausa» — un 30s configurato che a schermo
+  // dice 80. Ancorando a `pausedAt` il conto torna in tutti e due i posti: il
+  // cartello in pausa dice `pickSeconds`, e alla ripresa il chiamante ha esattamente
+  // `pickSeconds` per chiamare.
+  const lotVoided: Lot = { ...lot, status: "VOIDED" };
+  return ok({
+    ...withLot(state, lotVoided),
+    currentLotId: null,
+    phase: "WAITING_PICK",
+    currentSeatIndex: caller.seatIndex,
+    phaseDeadline: state.pausedAt + state.config.pickSeconds * 1000,
+  });
 }
 
 /**

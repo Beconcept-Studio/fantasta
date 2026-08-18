@@ -86,7 +86,15 @@ export function snapshot(patch: Partial<Snapshot> = {}): Snapshot {
       roleOrder: ["P", "D", "C", "A"],
       seats: 8,
       slots: { P: 3, D: 8, C: 8, A: 6 },
-      timers: { bidSeconds: 30, pickSeconds: 60, tiePrepSeconds: 5, revealSeconds: 10 },
+      timers: {
+        bidSeconds: 30,
+        pickSeconds: 60,
+        tiePrepSeconds: 5,
+        revealSeconds: 10,
+        // Il cancello dei risultati come lo propone `DEFAULT_CONFIG` (M14): qui
+        // il default è quello di un'asta **nuova**, non quello della colonna.
+        resultGateSeconds: 10,
+      },
       ...patch.auction,
     },
     members: [member(ME, 0), member(OTHER, 1), member(THIRD, 2)],

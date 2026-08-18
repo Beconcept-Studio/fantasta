@@ -85,11 +85,20 @@ testa; la procedura è in «Regole operative di produzione».
 
 ## Regole operative di produzione
 
-**Niente undo.** Un lotto sbagliato si corregge con `voidAssignment` + `manualAssign`: la
-rotazione dei turni non torna mai indietro.
+**Niente undo, con un'eccezione sola e delimitata.** Un lotto sbagliato si corregge con
+`voidAssignment` + `manualAssign`, e **lì la rotazione dei turni non torna mai indietro**: chi ha
+chiamato ha chiamato. L'unica eccezione è **«Annulla lotto»** (M14): vive solo dentro il cancello
+dei risultati (`phase = LOT_SEALED`) e solo ad asta in pausa, e lì il turno **torna** al chiamante.
+Non contraddice la regola, la delimita — nel cancello quel lotto non ha ancora prodotto niente:
+nessuna assegnazione, nessun credito speso, nessuna rotazione avanzata. Si può tornare indietro
+perché non c'è niente da riportare indietro. Dopo il reveal resta la strada di sempre e resta la
+regola.
 
 **Gli override solo senza un lotto in contesa.** Sono rifiutati con `phase ∈ {LOT_OPEN,
-LOT_TIE_PREP}`, anche ad asta in pausa — la pausa congela la fase, non la azzera.
+LOT_SEALED, LOT_TIE_PREP}`, anche ad asta in pausa — la pausa congela la fase, non la azzera.
+⚠ `LOT_SEALED` non è una precauzione in più: è il **presupposto** che rende sicuro «Annulla lotto»,
+che riporta il turno al chiamante contando sul fatto che nessuno gli abbia riempito il ruolo nel
+frattempo. L'unica cosa che riempie un ruolo fuori da un lotto è `manualAssign`.
 
 **Mai un `DELETE`** (regola 5): si scrive `voided_at`. Un void **non** scrive righe compensative,
 perché il credito è una formula e il prezzo esce dalla somma da solo.

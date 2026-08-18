@@ -426,27 +426,40 @@ suite("la cascata porta via l'asta e nient'altro", () => {
     const admin = await user("admin", { isAdmin: true });
     const game = await liveGame("PAUSED");
 
-    const listoneBefore = (
-      await db.select({ extId: listonePlayers.extId }).from(listonePlayers)
-    ).length;
-    const insightsBefore = (
-      await db.select({ extId: playerInsights.extId }).from(playerInsights)
-    ).length;
+    const listoneExtIds = async (): Promise<number[]> =>
+      (
+        await db.select({ extId: listonePlayers.extId }).from(listonePlayers)
+      ).map((r) => r.extId);
+    const insightExtIds = async (): Promise<number[]> =>
+      (
+        await db.select({ extId: playerInsights.extId }).from(playerInsights)
+      ).map((r) => r.extId);
+
+    const listoneBefore = await listoneExtIds();
+    const insightsBefore = await insightExtIds();
 
     await silently(() => deleteAuction(admin, game.auctionId, { force: true }));
 
-    // ⚠ Qui il conteggio globale **è** la domanda giusta, al contrario di
-    // `users`: la proprietà da provare è proprio che il numero non cambi. Il
-    // valore di partenza può essere zero — dipende da cosa c'è nel database di
-    // chi lancia i test — e va bene: quel che conta è che sia lo stesso dopo.
-    expect(
-      (await db.select({ extId: listonePlayers.extId }).from(listonePlayers))
-        .length,
-    ).toBe(listoneBefore);
-    expect(
-      (await db.select({ extId: playerInsights.extId }).from(playerInsights))
-        .length,
-    ).toBe(insightsBefore);
+    // ⚠ **Le righe di prima ci sono ancora**, e non «il conteggio non è cambiato».
+    //
+    // Fino a M14 questa asserzione confrontava due `length`, con un commento che
+    // diceva che qui il conteggio globale *è* la domanda giusta. La proprietà era
+    // quella giusta, la misura no: `listone_players` e `player_insights` sono
+    // tabelle **globali**, e `tests/db/listone.test.ts` e `tests/db/insights.test.ts`
+    // ci scrivono dentro — girando in parallelo a questo file. Un `toBe(length)`
+    // fallisce quando uno di quei due committa una riga nel mezzo, cioè a caso: il
+    // rosso è comparso lavorando a M14 (che non tocca affatto queste tabelle) solo
+    // perché un file di test in più ha cambiato l'ordine dei lavori.
+    //
+    // La domanda vera è «la cascata ha portato via qualcosa?», e a quella risponde
+    // il **contenimento**: ogni riga che c'era prima c'è anche dopo. Righe in più
+    // sono un altro test che lavora, righe in meno sono il bug.
+    expect(await listoneExtIds()).toEqual(
+      expect.arrayContaining(listoneBefore),
+    );
+    expect(await insightExtIds()).toEqual(
+      expect.arrayContaining(insightsBefore),
+    );
   });
 });
 

@@ -822,3 +822,416 @@ describe("machine: SKIP_REVEAL — la regia taglia l'attesa delle buste aperte",
     expectFail(paused, { type: "SKIP_REVEAL" }, T0 + sec(32), "WRONG_PHASE");
   });
 });
+
+// ─── M14 — il cancello dei risultati ─────────────────────────────────────────
+
+/**
+ * Il cancello dei risultati (M14): fra la chiusura di un round e l'apertura delle
+ * buste si infila `LOT_SEALED`, che dura `resultGateSeconds` e appartiene a chi
+ * conduce.
+ *
+ * ⚠ **`makeState` nasce con `resultGateSeconds: 0`**, quindi ogni test scritto prima
+ * di M14 continua a provare il comportamento senza cancello — che è esattamente la
+ * verifica 10 della spec, «con X = 0 l'asta si comporta come a v1.14.0», dimostrata
+ * dalle centinaia di asserzioni che esistevano già invece che da un test nuovo che lo
+ * racconta. Qui il cancello lo si accende a mano.
+ */
+const GATE = 10;
+
+/** Come `stateInWaitingPick`, ma con il cancello acceso. */
+function stateWithGate(seconds = GATE): AuctionState {
+  return stateInWaitingPick({ config: { resultGateSeconds: seconds } });
+}
+
+describe("machine: LOT_SEALED — la chiusura del round non risolve più", () => {
+  it("chiude il round, entra in LOT_SEALED e NON risolve niente", () => {
+    const opened = run(stateWithGate(), [[pick("m0", "q0"), T0]]);
+    const endsAt = opened.lots[0].rounds[0].endsAt;
+
+    const sealed = run(opened, [
+      [bidEvent("m1", 30), T0 + sec(5)],
+      [bidEvent("m2", 20), T0 + sec(6)],
+      [{ type: "ADVANCE" }, endsAt],
+    ]);
+
+    expect(sealed.phase).toBe("LOT_SEALED");
+    expect(sealed.phaseDeadline).toBe(endsAt + sec(GATE));
+    // Il round è chiuso: nessuna offerta nuova può entrare.
+    expect(sealed.lots[0].rounds[0].closedAt).toBe(endsAt);
+    // ⚠ Il cuore di §3: l'esito **non esiste ancora**. Non è nascosto, non c'è.
+    expect(sealed.lots[0].status).toBe("OPEN");
+    expect(sealed.lots[0].winnerMemberId).toBeNull();
+    expect(sealed.lots[0].finalPrice).toBeNull();
+    expect(sealed.lots[0].resolvedAt).toBeNull();
+    // Ed è per questo che i crediti non si muovono: non c'è nessuna assegnazione
+    // da cui dedurre chi ha vinto e a quanto.
+    expect(sealed.assignments).toHaveLength(0);
+    // Il lotto resta corrente, quindi I1 continua a proteggere.
+    expect(sealed.currentLotId).toBe(sealed.lots[0].id);
+  });
+
+  it("alla scadenza del cancello risolve, e produce lo stesso esito di sempre", () => {
+    const opened = run(stateWithGate(), [[pick("m0", "q0"), T0]]);
+    const endsAt = opened.lots[0].rounds[0].endsAt;
+    const gateEnd = endsAt + sec(GATE);
+
+    const revealed = run(opened, [
+      [bidEvent("m1", 30), T0 + sec(5)],
+      [bidEvent("m2", 20), T0 + sec(6)],
+      [{ type: "ADVANCE" }, endsAt],
+      [{ type: "ADVANCE" }, gateEnd],
+    ]);
+
+    expect(revealed.phase).toBe("LOT_REVEAL");
+    expect(revealed.phaseDeadline).toBe(gateEnd + sec(10));
+    expect(revealed.lots[0].status).toBe("RESOLVED");
+    expect(revealed.lots[0].winnerMemberId).toBe("m1");
+    expect(revealed.lots[0].finalPrice).toBe(30);
+    expect(revealed.lots[0].resolvedAt).toBe(gateEnd);
+    expect(revealed.assignments).toHaveLength(1);
+    expect(revealed.assignments[0]).toMatchObject({
+      memberId: "m1",
+      playerId: "q0",
+      price: 30,
+      source: "AUCTION",
+      voidedAt: null,
+    });
+  });
+
+  it("il cancello non cambia chi vince: stesse buste, stesso esito, con e senza", () => {
+    const bids: Array<[AuctionEvent, Millis]> = [
+      [bidEvent("m1", 30), T0 + sec(5)],
+      [bidEvent("m2", 44), T0 + sec(6)],
+      [bidEvent("m3", 12), T0 + sec(7)],
+    ];
+
+    const senza = run(stateInWaitingPick(), [[pick("m0", "q0"), T0]]);
+    const conGate = run(stateWithGate(), [[pick("m0", "q0"), T0]]);
+    const endsAt = senza.lots[0].rounds[0].endsAt;
+
+    const esitoSenza = run(senza, [...bids, [{ type: "ADVANCE" }, endsAt]]);
+    const esitoCon = run(conGate, [
+      ...bids,
+      [{ type: "ADVANCE" }, endsAt],
+      [{ type: "ADVANCE" }, endsAt + sec(GATE)],
+    ]);
+
+    expect(esitoSenza.lots[0].winnerMemberId).toBe("m2");
+    expect(esitoCon.lots[0].winnerMemberId).toBe(esitoSenza.lots[0].winnerMemberId);
+    expect(esitoCon.lots[0].finalPrice).toBe(esitoSenza.lots[0].finalPrice);
+  });
+
+  it("⚠ il pareggio passa dal cancello: nessuno sa che c'è uno spareggio", () => {
+    const opened = run(stateWithGate(), [[pick("m0", "q0"), T0]]);
+    const endsAt = opened.lots[0].rounds[0].endsAt;
+
+    const sealed = run(opened, [
+      [bidEvent("m1", 50), T0 + sec(2)],
+      [bidEvent("m2", 50), T0 + sec(9)],
+      [{ type: "ADVANCE" }, endsAt],
+    ]);
+
+    // Non `LOT_TIE_PREP`: è la decisione 2 dell'owner. Oggi un pareggio nel round 1
+    // svelerebbe l'importo pareggiato a chi ha pareggiato, cioè un pezzo di busta
+    // prima del reveal — e la disconnessione da cui nasce questa macro esporrebbe
+    // comunque quella cifra.
+    expect(sealed.phase).toBe("LOT_SEALED");
+    expect(sealed.lots[0].currentRound).toBe(1);
+    expect(sealed.lots[0].rounds).toHaveLength(1);
+
+    const tiePrep = run(sealed, [[{ type: "ADVANCE" }, endsAt + sec(GATE)]]);
+    expect(tiePrep.phase).toBe("LOT_TIE_PREP");
+    expect(tiePrep.phaseDeadline).toBe(endsAt + sec(GATE) + sec(10));
+    expect(tiePrep.assignments).toHaveLength(0);
+  });
+
+  it("con resultGateSeconds = 0 la fase non esiste: risolve nella stessa transizione", () => {
+    const opened = run(stateWithGate(0), [[pick("m0", "q0"), T0]]);
+    const endsAt = opened.lots[0].rounds[0].endsAt;
+
+    const closed = run(opened, [
+      [bidEvent("m1", 30), T0 + sec(5)],
+      [{ type: "ADVANCE" }, endsAt],
+    ]);
+
+    // Non c'è nessuno stato intermedio da osservare: una fase da zero secondi
+    // sarebbe uno snapshot in più mandato a dodici persone.
+    expect(closed.phase).toBe("LOT_REVEAL");
+    expect(closed.phaseDeadline).toBe(endsAt + sec(10));
+    expect(closed.lots[0].status).toBe("RESOLVED");
+    expect(closed.assignments).toHaveLength(1);
+  });
+
+  it("⚠ un lotto a idoneo unico resta istantaneo, cancello o no (§2)", () => {
+    // m1, m2 e m3 hanno già il loro portiere: l'unico idoneo è m0, che chiama.
+    const solo = stateInWaitingPick({
+      config: { resultGateSeconds: GATE },
+      assignments: [
+        assignment(1, "m1", "q1", 1),
+        assignment(2, "m2", "q2", 1),
+        assignment(3, "m3", "q3", 1),
+      ],
+      nextId: 10,
+    });
+    const picked = run(solo, [[pick("m0", "q0"), T0]]);
+
+    // Diritto al reveal: non c'è nessuna busta da proteggere, e a fine ruolo
+    // questi lotti sono molti di fila.
+    expect(picked.phase).toBe("LOT_REVEAL");
+    expect(picked.lots[0].status).toBe("RESOLVED");
+    expect(picked.lots[0].winnerMemberId).toBe("m0");
+    expect(picked.lots[0].finalPrice).toBe(1);
+  });
+
+  it("un ADVANCE in anticipo dentro il cancello è un no-op (I7)", () => {
+    const opened = run(stateWithGate(), [[pick("m0", "q0"), T0]]);
+    const endsAt = opened.lots[0].rounds[0].endsAt;
+    const sealed = run(opened, [[{ type: "ADVANCE" }, endsAt]]);
+
+    const result = transition(sealed, { type: "ADVANCE" }, endsAt + sec(GATE) - 1);
+    expect(result.ok).toBe(true);
+    // Lo stesso riferimento: è così che P14 distingue «niente da fare» da una
+    // mutazione, e timer e sweep possono battere quanto vogliono.
+    if (result.ok) expect(result.value).toBe(sealed);
+  });
+});
+
+describe("machine: SHOW_RESULTS — la regia apre le buste in anticipo", () => {
+  /** Un lotto sigillato, con m1 vincente a 30 e il cancello che scorre. */
+  function inSealed(): { sealed: AuctionState; gateEnd: Millis } {
+    const opened = run(stateWithGate(), [[pick("m0", "q0"), T0]]);
+    const endsAt = opened.lots[0].rounds[0].endsAt;
+    const sealed = run(opened, [
+      [bidEvent("m1", 30), T0 + sec(5)],
+      [{ type: "ADVANCE" }, endsAt],
+    ]);
+    return { sealed, gateEnd: endsAt + sec(GATE) };
+  }
+
+  it("anticipa la scadenza e lascia lo stesso stato che avrebbe prodotto", () => {
+    const { sealed, gateEnd } = inSealed();
+    const early = gateEnd - sec(7);
+
+    const shown = run(sealed, [[{ type: "SHOW_RESULTS" }, early]]);
+    const expired = run(sealed, [[{ type: "ADVANCE" }, gateEnd]]);
+
+    expect(shown.phase).toBe("LOT_REVEAL");
+    expect(shown.lots[0].winnerMemberId).toBe(expired.lots[0].winnerMemberId);
+    expect(shown.lots[0].finalPrice).toBe(expired.lots[0].finalPrice);
+    // Cambia solo *quando*: la deadline del reveal nasce dall'istante del click.
+    expect(shown.phaseDeadline).toBe(early + sec(10));
+    expect(shown.lots[0].resolvedAt).toBe(early);
+  });
+
+  it("premuto due volte non apre due volte (I7)", () => {
+    const { sealed, gateEnd } = inSealed();
+    const now = gateEnd - sec(7);
+    const once = run(sealed, [[{ type: "SHOW_RESULTS" }, now]]);
+    expectFail(once, { type: "SHOW_RESULTS" }, now + 50, "WRONG_PHASE");
+  });
+
+  it("è rifiutato in ogni fase che non sia il cancello", () => {
+    const waiting = stateWithGate();
+    expectFail(waiting, { type: "SHOW_RESULTS" }, T0, "WRONG_PHASE");
+
+    const open = run(waiting, [[pick("m0", "q0"), T0]]);
+    expectFail(open, { type: "SHOW_RESULTS" }, T0 + sec(1), "WRONG_PHASE");
+
+    const { sealed, gateEnd } = inSealed();
+    const reveal = run(sealed, [[{ type: "ADVANCE" }, gateEnd]]);
+    expectFail(reveal, { type: "SHOW_RESULTS" }, gateEnd + 50, "WRONG_PHASE");
+  });
+
+  it("non tocca un'asta in pausa: da lì si riprende o si annulla", () => {
+    const { sealed, gateEnd } = inSealed();
+    const paused = run(sealed, [[{ type: "PAUSE" }, gateEnd - sec(6)]]);
+    expectFail(paused, { type: "SHOW_RESULTS" }, gateEnd - sec(5), "WRONG_PHASE");
+  });
+});
+
+describe("machine: la pausa congela il cancello", () => {
+  it("il tempo rimasto si conserva, e i risultati non escono nel frattempo", () => {
+    const opened = run(stateWithGate(), [[pick("m0", "q0"), T0]]);
+    const endsAt = opened.lots[0].rounds[0].endsAt;
+    const sealed = run(opened, [
+      [bidEvent("m1", 30), T0 + sec(5)],
+      [{ type: "ADVANCE" }, endsAt],
+    ]);
+
+    // Pausa a 4 secondi dalla chiusura: ne restavano 6.
+    const pausedAt = endsAt + sec(4);
+    const paused = run(sealed, [[{ type: "PAUSE" }, pausedAt]]);
+    expect(paused.status).toBe("PAUSED");
+    expect(paused.phase).toBe("LOT_SEALED");
+    expect(paused.phaseDeadline).toBe(endsAt + sec(GATE));
+    // ⚠ Niente risolve mentre l'asta è ferma: `advance` esce subito su status.
+    const stillSealed = run(paused, [[{ type: "ADVANCE" }, endsAt + sec(90)]]);
+    expect(stillSealed).toBe(paused);
+    expect(stillSealed.lots[0].status).toBe("OPEN");
+    expect(stillSealed.assignments).toHaveLength(0);
+
+    // Ripresa dopo un minuto: restano i 6 secondi di prima, non 10 e non 0.
+    const resumedAt = pausedAt + sec(60);
+    const resumed = run(paused, [[{ type: "RESUME" }, resumedAt]]);
+    expect(resumed.phaseDeadline).toBe(resumedAt + sec(6));
+    expect(resumed.lots[0].status).toBe("OPEN");
+
+    const revealed = run(resumed, [[{ type: "ADVANCE" }, resumed.phaseDeadline!]]);
+    expect(revealed.phase).toBe("LOT_REVEAL");
+    expect(revealed.lots[0].winnerMemberId).toBe("m1");
+  });
+});
+
+describe("machine: CANCEL_LOT — il lotto si butta e si rifà", () => {
+  /** Un lotto sigillato con l'asta in pausa: l'unico posto da cui si annulla. */
+  function inPausedSealed(): { paused: AuctionState; pausedAt: Millis } {
+    // Chiama m0 (seat 0) su q0; poi il turno passerebbe a m1.
+    const opened = run(stateWithGate(), [[pick("m0", "q0"), T0]]);
+    const endsAt = opened.lots[0].rounds[0].endsAt;
+    const sealed = run(opened, [
+      [bidEvent("m1", 30), T0 + sec(5)],
+      [bidEvent("m2", 44), T0 + sec(6)],
+      [{ type: "ADVANCE" }, endsAt],
+    ]);
+    const pausedAt = endsAt + sec(3);
+    return { paused: run(sealed, [[{ type: "PAUSE" }, pausedAt]]), pausedAt };
+  }
+
+  it("il lotto diventa VOIDED e non è mai stato risolto", () => {
+    const { paused, pausedAt } = inPausedSealed();
+    const cancelled = run(paused, [[{ type: "CANCEL_LOT" }, pausedAt + sec(5)]]);
+
+    const lot = cancelled.lots[0];
+    expect(lot.status).toBe("VOIDED");
+    // ⚠ **Mai `RESOLVED`**: `isPublicLot` equipara `RESOLVED` a «le buste sono già
+    // state pubbliche», e queste non lo sono mai state.
+    expect(lot.status).not.toBe("RESOLVED");
+    expect(lot.winnerMemberId).toBeNull();
+    expect(lot.finalPrice).toBeNull();
+    expect(lot.resolvedAt).toBeNull();
+    expect(cancelled.currentLotId).toBeNull();
+  });
+
+  it("il turno torna al chiamante, con il ruolo invariato", () => {
+    const { paused, pausedAt } = inPausedSealed();
+    const cancelled = run(paused, [[{ type: "CANCEL_LOT" }, pausedAt + sec(5)]]);
+
+    expect(cancelled.phase).toBe("WAITING_PICK");
+    // Il chiamante era m0, al seat 0: la rotazione **torna indietro**, ed è l'unico
+    // posto dell'applicazione in cui succede.
+    expect(cancelled.currentSeatIndex).toBe(0);
+    expect(cancelled.currentRole).toBe("P");
+    // L'asta resta ferma: annullare non è riprendere.
+    expect(cancelled.status).toBe("PAUSED");
+    expect(cancelled.pausedAt).toBe(paused.pausedAt);
+  });
+
+  it("⚠ la scadenza del pick è ancorata a `pausedAt`, non a `now`", () => {
+    const { paused, pausedAt } = inPausedSealed();
+    const cancelledAt = pausedAt + sec(20);
+    const cancelled = run(paused, [[{ type: "CANCEL_LOT" }, cancelledAt]]);
+
+    // In pausa il client disegna `pausedRemaining(deadline, pausedAt)`: ancorando a
+    // `pausedAt` legge esattamente `pickSeconds`, invece di `pickSeconds` più i
+    // venti secondi già passati in pausa.
+    expect(cancelled.phaseDeadline! - cancelled.pausedAt!).toBe(sec(30));
+
+    // E alla ripresa il chiamante ha esattamente `pickSeconds` per chiamare: senza
+    // l'ancoraggio, `resume` traslerebbe una seconda volta.
+    const resumedAt = cancelledAt + sec(120);
+    const resumed = run(cancelled, [[{ type: "RESUME" }, resumedAt]]);
+    expect(resumed.phaseDeadline).toBe(resumedAt + sec(30));
+  });
+
+  it("nessuna assegnazione viene creata né annullata: i crediti sono quelli di prima", () => {
+    const { paused, pausedAt } = inPausedSealed();
+    const cancelled = run(paused, [[{ type: "CANCEL_LOT" }, pausedAt + sec(5)]]);
+
+    // ⚠ La conseguenza migliore di aver messo il cancello *prima* della
+    // risoluzione: non c'è niente da annullare, quindi la regola 5 non viene
+    // nemmeno sfiorata.
+    expect(cancelled.assignments).toEqual([]);
+    expect(paused.assignments).toEqual([]);
+  });
+
+  it("le offerte e i round restano in tabella: sono il verbale", () => {
+    const { paused, pausedAt } = inPausedSealed();
+    const cancelled = run(paused, [[{ type: "CANCEL_LOT" }, pausedAt + sec(5)]]);
+
+    const lot = cancelled.lots[0];
+    expect(lot.rounds).toHaveLength(1);
+    // Tre buste: l'auto-bid a 1 del chiamante, più m1 e m2.
+    expect(lot.rounds[0].bids.map((b) => b.amount).sort((a, b) => a - b)).toEqual([
+      1, 30, 44,
+    ]);
+    // Semplicemente non diventano mai pubbliche: il lotto non è `RESOLVED`.
+    expect(lot.status).toBe("VOIDED");
+  });
+
+  it("⚠ il giocatore torna chiamabile, e lo si dimostra richiamandolo", () => {
+    const { paused, pausedAt } = inPausedSealed();
+    const cancelled = run(paused, [[{ type: "CANCEL_LOT" }, pausedAt + sec(5)]]);
+    const resumedAt = pausedAt + sec(10);
+    const resumed = run(cancelled, [[{ type: "RESUME" }, resumedAt]]);
+
+    // Lo stesso membro richiama lo stesso giocatore: nasce un lotto **nuovo**, con
+    // il `seq` successivo. Il vecchio resta in tabella, `VOIDED`.
+    const again = run(resumed, [[pick("m0", "q0"), resumedAt + sec(1)]]);
+    expect(again.phase).toBe("LOT_OPEN");
+    expect(again.lots).toHaveLength(2);
+    expect(again.lots[0].status).toBe("VOIDED");
+    expect(again.lots[1].status).toBe("OPEN");
+    expect(again.lots[1].seq).toBe(2);
+    expect(again.lots[1].playerId).toBe("q0");
+    // La sequenza dei lotti pubblici ha un buco, ed è onesto che l'abbia: è il
+    // numero di volte che si è chiamato, non quello dei lotti riusciti.
+    expect(again.currentLotId).toBe(again.lots[1].id);
+  });
+
+  it("lo può richiamare anche un altro membro", () => {
+    const { paused, pausedAt } = inPausedSealed();
+    const cancelled = run(paused, [[{ type: "CANCEL_LOT" }, pausedAt + sec(5)]]);
+    const resumed = run(cancelled, [[{ type: "RESUME" }, pausedAt + sec(10)]]);
+    // Il turno è di m0; scade, e l'auto-pick pesca il miglior P disponibile — che è
+    // ancora q0, perché non è mai stato assegnato a nessuno.
+    const auto = run(resumed, [[{ type: "ADVANCE" }, resumed.phaseDeadline!]]);
+    expect(auto.lots[1].playerId).toBe("q0");
+    expect(auto.lots[1].autoCalled).toBe(true);
+  });
+
+  it("è rifiutato fuori dal cancello, e fuori dalla pausa", () => {
+    // Asta in corso, non in pausa, dentro il cancello.
+    const opened = run(stateWithGate(), [[pick("m0", "q0"), T0]]);
+    const endsAt = opened.lots[0].rounds[0].endsAt;
+    const sealedLive = run(opened, [[{ type: "ADVANCE" }, endsAt]]);
+    expect(sealedLive.phase).toBe("LOT_SEALED");
+    expectFail(sealedLive, { type: "CANCEL_LOT" }, endsAt + sec(1), "WRONG_PHASE");
+
+    // In pausa, ma in WAITING_PICK.
+    const waitingPaused = run(stateWithGate(), [[{ type: "PAUSE" }, T0]]);
+    expectFail(waitingPaused, { type: "CANCEL_LOT" }, T0 + sec(1), "WRONG_PHASE");
+
+    // In pausa, ma con le buste ancora aperte.
+    const openPaused = run(opened, [[{ type: "PAUSE" }, T0 + sec(2)]]);
+    expectFail(openPaused, { type: "CANCEL_LOT" }, T0 + sec(3), "WRONG_PHASE");
+
+    // In pausa, ma a buste già aperte: lì la strada è `voidAssignment`.
+    const revealPaused = run(sealedLive, [
+      [{ type: "ADVANCE" }, endsAt + sec(GATE)],
+      [{ type: "PAUSE" }, endsAt + sec(GATE) + sec(1)],
+    ]);
+    expect(revealPaused.phase).toBe("LOT_REVEAL");
+    expectFail(
+      revealPaused,
+      { type: "CANCEL_LOT" },
+      endsAt + sec(GATE) + sec(2),
+      "WRONG_PHASE",
+    );
+  });
+
+  it("premuto due volte non annulla due lotti (I7)", () => {
+    const { paused, pausedAt } = inPausedSealed();
+    const once = run(paused, [[{ type: "CANCEL_LOT" }, pausedAt + sec(5)]]);
+    expectFail(once, { type: "CANCEL_LOT" }, pausedAt + sec(6), "WRONG_PHASE");
+  });
+});

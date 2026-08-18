@@ -70,6 +70,10 @@ export type ManagerControls = {
   canResume: boolean;
   /** «Prosegui asta»: chiudere il reveal senza aspettarne la scadenza. */
   canSkipReveal: boolean;
+  /** «Mostra risultati» (M14): aprire le buste senza aspettare il cancello. */
+  canShowResults: boolean;
+  /** «Annulla lotto» (M14): solo ad asta in pausa, e solo dentro il cancello. */
+  canCancelLot: boolean;
 };
 
 /**
@@ -85,6 +89,18 @@ export type ManagerControls = {
  * pausa, che congela la fase — e fase `LOT_REVEAL`. Come sempre, disabilitare
  * non è autorizzare: chi non possiede l'asta viene rifiutato dal server anche
  * se il pulsante gli comparisse davanti (regola 6).
+ *
+ * Le due leve del cancello dei risultati (M14) ripetono le guardie del motore, e la
+ * differenza fra loro è la cosa da leggere: **«Mostra risultati» vuole `LIVE`,
+ * «Annulla lotto» vuole `PAUSED`**, e sono la stessa fase. Non è una simmetria
+ * imperfetta — è il disegno: il cancello che scorre si può anticipare, il cancello
+ * fermo si può disfare. Annullare un lotto mentre il suo countdown corre sarebbe una
+ * corsa con il proprio timer.
+ *
+ * ⚠ **«Metti in pausa» non è un pulsante nuovo, e `canPause` non cambia**: guarda
+ * `status`, non la fase, quindi durante il cancello è già vero. M14 non aggiunge una
+ * pausa — si assicura che in quel momento sia a portata di pollice e che il testo
+ * accanto dica cosa succede *adesso*.
  */
 export function managerControls(snapshot: Snapshot): ManagerControls {
   const { status, phase } = snapshot.auction;
@@ -94,6 +110,8 @@ export function managerControls(snapshot: Snapshot): ManagerControls {
     canPause: status === "LIVE",
     canResume: status === "PAUSED",
     canSkipReveal: status === "LIVE" && phase === "LOT_REVEAL",
+    canShowResults: status === "LIVE" && phase === "LOT_SEALED",
+    canCancelLot: status === "PAUSED" && phase === "LOT_SEALED",
   };
 
   if (status === "LIVE" || status === "PAUSED") {
@@ -146,17 +164,28 @@ export type OverrideControls = {
 
 /**
  * Se è il momento di correggere (PLAN §9): **mai con un lotto in contesa**,
- * cioè con `phase ∈ {LOT_OPEN, LOT_TIE_PREP}`, e la pausa non cambia niente
- * perché congela la fase invece di azzerarla.
+ * cioè con `phase ∈ {LOT_OPEN, LOT_SEALED, LOT_TIE_PREP}`, e la pausa non cambia
+ * niente perché congela la fase invece di azzerarla.
  *
  * È la copia client del rifiuto che `lib/engine/override.ts` fa comunque
  * (regola 6): serve a spiegare *prima* del round trip, non ad autorizzare. Il
  * messaggio dice quanto bisogna aspettare, perché «non si può adesso» senza un
  * «fra dieci secondi sì» in diretta genera solo un secondo tentativo.
+ *
+ * ⚠ **`LOT_SEALED` è il caso in cui questa copia conta più che mai** (M14 §6). Il
+ * cancello dei risultati è il momento in cui l'owner sta guardando la regia con il
+ * dito sopra i pulsanti, e i pannelli delle correzioni sono nella stessa pagina: se
+ * qui restassero abilitati, l'unico modo di scoprire il divieto sarebbe premere. E
+ * quel divieto non è cortesia — è ciò che rende sicuro «Annulla lotto», che riporta
+ * il turno al chiamante contando sul fatto che nessuno gli abbia riempito il ruolo.
  */
 export function overrideControls(snapshot: Snapshot): OverrideControls {
   const { phase } = snapshot.auction;
-  if (phase === "LOT_OPEN" || phase === "LOT_TIE_PREP") {
+  if (
+    phase === "LOT_OPEN" ||
+    phase === "LOT_SEALED" ||
+    phase === "LOT_TIE_PREP"
+  ) {
     return {
       allowed: false,
       blocked:

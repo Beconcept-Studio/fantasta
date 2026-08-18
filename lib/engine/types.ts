@@ -48,6 +48,13 @@ export type AuctionConfig = {
   pickSeconds: number;
   tiePrepSeconds: number;
   revealSeconds: number;
+  /**
+   * Il cancello dei risultati (M14): quanti secondi il round resta chiuso senza
+   * che nessuno sappia com'è finito. **`0` significa che la fase non esiste**, non
+   * che dura zero — `advanceLotOpen` risolve nella stessa transizione, come prima
+   * di M14. Il perché per esteso sta su `TIMER_LIMITS` in `setup-rules.ts`.
+   */
+  resultGateSeconds: number;
   slots: SlotsByRole;
   roleOrder: Role[];
   /** ⚠ P7 — se `true` i fuori lista rientrano nel pool chiamabile. */
@@ -97,7 +104,26 @@ export type LotRound = {
   bids: Bid[];
 };
 
-export type LotStatus = "OPEN" | "RESOLVED";
+/**
+ * `OPEN` durante il lotto (round di offerte **e** cancello dei risultati),
+ * `RESOLVED` quando le buste si aprono, `VOIDED` quando l'owner butta via il lotto
+ * dal cancello (M14 §6).
+ *
+ * ⚠ **Un lotto annullato non è `RESOLVED` e non lo diventerà mai**, e non è una
+ * distinzione formale: `isPublicLot` in `lib/auction-log.ts` equipara `RESOLVED` a
+ * «le buste sono già state pubbliche», per costruzione — `enterReveal` scrive
+ * quello status nell'istante esatto in cui gli importi diventano pubblici. Un lotto
+ * annullato è **l'unico caso dell'applicazione in cui un lotto finisce senza che le
+ * buste siano mai uscite**: dargli `RESOLVED` «per coerenza» — «è finito, no?» —
+ * farebbe pubblicare dallo storico esattamente le offerte che il cancello esiste
+ * per non svelare.
+ *
+ * ⚠ **E `VOIDED` non è `OPEN`, che è ciò che tiene in piedi I1**: l'indice parziale
+ * `one_open_lot_per_auction` guarda `status = 'OPEN'`, quindi il lotto annullato
+ * esce dall'indice e il lotto rifatto può nascere. Durante il cancello invece il
+ * lotto è ancora `OPEN`, quindi l'indice continua a proteggere.
+ */
+export type LotStatus = "OPEN" | "RESOLVED" | "VOIDED";
 
 export type Lot = {
   id: EngineId;
@@ -177,5 +203,15 @@ export type AuctionEvent =
   | { type: "WITHDRAW_BID"; memberId: string }
   | { type: "ADVANCE" }
   | { type: "SKIP_REVEAL" }
+  /**
+   * «Mostra risultati» (M14): l'owner apre le buste prima che il cancello scada.
+   * È il **secondo** evento della forma «un umano fa avanzare una fase in
+   * anticipo», dopo `SKIP_REVEAL`, e per la stessa ragione non è un `ADVANCE`:
+   * la guardia sulla deadline dentro `advance` serve a timer e sweep (I7), e
+   * allentarla la renderebbe inutile per entrambi.
+   */
+  | { type: "SHOW_RESULTS" }
+  /** «Annulla lotto» (M14): solo ad asta in pausa, e solo dentro il cancello. */
+  | { type: "CANCEL_LOT" }
   | { type: "PAUSE" }
   | { type: "RESUME" };

@@ -4,6 +4,59 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.15.0] — 2026-08-18
+
+**M14 — Il cancello dei risultati: le buste non si aprono più da sole.** Fino a ieri, fra «il round è
+chiuso» e «tutti sanno tutto» non c'era nessun istante: nello stesso momento in cui scadeva il tempo, il
+vincitore era deciso, il prezzo pubblico e le buste di tutti comparivano su ogni telefono e sul
+proiettore. Se qualcuno perdeva la connessione negli ultimi secondi — non per colpa sua — quando lo
+diceva a voce era già tardi: non c'era niente da fermare, e l'unico rimedio era una correzione a mano
+che lasciava comunque tutti a conoscenza di quanto ciascuno aveva offerto. In un'asta a busta chiusa fra
+amici che si guardano in faccia, è l'informazione che decide i lotti successivi.
+
+Adesso lì in mezzo c'è un istante, e appartiene a chi conduce.
+
+**Cosa si vede.** Quando un round si chiude, per qualche secondo tutti — telefoni e TV — leggono «buste
+da aprire» e un countdown, e **nessuno sa com'è finita**. Non solo le offerte restano coperte: restano
+fermi anche i crediti, le rose e le squadre sul tabellone, perché fino a quel momento l'assegnazione
+non è ancora avvenuta. Non c'è niente da cui indovinare chi ha vinto.
+
+**Cosa può fare chi conduce**, dalla regia:
+
+- **«Mostra risultati»** apre le buste subito, senza aspettare la scadenza. Se non premi nessuno, si
+  aprono da sole allo scadere del tempo: il pulsante anticipa una scadenza che c'è comunque.
+- **«Metti in pausa»** — che c'era già — congela il cancello: i risultati non escono finché non
+  riprendi, e alla ripresa il countdown riparte dal tempo che restava.
+- **«Annulla lotto»**, che compare **solo** ad asta in pausa dentro il cancello, butta via il lotto e
+  lo fa rifare: il turno di chiamata torna a chi aveva chiamato e il giocatore torna disponibile per
+  tutti. La conferma nomina il giocatore e la squadra, così si legge invece di cliccarla. È la cosa da
+  usare quando qualcuno segnala un problema vero, e funziona **solo prima** che le buste si aprano: le
+  offerte di quel lotto non diventano mai pubbliche, nemmeno nello storico, e restano registrate come
+  verbale. Nel registro dell'asta compare una riga che dice cosa è stato annullato e chi aveva chiamato,
+  senza nessun importo.
+
+**Quanto dura lo decidi tu**, dalla configurazione dell'asta: c'è un campo nuovo fra i tempi, «Prima dei
+risultati (s)». Come gli altri tempi si può cambiare anche ad asta iniziata, e vale dal lotto
+successivo.
+
+⚠ **Le aste che hai già create non cambiano comportamento.** Quel campo nasce a **0** su tutto ciò che
+esisteva prima di questa versione, e `0` vuol dire «nessuna attesa»: i risultati escono appena il round
+chiude, esattamente come prima. Il cancello si accende quando **tu** ci scrivi un numero. Le aste nuove
+lo propongono già a 10 secondi.
+
+**Due cose che il cancello non fa**, per non cercarle. Non riapre le offerte: chi era disconnesso durante
+il round ha perso quel round, e il cancello serve a non svelare — non a rimediare. L'unico rimedio vero è
+annullare il lotto e rifarlo. E non mette in pausa da sé per nessuna ragione: se nessuno preme e nessuno
+segnala, i risultati escono. Il cancello sposta la decisione, non la sospende.
+
+**Un caso resta istantaneo, di proposito**: quando l'unico che potrebbe offrire è chi ha chiamato — capita
+a fine ruolo, quando gli altri hanno la casella piena — il lotto si chiude subito a 1 come prima. Lì non
+c'è nessuna busta da proteggere, e mettere qualche secondo d'attesa su ognuno di quei lotti sarebbero
+minuti persi in diretta.
+
+⚠ **Questa versione richiede un passo a mano sul server** (una colonna nuova nel database), fatto al
+momento del rilascio. Nessun dato è stato modificato.
+
 ## [1.14.0] — 2026-08-18
 
 **M13 — La pagina utenti: una tabella che si legge, un pannello che modifica.** Admin → Utenti era una

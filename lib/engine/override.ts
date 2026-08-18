@@ -27,14 +27,22 @@ import type { Millis } from "./types";
  * parte più fragile della specifica, e in diretta una correzione che sposta
  * anche il turno è una correzione che nessuno sa più raccontare a voce.
  *
+ * ⚠ **Da M14 c'è un'eccezione, e vive fuori da questo file**: «Annulla lotto»
+ * (`CANCEL_LOT` in `machine.ts`) riporta il turno al chiamante. Non contraddice
+ * quanto sopra, lo delimita: quell'annullamento esiste **solo dentro il cancello
+ * dei risultati**, cioè nell'unico momento in cui il lotto non ha ancora prodotto
+ * niente — nessuna assegnazione, nessun credito speso, nessuna rotazione avanzata.
+ * Il ritorno indietro è possibile lì perché lì non c'è niente da riportare
+ * indietro. **Dopo il reveal resta questa strada e resta questa regola.**
+ *
  * ## 2. Solo senza un lotto in contesa
  *
- * `phase ∈ {LOT_OPEN, LOT_TIE_PREP}` → rifiuto, **anche ad asta in pausa**: la
- * pausa congela la fase, non la azzera. Toccare le rose mentre le buste sono
- * aperte cambierebbe `max_bid` e l'idoneità *sotto* un round già iniziato: chi
+ * `phase ∈ {LOT_OPEN, LOT_SEALED, LOT_TIE_PREP}` → rifiuto, **anche ad asta in
+ * pausa**: la pausa congela la fase, non la azzera. Toccare le rose mentre le buste
+ * sono aperte cambierebbe `max_bid` e l'idoneità *sotto* un round già iniziato: chi
  * ha offerto 40 due secondi fa si troverebbe l'offerta fuori tetto senza aver
  * fatto niente. Il momento buono è quello in cui non c'è nessuna busta aperta:
- * WAITING_PICK, il reveal, o l'asta ferma.
+ * WAITING_PICK, il reveal, o l'asta ferma **con nessun lotto sigillato**.
  *
  * ## 3. Mai un DELETE (regola 5)
  *
@@ -71,10 +79,26 @@ function requireOwner(loaded: LoadedAuction, userId: string): Result<never> | nu
  * quella di prima, quindi mettere in pausa **non** apre la porta alle
  * correzioni se le buste sono aperte. Il rimedio è aspettare il reveal: sono
  * dieci secondi.
+ *
+ * ⚠ **`LOT_SEALED` è in elenco, e non come precauzione in più** (M14 §6). Un lotto
+ * sigillato **è** un lotto in contesa — è il momento più in contesa che ci sia,
+ * perché l'esito è già deciso dalle buste e nessuno lo conosce ancora, nemmeno il
+ * server. Assegnare a mano un giocatore lì vorrebbe dire correggere una rosa mentre
+ * una busta chiusa sta per cambiarla.
+ *
+ * ⚠ **E questa riga è il presupposto di `cancelLot`**, non un extra: l'annullamento
+ * riporta il turno al chiamante, e regge solo perché il ruolo del chiamante non può
+ * essersi riempito nel frattempo. L'unica cosa che riempie un ruolo fuori da un lotto
+ * è `manualAssign`. Togliere `LOT_SEALED` da qui romperebbe una funzione in
+ * `machine.ts`, da un altro file e senza che niente lo segnali.
  */
 function requireNoContestedLot(loaded: LoadedAuction): Result<never> | null {
   const { phase } = loaded.state;
-  if (phase === "LOT_OPEN" || phase === "LOT_TIE_PREP") {
+  if (
+    phase === "LOT_OPEN" ||
+    phase === "LOT_SEALED" ||
+    phase === "LOT_TIE_PREP"
+  ) {
     return fail(
       "WRONG_PHASE",
       "C'è un lotto in contesa: le correzioni si fanno quando nessuna busta è aperta. Aspetta l'assegnazione, poi correggi.",

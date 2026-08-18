@@ -12,7 +12,39 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M13 è in produzione da `v1.14.0`** (2026-08-18): aperta, lavorata, provata dall'owner e
+Nessuna aperta. **M14 è in produzione da `v1.15.0`** (2026-08-18): aperta, lavorata, provata dall'owner e
+rilasciata **nella stessa giornata** in cui era stata pianificata — il secondo caso di fila, dopo M13.
+Gate verde con **860 test in 51 file** (da 815), typecheck, lint e build. Fra la chiusura di un round e
+la rivelazione delle buste c'è ora `LOT_SEALED`, la prima fase nuova della macchina a stati dopo v1.0.0.
+
+⚠ **Il passo a mano sul server è stato dato**: `auctions.result_gate_seconds`, additiva con `DEFAULT 0`.
+**Nessun backfill**, e nessuno serviva — in produzione c'erano **0 aste** (32 utenti, 12 dei quali bot),
+quindi non esisteva una riga su cui quel default facesse differenza. La colonna è stata aggiunta
+**prima** del push su `main` e non dopo il deploy come dice la procedura: fra il `pm2 reload` del deploy
+e il `db:push` l'app girerebbe con il codice nuovo su uno schema vecchio, e ogni lettura di `auctions`
+fallirebbe. Essendo additiva con un default, il codice vecchio la tollera senza vederla, quindi
+anticiparla chiude quella finestra a costo zero. `pnpm db:push` è stato dato comunque dopo, e ha
+risposto «No changes detected»: è la verifica che schema e `schema.ts` combaciano.
+
+⚠ **La cosa da non riscoprire da capo**: il cancello sta **prima** della risoluzione del lotto. Il modo
+ovvio — risolvere e nascondere `reveal` — è stato provato prima di scrivere il rimedio e non nasconde
+niente: nello snapshot della TV, con `reveal: null` e `tie: null`, il vincitore scende da 100 a 13
+crediti e `roster` pubblica `price: 87`, cioè l'**importo esatto** della busta vincente. Il racconto per
+un lettore futuro è in `docs/ARCHITECTURE.md`, le decisioni in `docs/DECISIONS.md` alla data.
+
+**Tre flake preesistenti sono stati corretti dentro questa macro** — `delete-auction`, `bots` e
+`scheduler` — dopo averli riprodotti e verificato che non fossero di M14: tutti e tre erano asserzioni
+su stato globale condiviso fra file di test che girano in parallelo. Dieci giri di suite di fila verdi
+dopo, contro uno rosso su otto prima.
+
+⚠ **E una cosa sul collaudo locale, che non era scritta da nessuna parte**: l'asta prodotta da
+`pnpm db:seed` ha i posti occupati dai dodici utenti di prova, **non** dai bot, e `bot_strategy` è
+`NULL` su tutti — il tick interno muove solo i membri con una strategia, quindi lì non muove niente e
+l'asta sembra piantata. Serve `pnpm bots`. Sta ora in `docs/HOWTO-PROVA-LOCALE.md`.
+
+---
+
+**M13 è in produzione da `v1.14.0`** (2026-08-18): aperta, lavorata, provata dall'owner e
 rilasciata **nella stessa giornata** in cui era stata pianificata. Gate verde con **815 test**, typecheck
 e build. La tabella di Admin → Utenti è diventata sei colonne in sola lettura con una ricerca in testa, e
 le modifiche stanno in un pannello laterale che si apre da «Vedi».
@@ -121,13 +153,12 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-Due sono state pianificate insieme il **2026-08-18**, dalle due richieste che l'owner aveva nel
-quaderno. **M13 è stata aperta e rilasciata lo stesso giorno** (`v1.14.0`); resta **M14**, che si apre su
-richiesta esplicita come tutte. **`docs/REQUESTS.md` resta vuoto.**
+Nessuna. **Il quaderno è vuoto e non c'è niente in attesa**: le due macro pianificate il **2026-08-18**
+dalle richieste dell'owner sono state entrambe aperte — M13 rilasciata in `v1.14.0` lo stesso giorno,
+**M14 è quella in corso** qui sopra. **`docs/REQUESTS.md` resta vuoto.**
 
-| Macro | Tema | Schema? |
-|---|---|---|
-| [M14](14-cancello-risultati.md) | Il cancello dei risultati: le buste non si aprono da sole, e un lotto si può annullare | ⚠ **Sì** — una colonna additiva, `pnpm db:push`, **nessun backfill** |
+Quello che segue è il ragionamento con cui le due erano state tagliate, e resta come archivio: dice il
+vero su perché sono due macro e non una.
 
 **Perché due e non una.** Non hanno niente in comune: la prima è tutta UI dentro il pannello di
 amministrazione, la seconda apre la **macchina a stati dell'asta** e aggiunge la prima fase nuova dopo
@@ -215,6 +246,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M14](14-cancello-risultati.md) | Il cancello dei risultati: fra la chiusura di un round e la rivelazione delle buste un istante che appartiene a chi conduce, e un lotto che si può annullare | v1.15.0 — 2026-08-18 |
 | [M13](13-utenti-admin.md) | La pagina utenti: sei colonne in sola lettura con la ricerca, e un pannello laterale che modifica | v1.14.0 — 2026-08-18 |
 | [M12](12-cancellazione-aste.md) | Cancellare un'asta per forza, anche in corso, e il congedo di chi la stava guardando | v1.13.0 — 2026-08-18 |
 | [M11](11-refresh-giornaliero.md) | Il refresh giornaliero degli insight: le due fonti pubbliche si chiedono da sé, e il pannello dice quando non ci riesce | v1.12.0 — 2026-08-13 |

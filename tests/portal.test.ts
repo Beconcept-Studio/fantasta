@@ -14,6 +14,7 @@ import {
   parseAmount,
   pausedRemaining,
   portalScreen,
+  secondsLeft,
   shouldOpenBidDialog,
   takenPlayerIds,
 } from "@/lib/realtime/portal";
@@ -140,6 +141,57 @@ describe("§8bis — la schermata è funzione dello snapshot", () => {
     // In pausa il server rifiuta le offerte: nessun modale che finge di poter salvare.
     expect(shouldOpenBidDialog(s, ME, null)).toBe(false);
     expect(canWithdraw(s, ME)).toBe(false);
+  });
+
+  /**
+   * Il **settimo** caso di rientro (M14): i cinque del piano, il sesto è il congedo
+   * di M12, questo è il cancello dei risultati.
+   *
+   * ⚠ Vale per costruzione — `portalScreen` decide su `currentLot !== null && phase
+   * !== "WAITING_PICK"`, non su un elenco di fasi — e proprio per questo va appeso a
+   * un'asserzione: una proprietà che nessuno prova è una proprietà che la prossima
+   * modifica può togliere in silenzio.
+   */
+  it("rientro durante LOT_SEALED: il cancello, non i risultati e non la card viva", () => {
+    const s = snapshot({
+      auction: {
+        ...snapshot().auction,
+        phase: "LOT_SEALED",
+        // Il cancello è di 10s e ne restano 6: è il countdown che chi rientra deve
+        // trovare, non uno ripartito da capo.
+        phaseDeadline: iso(6_000),
+      },
+      currentLot: lot({ closedAt: iso(-4_000) }),
+    });
+
+    expect(portalScreen(s, ME)).toEqual({ kind: "LOT", frozen: false });
+    // ⚠ Dell'esito non esce niente: non è nascosto in un campo, non c'è.
+    expect(s.currentLot?.reveal).toBeNull();
+    expect(s.currentLot?.tie).toBeNull();
+    // Il round è chiuso: niente modale, niente ritiro.
+    expect(shouldOpenBidDialog(s, ME, null)).toBe(false);
+    expect(canWithdraw(s, ME)).toBe(false);
+    // Il countdown è quello vero, dedotto dalla deadline dello snapshot.
+    expect(secondsLeft(6_000)).toBe(6);
+  });
+
+  it("rientro durante LOT_SEALED ad asta in pausa: congelato, e le buste restano chiuse", () => {
+    const s = snapshot({
+      auction: {
+        ...snapshot().auction,
+        status: "PAUSED",
+        phase: "LOT_SEALED",
+        phaseDeadline: iso(6_000),
+        pausedAt: iso(-1_000),
+      },
+      currentLot: lot({ closedAt: iso(-4_000) }),
+    });
+
+    expect(portalScreen(s, ME)).toEqual({ kind: "LOT", frozen: true });
+    expect(s.currentLot?.reveal).toBeNull();
+    // Il residuo congelato è quello dell'istante della pausa, non quello che
+    // continuerebbe a scorrere da sé verso zero: 6.000 − (−1.000) = 7 secondi.
+    expect(pausedRemaining(iso(6_000), iso(-1_000))).toBe(7_000);
   });
 });
 
