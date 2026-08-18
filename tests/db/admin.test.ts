@@ -130,6 +130,18 @@ suite("ogni server action del pannello rifiuta chi non è amministratore", () =>
       // alla guardia in cima a ognuna delle tre.
       "refreshListoneInsightsAction",
       "refreshSetPiecesAction",
+      // M13 — il salvataggio del pannello laterale della pagina utenti. Quinta
+      // volta di fila che una riga viene aggiunta qui **dopo** aver visto il
+      // rosso, insieme al `requireAppAdmin()` in cima all'azione. La spec di M13
+      // §5 lo aveva previsto per iscritto («c'è un test che si romperà, di
+      // proposito») e non è un intoppo: è il meccanismo che funziona.
+      //
+      // ⚠ Questa azione **non aggiunge nessun potere**: chiama le quattro
+      // funzioni del motore che esistevano già, e le tre azioni per campo qui
+      // sopra restano al loro posto. Il salvataggio a più campi ha un file di
+      // test suo — `admin-save.test.ts` — perché lì la guardia deve *passare*, e
+      // il finto di questo file la fa sempre fallire.
+      "saveUserAction",
       "setUserAdminAction",
       "setUserDisplayNameAction",
       "setUserProAction",

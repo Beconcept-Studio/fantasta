@@ -12,7 +12,29 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M12 è in produzione da `v1.13.0`** (2026-08-18): chiusa su `dev` il 17, provata a due
+**M13 — la pagina utenti** ([13-utenti-admin.md](13-utenti-admin.md)), aperta il **2026-08-18** su
+richiesta dell'owner e lavorata per intero su `feature/13-utenti-admin`: gate verde con **813 test**,
+typecheck e build, poi merge `--no-ff` su `dev`. La tabella del pannello è diventata sei colonne in sola
+lettura con una ricerca in testa, e le modifiche stanno in un pannello laterale che si apre da «Vedi».
+Non tocca lo schema, non tocca il motore, non tocca nessuna asta: **nessun `pnpm db:push`, nessun
+backfill, nessun passo a mano sul server.**
+
+Resta da fare **la prova in locale davanti alla pagina, anche su uno schermo stretto**: è l'unica cosa
+che questa macro può rompere senza che nessun test se ne accorga (M13-11). Poi il rilascio, che parte
+**solo su richiesta esplicita**: `CHANGELOG.md`, `package.json`, merge su `main`, tag `v1.14.0`.
+
+⚠ **La misura che la spec chiedeva è stata fatta, e ha confermato la scelta invece di ereditarla**: 20
+utenti veri in produzione, 32 contando i bot. «Niente paginazione» regge, e la ricerca resta un filtro
+lato client su righe già arrivate. Il giorno in cui quel numero cresce, ricerca lato server e
+paginazione arrivano **insieme** (M13 §4) — separate, la prima diventerebbe una bugia.
+
+⚠ **Quattro Server Action sono rimaste in piedi senza nessun chiamante**: le tre per campo di M6 più
+`setUserProAction` di M8. La spec dice che M13 «ne aggiunge una», non che ne toglie quattro, e ognuna ha
+la sua guardia e il suo test — ma sono la prima cosa da guardare il giorno in cui si vuole togliere del
+codice morto dal pannello, ricordando che l'elenco esatto di `tests/db/admin.test.ts` va aggiornato
+anche in quella direzione.
+
+**M12 è in produzione da `v1.13.0`** (2026-08-18): chiusa su `dev` il 17, provata a due
 dispositivi il 18, rilasciata subito dopo. Gate verde con **791 test**, typecheck e build.
 
 ⚠ **È il primo rilascio da sei senza nessun passo a mano sul server**: nessun `pnpm db:push`, nessun
@@ -87,12 +109,12 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-Due, pianificate insieme il **2026-08-18** dalle due richieste che l'owner aveva nel quaderno. Nessuna
-delle due è aperta: si aprono su richiesta esplicita, come tutte. **`docs/REQUESTS.md` torna vuoto.**
+Due sono state pianificate insieme il **2026-08-18**, dalle due richieste che l'owner aveva nel
+quaderno. **M13 è stata aperta** e sta qui sopra, in «In corso»; resta **M14**, che si apre su richiesta
+esplicita come tutte. **`docs/REQUESTS.md` resta vuoto.**
 
 | Macro | Tema | Schema? |
 |---|---|---|
-| [M13](13-utenti-admin.md) | La pagina utenti: tabella in sola lettura con ricerca, e un pannello laterale che modifica | **No** |
 | [M14](14-cancello-risultati.md) | Il cancello dei risultati: le buste non si aprono da sole, e un lotto si può annullare | ⚠ **Sì** — una colonna additiva, `pnpm db:push`, **nessun backfill** |
 
 **Perché due e non una.** Non hanno niente in comune: la prima è tutta UI dentro il pannello di

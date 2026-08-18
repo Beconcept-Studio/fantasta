@@ -2480,3 +2480,67 @@ amministratore**: il recupero lo chiede la persona da sé (M5), e un amministrat
 nell'account di un altro è un potere che questa applicazione non ha. La verifica forzata — che esiste
 già — è il massimo che si è accettato, con la sua avvertenza scritta: *«mettere la propria parola al
 posto della prova»*.
+
+## 2026-08-18 — M13, la pagina utenti
+
+Le quattro decisioni che la pianificazione aveva già messo per iscritto — la ricerca sì e la
+paginazione no, lo `Switch` di `radix-ui` invece di Base UI, la verifica a senso unico, le due strade
+scartate — sono qui sopra, nella voce della pianificazione, e sono state seguite alla lettera. Queste
+sono quelle **prese scrivendola**.
+
+**La misura di §4 è stata fatta e non ha riaperto niente: 20 utenti veri in produzione, 32 contando i
+bot** (letti dall'owner sulla pagina; da una sessione di sviluppo quel numero non è leggibile — nessun
+accesso SSH al server, e la pagina vuole una sessione da amministratore). Venti righe stanno in una
+schermata da portatile, quindi «niente paginazione» regge com'era ereditato da M6 invece di essere
+riconfermato a occhio. Il numero da riguardare in futuro è quello **con** i bot, perché è quello che la
+pagina mostra col filtro acceso.
+
+**Il server sa cosa è cambiato dalla presenza del campo nella `FormData`, non da un confronto.** Era il
+punto aperto di §5: «chiama solo per ciò che è cambiato» richiede di sapere cos'era prima, e l'azione
+**non può leggerlo** — `app/admin/actions.ts` non importa `lib/db` (regola ESLint) e `lib/engine/admin.ts`
+non si tocca (§1), quindi non esiste nessun `getAdminUser` da chiamare e non doveva nascerne uno. La
+soluzione è che il pannello monta l'input nascosto **solo** quando quel valore differisce da quello che
+il server gli aveva mandato: un `displayName` assente vuol dire «il nome non si tocca», non «il nome è
+vuoto». Scartata l'alternativa di mandare anche i valori precedenti (`wasAdmin`, `wasPro`) e far
+decidere al server: sono due volte i dati per la stessa informazione, e il peggio che può fare un client
+che mente su questo protocollo è ottenere una `UPDATE` che riscrive il valore che c'era già —
+l'autorizzazione la fa il motore, che rilegge `is_admin` a ogni mutazione.
+
+**L'esito per campo vive in `lib/admin-users.ts`, insieme al filtro della ricerca.** `FormState` ha un
+solo `error` e un solo `ok`, che è la forma giusta per un'azione che fa una cosa: qui le cose sono
+quattro e possono andare diversamente, quindi lo stato di ritorno porta anche `outcomes` e `done` — ed è
+`done` l'unica cosa su cui il modale si chiude. Il modulo è puro e senza dipendenze oltre a `fold`, sul
+modello di `lib/centro-dati.ts`: lo legge un client component, e una lista filtrata male non dà nessun
+errore — dà una lista plausibile e incompleta.
+
+**Il test del salvataggio è un file nuovo, `tests/db/admin-save.test.ts`, e non una sezione di
+`admin.test.ts`.** In quel file `requireAppAdmin` è sostituita da una che **interrompe sempre**, ed è
+ciò che prova che ogni azione la chiama in prima riga: non ci si può mettere accanto un test che vuole
+vedere un salvataggio *riuscire*. Il finto nuovo fa l'altra metà — restituisce la riga vera
+dell'attore scelto dal test, senza guardare `is_admin` — e questo rende onesta la verifica 11: la
+guardia lascia entrare il non-amministratore, e a fermarlo resta soltanto la rilettura del permesso nel
+motore. `next/cache` è sostituito perché `revalidatePath` fuori da una richiesta vera non ha nessuno
+store da invalidare, e non è la parte in prova.
+
+⚠ **`tests/db/admin.test.ts` si è rotto come previsto, ed è la quinta volta di fila.** L'elenco esatto
+degli export è stato aggiornato a mano insieme al `requireAppAdmin()` in cima all'azione nuova. Il
+conteggio dei test è passato da 791 a 813: otto sono la ricerca, tredici il salvataggio, **e uno arriva
+da solo** — l'`it.each` che enumera gli export e li chiama tutti con un form vuoto ha guadagnato un caso
+senza che nessuno lo scrivesse. È il meccanismo che funziona, non un intoppo.
+
+**Cosa non è stato toccato, verificato invece che dichiarato.** `lib/engine/admin.ts` è identico: §1
+diceva che trovarsi a modificarlo è il segnale che qualcosa è andato storto, e non è successo. Le tre
+azioni per campo (`setUserDisplayNameAction`, `forceVerifyEmailAction`, `setUserAdminAction`) e
+`setUserProAction` **restano al loro posto** benché nessuna schermata le chiami più: la spec dice che la
+macro «ne aggiunge una», non che ne toglie quattro, e ognuna ha la sua guardia e il suo test. Sono
+quattro export da rileggere il giorno in cui si vorrà togliere del codice morto — con la consapevolezza
+che l'elenco esatto di `admin.test.ts` andrà aggiornato anche in quella direzione.
+
+**Una duplicazione trovata per strada e lasciata dov'era.** `fold()` esiste **due volte**: in
+`lib/realtime/portal.ts` — quella che M13 importa, come chiedeva §4 — e in `lib/centro-dati.ts`, che da
+M10 ne ha una copia sua con la stessa semantica scritta in un ordine diverso — l'una toglie i segni
+diacritici con l'intervallo `\u0300-\u036f`, l'altra con `\p{Diacritic}`. Non è stata unificata in
+questa macro: cambiare la `fold` del Centro dati vuol dire cambiare il comportamento di una ricerca su
+cinquecento righe per una questione di forma, dentro una macro che non c'entra. Sta scritto qui perché il commento su
+`portal.ts` dice «due ricerche che rispondono diversamente sono una piccola bugia» e la terza ricerca
+adesso lo rispetta, mentre la seconda non lo sa.
