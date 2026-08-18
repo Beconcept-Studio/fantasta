@@ -269,42 +269,166 @@ a mano. Non è un intoppo: è il meccanismo che funziona.
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M13-01** — Aprire `feature/13-utenti-admin` da `dev`; rileggere questo file e **contare gli
+- [x] **M13-01** — Aprire `feature/13-utenti-admin` da `dev`; rileggere questo file e **contare gli
       utenti veri in produzione** (§4): il numero decide se «niente paginazione» regge o va riaperto,
       e si legge in un secondo dalla pagina stessa. Verificare che `pnpm test` sia verde **prima** di
       toccare qualcosa, e annotare il conteggio come baseline
-- [ ] **M13-02** — La tabella: sei colonne, dati e nient'altro, più «Vedi» (§2). Le tre colonne che se
+      → **20 utenti veri, 32 contando i bot**, letto dall'owner sulla pagina in produzione il
+      2026-08-18. Da qui non era leggibile e non lo sarà mai: non c'è nessun accesso SSH configurato al
+      server, e la pagina vuole una sessione da amministratore. **«Niente paginazione» regge**, e §4
+      non si riapre: venti righe stanno in una schermata da portatile, quindi la ricerca lato client
+      resta un filtro su righe già arrivate e non la bugia che diventerebbe con una «pagina 2». Il
+      numero da tenere d'occhio è quello **con** i bot — 32 — perché è quello che la pagina mostra col
+      filtro acceso, ed è ancora la metà della soglia in cui §4 dice di riguardare la decisione.
+      → Baseline dei test **prima** di toccare qualunque cosa: **791 test in 48 file, tutti verdi**
+      (8,2 s), cioè esattamente il conteggio di v1.13.0. Il Postgres locale era già acceso, quindi
+      anche i test di `tests/db/` hanno girato per davvero.
+- [x] **M13-02** — La tabella: sei colonne, dati e nient'altro, più «Vedi» (§2). Le tre colonne che se
       ne vanno **non spariscono**: vanno nel modale. Rimettere in discussione `min-w-240` e il
       contenitore che scorre — **guardando**, non deducendo (§2)
-- [ ] **M13-03** — `Sì`/`No` con il criterio di §3: la parola sempre, e il trattamento che si nota
+      → **`min-w-240` via, il contenitore che scorre resta.** Con sei colonne — di cui tre contengono la
+      parola «Sì» — quella larghezza minima non aveva più niente da tenere aperto: era lì per far stare
+      quattro form. Il `overflow-x-auto` invece **è rimasto di proposito**, e §2 lo diceva già: la
+      colonna dell'email è lunga e imprevedibile, ed è l'unica cosa che può ancora costringere allo
+      scorrimento — su uno schermo stretto è meglio uno scorrimento che un indirizzo spezzato in sei
+      righe. ⚠ **Questo pezzo è stato ragionato, non guardato**: da qui non c'è un browser, e la spec
+      chiede di guardare. La verifica visiva è quella di M13-11, e va fatta con la pagina davanti — è
+      l'unica cosa di questa macro che nessun test può accorgersi di aver rotto.
+      → Le tre colonne che se ne vanno sono nel pannello, e con loro **una quarta informazione che in
+      tabella non c'era mai stata**: *quando* l'indirizzo è stato verificato (`verifiedOn`). È la cosa
+      che distingue un indirizzo dimostrato da sé da uno verificato a mano la sera dell'asta, e il
+      pannello è il primo posto che ha lo spazio per dirla.
+      → `UserRow` **non** è tornato a essere un componente server, e §2 lasciava la porta aperta («se
+      la riga può, ci torni»): non può, perché «Vedi» apre un pannello che vive nel browser. Ciò che è
+      tornato indietro è tutto il resto — zero hook, zero azioni, zero stato: una funzione dalle prop
+      al markup. I quarantotto `useActionState` di prima sono zero.
+- [x] **M13-03** — `Sì`/`No` con il criterio di §3: la parola sempre, e il trattamento che si nota
       **solo** su «Email verificata: No», che è la riga su cui si deve agire. Non estenderlo per
       simmetria alle altre due
-- [ ] **M13-04** — La ricerca in testa alla tabella, lato client, con `fold()` di
+      → Il `No` della verifica è un **`Badge variant="destructive"`**, che è il tono che
+      l'applicazione usa già; gli altri due `Sì`/`No` sono testo normale. Il badge aggiunge una forma
+      oltre al colore, quindi la cella si distingue anche da chi non separa quei due grigi — e la
+      parola resta comunque scritta, che è la regola di M9 §2.
+- [x] **M13-04** — La ricerca in testa alla tabella, lato client, con `fold()` di
       `lib/realtime/portal.ts` — **importata, non ricopiata** (§4). Il conteggio in cima segue il
       filtro, e zero risultati si dice a parole. Test puro sul filtro, con un nome accentato dentro
-- [ ] **M13-05** — Il pannello laterale: `Dialog` di `radix-ui` come in `bid-modal.tsx`, **nessun
+      → `fold()` **importata** da `lib/realtime/portal.ts`, come chiedeva §4. Il filtro sta in
+      `lib/admin-users.ts` — puro, senza dipendenze oltre a `fold`, sul modello di
+      `lib/centro-dati.ts` — perché una lista filtrata male non dà nessun errore: dà una lista
+      plausibile e incompleta. I testi cercabili si calcolano una volta, non a ogni tasto.
+      → ⚠ **`fold()` esiste in due copie, e la spec non lo sapeva**: oltre a quella di `portal.ts`
+      (di cui M13 è il terzo chiamante, come scritto) `lib/centro-dati.ts` ne ha una **sua** da M10,
+      con la stessa semantica scritta in un ordine diverso. **Non l'ho unificata**: cambiare la `fold`
+      del Centro dati vuol dire toccare il comportamento di una ricerca su cinquecento righe per una
+      questione di forma, dentro una macro che non c'entra. Sta in `DECISIONS.md` perché è
+      esattamente la «piccola bugia» di cui parla il commento su `portal.ts`, ed è già in casa.
+      → **Il test ha corretto la spec, non il contrario.** La prima asserzione diceva che «ROSSÌ»
+      trova solo «Paolo Rossì»: è falso, e per il motivo giusto — il ripiegamento vale in **tutte due
+      le direzioni**, quindi una query accentata trova anche `rossi.impresa@example.com`, che
+      l'accento non ce l'ha. L'asserzione è stata cambiata per dire quello, che è la garanzia che
+      serve davvero.
+      → Il conteggio segue il filtro («3 di 20 righe») e zero risultati è una frase. ⚠ **Quella frase
+      dice anche che i bot sono nascosti**, quando lo sono: è esattamente il posto in cui uno cerca
+      «Bot 3» e non lo trova, e la spiegazione costa una riga.
+- [x] **M13-05** — Il pannello laterale: `Dialog` di `radix-ui` come in `bid-modal.tsx`, **nessun
       `components/ui/sheet.tsx`** (§5). Il recap completo, email in sola lettura con la sua riga di
       spiegazione accanto
-- [ ] **M13-06** — I tre switch con lo `Switch` di `radix-ui` (**non** Base UI, §5): etichette vere,
+      → `Dialog` di `radix-ui` a mano, come `bid-modal.tsx`: **nessun `components/ui/sheet.tsx` e
+      nessun `components/ui/dialog.tsx`**. Sheet da destra, `sm:max-w-md`, a tutta larghezza sotto quel
+      taglio — non mobile-first, non-rotto-sul-piccolo.
+      → **La riga di spiegazione sull'email si è spostata**, come chiedeva §5: prima stava sotto la
+      tabella (dove parlava di trentadue celle) e adesso sta nel pannello, accanto al campo di cui
+      parla. L'email è testo, non un input disabilitato: un input grigio suggerisce che da qualche
+      parte esista il modo di abilitarlo.
+      → Il pannello **nasce e muore** con «Vedi» (`key={user.id}`, montato solo quando è aperto):
+      così lo stato del form non sopravvive a una riga diversa, e riaprirlo non mostra il messaggio
+      del salvataggio precedente. Ne viene anche il congedo dell'animazione di chiusura, che è un
+      prezzo che si vede meno di uno stato che resta appiccicato.
+- [x] **M13-06** — I tre switch con lo `Switch` di `radix-ui` (**non** Base UI, §5): etichette vere,
       stato leggibile senza colore. ⚠ Quello della verifica è **a senso unico** e bloccato quando
       l'indirizzo è dimostrato; `is_admin` **assente** sulla propria riga e sui bot; `is_pro` assente
       sui bot e **presente** sulla propria
-- [ ] **M13-07** — La Server Action del salvataggio in `app/admin/actions.ts`: `requireAppAdmin()` in
+      → `Switch` di `radix-ui`, tre volte, con `Label` + `id` veri (niente `aria-label`) e **la parola
+      «Sì»/«No» accanto**: la posizione del pollice di un interruttore è un'informazione che chi
+      guarda da lontano non ha.
+      → La verifica è **acceso e bloccato** quando l'indirizzo è dimostrato, con la ragione scritta
+      accanto («l'indirizzo è dimostrato: non si torna indietro»). ⚠ **E c'è un terzo stato che la
+      spec non nominava**: una riga **senza indirizzo** — i bot non sono gli unici, `entry: "none"`
+      esiste — dove `forceVerifyEmail` rifiuta con `INVALID_EMAIL`. Lì lo switch è spento e bloccato,
+      e dice perché: «non c'è niente da verificare».
+      → `is_admin` **assente** sulla propria riga (al suo posto una riga che dice cosa vale e perché
+      non si tocca da qui), `is_pro` **presente**. Su un bot niente di tutto questo: il pannello è
+      tutto recap e lo dice in una frase, invece di mostrare quattro comandi spenti.
+- [x] **M13-07** — La Server Action del salvataggio in `app/admin/actions.ts`: `requireAppAdmin()` in
       prima riga, chiama **solo per ciò che è cambiato** le quattro funzioni esistenti, riporta
       l'esito **per campo**. Su errore il modale resta aperto; a pieno successo si chiude e la tabella
       si aggiorna (`revalidatePath`). ⚠ Aggiornare l'elenco degli export in `tests/db/admin.test.ts`,
       che si romperà di proposito (§5)
-- [ ] **M13-08** — Test con Postgres: le quattro azioni continuano a rifiutare ciò che rifiutavano
+      → `saveUserAction` in `app/admin/actions.ts`, `requireAppAdmin()` in prima riga.
+      → ⚠ **«Solo per ciò che è cambiato» ha richiesto una decisione che §5 non aveva preso**: per
+      sapere cos'era prima bisognerebbe leggere il database, e quest'azione **non può** — non importa
+      `lib/db` (regola ESLint) e `lib/engine/admin.ts` non si tocca (§1), quindi non esiste nessun
+      `getAdminUser` e non doveva nascerne uno. Il campo cambiato lo dice **la sua presenza nella
+      `FormData`**: il pannello monta l'input nascosto solo quando il valore differisce da quello
+      ricevuto, e un `displayName` assente vuol dire «il nome non si tocca», non «il nome è vuoto». Ne
+      viene una piccola stranezza da sapere leggendo il componente: **il campo di testo visibile non
+      ha `name`**. Scartato il mandare anche i valori precedenti: due volte i dati per la stessa
+      informazione, e il peggio che fa un client che mente è una `UPDATE` che riscrive ciò che c'era.
+      → L'esito per campo vive in `lib/admin-users.ts` (`outcomes` + `done`) accanto al filtro:
+      `FormState` ha un solo `error`, che è la forma giusta per un'azione che fa **una** cosa. Il
+      modale si chiude **solo** su `done`.
+      → ⚠ **`revalidatePath` si dà anche a metà strada**, se almeno un campo è passato: era una scelta
+      da fare e la spec non la nominava. Ciò che è stato scritto deve comparire in tabella anche
+      quando il modale resta aperto — altrimenti la pagina racconta una storia e il database un'altra,
+      che è il guaio peggiore di un salvataggio non atomico.
+      → Il ternario `"true"/"false" → boolean` era scritto due volte e adesso è tre: è diventato
+      `flag(form, key)` accanto a `text()`, **usato anche dalle due azioni vecchie**. Terzo chiamante,
+      quindi non è un'astrazione anticipata.
+      → `tests/db/admin.test.ts` si è rotto come previsto e l'elenco esatto è stato aggiornato a mano
+      (quinta volta di fila). ⚠ **E ha portato un test in regalo**: l'`it.each` che enumera gli export
+      e li chiama con un form vuoto ha guadagnato un caso da solo, quindi la guardia dell'azione nuova
+      era già coperta prima di scrivere un test suo.
+- [x] **M13-08** — Test con Postgres: le quattro azioni continuano a rifiutare ciò che rifiutavano
       (propria riga per `is_admin`, bot per entrambi i flag, nome fuori dai limiti, utente
       inesistente) **passando dall'azione nuova**; un non-amministratore è rifiutato chiamandola
       direttamente; un salvataggio che cambia due campi su quattro non scrive gli altri due
-- [ ] **M13-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
+      → File nuovo: `tests/db/admin-save.test.ts`, **13 test**. ⚠ **Non è una sezione di
+      `admin.test.ts`, e non per ordine**: là `requireAppAdmin` è sostituita da una che *interrompe
+      sempre* — è ciò che prova la guardia in prima riga — e accanto a quel finto non ci si può
+      mettere un test che vuole vedere un salvataggio **riuscire**. Il finto nuovo fa l'altra metà:
+      restituisce la riga vera dell'attore scelto dal test, **senza guardare `is_admin`**. È questo
+      che rende onesta la verifica 11 — la guardia lascia entrare l'intruso, e a fermarlo resta
+      soltanto la rilettura del permesso dentro il motore.
+      → `next/cache` è sostituito: `revalidatePath` fuori da una richiesta vera non ha nessuno store
+      da invalidare, e che la tabella si aggiorni è una verifica da fare col browser (M13-11).
+      → Coperti: due campi su quattro scrivono solo quei due; nome fuori dai limiti che cade **mentre
+      il flag valido passa**; `is_admin` sulla propria riga rifiutato con il nome dello stesso
+      salvataggio che invece si scrive; i tre comandi su un bot tutti rifiutati; un uuid inesistente
+      **e** una stringa che non è un uuid (il `22P02`, cioè un 500 al posto di un rifiuto); un flag
+      che non è né `true` né `false`; l'intruso; e **l'amministratore appena declassato** che salva
+      una volta e poi non più.
+- [x] **M13-09** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con `pnpm dev`
       spento — è una macro **tutta di UI**, quindi esattamente quella in cui un errore di lint fa
       fallire la build di produzione con tutto il resto verde: è successo a M9)
-- [ ] **M13-10** — `docs/ARCHITECTURE.md`: il capitolo del pannello, che oggi descrive una tabella che
+      → **813 test in 50 file**, typecheck e build verdi. Dei 22 in più di v1.13.0, otto sono la
+      ricerca, tredici il salvataggio e **uno è arrivato da solo** (M13-07).
+      → `pnpm build` dato con `pnpm dev` **spento**, verificato guardando chi era in ascolto e non
+      dandolo per fatto. `/admin/users` pesa 9 kB / 138 kB di first load. Nessun errore di lint, che è
+      il modo in cui questa macro poteva far fallire la produzione con tutto il resto verde (M9).
+- [x] **M13-10** — `docs/ARCHITECTURE.md`: il capitolo del pannello, che oggi descrive una tabella che
       si compila. `docs/DECISIONS.md`: **la ratifica su M6 §8** (la ricerca sì, la paginazione no, e
       perché non sono la stessa decisione), lo `Switch` di radix invece di Base UI, lo switch della
       verifica a senso unico, e le due strade scartate di §6
+      → `docs/ARCHITECTURE.md`: «Le tre azioni sugli utenti» è diventato «La pagina utenti: una
+      tabella che si legge, un pannello che modifica», e racconta perché la forma di prima era
+      sbagliata — la domanda frequente che si rispondeva peggio della rara. Corretta anche la chiusa
+      del capitolo, che dava per scontato che tutte le tabelle del pannello scorrano in orizzontale.
+      → `docs/DECISIONS.md`: le quattro decisioni che M13-10 chiedeva **erano già scritte** nella voce
+      di pianificazione del 2026-08-18 (ratifica su M6 §8, radix invece di Base UI, la verifica a
+      senso unico, le due strade scartate) e sono state seguite alla lettera. La voce nuova dice
+      quelle prese **scrivendola**: la misura in produzione, il protocollo «campo presente = campo
+      cambiato», l'esito per campo in `lib/admin-users.ts`, il file di test separato, le quattro
+      azioni vecchie lasciate in piedi e la `fold` duplicata.
 - [ ] **M13-11** — Chiusura: merge `--no-ff` su `dev`, prova in locale — **anche su uno schermo
       stretto**, che è l'unica cosa che questa macro può rompere senza che nessun test se ne accorga —
       poi, **solo su richiesta esplicita**, `CHANGELOG.md`, `package.json`, merge su `main`, tag
