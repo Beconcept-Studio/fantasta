@@ -110,6 +110,22 @@ const DEV_TIMERS = {
   pickSeconds: 3,
   tiePrepSeconds: 2,
   revealSeconds: 2,
+  /**
+   * ⚠ **Il cancello dei risultati acceso, e questa riga è il punto di M14-11.**
+   *
+   * Senza di lei `--auction-status=mid` continuerebbe a funzionare benissimo — la
+   * colonna ha `DEFAULT 0`, quindi il seed produrrebbe un'asta senza cancello — e
+   * l'unico collaudo locale che gioca un'asta intera sarebbe **l'unico che non
+   * attraversa la fase nuova**. Il `default: throw` dello `switch` di `simulate` non
+   * scatterebbe, nessun test diventerebbe rosso, e la cosa si scoprirebbe solo
+   * guardando un'asta vera.
+   *
+   * ⚠ E `tsc` **non** aiuta qui, malgrado il campo sia obbligatorio in
+   * `AuctionConfig`: `createAuction` prende `AuctionConfigInput`, dove ogni campo è
+   * opzionale. Questo oggetto non viene mai confrontato con `AuctionConfig`, quindi
+   * dimenticarlo compila.
+   */
+  resultGateSeconds: 2,
 };
 
 const SEED_SEATS = 8;
@@ -449,6 +465,11 @@ function simulate(
         state = apply(state, { type: "ADVANCE" }, vnow);
         break;
       }
+      // Le fasi che scorrono da sé: si salta alla loro scadenza e si avanza. Il
+      // cancello dei risultati (M14) è una di loro — la simulazione non preme
+      // «Mostra risultati», aspetta come farebbe una stanza distratta — e sta qui
+      // *accanto* alle altre due proprio perché non ha bisogno di niente di suo.
+      case "LOT_SEALED":
       case "LOT_TIE_PREP":
       case "LOT_REVEAL": {
         vnow = state.phaseDeadline!;

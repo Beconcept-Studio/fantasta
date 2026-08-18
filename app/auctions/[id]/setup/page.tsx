@@ -225,6 +225,7 @@ export default async function SetupPage({
               pickSeconds: auction.pickSeconds,
               tiePrepSeconds: auction.tiePrepSeconds,
               revealSeconds: auction.revealSeconds,
+              resultGateSeconds: auction.resultGateSeconds,
               slots: overview.slots,
               roleOrder: auction.roleOrder,
             }}

@@ -5,12 +5,20 @@ import { useState } from "react";
 import { PresenceDot } from "@/components/auction/presence-dot";
 import { Button } from "@/components/ui/button";
 import { managerControls } from "@/lib/realtime/manage";
+import { memberById, memberLabel } from "@/lib/realtime/portal";
 import { sendAction, type ActionPayload } from "@/lib/realtime/action";
 import type { Snapshot } from "@/lib/realtime/types";
 import { cn } from "@/lib/utils";
 
 /**
- * I comandi della regia: avvio, e — da F6-03 — pausa e ripresa.
+ * I comandi della regia: avvio, e — da F6-03 — pausa e ripresa. Da M14 anche le
+ * due leve del cancello dei risultati.
+ *
+ * ⚠ **Il cancello è l'unico blocco di questa pagina che vive per pochi secondi**, e
+ * questo cambia come va letto: «Mostra risultati» e «Annulla lotto» compaiono e
+ * spariscono da soli, perché la loro condizione è una fase. Non sono leve della
+ * serata come pausa e ripresa — sono la risposta a «un attimo, c'è un problema»,
+ * e la sera dell'asta chi conduce le trova già davanti invece di cercarle.
  *
  * Il pulsante d'avvio **non esisteva in nessuna pagina** fino a qui: l'asta si
  * faceva partire dai bot o con una `fetch` a mano dalla console del browser.
@@ -119,6 +127,33 @@ export function ControlPanel({
         </div>
       )}
 
+      {/*
+        ⚠ **Il cancello dei risultati sta in cima**, sopra pausa e ripresa (M14 §5).
+        Non è gerarchia: è che dura X secondi e in quegli X secondi è la sola cosa
+        che chi conduce deve poter raggiungere senza cercarla. Passati quelli, il
+        blocco sparisce da sé.
+      */}
+      {controls.canShowResults && (
+        <div className="border-primary/40 bg-primary/5 space-y-3 rounded-lg border p-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              size="lg"
+              disabled={pending !== null}
+              onClick={() =>
+                void send({ type: "SHOW_RESULTS" }, "Buste aperte.")
+              }
+            >
+              {pending === "SHOW_RESULTS" ? "Apro…" : "Mostra risultati"}
+            </Button>
+            <p className="text-muted-foreground max-w-xl text-sm">
+              Il round è chiuso e <strong>nessuno sa ancora niente</strong>. Apri
+              le buste quando la stanza è pronta: se non premi, si aprono da sole
+              allo scadere del tempo.
+            </p>
+          </div>
+        </div>
+      )}
+
       {(controls.canPause || controls.canResume) && (
         <div className="flex flex-wrap items-center gap-3">
           {controls.canPause && (
@@ -140,12 +175,39 @@ export function ControlPanel({
               {pending === "RESUME" ? "Riprendo…" : "Riprendi l'asta"}
             </Button>
           )}
+          {/*
+            ⚠ Durante il cancello il testo dice cosa succede **adesso**, non la frase
+            generica sui countdown: chi mette in pausa in quel momento lo sta facendo
+            perché qualcuno ha segnalato un problema, e la cosa che deve leggere è
+            che i risultati non escono finché non riprende.
+          */}
           <p className="text-muted-foreground max-w-xl text-sm">
-            {controls.canResume
-              ? "Alla ripresa ogni countdown riparte dal tempo che restava, non da capo: la pausa congela le scadenze, non le azzera."
-              : "La pausa congela tutti i countdown e sospende le offerte. La fase resta quella che è: si riprende esattamente da qui."}
+            {controls.canShowResults
+              ? "Se qualcuno segnala un problema, metti in pausa: i risultati non escono finché non riprendi, e da lì puoi anche annullare il lotto."
+              : controls.canCancelLot
+                ? "Le buste sono ancora chiuse e restano chiuse. Riprendi per far ripartire il cancello dal tempo che restava, oppure annulla il lotto qui sotto."
+                : controls.canResume
+                  ? "Alla ripresa ogni countdown riparte dal tempo che restava, non da capo: la pausa congela le scadenze, non le azzera."
+                  : "La pausa congela tutti i countdown e sospende le offerte. La fase resta quella che è: si riprende esattamente da qui."}
           </p>
         </div>
+      )}
+
+      {/*
+        «Annulla lotto» compare **solo** ad asta in pausa dentro il cancello, ed è
+        l'unica azione dell'applicazione che riporta il turno indietro. Regge perché
+        lì il lotto non ha ancora prodotto niente: nessuna assegnazione, nessun
+        credito speso, nessuna rotazione avanzata.
+      */}
+      {controls.canCancelLot && (
+        <CancelLotBlock
+          snapshot={snapshot}
+          pending={pending !== null}
+          working={pending === "CANCEL_LOT"}
+          onConfirm={() =>
+            void send({ type: "CANCEL_LOT" }, "Lotto annullato: il turno torna a chi aveva chiamato.")
+          }
+        />
       )}
 
       {/*
@@ -199,5 +261,88 @@ export function ControlPanel({
         </ul>
       )} */}
     </section>
+  );
+}
+
+/**
+ * «Annulla lotto», con il passo in mezzo (M14 §5).
+ *
+ * ⚠ **La conferma nomina il giocatore e chi l'aveva chiamato**, ed è la lezione di
+ * M12 §4: «un avviso che nomina un numero si legge; uno generico si clicca». Qui i
+ * nomi sono due, e sono precisamente i due fatti che l'operazione cambia — il
+ * giocatore torna disponibile, il turno torna a quella squadra.
+ *
+ * **Non serve digitare niente.** Non è una cancellazione irreversibile di dati: è un
+ * lotto di trenta secondi da rifare, e le offerte restano tutte a database. Ma serve
+ * un passo in mezzo, perché il pulsante vive accanto a «Riprendi l'asta» e i due
+ * click sono a un centimetro di distanza.
+ */
+function CancelLotBlock({
+  snapshot,
+  pending,
+  working,
+  onConfirm,
+}: {
+  snapshot: Snapshot;
+  /** Un'altra azione è in volo: si disabilita tutto, non solo questo pulsante. */
+  pending: boolean;
+  working: boolean;
+  onConfirm: () => void;
+}) {
+  const [asking, setAsking] = useState(false);
+  const lot = snapshot.currentLot;
+  if (lot === null) return null;
+
+  const caller = memberLabel(memberById(snapshot, lot.calledByMemberId));
+
+  return (
+    <div className="border-destructive/40 bg-destructive/5 space-y-3 rounded-lg border p-3">
+      {!asking ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            size="lg"
+            variant="outline"
+            disabled={pending}
+            onClick={() => setAsking(true)}
+          >
+            Annulla lotto
+          </Button>
+          <p className="text-muted-foreground max-w-xl text-sm">
+            Butta via questo lotto e rifallo: le buste non si aprono, il turno
+            torna a chi aveva chiamato e il giocatore torna disponibile.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold">
+              Annullo il lotto di {lot.player.name}?
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Le buste di questo lotto <strong>non verranno mai aperte</strong>.{" "}
+              <strong>{lot.player.name}</strong> torna disponibile per tutti, e il
+              turno di chiamata torna a <strong>{caller}</strong>. Le offerte
+              restano nel verbale dell&apos;asta, senza diventare pubbliche.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="destructive"
+              disabled={pending}
+              onClick={onConfirm}
+            >
+              {working ? "Annullo…" : "Sì, annulla il lotto"}
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={pending}
+              onClick={() => setAsking(false)}
+            >
+              No, lascia stare
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

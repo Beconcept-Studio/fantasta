@@ -99,6 +99,14 @@ export function makeState(overrides: StateOverrides = {}): AuctionState {
     pickSeconds: 30,
     tiePrepSeconds: 10,
     revealSeconds: 10,
+    // ⚠ **Zero di proposito, ed è ciò che rende ogni test già scritto una prova
+    // di regressione per M14**: con il cancello spento `advanceLotOpen` risolve
+    // nella stessa transizione, cioè si comporta esattamente come a v1.14.0. Le
+    // centinaia di asserzioni che esistevano prima del cancello continuano a
+    // valere senza una riga di modifica, e la verifica 10 della spec — «con X = 0
+    // l'asta si comporta come prima» — è dimostrata da loro invece che da un
+    // test nuovo che lo racconta. I test del cancello lo alzano da sé.
+    resultGateSeconds: 0,
     slots: { P: 1, D: 1, C: 1, A: 1 },
     roleOrder: ["P", "D", "C", "A"] as Role[],
     includeOutOfList: false,

@@ -251,6 +251,7 @@ export function serializeSnapshot(
         pickSeconds: state.config.pickSeconds,
         tiePrepSeconds: state.config.tiePrepSeconds,
         revealSeconds: state.config.revealSeconds,
+        resultGateSeconds: state.config.resultGateSeconds,
       },
     },
     members: serializeMembers(loaded, now),

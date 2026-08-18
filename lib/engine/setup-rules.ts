@@ -41,6 +41,21 @@ export const TIMER_LIMITS = {
   pickSeconds: { min: 3, max: 300 },
   tiePrepSeconds: { min: 2, max: 120 },
   revealSeconds: { min: 1, max: 120 },
+  /**
+   * Il cancello dei risultati (M14 §7): quanto passa fra la chiusura del round e
+   * l'apertura delle buste.
+   *
+   * ⚠ **È l'unico timer con minimo 0, e lo zero non è «una fase da zero
+   * secondi»: è l'assenza della fase.** Gli altri quattro hanno tutti un minimo
+   * positivo perché una fase che dura zero non ha senso — un timer armato
+   * sull'istante presente, uno snapshot in più per lotto mandato a dodici
+   * persone, e una schermata «risultati in arrivo» che lampeggia se un `ADVANCE`
+   * arriva un tick dopo. Qui lo zero salta la fase del tutto: `advanceLotOpen`
+   * risolve nella stessa transizione, cioè esattamente il comportamento di
+   * v1.14.0. **Non "uniformare" questo minimo a 1 per simmetria**: sarebbe
+   * togliere l'unico modo di tornare a come l'asta si comportava prima.
+   */
+  resultGateSeconds: { min: 0, max: 120 },
 } as const;
 
 export type TimerField = keyof typeof TIMER_LIMITS;
@@ -51,6 +66,7 @@ export const TIMER_LABELS: Record<TimerField, string> = {
   pickSeconds: "secondi per chiamare",
   tiePrepSeconds: "secondi di preparazione allo spareggio",
   revealSeconds: "secondi di apertura buste",
+  resultGateSeconds: "secondi prima dei risultati",
 };
 
 // ─── Configurazione ──────────────────────────────────────────────────────────
@@ -65,10 +81,23 @@ export type AuctionConfig = {
   pickSeconds: number;
   tiePrepSeconds: number;
   revealSeconds: number;
+  /** Il cancello dei risultati (M14). `0` = nessun cancello. */
+  resultGateSeconds: number;
   slots: SlotsByRole;
   roleOrder: Role[];
 };
 
+/**
+ * Cosa una pagina **propone** a chi sta creando un'asta adesso.
+ *
+ * ⚠ **`resultGateSeconds: 10` qui e `DEFAULT 0` sulla colonna, di proposito**
+ * (M14 §7). Non sono in contraddizione e non vanno allineati: rispondono a due
+ * domande diverse. Il default della colonna vale per le **righe che esistono
+ * già**, e lo zero le lascia identiche a se stesse senza nessun backfill — è la
+ * ragione per cui M14 si rilascia con un `db:push` e niente altro. Questo default
+ * vale per le aste **nuove**, e dieci secondi sono il comportamento che l'owner
+ * ha chiesto.
+ */
 export const DEFAULT_CONFIG: Omit<AuctionConfig, "name"> = {
   seats: 8,
   budgetDefault: 500,
@@ -76,6 +105,7 @@ export const DEFAULT_CONFIG: Omit<AuctionConfig, "name"> = {
   pickSeconds: 30,
   tiePrepSeconds: 10,
   revealSeconds: 10,
+  resultGateSeconds: 10,
   slots: { P: 3, D: 8, C: 8, A: 6 },
   roleOrder: [...ROLES],
 };
@@ -167,6 +197,7 @@ export type AuctionConfigInput = {
   pickSeconds?: unknown;
   tiePrepSeconds?: unknown;
   revealSeconds?: unknown;
+  resultGateSeconds?: unknown;
   slots?: Partial<Record<Role, unknown>>;
   roleOrder?: unknown;
 };

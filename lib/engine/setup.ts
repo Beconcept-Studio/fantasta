@@ -278,6 +278,7 @@ export async function createAuction(
       pickSeconds: config.pickSeconds,
       tiePrepSeconds: config.tiePrepSeconds,
       revealSeconds: config.revealSeconds,
+      resultGateSeconds: config.resultGateSeconds,
       slotsP: config.slots.P,
       slotsD: config.slots.D,
       slotsC: config.slots.C,
@@ -305,6 +306,11 @@ const TIMER_PATCH_FIELDS = [
   "pickSeconds",
   "tiePrepSeconds",
   "revealSeconds",
+  // Il cancello dei risultati (M14) è un timer come gli altri quattro, e si
+  // cambia anche ad asta iniziata: vale dal lotto successivo, perché il motore
+  // rilegge la config a ogni transizione. Portarlo a 0 a metà asta spegne il
+  // cancello dal prossimo round; alzarlo non allunga quello in corso.
+  "resultGateSeconds",
 ] as const;
 
 const STRUCTURAL_PATCH_FIELDS = [
@@ -355,6 +361,7 @@ export async function updateAuctionSettings(
       pickSeconds: auction.pickSeconds,
       tiePrepSeconds: auction.tiePrepSeconds,
       revealSeconds: auction.revealSeconds,
+      resultGateSeconds: auction.resultGateSeconds,
       slots: slotsOf(auction),
       roleOrder: auction.roleOrder,
     });

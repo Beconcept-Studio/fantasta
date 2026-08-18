@@ -56,12 +56,19 @@ export function Portal({
   /** Il listone dell'asta, letto una volta dal server: non viaggia nello snapshot. */
   pool: PoolPlayer[];
   /**
-   * Se chi guarda possiede l'asta: abilita «Prosegui asta» sulla card chiusa.
+   * Se chi guarda possiede l'asta: abilita i due pulsanti che anticipano una
+   * scadenza sulla card chiusa — «Prosegui asta» nel reveal e, da M14, «Mostra
+   * risultati» nel cancello.
    *
    * Arriva come prop e non dallo snapshot, per la stessa ragione del listone:
    * non è stato di gioco, non cambia durante la serata, e nello snapshot
    * verrebbe spedito a tutti a ogni transizione per un booleano che nasce col
-   * link. Non autorizza niente — `skipReveal` ricontrolla lato server.
+   * link. Non autorizza niente — `skipReveal` e `showResults` ricontrollano lato
+   * server.
+   *
+   * ⚠ **«Annulla lotto» non è qui, e non è una dimenticanza**: vive solo nella regia
+   * (M14 §5). Richiede l'asta in pausa, la conferma nomina due nomi, e il posto in
+   * cui si conduce è quello — non il telefono con cui si gioca.
    */
   viewerIsOwner: boolean;
 }) {
@@ -82,6 +89,15 @@ export function Portal({
     // Nessun messaggio di conferma: la conferma è il lotto successivo che si
     // apre da solo. Se il server rifiuta — reveal già scaduto mentre premevi —
     // lo snapshot è già andato avanti lo stesso, e non c'è niente da dire.
+  }
+
+  // «Mostra risultati» (M14): identica alla precedente, e per lo stesso motivo non
+  // dice niente in caso di rifiuto — se il cancello è scaduto mentre premevi, le
+  // buste si sono aperte comunque ed è quello che volevi.
+  async function showResults() {
+    setSkipping(true);
+    await sendAction(auctionId, { type: "SHOW_RESULTS" });
+    setSkipping(false);
   }
 
   // Prima dello snapshot, perché l'ultimo snapshot ricevuto è di un'asta che non
@@ -152,10 +168,17 @@ export function Portal({
           momenti diversi e devono avere due facce diverse (M1). La scelta è
           della fase, quindi dello snapshot: chi rientra a metà reveal trova la
           card chiusa come chi non si è mai disconnesso (I10).
+
+          ⚠ **Da M14 le fasi chiuse sono due, ma le card restano due** — il cancello
+          dei risultati (`LOT_SEALED`) porta la card chiusa nel suo stato sigillato,
+          non una terza cornice. Il perché sta su `LotClosedCard`: per chi guarda il
+          telefono la cosa già accaduta — «non si offre più» — è la stessa, e ciò che
+          cambia è solo se il risultato si conosce.
         */}
         {screen.kind === "LOT" &&
           lot !== null &&
-          (snapshot.auction.phase === "LOT_REVEAL" ? (
+          (snapshot.auction.phase === "LOT_REVEAL" ||
+          snapshot.auction.phase === "LOT_SEALED" ? (
             <LotClosedCard
               snapshot={snapshot}
               myMemberId={myMemberId}
@@ -163,6 +186,11 @@ export function Portal({
               onSkip={
                 viewerIsOwner && managerControls(snapshot).canSkipReveal
                   ? skipReveal
+                  : null
+              }
+              onShowResults={
+                viewerIsOwner && managerControls(snapshot).canShowResults
+                  ? showResults
                   : null
               }
               skipPending={skipping}

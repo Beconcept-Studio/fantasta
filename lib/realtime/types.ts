@@ -63,6 +63,11 @@ export type SnapshotAuction = {
     pickSeconds: number;
     tiePrepSeconds: number;
     revealSeconds: number;
+    /**
+     * Il cancello dei risultati (M14). `0` = nessun cancello, e la fase
+     * `LOT_SEALED` non compare mai.
+     */
+    resultGateSeconds: number;
   };
 };
 

@@ -93,9 +93,17 @@ export function memberLabel(member: SnapshotMember | null): string {
  * Non è una schermata a parte proprio per questo — §8bis chiede «lo stato
  * congelato», non una pagina bianca.
  *
- * `LOT` copre LOT_OPEN, LOT_TIE_PREP e LOT_REVEAL: finché `currentLot != null`
- * la card del lotto è l'elemento permanente della pagina, e sono le sue parti
- * interne a cambiare.
+ * `LOT` copre LOT_OPEN, LOT_SEALED, LOT_TIE_PREP e LOT_REVEAL: finché
+ * `currentLot != null` la card del lotto è l'elemento permanente della pagina, e
+ * sono le sue parti interne a cambiare.
+ *
+ * ⚠ **Il cancello dei risultati (M14) rientra in `LOT` senza che nessuno abbia
+ * aggiunto una riga**, e vale la pena saperlo: questa funzione decide su
+ * `currentLot !== null && phase !== "WAITING_PICK"`, non su un elenco di fasi. È il
+ * settimo caso di rientro di §8bis — chi ricarica la pagina durante il cancello
+ * trova il cancello, non i risultati e non la card viva — e il test lo dimostra
+ * invece di darlo per scontato: una proprietà che vale per costruzione va comunque
+ * appesa a un'asserzione, o la prossima modifica la toglie in silenzio.
  */
 export type PortalScreenKind =
   /** DRAFT o READY: l'asta non è ancora partita. */
@@ -155,6 +163,13 @@ export function phaseLabel(snapshot: Snapshot): string {
       return `chiamata${role}`;
     case "LOT_OPEN":
       return snapshot.currentLot?.roundNo === 2 ? "spareggio" : "offerte";
+    // ⚠ «buste da aprire» sta accanto a «buste aperte» di proposito: le due frasi si
+    // leggono in fila e dicono cose diverse in tre parole, che è il requisito di
+    // questa funzione. Il default qui sotto avrebbe scritto «in corso» senza che
+    // niente lo segnalasse — su un cartello proiettato in mezzo alla stanza, nel
+    // momento in cui la cosa da capire è precisamente che le buste non sono aperte.
+    case "LOT_SEALED":
+      return "buste da aprire";
     case "LOT_TIE_PREP":
       return "spareggio";
     case "LOT_REVEAL":

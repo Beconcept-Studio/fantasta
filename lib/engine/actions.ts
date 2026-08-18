@@ -78,6 +78,37 @@ export async function writeEvent(
   );
 }
 
+/**
+ * I campi in più che un tipo di evento porta oltre a «da dove a dove».
+ *
+ * Ce n'è **uno solo**, e per una ragione precisa: `CANCEL_LOT` è l'unica transizione
+ * che fa sparire qualcosa. Tutte le altre aggiungono storia, e il dettaglio del
+ * lotto la racconta meglio del payload; un lotto annullato invece non compare in
+ * nessun elenco — non è `RESOLVED`, quindi lo storico non lo pubblica — e questa
+ * riga è l'unico posto in cui resta scritto che è esistito. Senza il nome del
+ * giocatore e di chi l'aveva chiamato sarebbe una riga che dice «è stato annullato
+ * un lotto» e non serve a nessuno.
+ *
+ * ⚠ **Nessun importo, e qui la disciplina conta più che altrove.** Dentro `events`
+ * un `PLACE_BID` registra chi e quando, mai quanto: la riga di un lotto annullato
+ * **sopravvive alla sigillatura** delle sue buste, quindi un prezzo scritto qui
+ * sarebbe l'unica cifra a scavalcare il cancello.
+ */
+function extraPayload(
+  loaded: LoadedAuction,
+  event: AuctionEvent,
+): Record<string, unknown> {
+  if (event.type !== "CANCEL_LOT") return {};
+  const lot = loaded.state.lots.find((l) => l.id === loaded.state.currentLotId);
+  if (!lot) return {};
+  return {
+    playerId: lot.playerId,
+    player: loaded.view.players.get(lot.playerId)?.name ?? null,
+    calledByMemberId: lot.calledByMemberId,
+    team: loaded.view.members.get(lot.calledByMemberId)?.teamName ?? null,
+  };
+}
+
 /** La riga di `events` di una transizione: da dove a dove, su quale lotto. */
 async function recordEvent(
   tx: Tx,
@@ -88,7 +119,8 @@ async function recordEvent(
   now: Millis,
 ): Promise<void> {
   // Il lotto toccato dalla transizione: quello corrente dopo, o — quando la
-  // transizione lo archivia (fine reveal) — quello che era corrente prima.
+  // transizione lo archivia (fine reveal, annullamento) — quello che era corrente
+  // prima.
   const lotEngineId = next.currentLotId ?? loaded.state.currentLotId;
   const lotId =
     lotEngineId === null ? null : (loaded.refs.lots.get(lotEngineId) ?? null);
@@ -102,6 +134,7 @@ async function recordEvent(
       to: describePosition(next),
       lotId,
       actor,
+      ...extraPayload(loaded, event),
     },
     now,
   );
@@ -310,6 +343,63 @@ export async function skipReveal(
     (loaded) =>
       requireOwner(loaded, actorUserId, "far proseguire l'asta") ??
       ok({ type: "SKIP_REVEAL" }),
+    now,
+    actorUserId,
+  );
+}
+
+/**
+ * «Mostra risultati» (regia, M14): l'owner apre le buste prima che il cancello dei
+ * risultati scada.
+ *
+ * È la gemella di `skipReveal`, e la simmetria è voluta fino all'autorizzazione:
+ * **solo l'owner**, verificata qui perché il motore non sa chi possiede l'asta. Il
+ * pulsante che la UI mostra soltanto a lui non c'entra niente con la sicurezza
+ * (regola 6).
+ *
+ * Tutto il resto arriva dalla strada normale: `applyEvent` persiste dentro il lock,
+ * `syncTimer` riarma sulla fase nuova — il reveal o lo spareggio — e cancella il
+ * timeout del cancello, e l'hook di broadcast manda lo snapshot a tutti insieme.
+ */
+export async function showResults(
+  actorUserId: string,
+  auctionId: string,
+  now: Millis = Date.now(),
+): Promise<Result<ActionOutcome>> {
+  return applyEvent(
+    auctionId,
+    (loaded) =>
+      requireOwner(loaded, actorUserId, "mostrare i risultati") ??
+      ok({ type: "SHOW_RESULTS" }),
+    now,
+    actorUserId,
+  );
+}
+
+/**
+ * «Annulla lotto» (regia, M14 §6): il lotto sigillato muore, il turno torna a chi
+ * aveva chiamato e il giocatore torna chiamabile.
+ *
+ * **Solo l'owner**, come le altre tre leve della regia. Le condizioni di fase — asta
+ * in pausa *e* lotto sigillato — le verifica il motore, che è l'unico a saperle: qui
+ * si traduce solo l'utente in permesso.
+ *
+ * ⚠ **La riga di `events` la scrive `recordEvent`, con il giocatore e il chiamante
+ * dentro e nessun importo** (vedi `extraPayload`). È l'unica traccia che quel lotto è
+ * esistito: `VOIDED` non è `RESOLVED`, quindi lo storico non lo pubblica fra i lotti
+ * — e non deve, perché pubblicarlo vorrebbe dire pubblicare le buste che il cancello
+ * esiste per non svelare.
+ */
+export async function cancelLot(
+  actorUserId: string,
+  auctionId: string,
+  now: Millis = Date.now(),
+): Promise<Result<ActionOutcome>> {
+  return applyEvent(
+    auctionId,
+    (loaded) =>
+      requireOwner(loaded, actorUserId, "annullare un lotto") ??
+      ok({ type: "CANCEL_LOT" }),
     now,
     actorUserId,
   );

@@ -13,7 +13,11 @@ import {
   stopScheduler,
 } from "@/lib/engine/scheduler";
 
-import { type GameAuction, makeGameAuction } from "./game-helpers";
+import {
+  type GameAuction,
+  makeGameAuction,
+  markAllPresent,
+} from "./game-helpers";
 import {
   closeDatabase,
   databaseAvailable,
@@ -201,7 +205,24 @@ describe.runIf(dbUp)("F3-08 — sweep e bootRecovery (Postgres vero)", () => {
   it("il timer si riarma a ogni mutazione: pausa cancella, resume riarma (F3-07)", async () => {
     vi.useRealTimers();
     const game = await gameAuction();
-    const now = Date.now();
+
+    // ⚠ **Un'ora nel futuro, e non `Date.now()`.** Questo test vive su un orologio
+    // finto che avanza di dodici secondi (pausa di 10s, più i 2s di residuo), mentre
+    // `startScheduler` accende **anche** lo sweep periodico — che interroga il
+    // database con l'orologio **vero**. Con la linea temporale ancorata all'adesso
+    // reale, basta che l'esecuzione della suite duri più di quei dodici secondi
+    // perché lo sweep trovi la `phase_deadline` scaduta e faccia avanzare l'asta da
+    // sé: il timer armato non ha fatto niente di sbagliato, ma la spia registra una
+    // chiamata e il test diventa rosso. Succedeva circa una volta su otto lanciando
+    // la suite di fila (2026-08-18, lavorando a M14, che non tocca lo scheduler).
+    //
+    // Spostando tutto un'ora avanti nessuna scadenza è mai scaduta per il database,
+    // quindi l'unica cosa che può far scattare la spia è il timer — che è
+    // precisamente ciò che questo test verifica. La presence va riscritta a quel
+    // momento, o il cancello d'avvio (F4-06) rifiuterebbe: `last_seen_at` di adesso,
+    // guardato da un'ora dopo, è OFFLINE.
+    const now = Date.now() + 3_600_000;
+    await markAllPresent(game.auctionId, game.memberIds, now);
 
     vi.useFakeTimers({ now });
     const advance = vi.fn<(auctionId: string) => Promise<void>>(async () => {});
