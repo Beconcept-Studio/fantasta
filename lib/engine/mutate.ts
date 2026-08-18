@@ -75,10 +75,45 @@ type BroadcastHook = (auctionId: string) => void;
 
 const processGlobals = globalThis as typeof globalThis & {
   __broadcastHook?: BroadcastHook;
+  __auctionGoneHook?: AuctionGoneHook;
 };
 
 export function setBroadcastHook(hook: BroadcastHook): void {
   processGlobals.__broadcastHook = hook;
+}
+
+/**
+ * **L'asta non esiste più** (M12 §3b): l'altro hook che il processo aggancia,
+ * costruito con la stessa forma del precedente e per la stessa ragione.
+ *
+ * Lo chiama `deleteAuction` **dopo il commit**, e chi lo riceve fa due cose che
+ * vivono solo in memoria: congeda le connessioni aperte su quell'asta e cancella
+ * il suo timer di fase (M12 §2.3). Restituisce **quante connessioni** ha
+ * congedato, che è ciò che finisce nella riga di log della cancellazione.
+ *
+ * ⚠ **Perché un hook e non un import.** `lib/engine/setup.ts` non deve importare
+ * `lib/realtime/`: il motore non sa che esiste un canale verso i client, ed è la
+ * stessa disciplina del broadcast qui sopra. Ma qui c'è una seconda ragione, più
+ * concreta, e vale la pena saperla: **passando da qui il timer si cancella
+ * davvero.** Lo scheduler attivo è una variabile di modulo di
+ * `lib/engine/scheduler.ts`, e Next compila `instrumentation.ts` e i route
+ * handler in bundle separati — una `cancelTimer` chiamata da una Server Action
+ * girerebbe nella copia dove `active` è `null`, e non cancellerebbe niente. La
+ * closure agganciata qui nasce invece nel bundle dello scheduler, dove il timer
+ * armato esiste per davvero.
+ *
+ * Nei test, nel seed e nei bot resta il no-op: nessuno di quei processi ha
+ * connessioni aperte né timer armati.
+ */
+type AuctionGoneHook = (auctionId: string, auctionName: string) => number;
+
+export function setAuctionGoneHook(hook: AuctionGoneHook): void {
+  processGlobals.__auctionGoneHook = hook;
+}
+
+/** Il congedo, se qualcuno l'ha agganciato. Zero connessioni se nessuno l'ha fatto. */
+export function auctionGone(auctionId: string, auctionName: string): number {
+  return processGlobals.__auctionGoneHook?.(auctionId, auctionName) ?? 0;
 }
 
 export type LockOutcome<T> = {

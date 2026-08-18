@@ -2293,3 +2293,80 @@ guardando il pulsante. Che l'avviso in cima compaia solo in caso di guasto è la
 importante: un avviso che c'è sempre si smette di leggere. E i quattro timestamp in fondo alla pagina
 **restano** dove erano: rispondono a «quale di queste quattro cose è ferma?», che è una terza domanda
 ancora.
+
+⚠ **Una postilla scritta il giorno del rilascio, e vale per le macro future più che per questa.** Il
+`pnpm db:push` di M11 **non** ha la proprietà rassicurante dei quattro rilasci precedenti. Da M7 a M10B
+la frase era sempre la stessa — «finché il passo a mano non è dato, niente si rompe e niente si vede» —
+perché quelle tabelle erano lette in `LEFT JOIN` da schermate che sanno stare senza. `source_runs` no: la
+legge `sourceRunsStatus()`, che è la prima riga del pannello, quindi **fra la fine del deploy e il
+`db:push` la pagina Admin → Listone risponde 500**. Il resto dell'app è intatto — l'asta, il portale, la
+TV e il Centro dati non toccano quella tabella — ma la finestra è reale, e il changelog di `v1.12.0` la
+dichiara.
+
+**La regola che se ne ricava:** una tabella nuova **letta da una pagina** non è additiva nello stesso
+senso in cui lo è una tabella nuova letta in `LEFT JOIN` da una query di dominio. Nel primo caso
+l'ordine è deploy → `db:push` **subito**; nel secondo si può prendere tempo. La distinzione va fatta
+quando si scrive il file della macro, non quando si legge il 500.
+
+---
+
+## 2026-08-17 — M12, cancellare un'asta per forza
+
+Cinque scelte. La prima è la sola che avrebbe potuto far morire la macro prima di cominciarla, e non è
+una scelta nuova: è una scelta del 2026-08-07 riletta.
+
+**La regola 5 non è in mezzo, ed è ratificato per iscritto da Fase 1.** «Mai `DELETE` né `UPDATE`
+distruttivi su `assignments` e `ledger`» sembra vietare esattamente questa macro. Non la vieta, e non è
+un'interpretazione di comodo: la voce del 2026-08-07 su `ON DELETE CASCADE` verso `auctions` lo dice
+con queste parole — *«Compresi `assignments` e `ledger`. Motivazione: la regola 5 vieta `DELETE` e
+`UPDATE` distruttivi come correzione dentro un'asta viva — lì si usano `voided_at` e righe
+compensative. Cancellare un'asta intera è un'altra cosa, ed è richiesta dalla checklist pre-asta di
+PLAN §17 (punto 3: rimozione dell'asta di prova). Senza le cascate quella cancellazione andrebbe
+scritta a mano tabella per tabella.»* Le cascate esistono **per rendere possibile questo**, da prima
+che servisse: M12 non ha toccato lo schema, non ha dato nessun `pnpm db:push` e non ha scritto nessun
+backfill. La regola protegge la correzione di un numero dentro un'asta che si sta giocando; qui non si
+corregge niente, si butta via tutto — e chi lo fa deve digitare il nome dell'asta per riuscirci.
+
+**Il congedo passa da un hook, non da un import.** `lib/engine/setup.ts` non importa
+`lib/realtime/broadcast.ts`: `deleteAuction` chiama un hook che di default non fa niente, e il processo
+lo aggancia in `instrumentation.ts` dentro il ramo `nodejs`, con la stessa forma di `setBroadcastHook`.
+La ragione di disciplina è quella di sempre — il motore non sa che esiste un canale verso i client, e
+nei test, nel seed e nei bot quell'hook resta il no-op — ma stavolta ce n'è una seconda, concreta, che
+da sola avrebbe deciso lo stesso: **da lì il timer di fase si cancella davvero.** Lo scheduler attivo è
+una variabile di modulo di `scheduler.ts`, e di quel modulo esistono due copie in due bundle; una
+`cancelTimer` chiamata direttamente da una Server Action girerebbe nella copia in cui `active` è
+`null` e non cancellerebbe niente. La closure agganciata in `instrumentation.ts` nasce nel bundle dove
+lo scheduler è stato avviato. ⚠ **Nessuna regola ESLint difende questo confine** — quella copre solo
+`lib/db` — quindi qui la disciplina è di chi scrive.
+
+**Il `close()` viene prima della navigazione, e non è estetica.** Sull'evento terminale il client
+chiude l'`EventSource` e *poi* va in dashboard. Invertirle produce codice che sembra funzionare: lo
+schermo finisce in dashboard in entrambi i casi. Ma il server chiude lo stream subito dopo il congedo, e
+uno stream che finisce normalmente è per la specifica di `EventSource` un buon motivo per riconnettersi:
+senza il `close()` esplicito il client tornerebbe a battere su una rotta che risponde 404. Verificato
+il 2026-08-17 con due stream aperti su un'asta cancellata: il server chiude con **200 e stream
+terminato**, che è precisamente la condizione in cui un browser riprova. Il modo di accorgersi della
+differenza non è guardare lo schermo, è contare le richieste nel pannello di rete — ed è per questo che
+la verifica a mano di M12 chiede di guardare la rete.
+
+**⚠ La guardia del deploy non torna a contare le simulate — ratifica.** Questa macro rimuove la *causa*
+della decisione del 2026-08-12 («il deploy non si blocca più per un'asta simulata»): la guardia aveva
+smesso di contarle proprio perché una simulata in pausa non si poteva chiudere in nessun modo, e adesso
+si può. La domanda «la rimettiamo?» è stata posta invece di restare implicita, e la risposta dell'owner
+è **no**. Due ragioni. Il secondo motivo di quella voce regge da solo — «un minuto di silenzio con dieci
+persone che aspettano è un minuto di panico» non si applica a una simulazione, dove aspettano dei bot e
+il boot recovery li rimette in moto da sé. E riaprire una guardia appena chiusa riporterebbe l'abitudine
+a scavalcarla con `DEPLOY_DURING_AUCTION=1`, che è il modo in cui una guardia smette di proteggere il
+giorno che serve davvero. Chi legge le due voci in fila deve trovare la domanda già posta.
+
+**Le due strade scartate, e perché sarebbero costate più di quanto sembra.** La prima è **un'azione
+«termina asta»** che porti un'asta a `COMPLETED` senza giocarla: sarebbe uno stato prodotto da un
+percorso che il motore non conosce, e ogni query che oggi si fida di `COMPLETED` — il verbale, l'export,
+lo storico — dovrebbe imparare a diffidarne. Se un giorno servirà è una macro sua, e la prima domanda
+sarà «cosa dice il verbale di un'asta terminata a metà?». La seconda è la **cancellazione morbida**, un
+`deleted_at` sull'asta: vorrebbe dire un filtro nuovo in ogni query che legge `auctions` — dashboard,
+pannello, sweep, tick dei bot, refresh degli insight, guardia del deploy — e un solo posto dimenticato è
+un'asta fantasma che riappare. Il `DELETE` vero non ha filtri da dimenticare. Il prezzo è dichiarato e
+non mitigato: **non c'è undo, non c'è cestino, e su un'asta vera conclusa se ne va il verbale delle
+rose**. Il recupero è il `pg_dump` delle 04:15 UTC, e prima di cancellare un'asta vera si dà
+`deploy/db-backup.sh`.

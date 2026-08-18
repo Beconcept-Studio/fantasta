@@ -12,15 +12,28 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-**[M11](11-refresh-giornaliero.md) — il refresh giornaliero degli insight.** Aperta il 2026-08-13 su
-richiesta esplicita dell'owner, chiusa su `dev` lo stesso giorno con il gate verde: **777 test**,
-typecheck e build. **Non è ancora rilasciata**: il tag `v1.12.0` e il merge su `main` aspettano una
-richiesta esplicita.
+Nessuna aperta. **M12 è in produzione da `v1.13.0`** (2026-08-18): chiusa su `dev` il 17, provata a due
+dispositivi il 18, rilasciata subito dopo. Gate verde con **791 test**, typecheck e build.
 
-⚠ **Il rilascio porta un `pnpm db:push`** — `source_runs`, additiva, due righe per sempre — e **nessun
-file da caricare a mano**: è il primo rilascio da quattro che non ne ha, e va verificato invece di
-darlo per scontato. La tabella nasce vuota, «nessun tentativo registrato» è lo stato iniziale corretto,
-e il primo tick la riempie da sé entro un quarto d'ora.
+⚠ **È il primo rilascio da sei senza nessun passo a mano sul server**: nessun `pnpm db:push`, nessun
+backfill, nessun file da caricare. Verificato invece di darlo per scontato — `git diff` non tocca
+`lib/db/schema.ts`, e le cascate verso `auctions` esistono per intero dal 2026-08-07. Se un giorno una
+cancellazione sembrasse incompleta in produzione, **non è un passo dimenticato** il sospetto da
+coltivare per primo.
+
+⚠ **E c'è una cosa che nessun pulsante può impedire**, scritta nel `CHANGELOG.md` di `v1.13.0` perché è
+l'unico posto che qualcuno rileggerà: cancellare un'asta **reale** `COMPLETED` si porta via il verbale
+delle rose e tutto lo storico di M3, **per sempre**. Prima si dà `deploy/db-backup.sh`.
+
+**M11 è in produzione da `v1.12.0`** (2026-08-13), aperta e chiusa nella stessa
+giornata: gate verde con **777 test**, typecheck e build.
+
+⚠ **Il suo rilascio porta un `pnpm db:push`** — `source_runs`, additiva, due righe per sempre — e
+**nessun file da caricare a mano**: è il primo rilascio da quattro che non ne ha, e la cosa è stata
+verificata invece di darla per scontata. La tabella nasce vuota, «nessun tentativo registrato» è lo
+stato iniziale corretto, e il primo tick la riempie da sé entro un quarto d'ora. ⚠ Ma finché il push
+non è dato, il refresh non parte **e la pagina Admin → Listone va in errore quando la si apre**: è il
+passo che finisce il rilascio, non un extra.
 
 ```bash
 cd /home/ploi/fantasta.rggndr.it && pnpm db:push
@@ -74,14 +87,13 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-**Quattro macro, pianificate insieme il 2026-08-12** da una sessione di analisi sola, a partire dalle
-quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1. **Le prime due
-sono rilasciate** (v1.10.0 e v1.11.0, con M10B dentro l'ultima), **la terza è su `dev`** e aspetta il
-tag; l'ultima si apre **su richiesta esplicita**.
+Nessuna. **Le quattro macro pianificate insieme il 2026-08-12** — da una sessione di analisi sola, a
+partire dalle quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1 —
+sono state tutte lavorate: M9, M10 e M11 sono in produzione (v1.10.0, v1.11.0 con M10B dentro,
+v1.12.0), M12 è chiusa su `dev` e aspetta il rilascio.
 
-| Macro | Tema | Schema | Ordine |
-|---|---|---|---|
-| **[M12](12-cancellazione-aste.md)** | Cancellare un'asta per forza, anche in corso | no | 4ª |
+⚠ **`docs/REQUESTS.md` non è vuoto**: c'è «Admin – Refactor pagina utenti», scritta dall'owner e **non
+pianificata in nessuna macro**. Sarà una macro sua quando la chiederà, e non è entrata in M12.
 
 ⚠ **M11 non ha automatizzato il foglio di Carmy, e nessuno ci provi**: è un file che una persona
 compila e che arriva da fuori. Lo stesso vale per il listone **d'asta**, l'export Leghe in `.xlsx`, che
@@ -137,6 +149,8 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M12](12-cancellazione-aste.md) | Cancellare un'asta per forza, anche in corso, e il congedo di chi la stava guardando | v1.13.0 — 2026-08-18 |
+| [M11](11-refresh-giornaliero.md) | Il refresh giornaliero degli insight: le due fonti pubbliche si chiedono da sé, e il pannello dice quando non ci riesce | v1.12.0 — 2026-08-13 |
 | [M10B](10b-insight-da-carmy.md) | Gli insight che vengono da un umano: il foglio di Carmy, la titolarità letta invece che dedotta, i filtri per chi ha `is_pro` | v1.11.0 — 2026-08-12 |
 | [M10](10-listone-a-sistema.md) | Il listone a sistema: la sezione admin, il Centro dati, la proposta alla creazione di un'asta | v1.11.0 — 2026-08-12 |
 | [M9](09-badge-insight.md) | I badge degli insight, e la striscia verde via | v1.10.0 — 2026-08-12 |

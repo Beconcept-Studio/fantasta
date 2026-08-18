@@ -132,13 +132,19 @@ export async function setUserAdminAction(
  *
  * È un'azione a sé e non quella del setup, per una ragione di destinazione: da
  * `/auctions/[id]/setup` si finisce in dashboard, da qui si torna alla lista del
- * pannello. Il motore è lo stesso — `deleteAuction`, allargata di una riga in
- * M6 — e resta lui a rifiutare un'asta `LIVE` o `PAUSED`, anche a un
- * amministratore.
+ * pannello. Il motore è lo stesso — `deleteAuction` — e resta lui a decidere:
+ * qui non si autorizza niente.
  *
  * Il nome digitato si confronta **qui**, come nel setup: è una difesa contro la
  * mano, non contro il chiamante, e nel motore diventerebbe un parametro che ogni
  * altro chiamante dovrebbe ricordarsi di riempire.
+ *
+ * ⚠ **`force: true` sempre, da questa azione** (M12 §4): questa è la strada
+ * dell'amministratore, ed è l'unica che può interrompere un'asta in corso. Non è
+ * un permesso che si prende scrivendolo qui — `deleteAuction` rilegge `is_admin`
+ * dal database dentro il lock, quindi un `force` chiesto da chi non è
+ * amministratore non cancella niente. La difesa contro la mano è il nome
+ * digitato; la difesa vera è il motore.
  */
 export async function deleteAuctionAsAdminAction(
   _prev: FormState,
@@ -152,11 +158,21 @@ export async function deleteAuctionAsAdminAction(
     return { error: "Il nome non coincide: l'asta non è stata cancellata." };
   }
 
-  const result = await deleteAuction(admin.id, auctionId);
+  const result = await deleteAuction(admin.id, auctionId, { force: true });
   if (!result.ok) return { error: result.error.message };
 
   revalidatePath(AUCTIONS_PATH);
-  return { error: null, ok: `Asta «${result.value.name}» cancellata.` };
+  // Quante persone sono state congedate si dice **solo se ce n'erano**: un
+  // «0 collegati congedati» su una prova buttata è rumore che fa sembrare
+  // grave una cosa che non lo era.
+  const { name, dismissed } = result.value;
+  return {
+    error: null,
+    ok:
+      dismissed === 0
+        ? `Asta «${name}» cancellata.`
+        : `Asta «${name}» cancellata. ${dismissed === 1 ? "1 persona collegata è stata riportata" : `${dismissed} persone collegate sono state riportate`} alla dashboard.`,
+  };
 }
 
 /** I numeri della passata, detti in italiano: è tutto ciò che la pagina mostra. */

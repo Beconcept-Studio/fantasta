@@ -35,6 +35,7 @@ import { carmyForExtIds } from "./carmy";
 import { insightsForExtIds } from "./insights";
 import { isUuid } from "./ids";
 import { readListoneForCopy } from "./listone";
+import { auctionGone } from "./mutate";
 import {
   type AuctionConfig,
   type AuctionConfigInput,
@@ -123,12 +124,26 @@ async function requireOwnerOrAppAdmin<T>(
   userId: string,
 ): Promise<Result<T> | null> {
   if (auction.ownerUserId === userId) return null;
-  const actor = await tx.query.users.findFirst({ where: eq(users.id, userId) });
-  if (isAppAdmin(actor)) return null;
+  if (await actorIsAppAdmin(tx, userId)) return null;
   return fail<T>(
     "FORBIDDEN",
     "Solo chi ha creato l'asta, o un amministratore dell'applicazione, può cancellarla.",
   );
+}
+
+/**
+ * `is_admin` **riletto dal database, dentro il lock** (P17).
+ *
+ * La sessione è un JWT: non sa niente di `is_admin`, e un amministratore
+ * degradato dieci minuti fa avrebbe ancora un token che dice il contrario. Chi
+ * decide è la riga, e la si legge nella stessa transazione in cui si agisce.
+ *
+ * Ha due chiamanti (`requireOwnerOrAppAdmin` e la strada forzata di M12) e per
+ * questo è una funzione invece di due letture uguali.
+ */
+async function actorIsAppAdmin(tx: Tx, userId: string): Promise<boolean> {
+  const actor = await tx.query.users.findFirst({ where: eq(users.id, userId) });
+  return isAppAdmin(actor);
 }
 
 /** Il setup si tocca solo prima dell'avvio. */
@@ -997,47 +1012,91 @@ export async function removeMember(
  * ⚠ **M6 l'ha allargata di una riga, e di nient'altro.** L'autorizzazione è
  * passata da «l'owner» a «l'owner **oppure** un amministratore
  * dell'applicazione», perché dal pannello si cancella l'asta di qualcun altro.
- * Il rifiuto su `LIVE` e `PAUSED` **non si allenta**: vale per l'amministratore
- * esattamente come per tutti — non si butta via una stanza con dodici persone
- * dentro, e la pausa non è un'asta ferma, è un'asta congelata. La riga su stdout
- * registrava già `actor: userId`, quindi una cancellazione fatta da un
- * amministratore è tracciata dal giorno in cui quella riga è stata scritta,
- * senza aggiungere niente.
+ * La riga su stdout registrava già `actor: userId`, quindi una cancellazione
+ * fatta da un amministratore è tracciata dal giorno in cui quella riga è stata
+ * scritta, senza aggiungere niente.
+ *
+ * ⚠ **M12 ha aggiunto la strada forzata, e solo per l'amministratore.** Il
+ * rifiuto su `LIVE` e `PAUSED` **resta per tutti**, owner compreso: non si
+ * allarga il permesso di chi ha creato l'asta «tanto è la sua», perché la sua
+ * asta la stanno guardando altre undici persone. L'amministratore ha una strada
+ * in più, che quel rifiuto non ha, e la chiede esplicitamente con `force` — è
+ * l'unico modo di chiudere il vicolo cieco del 2026-08-12, quando una
+ * simulazione lasciata in pausa non si poteva togliere di mezzo in nessun modo.
+ *
+ * Il permesso di forzare si **rilegge dal database dentro il lock**
+ * (`actorIsAppAdmin`, P17), non arriva dal chiamante: un `force: true` passato
+ * da chi non è amministratore non cancella niente.
  */
 export async function deleteAuction(
   userId: string,
   auctionId: string,
-): Promise<Result<{ name: string }>> {
-  return withSetupLock(auctionId, async (tx, auction) => {
-    const forbidden = await requireOwnerOrAppAdmin<{ name: string }>(
-      tx,
-      auction,
-      userId,
-    );
+  options: { force?: boolean } = {},
+): Promise<Result<{ name: string; dismissed: number }>> {
+  type Deleted = {
+    name: string;
+    status: AuctionStatus;
+    isSimulated: boolean;
+    forced: boolean;
+  };
+
+  const deleted = await withSetupLock<Deleted>(auctionId, async (tx, auction) => {
+    const forbidden = await requireOwnerOrAppAdmin<Deleted>(tx, auction, userId);
     if (forbidden) return forbidden;
 
-    if (auction.status === "LIVE" || auction.status === "PAUSED") {
-      return fail<{ name: string }>(
+    const running = auction.status === "LIVE" || auction.status === "PAUSED";
+    // La pausa congela la fase, non azzera l'asta: `PAUSED` è «in corso» come
+    // `LIVE`, e va forzata allo stesso modo.
+    const forced =
+      running &&
+      options.force === true &&
+      (await actorIsAppAdmin(tx, userId));
+
+    if (running && !forced) {
+      return fail<Deleted>(
         "WRONG_STATUS",
-        "L'asta è in corso: mettila in pausa e falla finire, poi si potrà cancellare.",
+        "L'asta è in corso: mettila in pausa e falla finire, poi si potrà cancellare. " +
+          "Solo un amministratore dell'applicazione può interromperla adesso.",
       );
     }
 
-    console.log(
-      JSON.stringify({
-        auctionId,
-        type: "DELETE_AUCTION",
-        name: auction.name,
-        status: auction.status,
-        isSimulated: auction.isSimulated,
-        actor: userId,
-        ts: new Date().toISOString(),
-      }),
-    );
-
     await tx.delete(auctions).where(eq(auctions.id, auctionId));
-    return ok({ name: auction.name });
+    return ok({
+      name: auction.name,
+      status: auction.status,
+      isSimulated: auction.isSimulated,
+      forced,
+    });
   });
+
+  if (!deleted.ok) return deleted;
+
+  // ⚠ **Il congedo dopo il commit, fuori dalla transazione** (M12 §3b), come il
+  // broadcast di `withAuctionLock`: se il `DELETE` fosse rollbackato, avremmo
+  // già mandato via dodici persone da un'asta ancora viva.
+  const dismissed = auctionGone(auctionId, deleted.value.name);
+
+  // ⚠ **La riga di log è dopo il commit, e non prima come fino a M11.** Deve
+  // dire *quante connessioni sono state congedate* — la differenza fra «ho
+  // buttato via una prova» e «ho interrotto una serata» (M12 §4) — e quel numero
+  // esiste solo dopo il congedo. È anche più onesta: prima si registrava una
+  // cancellazione che una transazione fallita poteva ancora annullare. Resta
+  // l'unica traccia che sopravvive: `events` se ne va con la cascata.
+  console.log(
+    JSON.stringify({
+      auctionId,
+      type: "DELETE_AUCTION",
+      name: deleted.value.name,
+      status: deleted.value.status,
+      isSimulated: deleted.value.isSimulated,
+      forced: deleted.value.forced,
+      dismissed,
+      actor: userId,
+      ts: new Date().toISOString(),
+    }),
+  );
+
+  return ok({ name: deleted.value.name, dismissed });
 }
 
 // ─── Viste di lettura ────────────────────────────────────────────────────────

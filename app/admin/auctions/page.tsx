@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/setup/status-badge";
 import { romeDay } from "@/lib/auction-log";
 import { requireAppAdmin } from "@/lib/auth";
 import { listAdminAuctions } from "@/lib/engine/admin";
+import { connectionCount } from "@/lib/realtime/broadcast";
 
 /**
  * La lista di tutte le aste dell'applicazione (M6 §3).
@@ -25,6 +26,12 @@ import { listAdminAuctions } from "@/lib/engine/admin";
  * un secondo posto da cui si comanda la stessa asta sono due verità sullo stesso
  * stato. Chi vuole vedere un'asta la apre da dove si aprono le aste: il link c'è,
  * la vista non è duplicata.
+ *
+ * ⚠ **Da M12 la cancellazione c'è anche per le aste in corso**, e questa pagina
+ * è l'unico posto da cui si può: è la strada dell'amministratore di §4, quella
+ * che ha aperto il vicolo cieco della simulazione lasciata in pausa. Per le aste
+ * in corso l'avviso nomina **quante persone sono collegate in quel momento**, e
+ * il numero lo sa il registro delle connessioni SSE di questo stesso processo.
  */
 export default async function AdminAuctionsPage() {
   await requireAppAdmin();
@@ -52,13 +59,20 @@ export default async function AdminAuctionsPage() {
           </thead>
           <tbody>
             {auctions.map((auction) => {
-              // `LIVE` e `PAUSED` non si cancellano — nemmeno da qui, nemmeno da
-              // un amministratore: la pausa congela la fase, non azzera l'asta.
-              // La UI non offre il pulsante e il motore rifiuta comunque.
-              const deletable =
-                auction.status !== "LIVE" && auction.status !== "PAUSED";
+              // ⚠ **`LIVE` e `PAUSED` si cancellano solo da qui** (M12 §4): la
+              // pausa congela la fase, non azzera l'asta, quindi le due sono la
+              // stessa cosa — un'asta in corso, che qualcuno può star guardando.
+              // Il motore le rifiuta a tutti e le accetta da qui, con `force` e
+              // `is_admin` riletto dentro il lock.
+              const running =
+                auction.status === "LIVE" || auction.status === "PAUSED";
               const ownerLabel =
                 auction.ownerEmail ?? auction.ownerName ?? "un utente";
+              // Il numero è letto **al render di questa pagina**: la pagina è
+              // dinamica, quindi è fresco all'apertura, e la conferma dice «in
+              // questo momento». Il numero vero — quante sono state congedate
+              // davvero — lo dice l'azione dopo, che lo conta al congedo.
+              const connected = running ? connectionCount(auction.id) : 0;
 
               return (
                 <tr key={auction.id} className="border-b align-top">
@@ -104,17 +118,13 @@ export default async function AdminAuctionsPage() {
                   </td>
 
                   <td className="px-2 py-2">
-                    {deletable ? (
-                      <AuctionDelete
-                        auctionId={auction.id}
-                        name={auction.name}
-                        ownerLabel={ownerLabel}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground text-xs">
-                        in corso
-                      </span>
-                    )}
+                    <AuctionDelete
+                      auctionId={auction.id}
+                      name={auction.name}
+                      ownerLabel={ownerLabel}
+                      running={running}
+                      connected={connected}
+                    />
                   </td>
                 </tr>
               );
