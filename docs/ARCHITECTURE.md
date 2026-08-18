@@ -86,6 +86,17 @@ una seconda sorgente di verità da tenere allineata a mano. I tre file sono **co
 in build. La ricetta che li ha prodotti sta in `scripts/genera-icone.py`, che non è chiamato da niente:
 vuole Python e Pillow, che non sono e non devono diventare dipendenze del progetto.
 
+⚠ **In produzione l'ICO non viene servito, e non è un guasto da riparare.** Il server block che Ploi
+genera contiene un `location = /favicon.ico` del suo boilerplate, che nginx risolve dal disco: con
+`output: 'standalone'` quel file sul disco non esiste — sta in `app/` e lo serve l'applicazione —
+quindi nginx risponde 404 di suo e la richiesta non arriva mai a Node. È così da sempre, anche con il
+`favicon.ico` che Next.js metteva in un progetto nuovo, e il rilascio dell'icona l'ha solo reso visibile.
+L'effetto pratico è piccolo: l'icona in linguetta si vede comunque, perché il browser scende al `<link>`
+successivo e prende `icon.png` ridimensionandolo da sé, e iOS prende `apple-icon.png`. Si perde solo la
+resa a 16/32/48 preparata a mano. La decisione di lasciarlo così è dell'owner (2026-08-18), e la
+correzione — cancellare quel blocco dalla configurazione di Ploi — sta scritta in
+`deploy/nginx-asta.conf` insieme al perché non si può semplicemente aggiungerne uno nostro.
+
 ### Una regola di lint invece di una code review
 
 C'è un vincolo che vale la pena raccontare perché è la spina dorsale delle regole di correttezza:

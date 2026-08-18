@@ -2806,3 +2806,44 @@ luminanza intorno all'11%, cioè è il più scuro dei tre primari: contro il gri
 linguetta in tema scuro il cerchio si legge, ma con poco stacco. Non è un difetto da correggere di
 nascosto — è il colore scelto — ed è scritto qui perché chi lo noterà fra sei mesi veda il sintomo
 accanto alla sua causa invece di sospettare un file sbagliato.
+
+---
+
+## 2026-08-18 — `/favicon.ico` in produzione non arriva a Node, e si lascia così
+
+Scoperto **dopo** il rilascio di `v1.15.1`, verificando dall'esterno che le tre icone rispondessero.
+Due su tre sì; `/favicon.ico` no.
+
+**Chi risponde 404, e come si sa.** Non l'applicazione: nginx. Il 404 di `/favicon.ico` è il suo —
+146 byte, «nginx» nel corpo, e soprattutto **senza `x-powered-by: Next.js`** — mentre qualunque altro
+percorso inesistente riceve il 404 *di Next*, cioè viene proxato a Node e risponde l'app. Ed è un match
+**esatto** sul percorso, non per estensione: `/qualsiasi-cosa.ico` e `/sotto/cartella/x.ico` arrivano a
+Node senza problemi, solo `/favicon.ico` viene intercettato. La causa è il boilerplate di Ploi, che nel
+server block generato tiene un `location = /favicon.ico { access_log off; log_not_found off; }`: nginx lo
+risolve **dal disco**, e con `output: 'standalone'` quel file sul disco non c'è — sta in `app/` e lo
+serve l'applicazione. `deploy/nginx-asta.conf` sostituisce il `location /` di Ploi, **non** il resto del
+suo boilerplate, quindi quel blocco non l'avevamo mai visto.
+
+⚠ **È preesistente, e questo è il punto che evita una caccia inutile.** Misurato anche a `1.15.0`, un'ora
+prima: stesso 404 da nginx. In produzione quel percorso **non ha mai servito niente**, nemmeno il
+`favicon.ico` che Next.js mette in un progetto appena creato. Il rilascio dell'icona non l'ha rotto,
+l'ha reso visibile — che è la ragione per cui vale la pena guardare le rotte dopo un deploy invece di
+fidarsi del «completato».
+
+**Deciso dall'owner: si lascia così** (2026-08-18). L'icona si vede comunque, e non per fortuna: il
+browser scende al `<link>` successivo e prende `icon.png` a 512 ridimensionandolo da sé, iOS prende
+`apple-icon.png`. L'unica cosa che si perde è la resa a 16/32/48 preparata a mano dentro l'ICO, cioè la
+nitidezza dell'icona nella linguetta. Il `<link rel="icon" href="/favicon.ico">` che Next emette resta
+un link morto ed è innocuo. Modificare la configurazione nginx di un server in produzione per la
+nitidezza di un'icona a sedici pixel non è un rapporto costo/beneficio che regge.
+
+**E `app/favicon.ico` resta dov'è**, invece di essere cancellato per togliere il link morto: in locale
+funziona, è il file giusto se un giorno quel blocco di Ploi sparisce, e cancellarlo vorrebbe dire
+buttare via le tre misure preparate a mano per guadagnare un `<link>` in meno in una pagina.
+
+**Come si correggerebbe**, scritto in `deploy/nginx-asta.conf` accanto al resto: da Ploi → il sito →
+Manage → Nginx configuration si **cancella** quel blocco, così `/favicon.ico` ricade nel `location /` e
+viene proxato come tutto il resto, poi `sudo nginx -t && sudo systemctl reload nginx`. ⚠ E non si
+aggiunge un `location = /favicon.ico` nel *nostro* file: sarebbe un secondo match esatto sullo stesso
+percorso nello stesso server block, e nginx rifiuta di ripartire. Va **sostituito** quello di Ploi, non
+affiancato.
