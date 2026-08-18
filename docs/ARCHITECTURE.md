@@ -1945,23 +1945,131 @@ Quindi la guardia è distribuita, su tre piani che rispondono a tre domande dive
 amministratore non verificato è un utente non verificato, e il pannello non è una porta di servizio
 che aggira l'identità.
 
-### Le tre azioni sugli utenti
+### La pagina utenti: una tabella che si legge, un pannello che modifica
 
-Sono tre, e sono tre. **Correggere il nome**, che è l'unico modo di sistemare l'«asdf» scritto da un
-amico nell'onboarding: applica la stessa regola dell'onboarding, perché la regola è salita in
-`lib/domain.ts` quando il secondo chiamante è arrivato davvero. **Forzare la verifica
-dell'indirizzo**, di cui fra un attimo. E **dare o togliere `is_admin`**, mai sulla propria riga: un
-click e ci si chiude fuori tutti, e senza pannello non si rientra dal pannello. Il divieto vale in
-entrambe le direzioni, anche per riconfermarsi un permesso che si ha già — l'eccezione «ma darselo è
-innocuo» è il gradino da cui il caso pericoloso rientra. Su un bot il permesso è rifiutato prima
-della query, e comunque lo rifiuterebbe il `CHECK` a database: il controllo esplicito serve a
-rispondere con una frase leggibile invece che con un 500.
+Le azioni sul singolo utente sono quattro. **Correggere il nome**, che è l'unico modo di sistemare
+l'«asdf» scritto da un amico nell'onboarding: applica la stessa regola dell'onboarding, perché quella
+regola è salita in `lib/domain.ts` quando il secondo chiamante è arrivato davvero. **Forzare la
+verifica dell'indirizzo**, di cui fra un attimo. **Dare o togliere `is_admin`**, mai sulla propria
+riga: un click e ci si chiude fuori tutti, e senza pannello non si rientra dal pannello — il divieto
+vale in entrambe le direzioni, anche per riconfermarsi un permesso che si ha già, perché l'eccezione
+«ma darselo è innocuo» è il gradino da cui il caso pericoloso rientra. E **dare o togliere `is_pro`**,
+cioè gli insight sul listone, dove quel divieto invece non c'è: quel flag non apre nessuna porta, e un
+amministratore vede gli insight comunque. Su un bot i due flag sono rifiutati prima della query, e
+comunque lo rifiuterebbe il `CHECK` a database: il controllo esplicito serve a rispondere con una
+frase leggibile invece che con un 500.
 
-La lista mostra, per ogni persona, **da quale porta entra** — Google, password, o entrambe — e i due
-numeri con cui si capisce se una riga è una persona o un residuo: quante aste possiede e quante ne
-gioca. Sono indipendenti, perché l'owner che organizza senza giocare possiede un'asta e non ne gioca
-nessuna. I **bot stanno dietro un filtro** e per default non ci sono: sette righe «Bot 3» per ogni
-asta simulata sono l'unico modo in cui una lista di dodici amici può diventare illeggibile.
+Da v1.14.0 **nessuna di queste quattro funzioni del motore è cambiata**. È cambiato *da dove si danno*:
+dove c'erano quattro Server Action, una per campo, adesso ce n'è **una sola**, ed è l'unica azione
+dell'applicazione che scrive su una riga di `users`. Le quattro vecchie sono state tolte nello stesso
+momento in cui la schermata ha smesso di chiamarle, e vale la pena dire perché non sono state lasciate
+lì: una server action senza chiamanti non è codice morto inerte, è un endpoint scrivibile che nessuna
+schermata apre più — cioè superficie di cui nessuno si accorge se un giorno smette di comportarsi bene.
+Il meccanismo che ha reso sicura la pulizia è lo stesso test che di solito fa il rumore opposto: l'elenco
+**esatto** degli export del modulo, che era nato per rompersi quando un'azione nasce senza guardia, e che
+qui ha confermato che non restava in giro nessun riferimento.
+
+E vale la pena raccontare anche cos'era sbagliato nella forma di prima, perché è un errore di quelli che
+si commettono senza accorgersene.
+
+Fino a v1.13.0 la pagina era una tabella di otto colonne, e in quattro di quelle colonne c'era un
+form: un campo di testo col suo «Salva», «Verifica a mano», «Rendi admin», «Dai insight». Ogni riga
+montava quattro stati di form — su dodici righe sono quarantotto, montati per *guardare* una lista — e
+la tabella aveva una larghezza minima che la faceva scorrere in orizzontale su qualunque schermo,
+perché ogni cella doveva contenere un comando invece di un dato. Il risultato è che la domanda più
+frequente, *chi è questa persona e le manca qualcosa per entrare?*, si rispondeva peggio della più
+rara, che è *cambiamo qualcosa a questa persona*.
+
+Adesso le due domande hanno due posti. **La tabella è un elenco**: sei colonne, dati e nient'altro —
+indirizzo, nome, e tre `Sì`/`No` per email verificata, admin e pro — più un pulsante «Vedi». La riga
+non ha nessun hook e nessuna azione, e la larghezza minima è sparita insieme ai form che la
+giustificavano; il contenitore che scorre resta, perché la colonna dell'indirizzo è lunga e
+imprevedibile ed è l'unica cosa che può ancora costringere allo scorrimento.
+
+Una sola di quelle tre celle è scritta in modo da vedersi da lontano, e non è un vezzo grafico: **è
+l'ordine della lista**. La lista è ordinata dal più recente perché la riga su cui un amministratore
+deve agire è quasi sempre quella di chi si è appena iscritto e non riesce a entrare, e quella riga si
+riconosce da «Email verificata: No». È l'unico valore della tabella che chiede un intervento, quindi
+prende il tono `destructive` che l'applicazione usa già, mentre `Admin: No` e `Pro: No` sono il caso
+normale e restano testo normale. Il criterio è scritto accanto al codice perché non venga esteso per
+simmetria: **si evidenzia ciò su cui si deve agire, non ciò che è raro.** E la parola c'è sempre — il
+colore non è mai l'unica informazione, che qui vale doppio perché non c'è nessun numero accanto a fare
+da appoggio.
+
+**La ricerca sta nell'intestazione della tabella e filtra nel browser**, sulle righe già in pagina.
+Non è una `searchParam` e non è una query nuova: la pagina carica già tutti gli utenti, quindi cercare
+vuol dire nascondere righe che sono già arrivate, e la risposta arriva mentre si digita — l'unico
+comportamento accettabile per un campo di ricerca. È la differenza col filtro dei bot, che invece vive
+nell'indirizzo proprio perché cambia **quali righe il server manda**. Il confronto riusa la `fold()`
+di `lib/realtime/portal.ts`, che era già la ricerca della lista di chiamata e quella della regia:
+questo è il suo terzo chiamante, e la ragione per cui non se ne scrive una copia è la stessa scritta
+là — due ricerche che rispondono diversamente a «citta» sono una piccola bugia difficile da spiegare,
+e su un cognome accentato la bugia diventa «quella persona non si è iscritta». Il conteggio in cima
+**segue il filtro**, perché «20 righe» sopra una tabella che ne mostra tre sarebbe la prima cosa a
+mentire, e zero risultati si dice a parole: una tabella con la sola intestazione sembra un guasto.
+
+**La paginazione resta fuori, e non è la stessa decisione della ricerca.** Un filtro su righe già
+caricate non ha nessuna «pagina 2» in cui una riga possa nascondersi; la paginazione invece cambia il
+contratto della pagina, e nel momento in cui esiste la ricerca lato client diventa una bugia, perché
+cercherebbe solo dentro la pagina corrente. Quel giorno arriveranno insieme, ricerca lato server
+compresa. Il numero che tiene in piedi la scelta è stato **misurato** all'apertura della macro invece
+di essere ereditato da M6: venti utenti veri in produzione, trentadue contando i bot.
+
+**Le modifiche stanno in un pannello laterale** che si apre da «Vedi». È costruito con `Dialog` di
+`radix-ui` a mano, senza aggiungere nessuna primitiva condivisa in `components/ui/`: il precedente è
+letterale — il modale d'offerta fa lo stesso — e la ragione è che le primitive si allargano quando
+arriva il secondo chiamante *generico*, mentre uno sheet dal basso per un pollice sotto un countdown
+non ha niente da condividere con un pannello da scrivania oltre l'overlay. Gli interruttori sono lo
+`Switch` di `radix-ui`, non la variante Base UI a cui rimandava la richiesta: quella pagina monta una
+seconda libreria di primitive accanto a quella che il progetto usa in ogni componente, per un
+interruttore.
+
+Il pannello è anche il primo posto che ha lo spazio per dire tutto: le tre colonne che se ne sono
+andate dalla tabella — da quale porta entra, quante aste possiede e quante ne gioca, quando si è
+iscritto — e **quando** l'indirizzo è stato verificato, non solo se, che è ciò che distingue un
+indirizzo dimostrato da sé da uno verificato a mano la sera dell'asta. L'email è testo e non un campo
+disabilitato, con la spiegazione accanto invece che in fondo alla pagina: un input grigio suggerisce
+che da qualche parte esista il modo di abilitarlo. Su un bot non c'è nessun comando, e c'è scritto
+perché.
+
+**Lo switch della verifica è asimmetrico, e va guardato in faccia.** `forceVerifyEmail` sa fare una
+cosa sola: scrivere `email_verified_at`. Una de-verifica non esiste e non deve esistere, perché
+spegnerla vorrebbe dire rispedire una persona alla schermata del codice, cioè chiuderla fuori
+dall'applicazione con un click. Ma uno switch **promette due direzioni**: quindi acceso e bloccato
+quando l'indirizzo è dimostrato, con la ragione scritta accanto, e spento e attivabile quando non lo
+è. È l'unico dei tre che ha uno stato terminale, e chi lo legge deve capirlo senza provarci. Per la
+stessa ragione lo switch di `is_admin` **non esiste** sulla propria riga invece di essere spento — il
+motore lo rifiuterebbe comunque, ma un pulsante che esiste è un pulsante che qualcuno premerà — mentre
+quello di `is_pro` c'è, perché la differenza fra i due flag è di sostanza e non di simmetria.
+
+**Il salvataggio è uno solo, e non è atomico.** Sono quattro `UPDATE` distinti su `users` — nessun
+lock, perché non c'è nessuna asta da serializzare e `is_bot` non cambia mai dopo la creazione della
+riga — quindi un salvataggio può riuscire a metà, e la UI non deve far finta del contrario: l'esito si
+riporta **per campo** e il modale si chiude solo se tutto ciò che era stato chiesto è passato.
+Chiudersi dicendo «fatto» dopo aver scritto tre cose su quattro è il modo di rendere inaffidabile
+l'unico pannello di amministrazione che c'è. Il server sa cosa è cambiato dalla **presenza del campo**
+nella `FormData`: il pannello monta l'input nascosto solo quando quel valore differisce da quello che
+gli era arrivato, perché l'azione non legge il database e non può fare nessun confronto — e non deve,
+dato che l'autorizzazione la fa il motore rileggendo `is_admin` a ogni mutazione. Un client che
+mentisse otterrebbe una `UPDATE` che riscrive il valore che c'era già.
+
+E c'è **un toast**, che è arrivato guardando la pagina invece che leggendo la spec: l'esito per campo
+dentro il pannello è la cosa giusta finché il pannello **resta aperto**, cioè quando qualcosa è andato
+storto — ma a pieno successo il pannello si chiude, e il messaggio se ne andava con lui. Restava una
+tabella che si aggiornava e nient'altro, quindi un salvataggio riuscito era indistinguibile da un click
+andato perso. Il toast vive perciò **fuori** dal pannello, in `UsersTable`, che è ciò che sopravvive alla
+chiusura: il pannello riporta il proprio esito verso l'alto e non decide più di chiudersi da sé. Ha tre
+toni e non due — riuscito, **riuscito a metà**, rifiutato — perché il caso di mezzo è quello che va detto
+meglio: «errore» farebbe riprovare tutto, «salvato» nasconderebbe il campo che non è passato. È fatto con
+`Toast` di `radix-ui` e non con quello di shadcn, che oggi è un involucro attorno a `sonner`: la stessa
+decisione dello `Switch`, presa due volte nello stesso giorno perché entrambe le richieste linkavano
+shadcn — e «usa il componente di shadcn» significa «voglio quel comportamento», non «monta quella
+dipendenza».
+
+I **bot stanno dietro un filtro** e per default non ci sono: sette righe «Bot 3» per ogni asta
+simulata sono l'unico modo in cui una lista di dodici amici può diventare illeggibile. E i due numeri
+con cui si capisce se una riga è una persona o un residuo — quante aste possiede, quante ne gioca —
+sono indipendenti, perché l'owner che organizza senza giocare possiede un'asta e non ne gioca nessuna.
 
 ### Il pulsante che chiude una finestra
 
@@ -2009,7 +2117,11 @@ l'ORM fino al telefono.
 
 Infine una cosa dichiarata invece che accaduta per caso: **il pannello è roba da scrivania.**
 Tabelle dense, sidebar laterale, nessuna ottimizzazione per il pollice; su schermi stretti le tabelle
-scorrono in orizzontale invece di riflowire in un elenco lunghissimo. Il mobile-first è del portale
+scorrono in orizzontale invece di riflowire in un elenco lunghissimo — la pagina utenti da v1.14.0 non
+ha più bisogno di scorrere su un portatile, ma il contenitore che lo permette è rimasto, perché un
+indirizzo email lungo è più largo di qualunque previsione. Il pannello laterale segue la stessa
+regola: su uno schermo stretto prende tutta la larghezza invece di diventare una colonna accanto a una
+tabella che non c'è più — non è mobile-first, è non-rotto-sul-piccolo. Il mobile-first è del portale
 del partecipante — lì si offre dal telefono, sotto pressione, con trenta secondi di countdown — e
 resta suo. Il pannello si apre da un portatile, con calma.
 

@@ -1,26 +1,26 @@
-import Link from "next/link";
-
-import { type AdminUserView, UserRow } from "@/components/admin/user-row";
-import { romeDay } from "@/lib/auction-log";
+import type { AdminUserView } from "@/components/admin/user-row";
+import { UsersTable } from "@/components/admin/users-table";
+import { romeDateTime, romeDay } from "@/lib/auction-log";
 import { isVerified, requireAppAdmin } from "@/lib/auth";
 import { listAdminUsers } from "@/lib/engine/admin";
 
 /**
- * La lista degli utenti (M6 §4).
+ * La lista degli utenti (M6 §4, rifatta da M13 §2).
  *
- * ⚠ **La guardia sta qui e non solo nel layout**: la regola di §5 vale anche per
+ * ⚠ **La guardia sta qui e non solo nel layout**: la regola di M6 §5 vale anche per
  * le pagine, che sono endpoint come le altre. Costa una riga e non dipende
  * dall'albero delle cartelle.
  *
- * **Tabella densa, da scrivania.** Sette colonne strette, nessuna card, nessuna
- * ottimizzazione per il pollice: il pannello si apre da un portatile. Su schermi
- * stretti la tabella scorre in orizzontale dentro il suo contenitore invece di
- * riflowire in un elenco — un elenco di dodici righe con otto campi ciascuna
- * sarebbe più lungo di quanto sia leggibile.
+ * **Questa pagina carica i dati e non disegna la tabella**, ed è il cambio di forma
+ * di M13: la ricerca filtra righe già arrivate, quindi il conteggio in cima e le
+ * righe mostrate dipendono da uno stato che vive nel browser (`UsersTable`). Qui
+ * resta ciò che solo il server può fare — la guardia, la query, e la conversione a
+ * `Europe/Rome`, che è rendering ma va fatta dove il fuso è fissato.
  *
- * **I bot dietro un link e non in lista** (§4): sette righe «Bot 3» per ogni asta
+ * **I bot dietro un link e non in lista** (M6 §4): sette righe «Bot 3» per ogni asta
  * simulata renderebbero la lista inutile. Il filtro è una `searchParam` e non uno
- * stato client, così è anche un indirizzo che si può tenere aperto.
+ * stato client — cambia **quali righe il server manda**, al contrario della ricerca
+ * — così è anche un indirizzo che si può tenere aperto.
  */
 export default async function AdminUsersPage({
   searchParams,
@@ -41,6 +41,13 @@ export default async function AdminUsersPage({
     // condizione che la scala di `requireUser()` interroga, e non ne esiste una
     // seconda idea (M5).
     verified: isVerified(user),
+    // ⚠ E **quando**, che è la cosa in più che il pannello ha lo spazio per dire:
+    // un indirizzo dimostrato da sé e uno verificato a mano la sera dell'asta si
+    // distinguono solo da questa data.
+    verifiedOn:
+      user.emailVerifiedAt === null
+        ? null
+        : romeDateTime(user.emailVerifiedAt.toISOString()),
     isAdmin: user.isAdmin,
     isPro: user.isPro,
     isBot: user.isBot,
@@ -50,51 +57,5 @@ export default async function AdminUsersPage({
     isSelf: user.id === admin.id,
   }));
 
-  return (
-    <section className="space-y-4">
-      <div className="text-muted-foreground flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-        <span>
-          {rows.length} {rows.length === 1 ? "riga" : "righe"}
-        </span>
-        <Link
-          href={includeBots ? "/admin/users" : "/admin/users?bots=1"}
-          className="underline underline-offset-4"
-        >
-          {includeBots ? "nascondi i bot" : "mostra anche i bot"}
-        </Link>
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-240 border-collapse text-left">
-          <thead className="bg-muted/40 text-muted-foreground text-xs uppercase">
-            <tr className="border-b">
-              <th className="px-2 py-2 font-medium">Email</th>
-              <th className="px-2 py-2 font-medium">Nome</th>
-              <th className="px-2 py-2 font-medium">Come entra</th>
-              <th className="px-2 py-2 font-medium">Indirizzo</th>
-              <th className="px-2 py-2 font-medium">Permessi</th>
-              {/* M8 — chi vede titolarità, rigoristi e piazzati in `/play`. */}
-              <th className="px-2 py-2 font-medium">Insight</th>
-              {/* Possedute / giocate: i due numeri con cui si capisce se una
-                  riga è una persona o un residuo. */}
-              <th className="px-2 py-2 font-medium">Aste</th>
-              <th className="px-2 py-2 font-medium">Iscritto</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((user) => (
-              <UserRow key={user.id} user={user} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <p className="text-muted-foreground max-w-2xl text-xs">
-        L&apos;indirizzo email non si modifica: da quando si entra anche con una
-        password è la chiave d&apos;identità, e cambiarla cambia chi può entrare
-        in quell&apos;account. Un indirizzo sbagliato si risolve rifacendo
-        l&apos;account.
-      </p>
-    </section>
-  );
+  return <UsersTable rows={rows} includeBots={includeBots} />;
 }

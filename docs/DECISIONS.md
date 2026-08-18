@@ -2370,3 +2370,216 @@ un'asta fantasma che riappare. Il `DELETE` vero non ha filtri da dimenticare. Il
 non mitigato: **non c'è undo, non c'è cestino, e su un'asta vera conclusa se ne va il verbale delle
 rose**. Il recupero è il `pg_dump` delle 04:15 UTC, e prima di cancellare un'asta vera si dà
 `deploy/db-backup.sh`.
+
+## 2026-08-18 — Pianificazione di M13 e M14
+
+Sessione di sola analisi, dalle due richieste che l'owner aveva nel quaderno: la pagina utenti del
+pannello e il cancello sui risultati di un lotto. Due macro, `docs/features/13-utenti-admin.md` e
+`docs/features/14-cancello-risultati.md`, nessuna delle due aperta. Sette scelte, e le prime due sono
+quelle che hanno deciso la forma del lavoro.
+
+**⚠ Il cancello sta prima della risoluzione del lotto, e il modo ovvio ha un buco che non si vede.**
+La strada naturale sarebbe: lasciare `advanceLotOpen` come è — round chiuso, `resolveRound`,
+`enterReveal`, assegnazione committata — e **nascondere i risultati** finché la fase è il cancello.
+Sarebbe una riga, e non funziona: `serializeMembers` calcola `credits`, `maxBid`, `slotsFilled` e
+`roster` da `state.assignments`, e quei quattro campi stanno in **ogni** snapshot per **tutti**, vista
+TV compresa. Nascondere il pannello delle buste mentre i crediti del vincitore scendono di 87 e un nome
+nuovo compare nella sua rosa non nasconde niente: **è un quiz con una risposta sola**, e la risposta si
+legge sul proiettore prima che chiunque possa premere un pulsante. Il cancello quindi chiude il round e
+**non risolve**: `resolveRound` viene chiamata all'uscita. Tre conseguenze, tutte a favore — annullare
+un lotto non tocca la **regola 5** (non c'è nessuna assegnazione da annullare, e il giocatore torna
+disponibile da sé perché la disponibilità è derivata); la barriera I8 dello storico
+(`isPublicLot = status === "RESOLVED"`, M3) **continua a valere gratis**, perché un lotto sigillato è
+ancora `OPEN`; e il prezzo è dichiarato — la proprietà «un crash nel reveal non perde un lotto già
+deciso» viene rimandata di X secondi, ma l'esito è una **funzione pura delle offerte a database**,
+quindi il primo `ADVANCE` successivo lo ricalcola identico. Quest'ultima cosa è una verifica a mano
+della macro, non un'assunzione.
+
+**Il cancello sta a ogni chiusura di round, non solo all'esito finale** (owner). Allarga la richiesta,
+e la ragione è misurata: oggi un pareggio nel round 1 svela l'importo pareggiato a chi ha pareggiato
+(`LOT_TIE_PREP`), cioè **un pezzo di busta esce prima del reveal** — è `snapshot.ts` stesso a
+dichiararlo, «l'unica informazione che esce prima». La disconnessione descritta nel quaderno
+esporrebbe comunque quella cifra, quindi un cancello che copre solo l'esito finale avrebbe lasciato
+aperta la fessura che esiste per chiudere. Ed è un punto solo nel codice invece di due.
+
+**Lo zero non è una fase da zero secondi: è l'assenza della fase** (owner: `X = 0` deve poter spegnere
+il cancello). Il default della colonna è `0` — le aste che esistono restano identiche a se stesse,
+**quindi nessun backfill**, che è la differenza fra questo rilascio e quello di M5 — mentre la
+creazione di un'asta nuova propone `10`. **Due default diversi di proposito**, e la nota va nel codice:
+uno risponde a «cosa c'era prima», l'altro a «cosa proponiamo adesso», e allinearli spegnerebbe una
+delle due risposte. Nel motore il cancello a zero è un ramo `if` che salta la fase del tutto: una fase
+da zero secondi sarebbe uno stato osservabile — un timer armato sull'istante presente, uno snapshot in
+più per lotto verso dodici persone, una schermata «risultati in arrivo» che lampeggia.
+
+**⚠ Un lotto annullato non sarà mai `RESOLVED`.** Prende un terzo valore di `lots.status`, `VOIDED`
+(nessuna migrazione: la colonna è `text` senza `CHECK`), e `resolved_at` resta `null` perché non è mai
+stato risolto. La ragione è la citazione di M3 su `isPublicLot`: *«"lotto risolto" ≡ "buste già state
+pubbliche", per costruzione e non per attenzione»*. Un lotto annullato è **l'unico caso
+dell'applicazione in cui un lotto finisce senza che le buste siano mai uscite**: dargli `RESOLVED` per
+coerenza — «è finito, no?» — farebbe pubblicare allo storico le offerte di un lotto annullato, cioè
+esattamente le buste che la macro esiste per non svelare. Il predicato non si cambia, e la seconda rete
+di `lib/engine/log.ts` (niente vincitore o niente prezzo → scartato) resta dov'è: M3 dice che le due si
+sovrappongono di proposito.
+
+**⚠ Gli override si rifiutano anche nel cancello, e non è una precauzione.** `lib/engine/override.ts`
+oggi rifiuta `phase ∈ {LOT_OPEN, LOT_TIE_PREP}`; il cancello va aggiunto perché **è il presupposto che
+rende sicuro «Annulla lotto»**. Il ritorno del turno al chiamante è sicuro solo se il suo ruolo non può
+essersi riempito nel frattempo, e l'unica cosa che riempie un ruolo fuori da un lotto è
+`manualAssign`. Detto in positivo: un lotto sigillato **è** un lotto in contesa — è il momento più in
+contesa che ci sia, perché l'esito è già deciso e nessuno lo conosce. Con la guardia in piedi, il caso
+«il chiamante non può più chiamare» non esiste e il motore lo **asserisce** con un'eccezione, non con un
+rifiuto: è la convenzione dichiarata di `machine.ts` (*«i rifiuti previsti sono `Result`, i bug sono
+eccezioni»*) e il precedente è il `throw` di `nextTurn` due funzioni sopra.
+
+**⚠ La rotazione dei turni torna indietro, in un caso solo — e la riga di `CLAUDE.md` va corretta.**
+*«Un lotto sbagliato si corregge con `voidAssignment` + `manualAssign`: la rotazione dei turni non torna
+mai indietro»* resta vera **fuori** dal cancello, cioè in tutti i casi in cui il lotto ha già prodotto
+qualcosa. Dentro il cancello non ha prodotto niente: nessuna assegnazione, nessun passo di rotazione,
+nessun credito mosso. È il precedente di M9 con `PLAN §8bis` punto 1 — una parte di una regola scritta
+che smette di valere ha bisogno di una voce datata **e** della correzione nel file, altrimenti fra sei
+mesi il documento dice una cosa e l'applicazione un'altra, e chi legge crede al documento. Vale anche
+per la riga sulle fasi degli override.
+
+**M13: la ricerca sì, la paginazione no — ratifica su M6 §8.** Quella sezione le escludeva nella stessa
+riga (*«niente ricerca full-text, paginazione o esportazioni: con dodici utenti … una tabella ordinata è
+la cosa giusta»*), ma non sono la stessa decisione. La ricerca di M13 filtra **righe già caricate**, sul
+client, con la `fold()` che è già la ricerca della lista di chiamata e della regia — terzo chiamante, e
+il commento su quella funzione dice perché conta: *«due ricerche che rispondono diversamente a "citta"
+sarebbero una piccola bugia difficile da spiegare»*. Nessuna query nuova, nessuno stato
+nell'indirizzo, nessuna «pagina 2» in cui una riga possa nascondersi. La paginazione invece cambia il
+contratto della pagina, e nel momento in cui esiste **la ricerca lato client diventa una bugia** perché
+cercherebbe solo dentro la pagina corrente: quel giorno arrivano insieme, ricerca lato server compresa.
+La misura che deciderà se quel giorno è già arrivato — quanti utenti ci sono in produzione — è il primo
+task di M13, perché da qui non si può fare.
+
+**M13: lo switch è quello di `radix-ui`, non quello di Base UI.** La richiesta linka
+`ui.shadcn.com/docs/components/base/switch`, che monta `@base-ui-components/react`: una seconda libreria
+di primitive accanto a quella che il progetto usa in ogni componente, per un interruttore. Lo stack di
+`CLAUDE.md` è esplicito su cosa non si introduce. Per la stessa ragione il pannello laterale si
+costruisce con `Dialog` di `radix-ui` **senza** aggiungere `components/ui/sheet.tsx`, esattamente come
+`bid-modal.tsx`: le primitive condivise si allargano quando arriva il secondo chiamante *generico*, e un
+modale dal basso per un pollice sotto un countdown non ha niente da condividere con un pannello da
+scrivania oltre l'overlay (DECISIONS 2026-08-07, Fase 5).
+
+**M13: lo switch della verifica è a senso unico, e va progettato guardando l'asimmetria in faccia.**
+`forceVerifyEmail` sa fare una cosa sola: scrivere `email_verified_at`. Non esiste una de-verifica e non
+deve esistere — spegnerla vorrebbe dire rispedire una persona alla schermata del codice, cioè chiuderla
+fuori dall'applicazione con un click. Ma uno switch **promette due direzioni**: quindi acceso e bloccato
+quando l'indirizzo è dimostrato, con la ragione scritta accanto. Ed è anche il motivo per cui il
+salvataggio del modale **non è atomico e non deve far finta di esserlo**: sono quattro `UPDATE` distinti
+su `users`, l'esito si riporta per campo, e su qualunque errore il modale resta aperto — chiudersi
+dicendo «fatto» dopo aver scritto tre cose su quattro rende inaffidabile l'unico pannello che c'è.
+
+**Le due strade scartate in M13, entrambe più costose di quanto sembrano** (owner: nessun potere nuovo).
+**Cancellare un utente**: `members.user_id` punta a `users` **senza cascata**, quindi un utente che ha
+giocato non si cancella affatto senza portarsi via un'asta — è la stessa direzione delle chiavi che in
+M12 §1 garantisce che cancellare un'asta non tocchi nessuna persona, letta dall'altro lato. Sarebbe la
+seconda azione irreversibile dell'applicazione e vuole una macro sua, con la sua domanda: *cosa resta
+del verbale di un'asta a cui un partecipante non esiste più?* **Il reset della password da parte di un
+amministratore**: il recupero lo chiede la persona da sé (M5), e un amministratore che entra
+nell'account di un altro è un potere che questa applicazione non ha. La verifica forzata — che esiste
+già — è il massimo che si è accettato, con la sua avvertenza scritta: *«mettere la propria parola al
+posto della prova»*.
+
+## 2026-08-18 — M13, la pagina utenti
+
+Le quattro decisioni che la pianificazione aveva già messo per iscritto — la ricerca sì e la
+paginazione no, lo `Switch` di `radix-ui` invece di Base UI, la verifica a senso unico, le due strade
+scartate — sono qui sopra, nella voce della pianificazione, e sono state seguite alla lettera. Queste
+sono quelle **prese scrivendola**.
+
+**La misura di §4 è stata fatta e non ha riaperto niente: 20 utenti veri in produzione, 32 contando i
+bot** (letti dall'owner sulla pagina; da una sessione di sviluppo quel numero non è leggibile — nessun
+accesso SSH al server, e la pagina vuole una sessione da amministratore). Venti righe stanno in una
+schermata da portatile, quindi «niente paginazione» regge com'era ereditato da M6 invece di essere
+riconfermato a occhio. Il numero da riguardare in futuro è quello **con** i bot, perché è quello che la
+pagina mostra col filtro acceso.
+
+**Il server sa cosa è cambiato dalla presenza del campo nella `FormData`, non da un confronto.** Era il
+punto aperto di §5: «chiama solo per ciò che è cambiato» richiede di sapere cos'era prima, e l'azione
+**non può leggerlo** — `app/admin/actions.ts` non importa `lib/db` (regola ESLint) e `lib/engine/admin.ts`
+non si tocca (§1), quindi non esiste nessun `getAdminUser` da chiamare e non doveva nascerne uno. La
+soluzione è che il pannello monta l'input nascosto **solo** quando quel valore differisce da quello che
+il server gli aveva mandato: un `displayName` assente vuol dire «il nome non si tocca», non «il nome è
+vuoto». Scartata l'alternativa di mandare anche i valori precedenti (`wasAdmin`, `wasPro`) e far
+decidere al server: sono due volte i dati per la stessa informazione, e il peggio che può fare un client
+che mente su questo protocollo è ottenere una `UPDATE` che riscrive il valore che c'era già —
+l'autorizzazione la fa il motore, che rilegge `is_admin` a ogni mutazione.
+
+**L'esito per campo vive in `lib/admin-users.ts`, insieme al filtro della ricerca.** `FormState` ha un
+solo `error` e un solo `ok`, che è la forma giusta per un'azione che fa una cosa: qui le cose sono
+quattro e possono andare diversamente, quindi lo stato di ritorno porta anche `outcomes` e `done` — ed è
+`done` l'unica cosa su cui il modale si chiude. Il modulo è puro e senza dipendenze oltre a `fold`, sul
+modello di `lib/centro-dati.ts`: lo legge un client component, e una lista filtrata male non dà nessun
+errore — dà una lista plausibile e incompleta.
+
+**Il test del salvataggio è un file nuovo, `tests/db/admin-save.test.ts`, e non una sezione di
+`admin.test.ts`.** In quel file `requireAppAdmin` è sostituita da una che **interrompe sempre**, ed è
+ciò che prova che ogni azione la chiama in prima riga: non ci si può mettere accanto un test che vuole
+vedere un salvataggio *riuscire*. Il finto nuovo fa l'altra metà — restituisce la riga vera
+dell'attore scelto dal test, senza guardare `is_admin` — e questo rende onesta la verifica 11: la
+guardia lascia entrare il non-amministratore, e a fermarlo resta soltanto la rilettura del permesso nel
+motore. `next/cache` è sostituito perché `revalidatePath` fuori da una richiesta vera non ha nessuno
+store da invalidare, e non è la parte in prova.
+
+⚠ **`tests/db/admin.test.ts` si è rotto come previsto, ed è la quinta volta di fila.** L'elenco esatto
+degli export è stato aggiornato a mano insieme al `requireAppAdmin()` in cima all'azione nuova. Il
+conteggio dei test è passato da 791 a 813: otto sono la ricerca, tredici il salvataggio, **e uno arriva
+da solo** — l'`it.each` che enumera gli export e li chiama tutti con un form vuoto ha guadagnato un caso
+senza che nessuno lo scrivesse. È il meccanismo che funziona, non un intoppo.
+
+**Cosa non è stato toccato, verificato invece che dichiarato.** `lib/engine/admin.ts` è identico: §1
+diceva che trovarsi a modificarlo è il segnale che qualcosa è andato storto, e non è successo. Le tre
+azioni per campo (`setUserDisplayNameAction`, `forceVerifyEmailAction`, `setUserAdminAction`) e
+`setUserProAction` **restano al loro posto** benché nessuna schermata le chiami più: la spec dice che la
+macro «ne aggiunge una», non che ne toglie quattro, e ognuna ha la sua guardia e il suo test. Sono
+quattro export da rileggere il giorno in cui si vorrà togliere del codice morto — con la consapevolezza
+che l'elenco esatto di `admin.test.ts` andrà aggiornato anche in quella direzione.
+
+**Una duplicazione trovata per strada e lasciata dov'era.** `fold()` esiste **due volte**: in
+`lib/realtime/portal.ts` — quella che M13 importa, come chiedeva §4 — e in `lib/centro-dati.ts`, che da
+M10 ne ha una copia sua con la stessa semantica scritta in un ordine diverso — l'una toglie i segni
+diacritici con l'intervallo `\u0300-\u036f`, l'altra con `\p{Diacritic}`. Non è stata unificata in
+questa macro: cambiare la `fold` del Centro dati vuol dire cambiare il comportamento di una ricerca su
+cinquecento righe per una questione di forma, dentro una macro che non c'entra. Sta scritto qui perché il commento su
+`portal.ts` dice «due ricerche che rispondono diversamente sono una piccola bugia» e la terza ricerca
+adesso lo rispetta, mentre la seconda non lo sa.
+
+⚠ **Le quattro azioni vecchie sono state tolte, e il paragrafo qui sopra è stato ribaltato nella stessa
+sessione.** L'owner, letta la nota, ha deciso il contrario: pulizia. Resta scritto com'era perché è
+append-only e perché la ragione del ribaltamento è più chiara col «prima» accanto — la spec dice «ne
+aggiunge una» e **non si era pronunciata sul togliere**, quindi lasciarle era il default prudente, non una
+scelta. Il default prudente qui era sbagliato: quattro endpoint scrivibili che nessuna schermata apre più
+non sono codice morto inerte, sono superficie che nessuno guarda. `app/admin/actions.ts` passa da undici
+export a sette, `lib/engine/admin.ts` resta intatto — il potere è lo stesso, chiamato da un posto invece
+che da quattro — e i file di M6 e M8 **non** sono stati riscritti: sono l'archivio di due macro chiuse, e
+la ratifica di un cambio di idea sta qui, come per M6 §8 sulla ricerca.
+
+⚠ **E l'elenco esatto degli export ha funzionato al contrario, per la prima volta in cinque macro.** Era
+nato per rompersi quando un'azione *nasce* senza guardia; qui ha confermato che le quattro tolte non
+lasciavano nessun riferimento in giro, e che quella rimasta è una sola. Il conteggio dei test **scende**
+di quattro casi (l'`it.each` sugli export), ed è la prima volta che accade: 813 → 815 con sei test nuovi
+del toast dentro.
+
+**Il toast dell'esito, e perché non sta nel pannello** (richiesta dell'owner del 2026-08-18, dopo aver
+guardato la pagina: «non si capisce se vada in errore o effettua la modifica»). L'esito per campo dentro
+il modale è la cosa giusta **quando il modale resta aperto**, cioè in caso di errore — ma a pieno
+successo il modale si chiude, e il messaggio se ne andava con lui: la tabella si aggiornava e nient'altro,
+quindi un salvataggio riuscito era indistinguibile da un click andato perso. Il toast vive quindi in
+`UsersTable`, che è ciò che sopravvive alla chiusura, e il pannello **riporta** l'esito invece di
+decidere da sé di chiudersi (`onResult`). Tre toni e non due: riuscito, **riuscito a metà** e rifiutato —
+il caso di mezzo è quello che va detto meglio, perché «errore» farebbe riprovare tutto e «salvato»
+nasconderebbe il campo non passato. La riduzione da esito a toast è una funzione pura con i suoi test
+(`saveToast`), per la stessa ragione del filtro: il caso a metà è il più difficile da vedere a mano.
+
+**E il toast è `Toast` di `radix-ui`, non quello di shadcn.** La pagina «Toast» di `ui.shadcn.com` oggi è
+un involucro attorno a **`sonner`**, cioè una dipendenza nuova per un avviso, mentre la libreria di
+primitive che il progetto usa in ogni componente ne ha già uno. È la **stessa** decisione dello `Switch`
+presa qualche ora prima, e le due volte non sono una coincidenza: entrambe le richieste dell'owner
+linkavano shadcn, e shadcn oggi impacchetta primitive di terzi — quindi «usa il componente di shadcn» va
+letto come «voglio quel comportamento», non come «monta quella dipendenza». Due cose sapute e accettate:
+la ✕ del toast non risponde mentre il modale è aperto (un `Dialog` modale di Radix rende inerte ciò che
+gli sta fuori) — per questo il messaggio autorevole dell'errore resta quello per campo dentro il
+pannello, e il toast dell'errore dura dieci secondi invece di quattro; e il `Toast.Root` ha una `key` che
+avanza a ogni esito, perché due errori identici di fila lascerebbero il primo toast fermo com'è, che si
+legge come un secondo Salva che non ha fatto niente.

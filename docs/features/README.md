@@ -12,7 +12,41 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M12 è in produzione da `v1.13.0`** (2026-08-18): chiusa su `dev` il 17, provata a due
+Nessuna aperta. **M13 è in produzione da `v1.14.0`** (2026-08-18): aperta, lavorata, provata dall'owner e
+rilasciata **nella stessa giornata** in cui era stata pianificata. Gate verde con **815 test**, typecheck
+e build. La tabella di Admin → Utenti è diventata sei colonne in sola lettura con una ricerca in testa, e
+le modifiche stanno in un pannello laterale che si apre da «Vedi».
+
+⚠ **Nessun passo a mano sul server, e nessuna dipendenza nuova**: niente `pnpm db:push`, niente backfill,
+niente file da caricare. Secondo rilascio di fila senza niente in sospeso — e la cosa è stata verificata,
+non dedotta: `git diff` non tocca `lib/db/schema.ts` e `package.json` ha le stesse dipendenze di
+`v1.13.0`.
+
+**Due cose sono entrate a macro aperta, su decisione dell'owner del 2026-08-18** — la spec non le
+prevedeva, e i task `M13-12` e `M13-13` le raccontano per esteso.
+
+⚠ **Le quattro Server Action per campo sono state tolte**, non lasciate in piedi: `app/admin/actions.ts`
+adesso ha **una sola** azione che scrive su una riga di `users`. Quattro endpoint scrivibili che nessuna
+schermata apriva più sono quattro endpoint di cui nessuno si accorge se un giorno smettono di
+comportarsi bene. Il potere non è cambiato — le funzioni del motore sono le stesse quattro — e
+`lib/engine/admin.ts` è rimasto intatto. **L'elenco esatto degli export in `tests/db/admin.test.ts` ha
+funzionato per la prima volta al contrario**: era nato per fermare l'azione aggiunta senza guardia, e qui
+ha confermato che le quattro tolte non lasciavano riferimenti in giro.
+
+⚠ **E c'è un toast**, perché il primo giro non dava nessun feedback: l'esito per campo dentro il modale
+è giusto quando il modale resta aperto, ma a pieno successo il modale si chiude e il messaggio se ne
+andava con lui — un salvataggio riuscito era indistinguibile da un click andato perso. Il toast vive in
+`UsersTable`, che sopravvive alla chiusura, e ha tre toni: riuscito, **riuscito a metà** e rifiutato. È
+fatto con `Toast` di `radix-ui` e **non** con quello di shadcn, che oggi è un involucro attorno a
+`sonner`: è la stessa decisione dello `Switch`, presa due volte nello stesso giorno perché entrambe le
+richieste linkavano shadcn.
+
+⚠ **`docs/features/06-amministrazione.md` e `08-insight-listone.md` non sono stati riscritti**: sono
+l'archivio di due macro chiuse e dicono il vero su cosa fecero allora. È lo stesso trattamento che M13
+riserva a M6 §8 sulla ricerca — la ratifica di un cambio di idea sta in `docs/DECISIONS.md` e in
+`docs/ARCHITECTURE.md`, non in una riscrittura del file di una macro chiusa.
+
+**M12 è in produzione da `v1.13.0`** (2026-08-18): chiusa su `dev` il 17, provata a due
 dispositivi il 18, rilasciata subito dopo. Gate verde con **791 test**, typecheck e build.
 
 ⚠ **È il primo rilascio da sei senza nessun passo a mano sul server**: nessun `pnpm db:push`, nessun
@@ -87,13 +121,45 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-Nessuna. **Le quattro macro pianificate insieme il 2026-08-12** — da una sessione di analisi sola, a
-partire dalle quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1 —
-sono state tutte lavorate: M9, M10 e M11 sono in produzione (v1.10.0, v1.11.0 con M10B dentro,
-v1.12.0), M12 è chiusa su `dev` e aspetta il rilascio.
+Due sono state pianificate insieme il **2026-08-18**, dalle due richieste che l'owner aveva nel
+quaderno. **M13 è stata aperta e rilasciata lo stesso giorno** (`v1.14.0`); resta **M14**, che si apre su
+richiesta esplicita come tutte. **`docs/REQUESTS.md` resta vuoto.**
 
-⚠ **`docs/REQUESTS.md` non è vuoto**: c'è «Admin – Refactor pagina utenti», scritta dall'owner e **non
-pianificata in nessuna macro**. Sarà una macro sua quando la chiederà, e non è entrata in M12.
+| Macro | Tema | Schema? |
+|---|---|---|
+| [M14](14-cancello-risultati.md) | Il cancello dei risultati: le buste non si aprono da sole, e un lotto si può annullare | ⚠ **Sì** — una colonna additiva, `pnpm db:push`, **nessun backfill** |
+
+**Perché due e non una.** Non hanno niente in comune: la prima è tutta UI dentro il pannello di
+amministrazione, la seconda apre la **macchina a stati dell'asta** e aggiunge la prima fase nuova dopo
+v1.0.0. È lo stesso criterio con cui M5 e M6 sono state tagliate in due il 2026-08-10 e M9–M12 il
+2026-08-12: due profili di rischio così diversi vogliono due tag e due punti di rollback, perché
+tornare indietro su un modale non deve portarsi via il cancello — e soprattutto il contrario.
+M13 sta prima **solo** per questo: un suo errore si vede in una tabella, un errore di M14 si vede la
+sera dell'asta con dodici persone che guardano.
+
+**Le dipendenze sono zero.** Non si toccano gli stessi file, non si toccano gli stessi documenti, e
+l'ordine si può invertire senza riscrivere una riga di spec.
+
+⚠ **Le due cose da non riscoprire da capo, una per macro.** M13: la ricerca **ribalta una decisione
+scritta di M6 §8** («niente ricerca full-text, paginazione o esportazioni»), e la ratifica vale solo
+per la ricerca — la paginazione resta fuori, e M13 §4 spiega perché non sono la stessa decisione e cosa
+succederebbe alla ricerca il giorno che la paginazione arriva. M14: **il cancello sta prima della
+risoluzione del lotto, non dopo**, e il modo ovvio — risolvere e nascondere i risultati — ha un buco
+che non si vede leggendo `serializeLot`: i crediti, `maxBid` e la rosa del vincitore sono in **ogni**
+snapshot per **tutti**, TV compresa, e cambiano nell'istante dell'assegnazione. Nascondere il pannello
+delle buste mentre i crediti di qualcuno scendono di 87 è un quiz con una risposta sola. M14 §3 è tutta
+lì, ed è la sezione da leggere prima di scrivere una riga.
+
+⚠ **M14 modifica due righe di `CLAUDE.md`**, e va saputo prima di aprirla: «la rotazione dei turni non
+torna mai indietro» (l'annullamento la fa tornare indietro, in un caso solo e sotto tre condizioni) e
+l'elenco delle fasi in cui gli override sono rifiutati, che deve comprendere anche la fase nuova. Un
+file che si contraddice da solo è peggio di uno incompleto: è il precedente di M9 con `PLAN §8bis`
+punto 1.
+
+**Le quattro macro pianificate insieme il 2026-08-12** — da una sessione di analisi sola, a
+partire dalle quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1 —
+sono state tutte lavorate e sono tutte in produzione: M9 (v1.10.0), M10 e M10B (v1.11.0), M11
+(v1.12.0), M12 (v1.13.0).
 
 ⚠ **M11 non ha automatizzato il foglio di Carmy, e nessuno ci provi**: è un file che una persona
 compila e che arriva da fuori. Lo stesso vale per il listone **d'asta**, l'export Leghe in `.xlsx`, che
@@ -149,6 +215,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M13](13-utenti-admin.md) | La pagina utenti: sei colonne in sola lettura con la ricerca, e un pannello laterale che modifica | v1.14.0 — 2026-08-18 |
 | [M12](12-cancellazione-aste.md) | Cancellare un'asta per forza, anche in corso, e il congedo di chi la stava guardando | v1.13.0 — 2026-08-18 |
 | [M11](11-refresh-giornaliero.md) | Il refresh giornaliero degli insight: le due fonti pubbliche si chiedono da sé, e il pannello dice quando non ci riesce | v1.12.0 — 2026-08-13 |
 | [M10B](10b-insight-da-carmy.md) | Gli insight che vengono da un umano: il foglio di Carmy, la titolarità letta invece che dedotta, i filtri per chi ha `is_pro` | v1.11.0 — 2026-08-12 |

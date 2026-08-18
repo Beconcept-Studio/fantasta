@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import type { FormState } from "@/app/auctions/form-state";
+import type { UserFieldOutcome, UserSaveState } from "@/lib/admin-users";
 import { requireAppAdmin } from "@/lib/auth";
 import { ADMIN_ROOT } from "@/lib/admin-nav";
 import {
@@ -47,6 +48,14 @@ import { deleteAuction } from "@/lib/engine/setup";
  * La sessione è un JWT e non sa niente dei permessi (P17), quindi la guardia qui
  * e il controllo là non sono lo stesso controllo scritto due volte: uno decide
  * chi entra, l'altro chi comanda ancora nel momento in cui scrive.
+ *
+ * ⚠ **Da M13 le azioni sugli utenti sono una sola, `saveUserAction`.** Le quattro
+ * per campo — nome, verifica, `is_admin`, `is_pro` — sono state **tolte** quando
+ * il pannello laterale ha smesso di chiamarle: erano quattro endpoint scrivibili
+ * che nessuna schermata apriva più, e un endpoint senza chiamanti è un endpoint di
+ * cui nessuno si accorge se un giorno smette di comportarsi bene. Il potere non è
+ * cambiato: le funzioni del motore che scrivono sono le stesse quattro, chiamate da
+ * un posto invece che da quattro.
  */
 
 function text(form: FormData, key: string): string | undefined {
@@ -54,76 +63,143 @@ function text(form: FormData, key: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+/**
+ * L'intenzione su un flag, letta dal form: `true`, `false`, o `undefined` se non è
+ * nessuna delle due.
+ *
+ * La stringa diventa un booleano **qui**, e ciò che non lo è resta `undefined`: il
+ * motore riceve `unknown` e rifiuta quello che non è un booleano, perché è lui a
+ * dover restare vero anche se un giorno lo chiamasse qualcun altro (regola 6).
+ */
+function flag(form: FormData, key: string): boolean | undefined {
+  const value = text(form, key);
+  return value === "true" ? true : value === "false" ? false : undefined;
+}
+
 const USERS_PATH = `${ADMIN_ROOT}/users`;
 const AUCTIONS_PATH = `${ADMIN_ROOT}/auctions`;
 const LISTONE_PATH = `${ADMIN_ROOT}/listone`;
 const DATI_PATH = `${ADMIN_ROOT}/listone/dati`;
 
-/** Correggere il nome scritto male da qualcun altro. */
-export async function setUserDisplayNameAction(
-  _prev: FormState,
-  form: FormData,
-): Promise<FormState> {
-  const admin = await requireAppAdmin();
-  const userId = text(form, "userId");
-  if (!userId) return { error: "Utente non indicato." };
-
-  const result = await setUserDisplayName(
-    admin.id,
-    userId,
-    form.get("displayName"),
-  );
-  if (!result.ok) return { error: result.error.message };
-
-  revalidatePath(USERS_PATH);
-  return { error: null, ok: `Nome aggiornato: ${result.value.displayName}.` };
-}
-
-/** Il pulsante che chiude la finestra di M5 §9. */
-export async function forceVerifyEmailAction(
-  _prev: FormState,
-  form: FormData,
-): Promise<FormState> {
-  const admin = await requireAppAdmin();
-  const userId = text(form, "userId");
-  if (!userId) return { error: "Utente non indicato." };
-
-  const result = await forceVerifyEmail(admin.id, userId);
-  if (!result.ok) return { error: result.error.message };
-
-  revalidatePath(USERS_PATH);
-  return { error: null, ok: "Indirizzo verificato a mano: ora può entrare." };
-}
-
 /**
- * Dare o togliere il permesso di amministratore.
+ * Il salvataggio del pannello laterale della pagina utenti (M13 §5), e **l'unica
+ * azione che scrive su una riga di `users`**: ha preso il posto delle quattro per
+ * campo di M6 e M8.
  *
- * L'intenzione arriva come stringa e diventa un booleano **qui**: il motore
- * riceve `unknown` e rifiuta ciò che non è un booleano, perché è lui a dover
- * restare vero anche se un giorno lo chiamasse qualcun altro (regola 6).
+ * ⚠ **`requireAppAdmin()` in prima riga, prima di leggere un solo campo**, come le
+ * altre: `tests/db/admin.test.ts` enumera gli export di questo file con
+ * un'uguaglianza **esatta** e li chiama tutti con un form vuoto, quindi questa
+ * azione è nata insieme al suo rosso — e l'elenco del test è stato aggiornato a
+ * mano, che è precisamente il meccanismo che funziona.
+ *
+ * ⚠ **Chiama solo per ciò che è cambiato, e lo sa dalla presenza del campo.** Un
+ * `displayName` che non c'è nella `FormData` vuol dire «il nome non si tocca», non
+ * «il nome è vuoto»: il pannello monta l'input nascosto solo quando quel valore
+ * differisce da quello che il server gli aveva mandato. Non c'è nessun confronto da
+ * fare qui, e non potrebbe esserci — questo file non legge il database (la regola
+ * ESLint su `lib/db`), e `lib/engine/admin.ts` non si tocca (§1). L'unico effetto di
+ * un client che mentisse sarebbe una `UPDATE` che riscrive il valore che c'è già:
+ * l'autorizzazione la fa il motore, che rilegge `is_admin` a ogni mutazione.
+ *
+ * ⚠ **Non è atomica, e l'esito lo dice.** Sono quattro `UPDATE` distinti su `users`
+ * (niente lock: `lib/engine/admin.ts` spiega perché non serve), quindi un
+ * salvataggio **può riuscire a metà**: si riporta un esito **per campo** e `done`
+ * solo se tutto ciò che era stato chiesto è passato — è `done` l'unica cosa su cui
+ * il modale si chiude. E il `revalidatePath` si dà anche a metà strada: ciò che è
+ * stato scritto deve comparire in tabella, altrimenti la pagina racconta una storia
+ * e il database un'altra.
+ *
+ * La verifica è **a senso unico** anche qui, e non per simmetria con la UI: esiste
+ * `verify=1` e non esiste il suo contrario, perché `forceVerifyEmail` sa scrivere
+ * `email_verified_at` e non cancellarlo. Una de-verifica rispedirebbe una persona
+ * alla schermata del codice.
  */
-export async function setUserAdminAction(
-  _prev: FormState,
+export async function saveUserAction(
+  _prev: UserSaveState,
   form: FormData,
-): Promise<FormState> {
+): Promise<UserSaveState> {
   const admin = await requireAppAdmin();
   const userId = text(form, "userId");
   if (!userId) return { error: "Utente non indicato." };
 
-  const wanted = text(form, "isAdmin");
-  const result = await setUserAdmin(
-    admin.id,
-    userId,
-    wanted === "true" ? true : wanted === "false" ? false : undefined,
-  );
-  if (!result.ok) return { error: result.error.message };
+  const outcomes: UserFieldOutcome[] = [];
 
-  revalidatePath(USERS_PATH);
+  // L'ordine è quello del pannello, dall'alto in basso: se qualcosa va storto a
+  // metà, l'elenco degli esiti si legge nell'ordine in cui i campi stanno scritti.
+  const wantedName = form.get("displayName");
+  if (wantedName !== null) {
+    const result = await setUserDisplayName(admin.id, userId, wantedName);
+    outcomes.push(
+      result.ok
+        ? {
+            field: "displayName",
+            ok: true,
+            message: `adesso è «${result.value.displayName}».`,
+          }
+        : { field: "displayName", ok: false, message: result.error.message },
+    );
+  }
+
+  if (text(form, "verify") === "1") {
+    const result = await forceVerifyEmail(admin.id, userId);
+    outcomes.push(
+      result.ok
+        ? {
+            field: "verified",
+            ok: true,
+            message: "verificata a mano: ora può entrare.",
+          }
+        : { field: "verified", ok: false, message: result.error.message },
+    );
+  }
+
+  if (form.get("isAdmin") !== null) {
+    const result = await setUserAdmin(admin.id, userId, flag(form, "isAdmin"));
+    outcomes.push(
+      result.ok
+        ? {
+            field: "isAdmin",
+            ok: true,
+            message: result.value.isAdmin
+              ? "adesso amministra l'applicazione."
+              : "non amministra più l'applicazione.",
+          }
+        : { field: "isAdmin", ok: false, message: result.error.message },
+    );
+  }
+
+  if (form.get("isPro") !== null) {
+    const result = await setUserPro(admin.id, userId, flag(form, "isPro"));
+    outcomes.push(
+      result.ok
+        ? {
+            field: "isPro",
+            ok: true,
+            message: result.value.isPro
+              ? "adesso vede gli insight sul listone."
+              : "non vede più gli insight sul listone.",
+          }
+        : { field: "isPro", ok: false, message: result.error.message },
+    );
+  }
+
+  // Nessun campo nella `FormData`: non c'era niente da salvare, e non è un errore.
+  // Il pannello tiene il pulsante spento in questo caso, quindi ci si arriva solo
+  // per una strada che la UI non offre.
+  if (outcomes.length === 0) {
+    return { error: null, ok: "Non c'era niente da salvare.", done: true };
+  }
+
+  if (outcomes.some((outcome) => outcome.ok)) revalidatePath(USERS_PATH);
+
+  const failed = outcomes.filter((outcome) => !outcome.ok);
+  if (failed.length === 0) {
+    return { error: null, ok: "Salvato.", outcomes, done: true };
+  }
   return {
-    error: null,
-    ok: result.value.isAdmin
-      ? "Adesso è amministratore dell'applicazione."
-      : "Non è più amministratore dell'applicazione.",
+    error: failed.map((outcome) => outcome.message).join(" "),
+    outcomes,
+    done: false,
   };
 }
 
@@ -321,39 +397,6 @@ export async function uploadCarmyAction(
 }
 
 // ─── Gli insight sul listone (M8) ────────────────────────────────────────────
-
-/**
- * Dare o togliere `is_pro`, cioè gli insight sul listone.
- *
- * Stessa forma di `setUserAdminAction`, e la differenza sta nel motore: là
- * toccare la propria riga è vietato — togliersi `is_admin` chiude fuori — qui no,
- * perché il flag non apre nessuna porta e un amministratore vede gli insight
- * comunque.
- */
-export async function setUserProAction(
-  _prev: FormState,
-  form: FormData,
-): Promise<FormState> {
-  const admin = await requireAppAdmin();
-  const userId = text(form, "userId");
-  if (!userId) return { error: "Utente non indicato." };
-
-  const wanted = text(form, "isPro");
-  const result = await setUserPro(
-    admin.id,
-    userId,
-    wanted === "true" ? true : wanted === "false" ? false : undefined,
-  );
-  if (!result.ok) return { error: result.error.message };
-
-  revalidatePath(USERS_PATH);
-  return {
-    error: null,
-    ok: result.value.isPro
-      ? "Adesso vede gli insight sul listone."
-      : "Non vede più gli insight sul listone.",
-  };
-}
 
 /**
  * Il refresh della fonte A: titolarità, minuti, rigori storici.
