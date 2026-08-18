@@ -87,13 +87,45 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-Nessuna. **Le quattro macro pianificate insieme il 2026-08-12** — da una sessione di analisi sola, a
-partire dalle quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1 —
-sono state tutte lavorate: M9, M10 e M11 sono in produzione (v1.10.0, v1.11.0 con M10B dentro,
-v1.12.0), M12 è chiusa su `dev` e aspetta il rilascio.
+Due, pianificate insieme il **2026-08-18** dalle due richieste che l'owner aveva nel quaderno. Nessuna
+delle due è aperta: si aprono su richiesta esplicita, come tutte. **`docs/REQUESTS.md` torna vuoto.**
 
-⚠ **`docs/REQUESTS.md` non è vuoto**: c'è «Admin – Refactor pagina utenti», scritta dall'owner e **non
-pianificata in nessuna macro**. Sarà una macro sua quando la chiederà, e non è entrata in M12.
+| Macro | Tema | Schema? |
+|---|---|---|
+| [M13](13-utenti-admin.md) | La pagina utenti: tabella in sola lettura con ricerca, e un pannello laterale che modifica | **No** |
+| [M14](14-cancello-risultati.md) | Il cancello dei risultati: le buste non si aprono da sole, e un lotto si può annullare | ⚠ **Sì** — una colonna additiva, `pnpm db:push`, **nessun backfill** |
+
+**Perché due e non una.** Non hanno niente in comune: la prima è tutta UI dentro il pannello di
+amministrazione, la seconda apre la **macchina a stati dell'asta** e aggiunge la prima fase nuova dopo
+v1.0.0. È lo stesso criterio con cui M5 e M6 sono state tagliate in due il 2026-08-10 e M9–M12 il
+2026-08-12: due profili di rischio così diversi vogliono due tag e due punti di rollback, perché
+tornare indietro su un modale non deve portarsi via il cancello — e soprattutto il contrario.
+M13 sta prima **solo** per questo: un suo errore si vede in una tabella, un errore di M14 si vede la
+sera dell'asta con dodici persone che guardano.
+
+**Le dipendenze sono zero.** Non si toccano gli stessi file, non si toccano gli stessi documenti, e
+l'ordine si può invertire senza riscrivere una riga di spec.
+
+⚠ **Le due cose da non riscoprire da capo, una per macro.** M13: la ricerca **ribalta una decisione
+scritta di M6 §8** («niente ricerca full-text, paginazione o esportazioni»), e la ratifica vale solo
+per la ricerca — la paginazione resta fuori, e M13 §4 spiega perché non sono la stessa decisione e cosa
+succederebbe alla ricerca il giorno che la paginazione arriva. M14: **il cancello sta prima della
+risoluzione del lotto, non dopo**, e il modo ovvio — risolvere e nascondere i risultati — ha un buco
+che non si vede leggendo `serializeLot`: i crediti, `maxBid` e la rosa del vincitore sono in **ogni**
+snapshot per **tutti**, TV compresa, e cambiano nell'istante dell'assegnazione. Nascondere il pannello
+delle buste mentre i crediti di qualcuno scendono di 87 è un quiz con una risposta sola. M14 §3 è tutta
+lì, ed è la sezione da leggere prima di scrivere una riga.
+
+⚠ **M14 modifica due righe di `CLAUDE.md`**, e va saputo prima di aprirla: «la rotazione dei turni non
+torna mai indietro» (l'annullamento la fa tornare indietro, in un caso solo e sotto tre condizioni) e
+l'elenco delle fasi in cui gli override sono rifiutati, che deve comprendere anche la fase nuova. Un
+file che si contraddice da solo è peggio di uno incompleto: è il precedente di M9 con `PLAN §8bis`
+punto 1.
+
+**Le quattro macro pianificate insieme il 2026-08-12** — da una sessione di analisi sola, a
+partire dalle quattro richieste che l'owner aveva scritto nel quaderno dopo il rilascio di v1.9.1 —
+sono state tutte lavorate e sono tutte in produzione: M9 (v1.10.0), M10 e M10B (v1.11.0), M11
+(v1.12.0), M12 (v1.13.0).
 
 ⚠ **M11 non ha automatizzato il foglio di Carmy, e nessuno ci provi**: è un file che una persona
 compila e che arriva da fuori. Lo stesso vale per il listone **d'asta**, l'export Leghe in `.xlsx`, che
