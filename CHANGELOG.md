@@ -4,6 +4,25 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.15.1] — 2026-08-18
+
+**L'applicazione ha la sua icona.** Fino a questa versione nella linguetta del browser c'era ancora
+quella che Next.js mette in un progetto appena creato — un quadratino anonimo, uguale a quello di
+qualunque altra applicazione fatta con lo stesso strumento. Adesso c'è il cerchio blu, e si vede dove
+serve: nella linguetta, nei preferiti, e sulla schermata home se aggiungi il sito dal telefono.
+
+Non è un file solo ma tre, di misure diverse, perché a sedici pixel un'immagine grande ridotta dal
+browser viene male: la linguetta prende una versione preparata apposta per quella misura, iOS ne prende
+una senza trasparenza — altrimenti la riempirebbe di nero da sé, mettendo gli angoli neri attorno al
+cerchio — e i browser moderni prendono quella grande.
+
+⚠ **Se dopo il rilascio vedi ancora la vecchia icona**, non è il deploy che non è passato: le icone
+sono la cosa che i browser tengono in cache più a lungo di tutto il resto, e a volte non basta
+ricaricare la pagina. Un `Cmd+Shift+R`, o chiudere e riaprire la linguetta, la rimette a posto. Sulla
+schermata home del telefono serve rimuovere e riaggiungere il collegamento.
+
+**Nessun passo a mano sul server**: nessuna colonna nuova, nessun dato toccato. Il deploy basta.
+
 ## [1.15.0] — 2026-08-18
 
 **M14 — Il cancello dei risultati: le buste non si aprono più da sole.** Fino a ieri, fra «il round è

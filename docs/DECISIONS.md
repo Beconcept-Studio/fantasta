@@ -2726,3 +2726,83 @@ boot recovery da collaudare; l'`advance` è filtrato sull'asta del test. Per la 
 test del crash **non asseriscono su quale sweep abbia pescato l'asta** — non è una proprietà nostra —
 ma sull'esito, che è identico qualunque sweep l'abbia risolta: ed è precisamente la proprietà sotto
 esame.
+
+---
+
+## 2026-08-18 — L'icona dell'applicazione, fuori macro
+
+Su richiesta esplicita dell'owner, **senza aprire una macro**: l'icona era una delle due richieste che
+M15 avrebbe portato, ma M15 è stata **annullata e riportata indietro** (il tema nuovo non è piaciuto, e
+i tredici commit sono stati scartati con `dev` che non era mai stato pushato). L'icona è stata chiesta
+da sé, quindi vive dove `CLAUDE.md` manda gli interventi piccoli: direttamente su `dev`, con questa voce
+e la riga nell'indice delle macro.
+
+**Tre file, non quattro, e il quarto è stato saltato di proposito.** `app/favicon.ico` con 16, 32 e 48
+dentro, `app/icon.png` a 512, `app/apple-icon.png` a 180. ⚠ **Non c'è la misura a 192**, che ogni
+elenco di favicon sul web dà per obbligatoria: qui non lo è, e vale la pena scriverlo perché sembrerà
+una dimenticanza. Il 192 serve a un **manifest**, e questa applicazione non ne ha uno e non lo vuole
+(un manifest la renderebbe installabile, cioè aggiungerebbe una superficie da mantenere che nessuno ha
+chiesto). Senza manifest nessun consumatore sceglie il 192 al posto del 512: la linguetta e i preferiti
+prendono l'ICO, iOS prende `apple-icon`, Chrome su Android prende la più grande. E sarebbe costato un
+file di nome `icon1.png`, perché il suffisso numerico è il solo modo in cui Next accetta due icone
+dello stesso tipo — un nome che fra sei mesi qualcuno aprirebbe per capire cos'è.
+
+**Niente `metadata.icons` scritto a mano.** Next trova i tre file per convenzione di nome dentro `app/`
+e genera i `<link>` da sé — verificato sulla pagina servita: `icon`/`x-icon` per l'ICO, `icon`/`png` a
+`512x512`, `apple-touch-icon` a `180x180`, e le tre rotte rispondono 200 col tipo giusto. Scriverli a
+mano vorrebbe dire tenere allineate due verità per la stessa cosa.
+
+**I file sono committati, non generati in build.** Un'icona cambia una volta all'anno: tre immagini
+sono **asset**, e un passo di build è un costo permanente per un lavoro che si fa una volta. La ricetta
+sta in `scripts/genera-icone.py`, che **non è chiamato da niente** — né build, né `tsc`, né ESLint lo
+guardano — e vuole Python con Pillow, che non sono e non devono diventare dipendenze del progetto.
+⚠ **`sharp` sarebbe stata la scelta ovvia in un progetto Node e non è utilizzabile**: c'è sotto
+`node_modules/.pnpm/sharp@0.34.5` perché lo porta Next.js, ma con `pnpm` non è issato, quindi un
+`require("sharp")` dalla radice risponde `MODULE_NOT_FOUND`. Il dubbio «appoggiarsi a una dipendenza
+non dichiarata di qualcun altro?» si è chiuso da sé: non si può.
+
+⚠ **L'ICO è scritto byte per byte**, e l'alternativa era inutile: `Image.save(..., sizes=[...])` di
+Pillow **ridimensiona da sé** partendo da una sola immagine, cioè butta via le rese preparate a mano —
+che sono l'unica ragione per cui un ICO multi-misura esiste invece di un PNG solo. Il formato è
+semplice: intestazione, una voce di indice per misura, i blocchi BMP con la loro maschera di
+trasparenza in coda.
+
+**La sorgente sta in `fixtures/favicon-512.png`, non nella radice e non in `public/`.** Nella radice
+c'era perché era il modo di passarmela; in `public/` sarebbe servita a qualcuno senza che nessuno la
+chieda. `fixtures/` è già il posto dei materiali che arrivano da fuori e non vengono serviti — i fogli
+del listone, l'HTML dei rigoristi — e l'originale di un'icona è esattamente quello.
+
+**Due scelte che dipendono da com'è fatto *questo* disegno**, e vanno riviste se l'icona cambia forma.
+Il PNG è un **cerchio blu pieno** (`#0000FF`) a tela piena, con il fuori-cerchio trasparente.
+
+1. ⚠ **`apple-icon.png` è appiattita sul blu del disegno, non sul bianco e non sul nero.** iOS riempie
+   la trasparenza di nero da sé e poi ritaglia con la sua maschera a quadrato stondato: lasciarla
+   trasparente darebbe un cerchio blu con **gli angoli neri**, che è il difetto da evitare. Fra le due
+   tinte possibili si è scelta quella del disegno, perché così l'unica cosa che cambia rispetto
+   all'originale sono i quattro angoli che iOS avrebbe dipinto di nero — il bianco avrebbe introdotto
+   un colore che nell'originale non c'è, e reso l'icona «un pallino blu su un cartoncino bianco».
+   L'esito è un quadrato blu pieno che iOS stonda da sé, cioè l'idioma della piattaforma.
+2. **Nessuna maschera di contrasto sulle misure piccole.** Sulla sorgente precedente — un pallone da
+   calcio coi pentagoni disegnati — serviva, perché a 16 pixel il dettaglio fine diventa una pappa
+   grigia. Qui il disegno è una campitura piatta con un bordo curvo: non c'è nessun dettaglio da
+   recuperare, e una maschera su un bordo antialiasato produce **solo un alone**. Guardate le rese
+   ingrandite, a 16 pixel il cerchio è già netto. Il punto in cui rimetterla, se la sorgente torna a
+   essere un disegno, è segnato nello script.
+
+⚠ **Una cosa da non «aggiustare»**: sul `.ico` Next dichiara `sizes="16x16"`, perché legge la prima
+voce dell'indice e non tutte e tre. Le tre misure ci sono — riletto il file per controllo. È
+un'indicazione, non un vincolo: i browser aprono l'ICO e scelgono da sé. Correggerla vorrebbe dire
+scrivere `metadata.icons` a mano, cioè rinunciare alla decisione qui sopra.
+
+**Quello che questo intervento non fa**, per non ritrovarselo proposto come idea nuova: nessun
+manifest, nessuna PWA, nessun service worker; nessuna variante a fondo chiaro per i contesti scuri (le
+icone che seguono `prefers-color-scheme` sono supportate a chiazze, quindi si pagherebbe un secondo
+file per una garanzia che non c'è); e nessun margine aggiunto per la variante `maskable` di Android,
+che senza manifest non viene mai selezionata — e che comunque non servirebbe, perché il disegno **è**
+un cerchio e un ritaglio circolare non gli toglie niente.
+
+⚠ **Il blu è scuro, e su una linguetta scura si vede ma non salta all'occhio.** `#0000FF` ha una
+luminanza intorno all'11%, cioè è il più scuro dei tre primari: contro il grigio antracite di una
+linguetta in tema scuro il cerchio si legge, ma con poco stacco. Non è un difetto da correggere di
+nascosto — è il colore scelto — ed è scritto qui perché chi lo noterà fra sei mesi veda il sintomo
+accanto alla sua causa invece di sospettare un file sbagliato.

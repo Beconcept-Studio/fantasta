@@ -289,6 +289,17 @@ Dopo **v1.9.0**, su richiesta esplicita («si direi di filtrare quelle simulate,
   `docs/DECISIONS.md`, 2026-08-12. ⚠ **M12 apre quel vicolo cieco**, e ha ratificato che la guardia
   resta comunque com'è: la voce sta nel suo §5.
 
+Dopo **v1.15.0**, su richiesta esplicita («applica solo la favicon al progetto»):
+
+- **L'icona dell'applicazione**: tre file in `app/` — `favicon.ico` con 16, 32 e 48 dentro, `icon.png`
+  a 512, `apple-icon.png` a 180 senza trasparenza — più la sorgente in `fixtures/favicon-512.png` e la
+  ricetta in `scripts/genera-icone.py`, che non è chiamato da niente. `docs/DECISIONS.md`, 2026-08-18.
+  ⚠ Era una delle due richieste che **M15 avrebbe portato**: quella macro è stata **annullata** — il
+  tema nuovo non è piaciuto all'owner e i tredici commit sono stati scartati, senza conseguenze perché
+  `dev` non era mai stato pushato. L'icona è stata poi chiesta da sé. **Il preset di shadcn non è stato
+  applicato**, e se un giorno tornasse in gioco l'analisi va rifatta da zero: la spec di M15 non esiste
+  più.
+
 In **v1.3.1**, sempre su richiesta esplicita («vai pure da `dev` a `main` senza branch»):
 
 - **La versione nella navbar**, accanto al pulsante per uscire. Serve a controllare a vista quale
