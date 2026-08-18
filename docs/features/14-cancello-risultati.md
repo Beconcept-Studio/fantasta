@@ -2,9 +2,9 @@
 
 > **Stato:** **aperta** il 2026-08-18 su richiesta dell'owner, su `feature/14-cancello-risultati`.
 > Codice, test e documentazione **fatti**: gate verde con **860 test in 51 file** (baseline 815),
-> `pnpm typecheck` e `pnpm lint` puliti. ⚠ **`pnpm build` ancora da dare** — il dev server dell'owner
-> era acceso, e darlo con `pnpm dev` attivo corrompe `.next`. Restano **M14-15** (la prova a mano
-> dell'owner) e **M14-17** (il rilascio, solo su richiesta esplicita).
+> `pnpm typecheck`, `pnpm lint` e `pnpm build` verdi. **Merged `--no-ff` su `dev`.** Restano
+> **M14-15** (la prova a mano dell'owner) e il rilascio di **M14-17** — changelog, versione, `main`,
+> tag `v1.15.0` e `pnpm db:push` sul server — **solo su richiesta esplicita**.
 > **Indipendente da M13**, che sta prima solo per profilo di rischio: quella è tutta UI nel pannello,
 > questa apre la macchina a stati dell'asta.
 >
@@ -581,8 +581,9 @@ il modo di dimenticare metà dell'elenco. Verificato leggendo i chiamanti:
       → **Verde**, e con un margine che vale la pena scrivere: `pnpm test` **860 test in 51 file** (da
       815 di baseline, +45), `pnpm typecheck` e `pnpm lint` puliti. La suite è stata lanciata **dieci
       volte di fila** per la caccia ai flake, e sono dieci verdi.
-      ⚠ `pnpm build` **non ancora dato**: il dev server dell'owner è acceso, e darlo con `pnpm dev`
-      attivo corrompe `.next`. Va dato prima del merge su `dev`, a dev server spento.
+      ⚠ `pnpm build` **dato a dev server spento, e verde al primo tentativo** — l'inciampo noto
+      («Failed to collect page data for /api/auctions/[id]/stream» alla prima build dopo una sessione
+      di `pnpm dev`) non si è presentato.
 - [ ] **M14-15** — Prova a mano, che i test non sostituiscono: una simulazione con cancello a 10
       secondi, **due dispositivi collegati** più la TV. Si guarda che per dieci secondi **nessuno dei
       tre** mostri qualcosa dei risultati (crediti compresi), poi «Mostra risultati»; poi un secondo
