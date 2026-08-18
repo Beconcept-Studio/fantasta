@@ -73,6 +73,19 @@ otto persone.
 
 `tests/` sono i test Vitest.
 
+`fixtures/` sono i materiali che arrivano da fuori e che non vengono serviti a nessuno: i fogli del
+listone, l'HTML dei rigoristi, e il PNG sorgente dell'icona. Non è una cartella di asset — è il posto
+dove sta l'originale di qualcosa che nel progetto entra in un'altra forma.
+
+L'ultima cosa che si vede prima ancora della pagina è **l'icona nella linguetta**, e sono tre file in
+`app/`: `favicon.ico` con tre misure dentro (16, 32, 48), `icon.png` a 512, e `apple-icon.png` a 180
+**senza canale alpha** — iOS non rispetta la trasparenza, la riempie di nero da sé, quindi
+l'appiattimento lo si decide qui invece di subirlo. Next li trova per convenzione di nome e genera i
+`<link>` da sé: **non c'è nessun `metadata.icons` scritto a mano**, ed è di proposito, perché sarebbe
+una seconda sorgente di verità da tenere allineata a mano. I tre file sono **committati**, non generati
+in build. La ricetta che li ha prodotti sta in `scripts/genera-icone.py`, che non è chiamato da niente:
+vuole Python e Pillow, che non sono e non devono diventare dipendenze del progetto.
+
 ### Una regola di lint invece di una code review
 
 C'è un vincolo che vale la pena raccontare perché è la spina dorsale delle regole di correttezza:
