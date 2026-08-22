@@ -1,8 +1,10 @@
 # M16 — Le regole dell'offerta: niente scorciatoie, niente ritiro
 
-> **Stato:** **aperta** il 2026-08-22 su `feature/16-regole-offerta`, codice completo e gate verde
-> (**858 test in 52 file**, da 860 in 51 — 13 tolti col ritiro, 11 aggiunti; typecheck e build
-> puliti). Restano il collaudo a occhio dell'owner e la chiusura (M16-10).
+> **Stato:** **chiusa** — **in produzione da `v1.16.0`** (2026-08-22), aperta, lavorata, provata
+> dall'owner e rilasciata nella stessa giornata. Gate verde con **858 test in 52 file** (da 860 in
+> 51: 13 tolti insieme al ritiro, 11 aggiunti), typecheck e build puliti.
+> ⚠ **Nessun passo a mano sul server**: nessun `pnpm db:push`, nessun backfill, nessun file da
+> caricare. Il deploy finisce il rilascio.
 > ⚠ **Porta anche una correzione fuori tema** (`M16-11`, chiesta a macro già chiusa su `dev`): la
 > voce «Lobby» sparisce dal menù ad asta `LIVE`, dove portava a un rimbalzo.
 > ⚠ **La versione di chiusura è `v1.16.0`**, non quella che si sarebbe potuta dedurre: in produzione
@@ -322,10 +324,14 @@ posto è lo sweep che esiste già, non un timer nuovo.
       modifica la lobby perderebbe il proprio titolo esattamente quando la voce è nascosta.
       **+6 test** (`tests/auction-nav.test.ts`, da 16 a 22). Il link della dashboard non è toccato:
       rimbalza ancora, ed è annotato in `docs/DECISIONS.md`
-- [ ] **M16-10** — Chiusura: merge `--no-ff` su `dev`, prova in locale con `pnpm bots` e un telefono
+- [x] **M16-10** — Chiusura: merge `--no-ff` su `dev`, prova in locale con `pnpm bots` e un telefono
       in LAN, poi `CHANGELOG.md` e `package.json` a `v1.16.0`, merge su `main`, tag. **Nessun passo a
       mano sul server**, e va scritto nel changelog che non ce n'è: è l'informazione che si cerca
       quando il deploy dice «completato»
+      → chiusa il 2026-08-22 con **`v1.16.0`**. ⚠ **Il numero è quello della spec e non quello che
+      si sarebbe potuto dedurre**: in produzione c'era `v1.15.1`, e `package.json`, `CHANGELOG.md` e
+      i tag concordavano tutti e tre — controllati prima di decidere, invece di contare a memoria.
+      Il changelog dice per esteso che non c'è nessun passo a mano sul server
 
 ## Verifica
 

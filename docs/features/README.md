@@ -12,11 +12,19 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-**[M16](16-regole-offerta.md) — aperta il 2026-08-22** su `feature/16-regole-offerta`, codice completo
-e gate verde: **858 test in 52 file** (da 860 in 51 — 13 tolti insieme al ritiro, 11 aggiunti),
-typecheck e build puliti. Un'offerta è una decisione che si prende una volta: via i quattro valori
-suggeriti dal modale, via il ritiro **fino in fondo** — evento del motore compreso — e i pallini di
-presence in TV. **Nessun `pnpm db:push`, nessun backfill, nessun file da caricare.**
+Nessuna aperta. **M16 è in produzione da `v1.16.0`** (2026-08-22): aperta, lavorata, provata
+dall'owner e rilasciata **nella stessa giornata**, il terzo caso di fila dopo M13 e M14. Gate verde
+con **858 test in 52 file** (da 860 in 51 — 13 tolti insieme al ritiro, 11 aggiunti), typecheck e
+build puliti. Un'offerta è una decisione che si prende una volta: via i quattro valori suggeriti dal
+modale, via il ritiro **fino in fondo** — evento del motore compreso — e i pallini di presence in TV.
+**Nessun `pnpm db:push`, nessun backfill, nessun file da caricare**: verificato, non dedotto — il
+`git diff` della macro non tocca `lib/db/schema.ts`.
+
+⚠ **È la prima macro che toglie righe di test invece di aggiungerne**, e il conto va letto per
+quello che è: 13 test spariti non sono copertura persa, sono cinque divieti e un evento che non
+esistono più. Quello che restava da difendere è stato spostato dove ha senso — il filtro delle
+ritirate in `resolveRound` è provato in `tests/engine/rules.test.ts` costruendo la riga a mano,
+perché è un **lettore** e i lettori sopravvivono a chi scriveva.
 
 ⚠ **Porta anche una correzione fuori tema**, chiesta dall'owner a macro già chiusa su `dev` e
 accettata dentro M16 perché `CLAUDE.md` vuole le correzioni piccole nella macro aperta: **la voce
@@ -44,9 +52,6 @@ trascinerebbe React in ambiente `node`. È lo stesso motivo per cui esiste `use-
 pianificazione aveva avvertito: in quel file un tipo *sconosciuto* è notevole, quindi cancellare
 quella riga non farebbe sparire i ritiri storici — li **promuoverebbe** nel blocco delle correzioni
 di un'asta già giocata, dove non sono mai stati. Adesso la riga porta il commento che lo spiega.
-
-Restano il collaudo a occhio dell'owner — il modale sul telefono con la tastiera aperta, i pallini
-con una simulazione accesa e con un telefono che si scollega — e la chiusura (M16-10) a `v1.16.0`.
 
 ---
 
@@ -192,7 +197,7 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 ## Da pianificare
 
 **Una**, la seconda delle due pianificate il 2026-08-22 dalle tre richieste che l'owner aveva scritto
-nel quaderno dopo `v1.15.1`. **M16 è aperta** (vedi «In corso»); **`docs/REQUESTS.md` resta vuoto**.
+nel quaderno dopo `v1.15.1`. **M16 è chiusa e in produzione**; **`docs/REQUESTS.md` resta vuoto**.
 
 | Macro | Tema | Ordine |
 |---|---|---|
@@ -314,6 +319,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M16](16-regole-offerta.md) | Le regole dell'offerta: via i valori suggeriti, via il ritiro (motore compreso), i pallini di presence in TV | v1.16.0 — 2026-08-22 |
 | [M14](14-cancello-risultati.md) | Il cancello dei risultati: fra la chiusura di un round e la rivelazione delle buste un istante che appartiene a chi conduce, e un lotto che si può annullare | v1.15.0 — 2026-08-18 |
 | [M13](13-utenti-admin.md) | La pagina utenti: sei colonne in sola lettura con la ricerca, e un pannello laterale che modifica | v1.14.0 — 2026-08-18 |
 | [M12](12-cancellazione-aste.md) | Cancellare un'asta per forza, anche in corso, e il congedo di chi la stava guardando | v1.13.0 — 2026-08-18 |
