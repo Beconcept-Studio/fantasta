@@ -1,8 +1,10 @@
 # M16 — Le regole dell'offerta: niente scorciatoie, niente ritiro
 
 > **Stato:** **aperta** il 2026-08-22 su `feature/16-regole-offerta`, codice completo e gate verde
-> (852 test in 52 file, da 860 in 51 — 13 tolti col ritiro, 5 aggiunti; typecheck e build puliti).
-> Restano il collaudo a occhio dell'owner e la chiusura (M16-10).
+> (**858 test in 52 file**, da 860 in 51 — 13 tolti col ritiro, 11 aggiunti; typecheck e build
+> puliti). Restano il collaudo a occhio dell'owner e la chiusura (M16-10).
+> ⚠ **Porta anche una correzione fuori tema** (`M16-11`, chiesta a macro già chiusa su `dev`): la
+> voce «Lobby» sparisce dal menù ad asta `LIVE`, dove portava a un rimbalzo.
 > ⚠ **La versione di chiusura è `v1.16.0`**, non quella che si sarebbe potuta dedurre: in produzione
 > c'è `v1.15.1`, e `package.json`, `CHANGELOG.md` e i tag concordano tutti e tre.
 >
@@ -306,6 +308,20 @@ posto è lo sweep che esiste già, non un timer nuovo.
       non erano più sette), «Chi chiama è vincolato» con accanto la sezione nuova «Chi offre tiene»,
       il paragrafo sull'irreversibilità del ritiro, l'elenco delle azioni di `actions.ts`, le domande
       pure di `portal.ts`, e il modale d'offerta. Più la TV, per i pallini
+- [x] **M16-11** — ⚠ **Entrato a macro già chiusa su `dev`**, su richiesta dell'owner del 2026-08-22
+      e prima del rilascio: col tema dell'offerta non c'entra, sta qui perché `CLAUDE.md` dice che
+      una correzione piccola vive dentro la macro aperta. **La voce «Lobby» sparisce dal menù ad asta
+      `LIVE`**, dove portava a un rimbalzo — `LobbyLive` spinge il membro al portale.
+      La condizione è **copiata da quella del rimbalzo**: `isMember && status === "LIVE"`. Restano
+      visibili la voce in pausa (lì la spinta non c'è, per una decisione precedente) e la voce per
+      l'owner che non gioca (non è membro, non viene spinto, e la lobby per lui funziona).
+      ⚠ Restringe la regola scritta in `lib/auction-nav.ts` — «le sezioni dipendono dal ruolo e mai
+      dallo stato» — in **un caso solo**, con lo stato preso da `getAuctionOverview` e non dallo
+      stream: la navigazione non diventa stato di gioco (regola 7). ⚠ E `activeSection` ora legge il
+      catalogo intero: da qui in poi esiste una sezione **nascosta ma raggiungibile**, e senza quella
+      modifica la lobby perderebbe il proprio titolo esattamente quando la voce è nascosta.
+      **+6 test** (`tests/auction-nav.test.ts`, da 16 a 22). Il link della dashboard non è toccato:
+      rimbalza ancora, ed è annotato in `docs/DECISIONS.md`
 - [ ] **M16-10** — Chiusura: merge `--no-ff` su `dev`, prova in locale con `pnpm bots` e un telefono
       in LAN, poi `CHANGELOG.md` e `package.json` a `v1.16.0`, merge su `main`, tag. **Nessun passo a
       mano sul server**, e va scritto nel changelog che non ce n'è: è l'informazione che si cerca

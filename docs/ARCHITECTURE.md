@@ -1326,12 +1326,36 @@ v1.10.0 non c'è più: il capitolo del portale racconta perché, perché è lì 
 preso da qualcos'altro.
 
 Dentro un'asta, un layout su `/auctions/[id]` legge una volta chi guarda e che rapporto ha con
-quell'asta, e da due booleani — la possiede, ci gioca — ricava le sezioni. **Dipendono dal ruolo e
-mai dallo stato dell'asta**, e non è solo prevedibilità: il ruolo non cambia mentre guardi la
-pagina, lo stato sì, e una sotto-navbar renderizzata dal server mostrerebbe voci sbagliate dopo la
-prima transizione — a meno di alimentarla dallo snapshot, cioè di trasformare la navigazione in
-stato di gioco. Il layout decide cosa *mostrare*, mai cosa si può *fare*: sono le pagine a
-respingere chi non deve entrare, e le azioni a ricontrollare comunque sul server.
+quell'asta, e da due booleani — la possiede, ci gioca — ricava le sezioni. **Dipendono dal ruolo**,
+e per quasi tutte è l'unica cosa da cui dipendono: il ruolo non cambia mentre guardi la pagina, lo
+stato sì, e una sotto-navbar renderizzata dal server mostrerebbe voci sbagliate dopo la prima
+transizione — a meno di alimentarla dallo snapshot, cioè di trasformare la navigazione in stato di
+gioco. Il layout decide cosa *mostrare*, mai cosa si può *fare*: sono le pagine a respingere chi non
+deve entrare, e le azioni a ricontrollare comunque sul server.
+
+**Una sola voce fa eccezione, da M16: la Lobby, che sparisce dal menù ad asta `LIVE`.** Il motivo è
+che lì il link non porta da nessuna parte — chi è membro, arrivando in lobby con l'asta in corso,
+viene spinto al portale da `LobbyLive`, ed è l'unico `router.push` automatico dell'applicazione. Un
+link che rimanda indietro è peggio di un link assente: chiede un tocco e restituisce il punto di
+partenza.
+
+La condizione è **copiata da quella del rimbalzo**, non inventata più larga, e le due cose che *non*
+nasconde sono la parte da non semplificare per simmetria. Ad asta **in pausa** la voce resta, perché
+in pausa la spinta non c'è — è stata tolta apposta, dato che la pausa è il momento in cui si va a
+cambiare i tempi. E per **l'owner che non gioca** (⚠ P11) la voce resta sempre: non essendo membro
+non viene spinto da nessuna parte, e per lui la lobby ad asta in corso è la lista dei partecipanti
+coi loro pallini di presence.
+
+⚠ Due precisazioni tengono in piedi il resto. La prima: lo stato arriva da `getAuctionOverview`,
+cioè dalla stessa lettura da cui esce tutto il layout, **non dallo stream** — la riga sulla
+navigazione che non diventa stato di gioco non si è mossa. Il prezzo è la staleness, ed è piccolo
+per costruzione: il layout è dinamico e si rirenderizza a ogni navigazione, e la spinta al portale è
+essa stessa una navigazione, quindi il caso che conta si corregge da sé nell'istante in cui si
+verifica; resta stantia solo per chi sta fermo su una pagina mentre l'asta cambia stato. La seconda:
+**nascosta dal menù non vuol dire irraggiungibile**, e `activeSection` — la funzione che dal
+pathname ricava il titolo della pagina — legge per questo il catalogo intero e non l'elenco delle
+voci visibili. Se passasse dalle voci visibili, la lobby perderebbe la propria intestazione proprio
+nello stato in cui la voce è nascosta, cioè quando l'owner che non gioca la sta guardando.
 
 Nella stessa intestazione il nome dell'asta è tornato a essere ciò che è — **contesto, quindi un
 badge** — e il titolo dice finalmente il nome della pagina. Prima erano tre schermate diverse che si

@@ -2907,3 +2907,55 @@ l'app **adesso**.
 `max_bid` — è l'unico che la macro sfiora, e lo sfiora per rafforzarlo: `max NN` resta scritto
 nell'intestazione del modale, perché è il limite che il server applica e non un valore suggerito.
 Sparisce il pulsante che scriveva quel numero nel campo, non l'informazione che il tetto è quello.
+
+---
+
+## 2026-08-22 — La Lobby sparisce dal menù ad asta LIVE, e la regola della navbar si restringe
+
+Chiesto dall'owner a macro M16 già chiusa su `dev`, prima del rilascio: «la voce Lobby se l'asta è
+live mi fa fare redirect, e questo mi va bene. Vorrei però nascondere la voce dal menù in quello
+stato, non ha senso avere un link che mi fa redirect». Entra in M16 perché `CLAUDE.md` dice che una
+correzione piccola vive dentro la macro aperta.
+
+**Il fatto.** `LobbyLive` ha l'unico `router.push` automatico dell'applicazione: chi è **membro**,
+arrivando in lobby con l'asta `LIVE`, viene portato al portale. La voce di menù che ci porta è
+quindi un viaggio di andata e ritorno — un tocco che restituisce il punto di partenza.
+
+**Cosa cambia, e cosa deliberatamente no.** La Lobby è nascosta se e solo se
+`isMember && status === "LIVE"`, che è **la condizione del rimbalzo copiata**, non una più larga.
+Due casi restano fuori apposta:
+
+- **In pausa la voce resta.** La spinta al portale è stata tolta da `PAUSED` con una decisione
+  precedente e per una ragione precisa — la pausa è il momento in cui si va a cambiare i tempi, e
+  finché la spinta valeva anche lì l'owner veniva rispedito al portale a ogni tentativo. Nascondere
+  la voce in pausa rimetterebbe in piedi quel problema dall'altro lato.
+- **All'owner che non gioca la voce resta sempre** (⚠ P11). Non è membro, quindi non viene spinto da
+  nessuna parte: per lui la lobby ad asta in corso è la lista dei partecipanti coi loro pallini, cioè
+  una destinazione vera. Nasconderla sarebbe togliere un link che funziona.
+
+**La regola scritta in `lib/auction-nav.ts` è stata ristretta, non abolita**, e la distinzione è il
+punto di questa nota. Quel file diceva: «le sezioni dipendono dal **ruolo** di chi guarda e mai dallo
+**stato** dell'asta», con una motivazione tecnica che vale ancora — il ruolo non cambia mentre
+guardi la pagina, lo stato sì, e la navbar è renderizzata dal server. Adesso lo stato entra in **un
+caso solo**, e la motivazione resta scritta accanto alla deroga invece di essere cancellata.
+
+⚠ **Lo stato arriva da `getAuctionOverview`, non dallo snapshot.** Alimentare la navigazione dallo
+stream sarebbe trasformarla in stato di gioco (regola 7), e quella riga non si è mossa: la navbar
+legge lo stato dalla stessa lettura da cui esce il resto del layout. Il prezzo è la staleness, ed è
+piccolo per costruzione — il layout è dinamico e si rirenderizza a ogni navigazione, e **la spinta
+al portale è essa stessa una navigazione**, quindi il caso che conta si corregge da sé nell'istante
+in cui si verifica. Resta stantia solo per chi sta fermo su una pagina mentre l'asta cambia stato,
+ed è un costo accettato consapevolmente.
+
+⚠ **`activeSection` adesso legge il catalogo intero e non passa più da `auctionSections`**, ed è la
+riga che tiene in piedi tutto il resto. Da questa modifica in poi esiste una cosa che prima non
+esisteva: una sezione **nascosta dal menù ma raggiungibile** — la Lobby ad asta `LIVE`, che l'owner
+che non gioca continua ad abitare e il cui URL funziona per chiunque lo digiti. Se il titolo della
+pagina venisse cercato fra le voci *visibili*, quella pagina perderebbe la propria intestazione
+proprio nello stato in cui la voce è nascosta, e al posto di «Lobby» si leggerebbe il nome dell'asta
+— il ripiego di `AuctionNav` per le rotte che non riconosce. C'è un test apposta.
+
+**Quello che questa correzione non fa.** Il link alla lobby nella **dashboard** (`/dashboard`, per
+chi non è owner) continua a portare in lobby anche ad asta `LIVE`, quindi rimbalza al portale
+esattamente come faceva la voce di menù. È lo stesso difetto un click prima, non è stato toccato
+perché fuori dalla richiesta, ed è annotato qui perché è il posto in cui lo si ritroverà.
