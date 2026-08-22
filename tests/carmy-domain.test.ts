@@ -10,6 +10,7 @@ import {
   SOGLIA_TITOLARE,
   SOGLIA_TITOLARE_CARMY,
   carmyFasciaRank,
+  pmaCrediti,
   titolarita,
 } from "@/lib/domain";
 
@@ -211,5 +212,40 @@ describe("la scala", () => {
   it("arriva a 5, ed è la stessa che il parser rifiuta di superare", () => {
     expect(CARMY_SCALA_MAX).toBe(5);
     expect(SOGLIA_TITOLARE_CARMY).toBeLessThanOrEqual(CARMY_SCALA_MAX);
+  });
+});
+
+// ─── Il PMA nei crediti dell'asta (M17, 2026-08-22) ──────────────────────────
+
+describe("pmaCrediti — la percentuale tradotta in una cifra offribile", () => {
+  it("è la percentuale del budget, arrotondata", () => {
+    expect(pmaCrediti(10.5, 500)).toBe(53);
+    expect(pmaCrediti(10, 500)).toBe(50);
+    expect(pmaCrediti(2.5, 500)).toBe(13);
+    expect(pmaCrediti(100, 500)).toBe(500);
+  });
+
+  it("segue il budget dell'asta, che non è sempre 500", () => {
+    expect(pmaCrediti(10, 200)).toBe(20);
+    expect(pmaCrediti(10, 1_000)).toBe(100);
+  });
+
+  it("⚠ non scende mai sotto 1: zero crediti non è un'offerta che si possa fare", () => {
+    // Il `pma` più piccolo che il foglio scrive è 0,2%, e su un budget basso
+    // l'arrotondamento darebbe zero — cioè un suggerimento impossibile da
+    // seguire, che è la stessa ragione per cui il parser traduce in assente il
+    // `prezzo` scritto `0`.
+    expect(pmaCrediti(0.2, 200)).toBe(1);
+    expect(pmaCrediti(0.2, 100)).toBe(1);
+    expect(pmaCrediti(0.01, 500)).toBe(1);
+  });
+
+  it("⚠ NON è `prezzo` ricalcolato, e i due possono divergere", () => {
+    // La misura sui byte del foglio (2026-08-12) dice che solo 132 righe su 385
+    // rispettano `prezzo / 5`: Di Gregorio costa 41 con un PMA di 2,5%, che su un
+    // budget da 500 fa 13. Questa riga non è un'asserzione su un bug — è la prova
+    // che questa funzione converte il PMA e nient'altro, e che chi vedesse i due
+    // numeri diversi nella stessa serata sta guardando due giudizi diversi.
+    expect(pmaCrediti(2.5, 500)).not.toBe(41);
   });
 });

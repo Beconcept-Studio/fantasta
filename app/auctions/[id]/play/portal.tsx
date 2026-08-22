@@ -43,18 +43,24 @@ import { useAuctionStream, useHeartbeat } from "@/lib/realtime/use-auction-strea
  * Il portale del partecipante (F5-01): **una sola pagina, e nient'altro che lo
  * snapshot**.
  *
- * La gerarchia è quella vincolante di §8bis, dall'esterno all'interno:
- * il banner globale (che sta nel layout, e porta qui), la **card permanente**
- * del lotto, il **modale** sopra la card. Qui si vede la parte interna: quale
- * schermata mostrare è `portalScreen(snapshot)`, se il modale è aperto è
- * `shouldOpenBidDialog(snapshot, dismissedLotId)`, e `dismissedLotId` è l'unico
- * pezzo di stato locale di tutto il portale.
+ * La gerarchia è quella vincolante di §8bis, dall'esterno all'interno: la
+ * **cornice permanente** della colonna 3 e i **due pannelli** che si aprono
+ * sopra di lei. Qui si vede la parte interna: quale scena mostrare è
+ * `sceneOf(snapshot)`, se un pannello è aperto sono `shouldOpenBidDialog` e
+ * `shouldOpenPickSheet`, e le sole due variabili che non vengono dallo snapshot
+ * sono `dismissedLotId` e `dismissedTurnKey`.
  *
- * Che sia l'unico non è un dettaglio: è la forma che prende la regola 7. Non
- * esiste una variabile "ho ricevuto l'evento X", non esiste una schermata
- * raggiungibile solo da chi era connesso al momento giusto. Chiudere il tab e
- * riaprirlo produce esattamente la stessa pagina — non perché ci sia un
+ * Che siano due e non una non allenta la regola 7, perché sono due **dello
+ * stesso tipo**: «questa cosa che si apre da sé l'ho chiusa io». Non esiste da
+ * nessuna parte una variabile "ho ricevuto l'evento X", quindi non esiste una
+ * schermata raggiungibile solo da chi era connesso al momento giusto. Chiudere
+ * il tab e riaprirlo produce esattamente la stessa pagina — non perché ci sia un
  * recupero, ma perché non c'era niente da recuperare (I10).
+ *
+ * ⚠ **Il banner globale «Asta in corso» che §8bis mette al primo livello non
+ * esiste più** da v1.10.0: era il modo di *arrivare* alla pagina, non di
+ * ricostruirla, e la sua rimozione non ha toccato nessuno dei rientri. Il
+ * racconto sta in `docs/ARCHITECTURE.md`.
  *
  * Le azioni escono da `sendAction`; lo stato torna **solo** dallo stream. Non
  * c'è nessun aggiornamento ottimistico dello stato dell'asta: il feedback
@@ -64,6 +70,7 @@ export function Portal({
   auctionId,
   pool,
   viewerIsOwner,
+  budget,
 }: {
   auctionId: string;
   /** Il listone dell'asta, letto una volta dal server: non viaggia nello snapshot. */
@@ -84,6 +91,17 @@ export function Portal({
    * cui si conduce è quello — non il telefono con cui si gioca.
    */
   viewerIsOwner: boolean;
+  /**
+   * I crediti di partenza dell'asta, che servono a una cosa sola: tradurre il
+   * `PMA` del foglio da percentuale a cifra offribile nella lista di chiamata.
+   *
+   * ⚠ Terza prop che arriva dal server invece che dallo snapshot, e per la stessa
+   * ragione delle altre due — non è stato di gioco e non cambia durante la serata.
+   * M17 §8 dice che un dato mancante nello snapshot è il segnale di fermarsi e
+   * chiedere: qui non è servito, perché questa strada esisteva già e
+   * `serializeSnapshot` non è stato toccato (I8).
+   */
+  budget: number;
 }) {
   const { snapshot, connected, offset, deleted } = useAuctionStream(auctionId);
   useHeartbeat(auctionId);
@@ -312,6 +330,7 @@ export function Portal({
         }
         snapshot={snapshot}
         pool={pool}
+        budget={budget}
         offset={offset}
         frozen={screen.frozen}
         onPick={(playerId) => sendAction(auctionId, { type: "PICK", playerId })}

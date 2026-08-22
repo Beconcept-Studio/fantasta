@@ -122,6 +122,7 @@ export function PickSheet({
   onOpenChange,
   snapshot,
   pool,
+  budget,
   offset,
   frozen,
   onPick,
@@ -130,6 +131,8 @@ export function PickSheet({
   onOpenChange: (open: boolean) => void;
   snapshot: Snapshot;
   pool: PoolPlayer[];
+  /** I crediti di partenza dell'asta: servono al `PMA` in crediti sulla riga. */
+  budget: number;
   offset: number;
   frozen: boolean;
   onPick: (playerId: string) => Promise<ActionResult>;
@@ -352,42 +355,6 @@ export function PickSheet({
               </div>
             )}
 
-            {/*
-              ⚠ **Il vincolo di M10B §6, risolto in pagina e non con un commento nel
-              codice.** La riga si scrive **sempre** quando c'è un auto-pick, filtro
-              o no: se comparisse solo a filtro acceso, chi non filtra continuerebbe
-              a fidarsi dell'ordinamento — e chi filtra imparerebbe che quella riga è
-              un avviso d'errore invece di un'informazione. Quando il primo della
-              lista **non** è più quello che il timer prenderebbe, lo dice a voce più
-              alta.
-            */}
-            {autoPick !== null && (
-              <p
-                className={cn(
-                  "shrink-0 rounded-md px-3 py-2 text-xs",
-                  autoPickAltrove
-                    ? "border border-amber-600/40 bg-amber-600/10 text-amber-800"
-                    : "text-muted-foreground bg-muted/50",
-                )}
-                role={autoPickAltrove ? "status" : undefined}
-              >
-                {autoPickAltrove ? (
-                  <>
-                    Allo scadere il timer comprerebbe{" "}
-                    <strong>{autoPick.name}</strong> ({autoPick.team}), che con questi
-                    filtri {MODO_AUTOPICK === "fissa" ? "è tenuto in cima" : "non è il primo della lista"}:
-                    l&apos;auto-pick guarda tutti i {ROLE_LABELS[autoPick.role].toLowerCase()} liberi,
-                    non quelli filtrati.
-                  </>
-                ) : (
-                  <>
-                    Allo scadere il timer comprerebbe{" "}
-                    <strong>{autoPick.name}</strong> ({autoPick.team}), a 1.
-                  </>
-                )}
-              </p>
-            )}
-
             <ul className="space-y-1.5">
               {shown.map((player) => (
                 <li key={player.id}>
@@ -416,7 +383,11 @@ export function PickSheet({
                           stanno incolonnati a destra. Chi non ha il permesso, o chi ha
                           solo la stagione precedente, non vede niente — e la riga non
                           cambia altezza, perché era già su due righe. */}
-                      <InsightsLine insights={player.insights} carmy={player.carmy} />
+                      <InsightsLine
+                        insights={player.insights}
+                        carmy={player.carmy}
+                        budget={budget}
+                      />
                     </span>
                     <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
                       fvm {player.fvm}

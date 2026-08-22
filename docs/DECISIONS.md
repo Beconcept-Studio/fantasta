@@ -3113,3 +3113,58 @@ avrebbe prodotto lo stesso pixel con una riga di codice in più.
 «Mostra risultati» nel cancello era già pieno. Sono lo stesso gesto in due momenti — anticipare una
 scadenza che scadrebbe da sé — e averne uno pieno e uno contornato faceva sembrare che uno dei due
 fosse meno definitivo dell'altro. Adesso hanno la stessa forma.
+
+### La riga del giocatore nella lista di chiamata: il taglio passa da «fonte» a «domanda»
+
+Chiesto dall'owner il 2026-08-22, dopo aver provato il pannello: due righe per ogni card, con
+**FMA, titolarità e PMA** sulla prima e **rigori, piazzati e note** sulla seconda. Il `PMA` con
+accanto il suo valore assoluto rispetto ai crediti dell'asta.
+
+**Cosa cambia davvero.** La riga era già su due righe da M10B, ma divise per **fonte**: sopra i
+numeri di stagione di fantacalcio.it, sotto il giudizio del foglio di Carmy. Adesso sono divise per
+**domanda**: sopra *quanto vale* — le tre cose che si confrontano fra due giocatori — sotto *cosa
+porta in più*, che è qualitativo e si nota invece di confrontarsi.
+
+⚠ Il taglio per fonte era comodo per chi scrive il codice e non serviva a chi guarda: chi ha
+ventidue secondi per scegliere non sa, né gliene importa, da dove arriva un numero. È lo stesso tipo
+di errore della copia che nomina una direzione — una struttura che descrive l'implementazione invece
+dell'uso.
+
+**Il `PMA` in crediti**, che è la parte nuova: una percentuale non si può offrire, e sotto un
+countdown nessuno converte `10,5%` di `500` a mente. La conversione è `pmaCrediti` in
+`lib/domain.ts`, funzione pura con il suo test.
+
+⚠ **E non è il «prezzo consigliato», anche se sembra la stessa cosa.** Il foglio ha due colonne
+indipendenti — `prezzo`, un assoluto, e `pma`, una percentuale — e la misura sui byte lo dice: solo
+132 righe su 385 rispettano `prezzo / 5`. Quindi **nella stessa serata i due numeri possono
+divergere**: la lista di chiamata mostra `PMA 2,5% (13)` e il modale d'offerta, sullo stesso
+giocatore, «consigliato 41». Non è un bug ed è annotato qui perché è precisamente il tipo di
+differenza che sembra un bug: sono due giudizi diversi di chi compila il foglio, e ricalcolare l'uno
+dall'altro vorrebbe dire sostituire il suo dato con una nostra stima.
+
+⚠ **Il minimo è 1 credito.** Con un budget basso il `pma` più piccolo che il foglio scrive (0,2%)
+arrotonderebbe a zero, e «zero crediti» è un'offerta che il motore rifiuta — un suggerimento
+impossibile da seguire. È la stessa ragione per cui il parser traduce in assente il `prezzo` scritto
+`0` (M10B-02).
+
+⚠ **«FMA» è una sigla da tenere d'occhio, e il rischio era già scritto nel codice prima di questa
+richiesta.** In questo progetto `fvm` è il **Fantavalore di Mercato**, che sta sulla **stessa riga
+della card**, all'estremità destra, come `fvm 300`; `FMA` è la **fantamedia attesa**. Sono due sigle
+di tre lettere con le stesse due consonanti a otto centimetri l'una dall'altra, ed è la ragione per
+cui prima quel numero si chiamava «attesa» e non con una sigla. La richiesta è stata seguita perché
+l'etichetta esplicita è più utile di una parola generica, ma se un giorno qualcuno le confonde **il
+rimedio non è cambiare `FMA`**: è dare un nome anche al numero a destra, che oggi è l'unico dei due
+a non averne uno.
+
+**I crediti dell'asta arrivano come prop dalla pagina server**, non dallo snapshot: `budget` è la
+terza prop di quel genere dopo il listone e `viewerIsOwner`, e per la stessa ragione — non è stato di
+gioco e non cambia durante la serata. M17 §8 dice che un dato mancante nello snapshot è il segnale di
+fermarsi e chiedere; qui non è servito, perché quella strada esisteva già e `serializeSnapshot` non è
+stato toccato (I8 intatto).
+
+**Cosa è rimasto dov'era, e non è una dimenticanza.** Il rapporto grezzo (`31/38`) e i minuti medi
+non erano nell'elenco della richiesta ma restano sulla riga 1, attaccati alla titolarità di cui sono
+la prova: togliere un dato che nessuno ha chiesto di togliere è peggio che tenerlo. La fascia sta
+sulla riga 2 con le note, che è dove un giudizio qualitativo appartiene. Affidabilità e integrità
+restano fuori da entrambe, come da M10B: vivono nel modale d'offerta, dove ci sono i secondi per
+leggerle.
