@@ -4,6 +4,60 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.16.0] — 2026-08-22
+
+**M16 — Chi offre tiene, e al massimo rilancia.** Due regole del gioco cambiano, e cambiano nella
+stessa direzione: un'offerta è una decisione che si prende una volta.
+
+**Nel modale d'offerta non c'è più niente che scriva una cifra al posto tuo.** Sotto al campo c'era
+una fila di quattro pulsanti — `+5`, `+10`, `+25` e un `max` che ci scriveva dentro il tetto — e non
+c'è più: restano `−1`, il campo, `+1`. In un'asta in cui la cifra è l'unica informazione che conta,
+scegliere fra quattro incrementi tondi non è una comodità, è un modo di non decidere. I ~44 pixel
+che quella riga occupava tornano al campo, che con la tastiera aperta è lo spazio che manca.
+
+⚠ **Il `max` in alto a destra resta**, e non è una svista: quello non è un valore suggerito, è il
+tetto che il server applica comunque a ogni offerta. Serve leggerlo *prima* di scrivere, non dopo
+essersi visti rifiutare la busta.
+
+**Il ritiro di un'offerta non esiste più.** Chi consegna una busta la tiene: può rilanciare fino alla
+scadenza, non può più togliere. È sparito il pulsante «Ritira» dal modale, e con lui la riga sulla
+card che diceva di esserti ritirato.
+
+⚠ **Ed è sparito davvero, non solo dallo schermo.** Il server non sa più cosa sia un ritiro: chi
+provasse a chiederglielo scavalcando l'interfaccia si sentirebbe rispondere che quell'azione non
+esiste. È il motivo per cui questa versione tocca il motore dell'asta e non solo una pagina — una
+regola del gioco che vive soltanto nel browser è una regola che, fra sei mesi, nessuno sa più se c'è.
+
+**Le aste già giocate non cambiano di una riga.** Se in una serata passata qualcuno si era ritirato,
+quel ritiro si vede ancora dov'era: barrato nell'apertura delle buste, e nello storico dei lotti col
+suo orario. Non è stato riscritto niente del passato, ed è stato verificato invece che sperato.
+
+**In TV si vede chi è collegato.** Ogni squadra del tabellone ha ora un pallino prima del nome:
+**verde chi è collegato, rosso chi non lo è**. Serve alla domanda che in quella stanza si fa a voce
+almeno una volta a serata — possiamo far partire il round, o manca qualcuno? Chi ha la pagina aperta
+col telefono in tasca conta come collegato: in secondo piano non vuol dire andato via. Un telefono
+che si scollega diventa rosso entro una quindicina di secondi, senza ricaricare niente.
+
+⚠ Se si scollegassero **tutti insieme** i pallini resterebbero verdi, ed è un limite noto e accettato:
+la presence si ricalcola quando qualcuno si fa vivo, e se non si fa vivo nessuno non c'è più nessuno
+da mostrare.
+
+**La voce «Lobby» sparisce dal menù mentre l'asta è in corso.** Ci portava a un rimbalzo: si entrava
+in lobby e si veniva rispediti al portale un istante dopo. Un link che restituisce il punto di
+partenza è peggio di un link che non c'è. Resta invece **quando l'asta è in pausa** — lì non rimbalza
+nessuno, ed è la strada per andare a cambiare i tempi — e resta sempre **per chi organizza senza
+giocare**, che dalla lobby vede la lista dei partecipanti e i loro pallini.
+
+**Il portale è un po' più largo e un po' più calmo.** Non fa parte di M16 ed è entrato prima, ma esce
+qui perché è la prima versione che lo porta in produzione: l'intestazione del portale usa tutta la
+larghezza invece di stringersi a metà schermo, il nome dell'asta e il badge dello stato non le
+stanno più addosso — sopra c'è già la navigazione che li dice — e le sezioni della pagina hanno
+sfondi più tenui, così le card si distinguono dal fondo senza gridare. Il «max» dei crediti non è
+più in grassetto: era l'unico numero della riga a esserlo, e attirava l'occhio più di quanto meriti.
+
+**Nessun passo a mano sul server**: nessuna colonna nuova, nessun dato da correggere, nessun file da
+caricare. Il deploy basta, e quando dice «completato» ha finito davvero.
+
 ## [1.15.1] — 2026-08-18
 
 **L'applicazione ha la sua icona.** Fino a questa versione nella linguetta del browser c'era ancora

@@ -144,6 +144,11 @@ export const NOTABLE_EVENT_TYPES = [
 const ROUTINE_EVENT_TYPES = new Set([
   "PICK",
   "PLACE_BID",
+  // ⚠ **`WITHDRAW_BID` resta anche se da M16 nessuno lo emette più**, e toglierlo
+  // sarebbe il contrario di quello che sembra. Per la regola qui sotto, un tipo
+  // che non è in questa lista è *notevole*: cancellare questa riga non farebbe
+  // sparire i ritiri delle aste già giocate, li farebbe **comparire** nel blocco
+  // delle correzioni, dove non sono mai stati. Costa una riga e dice il vero.
   "WITHDRAW_BID",
   "ADVANCE",
 ]);

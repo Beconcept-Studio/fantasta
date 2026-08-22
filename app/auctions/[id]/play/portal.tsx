@@ -155,7 +155,7 @@ export function Portal({
         )}
 
         {screen.kind === "COMPLETED" && (
-          <section className="bg-card space-y-2 rounded-xl border p-6 text-center shadow-sm">
+          <section className="bg-card/40 space-y-2 rounded-xl border p-6 text-center shadow-sm">
             <h2 className="text-lg font-semibold">Asta conclusa</h2>
             <p className="text-muted-foreground text-sm">
               Le rose sono chiuse. Qui sotto la tua, con i prezzi pagati.
@@ -256,7 +256,6 @@ export function Portal({
           myMemberId={myMemberId}
           offset={offset}
           onBid={(amount) => sendAction(auctionId, { type: "BID", amount })}
-          onWithdraw={() => sendAction(auctionId, { type: "WITHDRAW" })}
         />
       )}
     </>

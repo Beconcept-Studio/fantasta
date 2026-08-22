@@ -9,7 +9,6 @@ import {
   showResults,
   skipReveal,
   startAuction,
-  withdrawBid,
 } from "@/lib/engine/actions";
 import type { ActionError, Result } from "@/lib/engine/errors";
 import {
@@ -85,10 +84,10 @@ export async function POST(
       result = await placeBid(user.id, id, payload.amount as number);
       break;
     }
-    case "WITHDRAW": {
-      result = await withdrawBid(user.id, id);
-      break;
-    }
+    // ⚠ Non c'è nessun `case "WITHDRAW"`, e da M16 è **una scelta**: un `POST`
+    // con quel tipo cade nel `default` e torna `INVALID_REQUEST`, che è la
+    // risposta giusta — non «non puoi ritirare adesso», ma «questa azione non
+    // esiste». La regola sta qui e non solo nel browser (regola 6).
     // PAUSE e RESUME sono azioni dell'owner e il loro posto vero è il portale
     // manager (Fase 6). Stanno già qui perché la vista in pausa del
     // partecipante (F5-11) va collaudata adesso, e senza un modo di mettere in

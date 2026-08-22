@@ -2806,3 +2806,156 @@ luminanza intorno all'11%, cioè è il più scuro dei tre primari: contro il gri
 linguetta in tema scuro il cerchio si legge, ma con poco stacco. Non è un difetto da correggere di
 nascosto — è il colore scelto — ed è scritto qui perché chi lo noterà fra sei mesi veda il sintomo
 accanto alla sua causa invece di sospettare un file sbagliato.
+
+---
+
+## 2026-08-18 — `/favicon.ico` in produzione non arriva a Node, e si lascia così
+
+Scoperto **dopo** il rilascio di `v1.15.1`, verificando dall'esterno che le tre icone rispondessero.
+Due su tre sì; `/favicon.ico` no.
+
+**Chi risponde 404, e come si sa.** Non l'applicazione: nginx. Il 404 di `/favicon.ico` è il suo —
+146 byte, «nginx» nel corpo, e soprattutto **senza `x-powered-by: Next.js`** — mentre qualunque altro
+percorso inesistente riceve il 404 *di Next*, cioè viene proxato a Node e risponde l'app. Ed è un match
+**esatto** sul percorso, non per estensione: `/qualsiasi-cosa.ico` e `/sotto/cartella/x.ico` arrivano a
+Node senza problemi, solo `/favicon.ico` viene intercettato. La causa è il boilerplate di Ploi, che nel
+server block generato tiene un `location = /favicon.ico { access_log off; log_not_found off; }`: nginx lo
+risolve **dal disco**, e con `output: 'standalone'` quel file sul disco non c'è — sta in `app/` e lo
+serve l'applicazione. `deploy/nginx-asta.conf` sostituisce il `location /` di Ploi, **non** il resto del
+suo boilerplate, quindi quel blocco non l'avevamo mai visto.
+
+⚠ **È preesistente, e questo è il punto che evita una caccia inutile.** Misurato anche a `1.15.0`, un'ora
+prima: stesso 404 da nginx. In produzione quel percorso **non ha mai servito niente**, nemmeno il
+`favicon.ico` che Next.js mette in un progetto appena creato. Il rilascio dell'icona non l'ha rotto,
+l'ha reso visibile — che è la ragione per cui vale la pena guardare le rotte dopo un deploy invece di
+fidarsi del «completato».
+
+**Deciso dall'owner: si lascia così** (2026-08-18). L'icona si vede comunque, e non per fortuna: il
+browser scende al `<link>` successivo e prende `icon.png` a 512 ridimensionandolo da sé, iOS prende
+`apple-icon.png`. L'unica cosa che si perde è la resa a 16/32/48 preparata a mano dentro l'ICO, cioè la
+nitidezza dell'icona nella linguetta. Il `<link rel="icon" href="/favicon.ico">` che Next emette resta
+un link morto ed è innocuo. Modificare la configurazione nginx di un server in produzione per la
+nitidezza di un'icona a sedici pixel non è un rapporto costo/beneficio che regge.
+
+**E `app/favicon.ico` resta dov'è**, invece di essere cancellato per togliere il link morto: in locale
+funziona, è il file giusto se un giorno quel blocco di Ploi sparisce, e cancellarlo vorrebbe dire
+buttare via le tre misure preparate a mano per guadagnare un `<link>` in meno in una pagina.
+
+**Come si correggerebbe**, scritto in `deploy/nginx-asta.conf` accanto al resto: da Ploi → il sito →
+Manage → Nginx configuration si **cancella** quel blocco, così `/favicon.ico` ricade nel `location /` e
+viene proxato come tutto il resto, poi `sudo nginx -t && sudo systemctl reload nginx`. ⚠ E non si
+aggiunge un `location = /favicon.ico` nel *nostro* file: sarebbe un secondo match esatto sullo stesso
+percorso nello stesso server block, e nginx rifiuta di ripartire. Va **sostituito** quello di Ploi, non
+affiancato.
+
+---
+
+## 2026-08-22 — M16: il ritiro si toglie fino in fondo, i valori suggeriti spariscono
+
+Quattro decisioni dell'owner, prese aprendo M16 e ratificate qui perché tre di esse cambiano una
+regola del gioco e la quarta cambia il perimetro di due macro.
+
+**1. Il ritiro si toglie fino in fondo, motore compreso** — non solo il pulsante. La ragione è la
+regola 6 letta al contrario: la regola dice «la UI disabilita, il server rifiuta comunque», e se si
+fosse tolto solo il pulsante il server **non** avrebbe rifiutato. Un `POST` costruito a mano avrebbe
+continuato a ritirare un'offerta, e la nuova regola del gioco sarebbe vissuta soltanto nel codice
+del browser. In un'asta fra amici il rischio pratico è nullo; il punto è un altro, ed è che questo
+progetto non ha mai una regola che esista solo lato client — lasciarne una qui vuol dire che fra sei
+mesi nessuno saprà più se il ritiro c'è o no. Spariscono quindi `WITHDRAW_BID` dalla macchina a
+stati, `withdrawBid` dalle azioni, il `case "WITHDRAW"` dalla rotta, i codici `BID_WITHDRAWN` e
+`WITHDRAW_FORBIDDEN`, e `canWithdraw`/`haveWithdrawn` dal portale. Un `WITHDRAW` adesso cade nel
+`default` della rotta e riceve `INVALID_REQUEST` — «questa azione non esiste», che è la risposta
+giusta e non «non puoi ritirare adesso».
+
+**2. La colonna `withdrawn_at` resta, con tutti i suoi lettori.** Nessun `pnpm db:push`, nessun
+backfill, nessun `pg_dump` prima del rilascio: la macro toglie tutti gli **scrittori** e non tocca
+**nessun lettore**. Restano il filtro di `resolveRound`, il round-trip di `mutate.ts`, il campo negli
+snapshot, il `line-through` del reveal — in TV e nel portale — e le righe del log dei lotti. Su
+tutto ciò che si scrive da qui in avanti è `null`, ma le aste già giocate hanno dei ritiri dentro:
+un lettore tolto non semplificherebbe niente, riscriverebbe il passato.
+
+⚠ **E `"WITHDRAW_BID"` resta dentro `ROUTINE_EVENT_TYPES` in `lib/auction-log.ts`**, che è la riga
+che sembra più di tutte da cancellare e va lasciata. Quel file ha una scelta deliberata scritta in
+un commento — *un tipo sconosciuto è notevole* — perché lo storico delle correzioni deve mostrare un
+evento nuovo anche se nessuno si è ricordato di elencarlo. La conseguenza è che togliere
+`WITHDRAW_BID` da quell'elenco non farebbe sparire i ritiri storici: li **promuoverebbe**, facendoli
+comparire di colpo nel blocco delle correzioni di un'asta già giocata, dove non sono mai stati.
+
+**3. In TV due colori e non tre**, e `IDLE` conta come collegato. In TV la domanda è «possiamo far
+partire il round?», e un tab in secondo piano non è una persona assente: è qualcuno che ha il
+telefono in tasca ed è nella stanza. È anche l'unico punto dell'app in cui l'ambra sarebbe stata
+sbagliata — in TV l'ambra è già la pausa e già la riconnessione, e un terzo significato sullo stesso
+colore, a tre metri, non si distingue. La mappa sta in `tvConnected` (`lib/realtime/portal.ts`), in
+un posto solo e con il suo test.
+
+**4. M16 esce prima di M17**, che è più grande e più rischiosa. Sono indipendenti e l'ordine si
+potrebbe invertire, ma M17 ridisegna una card da cui M16 ha già tolto un ramo — e soprattutto, se il
+layout a tre colonne di M17 non convincesse, tornare indietro **non deve rimettere in piedi il
+pulsante «Ritira»**. Due tag, due punti di rollback. Il precedente che pesa è M15, guardata e
+buttata.
+
+### Cosa questo rende parzialmente falso, e non si riscrive
+
+`docs/PLAN.md` è **archivio**: §297 («il chiamante non può ritirare, può solo rilanciare»), §314
+(«il ritiro è disabilitato nel round 2»), la firma di §544 e gli scenari 7 e 8 di §683-684
+descrivono un comportamento che dopo questa macro non esiste più. Restano scritti come stanno, ed è
+il precedente letterale di M13, che ha ribaltato M6 §8 senza riscrivere il file di M6. La ratifica è
+questa nota, insieme a `docs/ARCHITECTURE.md`, che è il documento che si legge per capire com'è
+l'app **adesso**.
+
+⚠ Nessuno degli invarianti I1–I10 viene modificato: non nominano il ritiro. **I5** — il tetto
+`max_bid` — è l'unico che la macro sfiora, e lo sfiora per rafforzarlo: `max NN` resta scritto
+nell'intestazione del modale, perché è il limite che il server applica e non un valore suggerito.
+Sparisce il pulsante che scriveva quel numero nel campo, non l'informazione che il tetto è quello.
+
+---
+
+## 2026-08-22 — La Lobby sparisce dal menù ad asta LIVE, e la regola della navbar si restringe
+
+Chiesto dall'owner a macro M16 già chiusa su `dev`, prima del rilascio: «la voce Lobby se l'asta è
+live mi fa fare redirect, e questo mi va bene. Vorrei però nascondere la voce dal menù in quello
+stato, non ha senso avere un link che mi fa redirect». Entra in M16 perché `CLAUDE.md` dice che una
+correzione piccola vive dentro la macro aperta.
+
+**Il fatto.** `LobbyLive` ha l'unico `router.push` automatico dell'applicazione: chi è **membro**,
+arrivando in lobby con l'asta `LIVE`, viene portato al portale. La voce di menù che ci porta è
+quindi un viaggio di andata e ritorno — un tocco che restituisce il punto di partenza.
+
+**Cosa cambia, e cosa deliberatamente no.** La Lobby è nascosta se e solo se
+`isMember && status === "LIVE"`, che è **la condizione del rimbalzo copiata**, non una più larga.
+Due casi restano fuori apposta:
+
+- **In pausa la voce resta.** La spinta al portale è stata tolta da `PAUSED` con una decisione
+  precedente e per una ragione precisa — la pausa è il momento in cui si va a cambiare i tempi, e
+  finché la spinta valeva anche lì l'owner veniva rispedito al portale a ogni tentativo. Nascondere
+  la voce in pausa rimetterebbe in piedi quel problema dall'altro lato.
+- **All'owner che non gioca la voce resta sempre** (⚠ P11). Non è membro, quindi non viene spinto da
+  nessuna parte: per lui la lobby ad asta in corso è la lista dei partecipanti coi loro pallini, cioè
+  una destinazione vera. Nasconderla sarebbe togliere un link che funziona.
+
+**La regola scritta in `lib/auction-nav.ts` è stata ristretta, non abolita**, e la distinzione è il
+punto di questa nota. Quel file diceva: «le sezioni dipendono dal **ruolo** di chi guarda e mai dallo
+**stato** dell'asta», con una motivazione tecnica che vale ancora — il ruolo non cambia mentre
+guardi la pagina, lo stato sì, e la navbar è renderizzata dal server. Adesso lo stato entra in **un
+caso solo**, e la motivazione resta scritta accanto alla deroga invece di essere cancellata.
+
+⚠ **Lo stato arriva da `getAuctionOverview`, non dallo snapshot.** Alimentare la navigazione dallo
+stream sarebbe trasformarla in stato di gioco (regola 7), e quella riga non si è mossa: la navbar
+legge lo stato dalla stessa lettura da cui esce il resto del layout. Il prezzo è la staleness, ed è
+piccolo per costruzione — il layout è dinamico e si rirenderizza a ogni navigazione, e **la spinta
+al portale è essa stessa una navigazione**, quindi il caso che conta si corregge da sé nell'istante
+in cui si verifica. Resta stantia solo per chi sta fermo su una pagina mentre l'asta cambia stato,
+ed è un costo accettato consapevolmente.
+
+⚠ **`activeSection` adesso legge il catalogo intero e non passa più da `auctionSections`**, ed è la
+riga che tiene in piedi tutto il resto. Da questa modifica in poi esiste una cosa che prima non
+esisteva: una sezione **nascosta dal menù ma raggiungibile** — la Lobby ad asta `LIVE`, che l'owner
+che non gioca continua ad abitare e il cui URL funziona per chiunque lo digiti. Se il titolo della
+pagina venisse cercato fra le voci *visibili*, quella pagina perderebbe la propria intestazione
+proprio nello stato in cui la voce è nascosta, e al posto di «Lobby» si leggerebbe il nome dell'asta
+— il ripiego di `AuctionNav` per le rotte che non riconosce. C'è un test apposta.
+
+**Quello che questa correzione non fa.** Il link alla lobby nella **dashboard** (`/dashboard`, per
+chi non è owner) continua a portare in lobby anche ad asta `LIVE`, quindi rimbalza al portale
+esattamente come faceva la voce di menù. È lo stesso difetto un click prima, non è stato toccato
+perché fuori dalla richiesta, ed è annotato qui perché è il posto in cui lo si ritroverà.

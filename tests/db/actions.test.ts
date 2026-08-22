@@ -11,7 +11,6 @@ import {
   resumeAuction,
   skipReveal,
   startAuction,
-  withdrawBid,
 } from "@/lib/engine/actions";
 import { setBroadcastHook } from "@/lib/engine/mutate";
 import type { AuctionState } from "@/lib/engine/types";
@@ -181,20 +180,19 @@ describe.runIf(dbUp)("F3-03 — errori tipizzati dalle azioni", () => {
   });
 });
 
-describe.runIf(dbUp)("F3-05 — pick, bid e withdraw scrivono le righe attese", () => {
+describe.runIf(dbUp)("F3-05 — pick e bid scrivono le righe attese", () => {
   beforeEach(() => {
     vi.useRealTimers();
     setBroadcastHook(() => {});
   });
 
-  it("pick → bid × N → withdraw produce lots/lot_rounds/bids coerenti", async () => {
+  it("pick → bid × N produce lots/lot_rounds/bids coerenti", async () => {
     const now = Date.now();
     const game = await liveWithOpenLot(now);
 
     unwrap(await placeBid(game.userIds[1], game.auctionId, 10, now + 1000));
     unwrap(await placeBid(game.userIds[2], game.auctionId, 15, now + 1100));
     unwrap(await placeBid(game.userIds[1], game.auctionId, 20, now + 1200));
-    unwrap(await withdrawBid(game.userIds[2], game.auctionId, now + 1300));
 
     const lotRows = await db
       .select()
@@ -224,12 +222,14 @@ describe.runIf(dbUp)("F3-05 — pick, bid e withdraw scrivono le righe attese", 
     // L'override è un UPDATE della stessa riga, non una riga nuova.
     expect(bidRows[1].amount).toBe(20);
     expect(bidRows[1].amountSetAt.getTime()).toBe(now + 1200);
-    // Il ritiro resta a DB, marcato.
+    // ⚠ E da M16 `withdrawn_at` resta `NULL` su tutto ciò che si scrive: la
+    // colonna c'è ancora, i suoi lettori pure, ma non esiste più un evento che
+    // la riempia.
     expect(bidRows[2].amount).toBe(15);
-    expect(bidRows[2].withdrawnAt?.getTime()).toBe(now + 1300);
+    expect(bidRows.every((b) => b.withdrawnAt === null)).toBe(true);
 
-    // 1 start + 1 pick + 3 bid + 1 withdraw = 6 mutazioni effettive.
-    expect((await auctionRow(game.auctionId)).stateVersion).toBe(6);
+    // 1 start + 1 pick + 3 bid = 5 mutazioni effettive.
+    expect((await auctionRow(game.auctionId)).stateVersion).toBe(5);
   });
 
   it("confermare la stessa cifra è un no-op: niente bump di versione (P3/P14)", async () => {

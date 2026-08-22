@@ -45,8 +45,6 @@ export function transition(
       return pick(state, event.memberId, event.playerId, now);
     case "PLACE_BID":
       return placeBid(state, event.memberId, event.amount, now);
-    case "WITHDRAW_BID":
-      return withdrawBid(state, event.memberId, now);
     case "ADVANCE":
       return advance(state, now);
     case "SKIP_REVEAL":
@@ -290,13 +288,12 @@ function placeBid(
   if (!round.eligibleMemberIds.includes(memberId)) {
     return fail("NOT_ELIGIBLE", "Non sei fra gli idonei di questo round.");
   }
+  // ⚠ Qui stava la guardia `existing?.withdrawnAt != null`, che rifiutava un
+  // rilancio su un'offerta ritirata. Da M16 non c'è più nessuno scrittore di
+  // `withdrawnAt`, quindi quella condizione non può più diventare vera: era
+  // diventata una guardia irraggiungibile, cioè una guardia che nessun test
+  // può più difendere.
   const existing = round.bids.find((b) => b.memberId === memberId);
-  if (existing?.withdrawnAt != null) {
-    return fail(
-      "BID_WITHDRAWN",
-      "Hai ritirato l'offerta su questo lotto: il ritiro è definitivo.",
-    );
-  }
   if (!Number.isInteger(amount)) {
     return fail("INVALID_AMOUNT", "L'offerta deve essere un numero intero.");
   }
@@ -337,46 +334,22 @@ function placeBid(
   return ok(existing ? next : { ...next, nextId: state.nextId + 1 });
 }
 
-function withdrawBid(
-  state: AuctionState,
-  memberId: string,
-  now: Millis,
-): Result<AuctionState> {
-  if (state.status !== "LIVE") {
-    return fail("WRONG_STATUS", "L'asta non è in corso.");
-  }
-  if (state.phase !== "LOT_OPEN") {
-    return fail("WRONG_PHASE", "Non c'è un round di offerte aperto.");
-  }
-  const lot = openLotOf(state);
-  const round = currentRoundOf(lot);
-  if (now > round.endsAt) {
-    return fail("ROUND_CLOSED", "Il round è chiuso: il ritiro è arrivato tardi.");
-  }
-  if (memberId === lot.calledByMemberId) {
-    return fail(
-      "WITHDRAW_FORBIDDEN",
-      "Il chiamante non può ritirare: può solo rilanciare.",
-    );
-  }
-  if (round.roundNo === 2) {
-    return fail(
-      "WITHDRAW_FORBIDDEN",
-      "Nello spareggio il ritiro non è ammesso.",
-    );
-  }
-  const existing = round.bids.find((b) => b.memberId === memberId);
-  if (!existing) {
-    return fail("WITHDRAW_FORBIDDEN", "Non hai un'offerta da ritirare.");
-  }
-  if (existing.withdrawnAt !== null) {
-    return ok(state); // già ritirata: ripetere non cambia niente
-  }
-  const bids = round.bids.map((b) =>
-    b.memberId === memberId ? { ...b, withdrawnAt: now } : b,
-  );
-  return ok(withLot(state, withCurrentRound(lot, { ...round, bids })));
-}
+// ─── Il ritiro, che non c'è più ──────────────────────────────────────────────
+
+// Qui stava `withdrawBid`, con i suoi tre divieti — il chiamante non ritira, lo
+// spareggio non ammette ritiri, non si ritira ciò che non si è offerto — e
+// l'unica scrittura di `withdrawnAt` che sia mai esistita. Da M16 la regola del
+// gioco è più semplice di tutti e tre messi insieme: **chi offre tiene, e al
+// massimo rilancia.**
+//
+// ⚠ È sparita da qui e non solo dal modale, ed è il punto della macro. Se la
+// rotta avesse continuato ad accettare un `WITHDRAW`, la nuova regola sarebbe
+// vissuta soltanto nel codice del browser — cioè esattamente ciò che la regola
+// 6 vieta. Fra amici il rischio pratico di un `POST` costruito a mano è nullo;
+// il rischio vero è che fra sei mesi nessuno sappia più se il ritiro c'è o no.
+//
+// Le offerte continuano a portarsi dietro `withdrawnAt`, sempre `null` sulle
+// nuove: vedi il commento sul campo in `types.ts`.
 
 // ─── ADVANCE — l'unico evento del tempo ──────────────────────────────────────
 

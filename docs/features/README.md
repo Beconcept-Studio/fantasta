@@ -12,7 +12,50 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M14 è in produzione da `v1.15.0`** (2026-08-18): aperta, lavorata, provata dall'owner e
+Nessuna aperta. **M16 è in produzione da `v1.16.0`** (2026-08-22): aperta, lavorata, provata
+dall'owner e rilasciata **nella stessa giornata**, il terzo caso di fila dopo M13 e M14. Gate verde
+con **858 test in 52 file** (da 860 in 51 — 13 tolti insieme al ritiro, 11 aggiunti), typecheck e
+build puliti. Un'offerta è una decisione che si prende una volta: via i quattro valori suggeriti dal
+modale, via il ritiro **fino in fondo** — evento del motore compreso — e i pallini di presence in TV.
+**Nessun `pnpm db:push`, nessun backfill, nessun file da caricare**: verificato, non dedotto — il
+`git diff` della macro non tocca `lib/db/schema.ts`.
+
+⚠ **È la prima macro che toglie righe di test invece di aggiungerne**, e il conto va letto per
+quello che è: 13 test spariti non sono copertura persa, sono cinque divieti e un evento che non
+esistono più. Quello che restava da difendere è stato spostato dove ha senso — il filtro delle
+ritirate in `resolveRound` è provato in `tests/engine/rules.test.ts` costruendo la riga a mano,
+perché è un **lettore** e i lettori sopravvivono a chi scriveva.
+
+⚠ **Porta anche una correzione fuori tema**, chiesta dall'owner a macro già chiusa su `dev` e
+accettata dentro M16 perché `CLAUDE.md` vuole le correzioni piccole nella macro aperta: **la voce
+«Lobby» sparisce dal menù ad asta `LIVE`**, dove portava a un rimbalzo. Restringe — in un caso solo,
+e senza toccare la ragione che la motivava — la regola di `lib/auction-nav.ts` per cui le sezioni
+dipendono dal ruolo e mai dallo stato. Il perché sta in `docs/DECISIONS.md` alla data.
+
+⚠ **Il ritiro è stato tolto dal server e non solo dal pulsante**, ed è il senso della macro: la
+regola 6 dice «la UI disabilita, il server rifiuta comunque», quindi togliere solo il pulsante
+avrebbe lasciato una regola del gioco viva soltanto nel browser. Un `POST` con `{type:"WITHDRAW"}`
+riceve ora `INVALID_REQUEST`, e il test che lo dimostra passa dalla rotta vera
+(`tests/db/withdraw-gone.test.ts`).
+
+⚠ **Due cose che la spec non aveva previsto, e che sono la cronaca utile di questa macro.** La prima:
+il grep di controllo di M16-03 era incompleto — `components/auction/reveal-panel.tsx` legge
+`withdrawnAt` per barrare le buste ritirate ed è il gemello nel portale del `line-through` della TV.
+È un **lettore**, quindi resta: la regola «via tutti gli scrittori, restano tutti i lettori» vince
+sull'elenco, e il file ha guadagnato il commento che dice perché. La seconda: `tvConnected`, la mappa
+da tre stati di presence a due, sta in `lib/realtime/portal.ts` e non «accanto al componente» come
+chiedeva §5 — vitest include solo `**/*.test.ts`, e un test che importasse un `.tsx` client
+trascinerebbe React in ambiente `node`. È lo stesso motivo per cui esiste `use-auction-stream.ts`, e
+`tv-view.tsx` importava già `portalScreen` da lì.
+
+⚠ **`"WITHDRAW_BID"` in `ROUTINE_EVENT_TYPES` (`lib/auction-log.ts`) NON è stato tolto**, come la
+pianificazione aveva avvertito: in quel file un tipo *sconosciuto* è notevole, quindi cancellare
+quella riga non farebbe sparire i ritiri storici — li **promuoverebbe** nel blocco delle correzioni
+di un'asta già giocata, dove non sono mai stati. Adesso la riga porta il commento che lo spiega.
+
+---
+
+**M14 è in produzione da `v1.15.0`** (2026-08-18): aperta, lavorata, provata dall'owner e
 rilasciata **nella stessa giornata** in cui era stata pianificata — il secondo caso di fila, dopo M13.
 Gate verde con **860 test in 51 file** (da 815), typecheck, lint e build. Fra la chiusura di un round e
 la rivelazione delle buste c'è ora `LOT_SEALED`, la prima fase nuova della macchina a stati dopo v1.0.0.
@@ -153,12 +196,42 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-Nessuna. **Il quaderno è vuoto e non c'è niente in attesa**: le due macro pianificate il **2026-08-18**
-dalle richieste dell'owner sono state entrambe aperte — M13 rilasciata in `v1.14.0` lo stesso giorno,
-**M14 è quella in corso** qui sopra. **`docs/REQUESTS.md` resta vuoto.**
+**Una**, la seconda delle due pianificate il 2026-08-22 dalle tre richieste che l'owner aveva scritto
+nel quaderno dopo `v1.15.1`. **M16 è chiusa e in produzione**; **`docs/REQUESTS.md` resta vuoto**.
 
-Quello che segue è il ragionamento con cui le due erano state tagliate, e resta come archivio: dice il
-vero su perché sono due macro e non una.
+| Macro | Tema | Ordine |
+|---|---|---|
+| [M17](17-portale-tre-colonne.md) | Il portale a tre colonne: la chiamata a pannello, e una colonna di stato che si legge a colpo d'occhio | dopo M16 |
+
+**Perché due e non una.** Le tre richieste sembrano un tema solo — «sistemiamo il portale» — e hanno
+due profili di rischio molto diversi, che è il criterio con cui sono state tagliate M5/M6, M9–M12 e
+M13/M14. **M16 tocca il motore**: `machine.ts`, `actions.ts`, la rotta `/action`. Un suo errore non si
+vede in una pagina, si vede la sera dell'asta — ma è **sottrattiva**, non apre nessun percorso nuovo,
+e il suo gate sta quasi tutto in `pnpm test`. **M17 non tocca né motore né schema**, ma è una
+scommessa visiva grande: tre colonne, un pannello nuovo, una tavolozza.
+
+⚠ **Ed è il precedente di M15 a decidere il taglio, non la simmetria.** Quella macro — tutta visiva —
+è stata lavorata per intero, guardata una volta e buttata: tredici commit scartati. Se il layout a tre
+colonne facesse la stessa fine, tornare indietro **non deve rimettere in piedi il pulsante «Ritira»**.
+Due tag, due punti di rollback.
+
+**La dipendenza è una sola e va in una direzione**: M16 toglie da `lot-card.tsx` il ramo «ti sei
+ritirato», e M17 ridisegna quella card. M16 prima vuol dire ridisegnare una card che ha già la forma
+finale; l'ordine inverso vuol dire toccare due volte lo stesso file. Nessuna delle due tocca lo
+schema: **nessun `pnpm db:push`, nessun backfill, nessun file da caricare** — e la cosa è stata
+verificata leggendo, non dedotta.
+
+⚠ **Le due cose da non riscoprire da capo, una per macro.** M16: `"WITHDRAW_BID"` in
+`ROUTINE_EVENT_TYPES` (`lib/auction-log.ts`) **non va tolto** insieme al resto — quel file ha scritto
+che «un tipo sconosciuto è notevole», quindi toglierlo dall'elenco della routine non fa sparire i
+ritiri storici, li **promuove** nel blocco delle correzioni dove non sono mai stati. M17: la colonna 3
+va scritta **prima** delle altre nel DOM e riordinata con `lg:order-*`, altrimenti chi gioca dal
+telefono deve scorrere oltre la propria rosa per arrivare all'offerta.
+
+---
+
+Quello che segue è il ragionamento con cui M13 e M14 erano state tagliate il 2026-08-18, e resta come
+archivio: dice il vero su perché sono due macro e non una.
 
 **Perché due e non una.** Non hanno niente in comune: la prima è tutta UI dentro il pannello di
 amministrazione, la seconda apre la **macchina a stati dell'asta** e aggiunge la prima fase nuova dopo
@@ -246,6 +319,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M16](16-regole-offerta.md) | Le regole dell'offerta: via i valori suggeriti, via il ritiro (motore compreso), i pallini di presence in TV | v1.16.0 — 2026-08-22 |
 | [M14](14-cancello-risultati.md) | Il cancello dei risultati: fra la chiusura di un round e la rivelazione delle buste un istante che appartiene a chi conduce, e un lotto che si può annullare | v1.15.0 — 2026-08-18 |
 | [M13](13-utenti-admin.md) | La pagina utenti: sei colonne in sola lettura con la ricerca, e un pannello laterale che modifica | v1.14.0 — 2026-08-18 |
 | [M12](12-cancellazione-aste.md) | Cancellare un'asta per forza, anche in corso, e il congedo di chi la stava guardando | v1.13.0 — 2026-08-18 |

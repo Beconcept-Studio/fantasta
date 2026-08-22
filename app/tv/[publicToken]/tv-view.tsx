@@ -14,8 +14,9 @@ import {
   memberLabel,
   phaseLabel,
   portalScreen,
+  tvConnected,
 } from "@/lib/realtime/portal";
-import type { Snapshot, SnapshotMember } from "@/lib/realtime/types";
+import type { Presence, Snapshot, SnapshotMember } from "@/lib/realtime/types";
 import { useAuctionStream } from "@/lib/realtime/use-auction-stream";
 import { cn } from "@/lib/utils";
 
@@ -312,6 +313,34 @@ function boardRows(
   return rows;
 }
 
+/**
+ * Chi è collegato, prima del nome squadra: **verde sì, rosso no** (M16).
+ *
+ * ⚠ **Non riusa `PresenceDot`**, ed è la stessa ragione per cui `SimulationTag`
+ * non riusa `SimulationBadge`: questa pagina è bianco su nero fisso, e
+ * `PresenceDot` disegna l'`OFFLINE` con `bg-muted-foreground/40`, che su fondo
+ * nero diventa un grigio chiaro — cioè il contrario di ciò che deve comunicare.
+ * Qui i due colori sono scritti a mano e non passano dal tema.
+ *
+ * La mappa da tre stati a due sta altrove e in un posto solo, `tvConnected`:
+ * qui c'è solo il colore. `aria-label` c'è per disciplina, ma nessuno legge
+ * questa pagina con uno screen reader — è un televisore.
+ */
+function TvPresenceDot({ presence }: { presence: Presence }) {
+  const connected = tvConnected(presence);
+  return (
+    <span
+      className={cn(
+        "size-2 shrink-0 self-center rounded-full",
+        connected ? "bg-emerald-400" : "bg-red-500",
+      )}
+      role="img"
+      aria-label={connected ? "collegato" : "non collegato"}
+      title={connected ? "collegato" : "non collegato"}
+    />
+  );
+}
+
 function TeamCard({
   member,
   slots,
@@ -334,6 +363,7 @@ function TeamCard({
       )}
     >
       <div className="flex shrink-0 items-baseline gap-1.5 border-b border-white/10 pb-1">
+        <TvPresenceDot presence={member.presence} />
         <span className="min-w-0 flex-1 truncate text-xs font-semibold">
           {member.teamName}
         </span>

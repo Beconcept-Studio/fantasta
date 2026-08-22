@@ -9,7 +9,6 @@ import { ROLE_LABELS } from "@/lib/domain";
 import {
   amEligible,
   amInTie,
-  haveWithdrawn,
   memberById,
   memberLabel,
 } from "@/lib/realtime/portal";
@@ -54,10 +53,9 @@ export function LotCard({
   const eligible = amEligible(lot, myMemberId);
   const caller = memberById(snapshot, lot.calledByMemberId);
   const iCalled = lot.calledByMemberId === myMemberId;
-  const withdrawn = haveWithdrawn(snapshot);
 
   return (
-    <section className="bg-card overflow-hidden rounded-xl border shadow-sm">
+    <section className="bg-muted/40 overflow-hidden rounded-xl border shadow-sm">
       {/* ── Il giocatore, e quanto tempo resta ── */}
       <header className="space-y-2 p-4 pb-3">
         <div className="flex items-start justify-between gap-3">
@@ -123,9 +121,8 @@ export function LotCard({
               snapshot={snapshot}
               eligible={eligible}
               iCalled={iCalled}
-              withdrawn={withdrawn}
             />
-            {eligible && !withdrawn && (
+            {eligible && (
               <Button
                 type="button"
                 className="h-12 w-full text-base"
@@ -164,25 +161,16 @@ function MyBidRow({
   snapshot,
   eligible,
   iCalled,
-  withdrawn,
 }: {
   snapshot: Snapshot;
   eligible: boolean;
   iCalled: boolean;
-  withdrawn: boolean;
 }) {
   if (!eligible) {
     return (
       <p className="bg-muted/50 rounded-md px-3 py-2 text-sm">
         Non sei fra gli idonei di questo lotto: hai il ruolo pieno, o i crediti
         non bastano.
-      </p>
-    );
-  }
-  if (withdrawn) {
-    return (
-      <p className="bg-muted/50 rounded-md px-3 py-2 text-sm">
-        Ti sei ritirato da questo lotto: il ritiro è definitivo.
       </p>
     );
   }
@@ -194,10 +182,15 @@ function MyBidRow({
           {snapshot.myBid === null ? "—" : snapshot.myBid.amount}
         </span>
       </div>
+      {/*
+        ⚠ La coda «e non puoi ritirarti, solo rilanciare» è stata tolta da M16,
+        e non perché fosse diventata falsa: è diventata **fuorviante**. Dire al
+        chiamante che *lui* non può ritirarsi implica che qualcun altro possa, e
+        dopo M16 non è vero per nessuno.
+      */}
       {iCalled && (
         <p className="text-muted-foreground text-xs">
-          L&apos;hai chiamato tu: l&apos;apertura a 1 è già registrata e non
-          puoi ritirarti, solo rilanciare.
+          L&apos;hai chiamato tu: l&apos;apertura a 1 è già registrata.
         </p>
       )}
     </div>

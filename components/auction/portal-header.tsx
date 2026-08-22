@@ -26,19 +26,16 @@ export function PortalHeader({
   const { auction } = snapshot;
   return (
     <header className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-40 border-b backdrop-blur">
-      <div className="mx-auto w-full max-w-xl px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
+      <div className="mx-auto w-full max-w-6xl px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
         <div className="flex items-center gap-2">
-          <p className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
-            {auction.name}
-          </p>
           {!connected && (
             <Badge variant="outline" className="border-amber-500/50">
               riconnessione…
             </Badge>
           )}
-          <Badge variant={auction.status === "PAUSED" ? "destructive" : "secondary"}>
+          {/* <Badge variant={auction.status === "PAUSED" ? "destructive" : "secondary"}>
             {phaseLabel(snapshot)}
-          </Badge>
+          </Badge> */}
         </div>
 
         {me !== null && (
@@ -53,7 +50,7 @@ export function PortalHeader({
             </div>
             <div className="flex shrink-0 items-end gap-4 text-right">
               <Figure label="crediti" value={me.credits} />
-              <Figure label="max" value={me.maxBid} strong />
+              <Figure label="max" value={me.maxBid} />
             </div>
           </div>
         )}
