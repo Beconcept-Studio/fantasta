@@ -288,23 +288,6 @@ export async function placeBid(
   );
 }
 
-export async function withdrawBid(
-  actorUserId: string,
-  auctionId: string,
-  now: Millis = Date.now(),
-): Promise<Result<ActionOutcome>> {
-  return applyEvent(
-    auctionId,
-    (loaded) => {
-      const member = requireMember(loaded, actorUserId);
-      if (!member.ok) return member;
-      return ok({ type: "WITHDRAW_BID", memberId: member.value });
-    },
-    now,
-    actorUserId,
-  );
-}
-
 /**
  * L'unico evento del tempo (F3-06). Senza attore e senza autorizzazione: la
  * chiamano i timer e lo sweep, ed è **guardata dentro il motore** (I7) —

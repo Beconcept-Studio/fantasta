@@ -5,7 +5,6 @@ import {
   pickPlayer,
   placeBid,
   startAuction,
-  withdrawBid,
 } from "@/lib/engine/actions";
 import { setBroadcastHook } from "@/lib/engine/mutate";
 import { derivePresence } from "@/lib/engine/presence";
@@ -129,26 +128,13 @@ describe.runIf(dbUp)("F4-01 — snapshot durante LOT_OPEN", () => {
     expect(snap.currentLot).not.toHaveProperty("bidStatus");
   });
 
-  it("il ritiro resta con withdrawnAt, e lo vede solo chi si è ritirato", async () => {
-    const game = await gameAuction();
-    const t0 = Date.now();
-    unwrap(await startAuction(game.ownerId, game.auctionId, 0, t0));
-
-    const [gk] = await playersOfRole(game.auctionId, "P");
-    unwrap(await pickPlayer(game.userIds[0], game.auctionId, gk.id, t0 + 500));
-    unwrap(await placeBid(game.userIds[1], game.auctionId, 7, t0 + 1_000));
-    unwrap(await withdrawBid(game.userIds[1], game.auctionId, t0 + 1_500));
-
-    const mine = await snapshotOf(game.auctionId, game.memberIds[1], t0 + 1_600);
-    expect(mine.myBid?.withdrawnAt).toBe(new Date(t0 + 1_500).toISOString());
-
-    // Fino a v1.1.0 il ritiro era pubblico. Non lo è più: sapere che qualcuno
-    // è uscito dal lotto è esattamente il genere di informazione su cui si fa
-    // strategia (M1). Chi lo scopre lo scopre all'apertura delle buste.
-    const other = await snapshotOf(game.auctionId, game.memberIds[2], t0 + 1_600);
-    expect(other.myBid).toBeNull();
-    expect(JSON.stringify(other.currentLot)).not.toContain("withdrawn");
-  });
+  // ⚠ Qui stava «il ritiro resta con withdrawnAt, e lo vede solo chi si è
+  // ritirato», tolto da M16 insieme a `withdrawBid`: senza uno scrittore non
+  // c'è modo di costruire un ritiro passando dalle azioni. Il campo continua a
+  // viaggiare nello snapshot — `withdrawnAt: null` è asserito qui sopra — e le
+  // due proprietà che quel test difendeva sono ancora difese altrove: la forma
+  // esatta di ciò che esce dal server sta in `i8.test.ts`, e il filtro delle
+  // ritirate nella risoluzione in `tests/engine/rules.test.ts`.
 });
 
 describe.runIf(dbUp)("F4-01 — §12.32, il membro non idoneo", () => {

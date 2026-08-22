@@ -10,13 +10,7 @@ import { Countdown, CountdownBar } from "@/components/auction/countdown";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
 import type { ActionResult } from "@/lib/realtime/action";
-import {
-  bidBounds,
-  canWithdraw,
-  checkAmount,
-  haveWithdrawn,
-  parseAmount,
-} from "@/lib/realtime/portal";
+import { bidBounds, checkAmount, parseAmount } from "@/lib/realtime/portal";
 import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +41,17 @@ import { cn } from "@/lib/utils";
  *
  * Il pulsante di conferma non si fida di niente (regola 6): disabilita e
  * spiega, ma il rifiuto vero arriva dal server con il suo codice.
+ *
+ * Da M16 il modale ha **una strada sola**: si scrive una cifra, con `−1` e `+1`
+ * accanto al campo per l'aggiustamento dell'ultimo secondo, e quella cifra si
+ * può rilanciare, mai togliere. Sono spariti i valori suggeriti (`+5`, `+10`,
+ * `+25`, `max`), che trasformavano la scelta della cifra in un tocco su un
+ * incremento tondo, e il ritiro, che trasformava la busta chiusa in una cosa
+ * reversibile — quest'ultimo fino in fondo, motore compreso, perché una regola
+ * del gioco che vive solo nel browser qui non esiste. ⚠ Resta invece `max NN`
+ * nell'intestazione: non è un valore suggerito, è il tetto I5 che il server
+ * applica, e con la tastiera aperta va letto prima di scrivere, non dopo il
+ * rifiuto.
  */
 
 type Feedback =
@@ -54,7 +59,6 @@ type Feedback =
   | { kind: "saving" }
   | { kind: "saved"; amount: number }
   | { kind: "unchanged"; amount: number }
-  | { kind: "withdrawn" }
   | { kind: "error"; message: string };
 
 export function BidModal({
@@ -65,7 +69,6 @@ export function BidModal({
   myMemberId,
   offset,
   onBid,
-  onWithdraw,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -83,13 +86,10 @@ export function BidModal({
   myMemberId: string | null;
   offset: number;
   onBid: (amount: number) => Promise<ActionResult>;
-  onWithdraw: () => Promise<ActionResult>;
 }) {
   const lot = snapshot.currentLot;
   const bounds = bidBounds(snapshot, myMemberId);
   const myBid = snapshot.myBid;
-  const withdrawable = canWithdraw(snapshot, myMemberId);
-  const withdrawn = haveWithdrawn(snapshot);
   const closing = snapshot.auction.phase !== "LOT_OPEN";
   const frozen = snapshot.auction.status === "PAUSED";
   // ⚠ `?.insights` è `undefined` in tre casi che non serve distinguere: chi non
@@ -105,7 +105,6 @@ export function BidModal({
 
   const [raw, setRaw] = useState("");
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle" });
-  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Ogni lotto ricomincia da zero, e il campo parte dalla propria offerta già
@@ -115,7 +114,6 @@ export function BidModal({
   useEffect(() => {
     setRaw(savedAmount === null ? "" : String(savedAmount));
     setFeedback({ kind: "idle" });
-    setConfirmWithdraw(false);
     // `savedAmount` intenzionalmente fuori dalle dipendenze: il campo si
     // riallinea al cambio di lotto (o di round), non a ogni snapshot — altrimenti
     // riscriverebbe sotto le dita quello che l'utente sta digitando.
@@ -128,10 +126,10 @@ export function BidModal({
   const problem = checkAmount(amount, bounds);
   const alreadyAt = amount !== null && savedAmount === amount;
   const canSubmit =
-    !closing && !frozen && !withdrawn && problem === null && feedback.kind !== "saving";
+    !closing && !frozen && problem === null && feedback.kind !== "saving";
 
-  // Da campo vuoto "+5" scrive 5 e "−1" scrive il minimo: sotto pressione i
-  // tasti rapidi devono valere quello che c'è scritto sopra, non "minimo più 5".
+  // Da campo vuoto "+1" scrive il minimo e "−1" pure: sotto pressione i tasti
+  // rapidi devono valere quello che c'è scritto sopra, non "minimo più 1".
   const bump = (delta: number) => {
     const base = amount ?? savedAmount ?? 0;
     const next = Math.min(bounds.max, Math.max(bounds.min, base + delta));
@@ -153,15 +151,6 @@ export function BidModal({
     } else {
       setFeedback({ kind: "error", message: result.message });
     }
-  };
-
-  const withdraw = async () => {
-    setFeedback({ kind: "saving" });
-    const result = await onWithdraw();
-    setFeedback(
-      result.ok ? { kind: "withdrawn" } : { kind: "error", message: result.message },
-    );
-    setConfirmWithdraw(false);
   };
 
   return (
@@ -268,7 +257,7 @@ export function BidModal({
               variant="outline"
               className="size-12 shrink-0 text-lg"
               aria-label="Un credito in meno"
-              disabled={closing || frozen || withdrawn}
+              disabled={closing || frozen}
               onClick={() => bump(-1)}
             >
               −1
@@ -287,7 +276,7 @@ export function BidModal({
               pattern="[0-9]*"
               autoComplete="off"
               enterKeyHint="send"
-              disabled={closing || frozen || withdrawn}
+              disabled={closing || frozen}
               aria-label="La tua offerta in crediti"
               aria-invalid={problem !== null && raw !== ""}
               onKeyDown={(event) => {
@@ -300,7 +289,7 @@ export function BidModal({
               variant="outline"
               className="size-12 shrink-0 text-lg"
               aria-label="Un credito in più"
-              disabled={closing || frozen || withdrawn}
+              disabled={closing || frozen}
               onClick={() => bump(1)}
             >
               +1
@@ -316,39 +305,19 @@ export function BidModal({
           */}
           <PrezzoConsigliato carmy={carmy} dove="campo" />
 
-          <div className="flex gap-2">
-            {[5, 10, 25].map((step) => (
-              <Button
-                key={step}
-                type="button"
-                variant="secondary"
-                className="h-11 flex-1"
-                disabled={closing || frozen || withdrawn}
-                onClick={() => bump(step)}
-              >
-                +{step}
-              </Button>
-            ))}
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-11 flex-1"
-              disabled={closing || frozen || withdrawn}
-              onClick={() => {
-                setRaw(String(bounds.max));
-                setFeedback({ kind: "idle" });
-              }}
-            >
-              max
-            </Button>
-          </div>
+          {/*
+            ⚠ Qui stava la riga dei valori suggeriti — `+5`, `+10`, `+25` e un
+            `max` che scriveva il tetto nel campo — e da M16 non c'è più: la
+            cifra si scrive, non si sceglie fra quattro incrementi tondi. I
+            ~44px che la riga occupava sono altezza restituita al campo, che con
+            la tastiera aperta è la risorsa scarsa.
+          */}
 
           {/* ── Il verdetto, sempre nello stesso posto ── */}
           <FeedbackLine
             feedback={feedback}
             problem={raw === "" ? null : problem}
             savedAmount={savedAmount}
-            withdrawn={withdrawn}
             closing={closing}
             frozen={frozen}
           />
@@ -360,44 +329,26 @@ export function BidModal({
             disabled={!canSubmit}
             onClick={() => void submit()}
           >
-            {withdrawn
-              ? "Ritirato"
-              : feedback.kind === "saving"
-                ? "Invio…"
-                : savedAmount === null
-                  ? "Offri"
-                  : alreadyAt
-                    ? `Conferma ${savedAmount}`
-                    : `Rilancia a ${amount ?? "…"}`}
+            {feedback.kind === "saving"
+              ? "Invio…"
+              : savedAmount === null
+                ? "Offri"
+                : alreadyAt
+                  ? `Conferma ${savedAmount}`
+                  : `Rilancia a ${amount ?? "…"}`}
           </Button>
 
-          <div className="flex items-center gap-2">
-            <Dialog.Close asChild>
-              <Button type="button" variant="ghost" className="h-11 flex-1">
-                Chiudi
-              </Button>
-            </Dialog.Close>
-            {withdrawable &&
-              (confirmWithdraw ? (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  className="h-11 flex-1"
-                  onClick={() => void withdraw()}
-                >
-                  Ritiro definitivo?
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 flex-1"
-                  onClick={() => setConfirmWithdraw(true)}
-                >
-                  Ritira
-                </Button>
-              ))}
-          </div>
+          {/*
+            ⚠ «Chiudi» è rimasto da solo, e occupa la riga intera: accanto a lui
+            stava «Ritira», tolto da M16. Chiudere il modale non toglie niente —
+            l'offerta è a database e la card la rimostra — ed è la ragione per
+            cui questo pulsante non chiede conferma.
+          */}
+          <Dialog.Close asChild>
+            <Button type="button" variant="ghost" className="h-11 w-full">
+              Chiudi
+            </Button>
+          </Dialog.Close>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -414,14 +365,12 @@ function FeedbackLine({
   feedback,
   problem,
   savedAmount,
-  withdrawn,
   closing,
   frozen,
 }: {
   feedback: Feedback;
   problem: string | null;
   savedAmount: number | null;
-  withdrawn: boolean;
   closing: boolean;
   frozen: boolean;
 }) {
@@ -432,13 +381,6 @@ function FeedbackLine({
     return (
       <p role="status" className={cn(base, "bg-muted/50 border-transparent")}>
         Asta in pausa: le offerte sono sospese.
-      </p>
-    );
-  }
-  if (withdrawn) {
-    return (
-      <p role="status" className={cn(base, "bg-muted/50 border-transparent")}>
-        Ti sei ritirato da questo lotto. Il ritiro è definitivo.
       </p>
     );
   }
@@ -469,13 +411,6 @@ function FeedbackLine({
     return (
       <p role="status" className={cn(base, "bg-muted/50 border-transparent")}>
         Sei già a {feedback.amount}: nulla è cambiato.
-      </p>
-    );
-  }
-  if (feedback.kind === "withdrawn") {
-    return (
-      <p role="status" className={cn(base, "bg-muted/50 border-transparent")}>
-        Ritiro registrato.
       </p>
     );
   }

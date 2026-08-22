@@ -12,7 +12,39 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M14 è in produzione da `v1.15.0`** (2026-08-18): aperta, lavorata, provata dall'owner e
+**[M16](16-regole-offerta.md) — aperta il 2026-08-22** su `feature/16-regole-offerta`, codice completo
+e gate verde: **852 test in 52 file** (da 860 in 51 — 13 tolti insieme al ritiro, 5 aggiunti),
+typecheck e build puliti. Un'offerta è una decisione che si prende una volta: via i quattro valori
+suggeriti dal modale, via il ritiro **fino in fondo** — evento del motore compreso — e i pallini di
+presence in TV. **Nessun `pnpm db:push`, nessun backfill, nessun file da caricare.**
+
+⚠ **Il ritiro è stato tolto dal server e non solo dal pulsante**, ed è il senso della macro: la
+regola 6 dice «la UI disabilita, il server rifiuta comunque», quindi togliere solo il pulsante
+avrebbe lasciato una regola del gioco viva soltanto nel browser. Un `POST` con `{type:"WITHDRAW"}`
+riceve ora `INVALID_REQUEST`, e il test che lo dimostra passa dalla rotta vera
+(`tests/db/withdraw-gone.test.ts`).
+
+⚠ **Due cose che la spec non aveva previsto, e che sono la cronaca utile di questa macro.** La prima:
+il grep di controllo di M16-03 era incompleto — `components/auction/reveal-panel.tsx` legge
+`withdrawnAt` per barrare le buste ritirate ed è il gemello nel portale del `line-through` della TV.
+È un **lettore**, quindi resta: la regola «via tutti gli scrittori, restano tutti i lettori» vince
+sull'elenco, e il file ha guadagnato il commento che dice perché. La seconda: `tvConnected`, la mappa
+da tre stati di presence a due, sta in `lib/realtime/portal.ts` e non «accanto al componente» come
+chiedeva §5 — vitest include solo `**/*.test.ts`, e un test che importasse un `.tsx` client
+trascinerebbe React in ambiente `node`. È lo stesso motivo per cui esiste `use-auction-stream.ts`, e
+`tv-view.tsx` importava già `portalScreen` da lì.
+
+⚠ **`"WITHDRAW_BID"` in `ROUTINE_EVENT_TYPES` (`lib/auction-log.ts`) NON è stato tolto**, come la
+pianificazione aveva avvertito: in quel file un tipo *sconosciuto* è notevole, quindi cancellare
+quella riga non farebbe sparire i ritiri storici — li **promuoverebbe** nel blocco delle correzioni
+di un'asta già giocata, dove non sono mai stati. Adesso la riga porta il commento che lo spiega.
+
+Restano il collaudo a occhio dell'owner — il modale sul telefono con la tastiera aperta, i pallini
+con una simulazione accesa e con un telefono che si scollega — e la chiusura (M16-10) a `v1.16.0`.
+
+---
+
+**M14 è in produzione da `v1.15.0`** (2026-08-18): aperta, lavorata, provata dall'owner e
 rilasciata **nella stessa giornata** in cui era stata pianificata — il secondo caso di fila, dopo M13.
 Gate verde con **860 test in 51 file** (da 815), typecheck, lint e build. Fra la chiusura di un round e
 la rivelazione delle buste c'è ora `LOT_SEALED`, la prima fase nuova della macchina a stati dopo v1.0.0.
@@ -153,13 +185,12 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-**Due, pianificate il 2026-08-22** dalle tre richieste che l'owner aveva scritto nel quaderno dopo
-`v1.15.1`. Nessuna delle due è ancora aperta, e **`docs/REQUESTS.md` torna vuoto**.
+**Una**, la seconda delle due pianificate il 2026-08-22 dalle tre richieste che l'owner aveva scritto
+nel quaderno dopo `v1.15.1`. **M16 è aperta** (vedi «In corso»); **`docs/REQUESTS.md` resta vuoto**.
 
 | Macro | Tema | Ordine |
 |---|---|---|
-| [M16](16-regole-offerta.md) | Le regole dell'offerta: via i valori suggeriti, via il ritiro (motore compreso), e i pallini di presence in TV | **prima** |
-| [M17](17-portale-tre-colonne.md) | Il portale a tre colonne: la chiamata a pannello, e una colonna di stato che si legge a colpo d'occhio | dopo |
+| [M17](17-portale-tre-colonne.md) | Il portale a tre colonne: la chiamata a pannello, e una colonna di stato che si legge a colpo d'occhio | dopo M16 |
 
 **Perché due e non una.** Le tre richieste sembrano un tema solo — «sistemiamo il portale» — e hanno
 due profili di rischio molto diversi, che è il criterio con cui sono state tagliate M5/M6, M9–M12 e

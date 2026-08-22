@@ -151,7 +151,7 @@ describe.runIf(dbUp)("F3-01 — load/persist dello stato", () => {
     expect(row.startedAt).not.toBeNull();
   });
 
-  it("roundtrip di un lotto intero: pick, offerte, ritiro, reveal, avanzamento", async () => {
+  it("roundtrip di un lotto intero: pick, offerte, reveal, avanzamento", async () => {
     const { auctionId } = await gameAuction();
     const t0 = Date.now();
 
@@ -175,7 +175,9 @@ describe.runIf(dbUp)("F3-01 — load/persist dello stato", () => {
     expect(state.lots).toHaveLength(1);
     expect(state.lots[0].rounds[0].bids).toHaveLength(1);
 
-    // Offerta nuova (INSERT), rilancio (UPDATE), ritiro (UPDATE).
+    // Offerta nuova (INSERT) e rilancio (UPDATE). ⚠ Il terzo passo era un
+    // ritiro, tolto da M16: `withdrawn_at` continua a fare il round-trip in
+    // `mutate.ts` per le righe vecchie, ma non c'è più un evento che la scriva.
     state = await applyAndReload(
       auctionId,
       state,
@@ -193,12 +195,6 @@ describe.runIf(dbUp)("F3-01 — load/persist dello stato", () => {
       state,
       { type: "PLACE_BID", memberId: m2, amount: 5 },
       t0 + 1900,
-    );
-    state = await applyAndReload(
-      auctionId,
-      state,
-      { type: "WITHDRAW_BID", memberId: m2 },
-      t0 + 2100,
     );
 
     // Chiusura del round: assegnazione committata all'ingresso del reveal.

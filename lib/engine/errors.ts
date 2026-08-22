@@ -62,8 +62,10 @@ export const ERROR_CODES = [
   "BID_TOO_LOW",
   "BID_TOO_HIGH",
   "ROUND_CLOSED",
-  "BID_WITHDRAWN",
-  "WITHDRAW_FORBIDDEN",
+  // ⚠ Qui stavano `BID_WITHDRAWN` e `WITHDRAW_FORBIDDEN`, spariti con M16
+  // insieme alle funzioni che li producevano. Un `POST` con `{type:"WITHDRAW"}`
+  // non torna più «non puoi ritirare adesso»: cade nel `default` della rotta e
+  // torna `INVALID_REQUEST`, cioè «questa azione non esiste», che è la verità.
   "INVALID_SEAT",
   "ADJUST_VIOLATES_I3",
 

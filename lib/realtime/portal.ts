@@ -2,6 +2,7 @@ import { ROLE_LABELS, type Role } from "@/lib/domain";
 
 import type {
   PoolPlayer,
+  Presence,
   Snapshot,
   SnapshotLot,
   SnapshotMember,
@@ -11,10 +12,10 @@ import type {
  * Il portale del partecipante, nella parte che si può provare senza un browser.
  *
  * La regola 7 dice che ogni schermata è funzione pura dello snapshot corrente
- * (invariante I10): se è vero, allora *quale* schermata mostrare, *quanto* si
- * può offrire e *se* si può ritirare sono funzioni pure — e si collaudano in
- * millisecondi, come il motore. È il motivo per cui stanno qui e non dentro i
- * componenti: i test girano in ambiente `node`, senza DOM.
+ * (invariante I10): se è vero, allora *quale* schermata mostrare e *quanto* si
+ * può offrire sono funzioni pure — e si collaudano in millisecondi, come il
+ * motore. È il motivo per cui stanno qui e non dentro i componenti: i test
+ * girano in ambiente `node`, senza DOM.
  *
  * Le validazioni di questo file **non** sostituiscono quelle del server
  * (regola 6). Servono a disabilitare un pulsante e a scrivere un messaggio
@@ -265,29 +266,16 @@ export function parseAmount(raw: string): number | null {
 
 // ─── Il ritiro ───────────────────────────────────────────────────────────────
 
-/**
- * I tre divieti di `withdrawBid`, nella forma che serve a un pulsante: il
- * chiamante non può ritirare (ha l'auto-bid a 1 e può solo rilanciare), nello
- * spareggio il ritiro non esiste, e non si ritira ciò che non si è offerto.
- * Il ritiro è **definitivo** (⚠ P10): chi si è ritirato non torna a offrire.
- */
-export function canWithdraw(
-  snapshot: Snapshot,
-  myMemberId: string | null,
-): boolean {
-  const lot = snapshot.currentLot;
-  if (snapshot.auction.status !== "LIVE") return false;
-  if (snapshot.auction.phase !== "LOT_OPEN") return false;
-  if (lot === null || myMemberId === null) return false;
-  if (lot.calledByMemberId === myMemberId) return false;
-  if (lot.roundNo === 2) return false;
-  if (snapshot.myBid === null) return false;
-  return snapshot.myBid.withdrawnAt === null;
-}
-
-export function haveWithdrawn(snapshot: Snapshot): boolean {
-  return snapshot.myBid?.withdrawnAt != null;
-}
+// Non c'è, e da M16 non c'è più da nessuna parte: chi offre tiene, e al massimo
+// rilancia. Qui stavano `canWithdraw` — i tre divieti di `withdrawBid` nella
+// forma che serviva a un pulsante — e `haveWithdrawn`. Sono sparite insieme
+// all'evento del motore, non solo al pulsante: una regola del gioco che vive
+// soltanto nel browser è precisamente ciò che la regola 6 vieta.
+//
+// ⚠ `myBid.withdrawnAt` **continua a viaggiare nello snapshot** e continua a
+// essere letto — dal reveal, dal log dei lotti, dal tabellone — perché le aste
+// già giocate hanno dei ritiri dentro e vanno raccontate per quello che sono.
+// Su ogni offerta nuova è `null` e resterà `null`.
 
 // ─── Le buste degli altri ────────────────────────────────────────────────────
 
@@ -295,6 +283,31 @@ export function haveWithdrawn(snapshot: Snapshot): boolean {
 // aperto, delle buste altrui lo snapshot non porta niente da cui derivare
 // qualcosa (M1, §1). La funzione che stava qui — `envelopes()` — leggeva un
 // campo che non esiste più.
+
+// ─── La presence come la legge la TV (M16) ───────────────────────────────────
+
+/**
+ * Tre stati di presence in due colori: **verde chi è collegato, rosso chi non
+ * lo è**, e `IDLE` conta come collegato.
+ *
+ * La ragione è la domanda che si fa chi guarda il tabellone — «possiamo far
+ * partire il round?» — e un tab in secondo piano non è una persona che se n'è
+ * andata: è qualcuno che ha il telefono in tasca ed è nella stanza. Nel portale
+ * la distinzione fra `LIVE` e `IDLE` serve e `PresenceDot` la mostra in ambra;
+ * a tre metri da un televisore no.
+ *
+ * ⚠ **L'ambra sarebbe stata sbagliata proprio lì**, ed è l'unico punto dell'app
+ * in cui vale: in TV l'ambra è già la pausa e già la riconnessione, e un terzo
+ * significato sullo stesso colore, letto da lontano, non si distingue da nessuno
+ * degli altri due.
+ *
+ * Sta qui, in un posto solo e come funzione pura, per la stessa ragione per cui
+ * ci sta `portalScreen`: la mappa da tre stati a due è una regola, e una regola
+ * si collauda in millisecondi invece che accendendo dodici telefoni.
+ */
+export function tvConnected(presence: Presence): boolean {
+  return presence !== "OFFLINE";
+}
 
 // ─── Lo spareggio ────────────────────────────────────────────────────────────
 

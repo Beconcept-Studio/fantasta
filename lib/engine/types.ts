@@ -89,6 +89,14 @@ export type Bid = {
    */
   amountSetAt: Millis;
   createdAt: Millis;
+  /**
+   * ⚠ **Sempre `null` da M16**, e resta perché le aste già giocate hanno dei
+   * ritiri dentro: il campo si legge — il reveal, il log dei lotti, il
+   * tabellone — ma non lo scrive più nessuno. L'evento `WITHDRAW_BID` non
+   * esiste, e con lui non esiste nessun modo di far diventare questo campo una
+   * data. Non è una colonna morta: è un pezzo di storia che continua a
+   * raccontare il vero.
+   */
   withdrawnAt: Millis | null;
 };
 
@@ -200,7 +208,6 @@ export type AuctionEvent =
   | { type: "START"; startSeatIndex: number }
   | { type: "PICK"; memberId: string; playerId: string }
   | { type: "PLACE_BID"; memberId: string; amount: number }
-  | { type: "WITHDRAW_BID"; memberId: string }
   | { type: "ADVANCE" }
   | { type: "SKIP_REVEAL" }
   /**

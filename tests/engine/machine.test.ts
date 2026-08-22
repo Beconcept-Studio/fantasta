@@ -305,53 +305,19 @@ describe("machine: placeBid — F2-11 (⚠ P3)", () => {
   });
 });
 
-describe("machine: withdrawBid — F2-12 (⚠ P10)", () => {
-  const opened = run(stateInWaitingPick(), [
-    [pick("m0", "q0"), T0],
-    [bidEvent("m1", 30), T0 + sec(5)],
-  ]);
-
-  it("§12.7 — il ritiro esclude dalla risoluzione, la riga resta con withdrawn_at", () => {
-    const next = run(opened, [[{ type: "WITHDRAW_BID", memberId: "m1" }, T0 + sec(10)]]);
-    const b = next.lots[0].rounds[0].bids.find((b) => b.memberId === "m1");
-    expect(b).toMatchObject({ amount: 30, withdrawnAt: T0 + sec(10) });
-  });
-
-  it("§12.8 — il chiamante non può ritirare", () => {
-    expectFail(
-      opened,
-      { type: "WITHDRAW_BID", memberId: "m0" },
-      T0 + sec(10),
-      "WITHDRAW_FORBIDDEN",
-    );
-  });
-
-  it("senza un'offerta non c'è niente da ritirare", () => {
-    expectFail(
-      opened,
-      { type: "WITHDRAW_BID", memberId: "m2" },
-      T0 + sec(10),
-      "WITHDRAW_FORBIDDEN",
-    );
-  });
-
-  it("a round chiuso non si ritira più: l'esito è quello delle buste a DB", () => {
-    const endsAt = opened.lots[0].rounds[0].endsAt;
-    expectFail(
-      opened,
-      { type: "WITHDRAW_BID", memberId: "m1" },
-      endsAt + 200,
-      "ROUND_CLOSED",
-    );
-  });
-
-  it("il ritiro è irreversibile: un placeBid successivo è rifiutato", () => {
-    const withdrawn = run(opened, [
-      [{ type: "WITHDRAW_BID", memberId: "m1" }, T0 + sec(10)],
-    ]);
-    expectFail(withdrawn, bidEvent("m1", 40), T0 + sec(12), "BID_WITHDRAWN");
-  });
-});
+// ─── withdrawBid — F2-12 (⚠ P10), tolto da M16 ───────────────────────────────
+//
+// Cinque test spariti insieme all'evento `WITHDRAW_BID`: §12.7 (il ritiro
+// esclude dalla risoluzione), §12.8 (il chiamante non ritira), «senza
+// un'offerta non c'è niente da ritirare», il round chiuso, e l'irreversibilità.
+// Provavano una funzione che non esiste più.
+//
+// ⚠ **Il filtro di `resolveRound` continua a essere provato**, e va così: sta
+// in `tests/engine/rules.test.ts` («le offerte ritirate sono escluse dalla
+// risoluzione»), dove la riga ritirata è costruita a mano invece che con un
+// evento. È il test giusto per un **lettore** — le aste già a database hanno
+// dei ritiri dentro, e il filtro deve continuare a rispettarli — ed è la
+// ragione per cui `helpers.ts` tiene la sua opzione `withdrawnAt`.
 
 describe("machine: chiusura del round 1 — F2-13", () => {
   // Lotto aperto a T0 su q0, chiamato da m0 (auto-bid a 1). Round: [T0, T0+30s].
@@ -388,15 +354,6 @@ describe("machine: chiusura del round 1 — F2-13", () => {
     expect(closed.phase).toBe("LOT_REVEAL");
     expect(closed.lots[0].winnerMemberId).toBe("m0");
     expect(closed.lots[0].finalPrice).toBe(1);
-  });
-
-  it("un'offerta ritirata non conta nella risoluzione (§12.7)", () => {
-    const closed = run(opened, [
-      [bidEvent("m1", 30), T0 + sec(5)],
-      [{ type: "WITHDRAW_BID", memberId: "m1" }, T0 + sec(8)],
-      [{ type: "ADVANCE" }, endsAt],
-    ]);
-    expect(closed.lots[0].winnerMemberId).toBe("m0");
   });
 
   it("§12.9 — pareggio sul massimo → LOT_TIE_PREP con deadline tie_prep_seconds", () => {
@@ -471,14 +428,8 @@ describe("machine: TIE_PREP → round 2 con carry-forward — F2-14", () => {
     expectFail(inRound2, bidEvent("m3", 60), tieDeadline + sec(1), "NOT_ELIGIBLE");
   });
 
-  it("nel round 2 il ritiro è vietato anche ai non-chiamanti (⚠ P10)", () => {
-    expectFail(
-      inRound2,
-      { type: "WITHDRAW_BID", memberId: "m2" },
-      tieDeadline + sec(1),
-      "WITHDRAW_FORBIDDEN",
-    );
-  });
+  // ⚠ Qui stava «nel round 2 il ritiro è vietato anche ai non-chiamanti»: da
+  // M16 è vietato in tutti i round e a tutti, e non c'è un evento da rifiutare.
 });
 
 describe("machine: risoluzione del round 2 — F2-15", () => {
@@ -621,12 +572,7 @@ describe("machine: pause/resume — F2-17", () => {
   it("in pausa le azioni di gioco sono rifiutate e ADVANCE è un no-op", () => {
     const paused = run(opened, [[{ type: "PAUSE" }, T0 + sec(10)]]);
     expectFail(paused, bidEvent("m1", 10), T0 + sec(11), "WRONG_STATUS");
-    expectFail(
-      paused,
-      { type: "WITHDRAW_BID", memberId: "m1" },
-      T0 + sec(11),
-      "WRONG_STATUS",
-    );
+    expectFail(paused, pick("m1", "q1"), T0 + sec(11), "WRONG_STATUS");
     // Neanche il tempo fa avanzare un'asta in pausa.
     const advanced = transition(paused, { type: "ADVANCE" }, T0 + sec(999));
     expect(advanced.ok).toBe(true);

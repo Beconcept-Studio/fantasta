@@ -19,7 +19,6 @@ export type ActionPayload =
   | { type: "START"; startSeatIndex: number }
   | { type: "PICK"; playerId: string }
   | { type: "BID"; amount: number }
-  | { type: "WITHDRAW" }
   /** Solo l'owner; il portale manager di Fase 6 le userà da qui. */
   | { type: "PAUSE" }
   | { type: "RESUME" }

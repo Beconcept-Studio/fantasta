@@ -256,7 +256,6 @@ export function Portal({
           myMemberId={myMemberId}
           offset={offset}
           onBid={(amount) => sendAction(auctionId, { type: "BID", amount })}
-          onWithdraw={() => sendAction(auctionId, { type: "WITHDRAW" })}
         />
       )}
     </>
