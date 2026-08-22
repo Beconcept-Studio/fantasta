@@ -48,7 +48,9 @@ export default async function AuctionLayout({
         auctionId={id}
         auctionName={overview.auction.name}
         isSimulated={overview.auction.isSimulated}
-        sections={auctionSections(viewer)}
+        // ⚠ Lo stato serve a una voce sola, la Lobby (M16), e arriva da qui —
+        // dalla stessa lettura del resto del layout, non dallo stream.
+        sections={auctionSections(viewer, { status: overview.auction.status })}
         // Il `public_token` non esce da nessun'altra parte, ed è la chiave
         // della vista pubblica: il link lo vede chi l'asta la possiede.
         tvHref={

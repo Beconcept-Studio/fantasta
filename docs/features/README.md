@@ -13,10 +13,16 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 ## In corso
 
 **[M16](16-regole-offerta.md) — aperta il 2026-08-22** su `feature/16-regole-offerta`, codice completo
-e gate verde: **852 test in 52 file** (da 860 in 51 — 13 tolti insieme al ritiro, 5 aggiunti),
+e gate verde: **858 test in 52 file** (da 860 in 51 — 13 tolti insieme al ritiro, 11 aggiunti),
 typecheck e build puliti. Un'offerta è una decisione che si prende una volta: via i quattro valori
 suggeriti dal modale, via il ritiro **fino in fondo** — evento del motore compreso — e i pallini di
 presence in TV. **Nessun `pnpm db:push`, nessun backfill, nessun file da caricare.**
+
+⚠ **Porta anche una correzione fuori tema**, chiesta dall'owner a macro già chiusa su `dev` e
+accettata dentro M16 perché `CLAUDE.md` vuole le correzioni piccole nella macro aperta: **la voce
+«Lobby» sparisce dal menù ad asta `LIVE`**, dove portava a un rimbalzo. Restringe — in un caso solo,
+e senza toccare la ragione che la motivava — la regola di `lib/auction-nav.ts` per cui le sezioni
+dipendono dal ruolo e mai dallo stato. Il perché sta in `docs/DECISIONS.md` alla data.
 
 ⚠ **Il ritiro è stato tolto dal server e non solo dal pulsante**, ed è il senso della macro: la
 regola 6 dice «la UI disabilita, il server rifiuta comunque», quindi togliere solo il pulsante

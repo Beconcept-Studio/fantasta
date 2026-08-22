@@ -1,10 +1,13 @@
+import type { AuctionStatus } from "@/lib/domain";
+
 /**
  * Il vocabolario della navigazione dentro un'asta: sezioni, etichette, titoli.
  *
- * Sta in un file suo, senza nessuna dipendenza, per le stesse due ragioni di
- * `lib/domain.ts` — che è il suo gemello. Non importa `lib/db` e non importa
- * niente, quindi lo può leggere anche il client component che evidenzia la voce
- * attiva, senza portarsi l'ORM nel bundle del telefono.
+ * Sta in un file suo, quasi senza dipendenze, per le stesse due ragioni di
+ * `lib/domain.ts` — che è il suo gemello, ed è anche l'unica cosa che importa,
+ * per un tipo. Non importa `lib/db` e non importa niente altro, quindi lo può
+ * leggere anche il client component che evidenzia la voce attiva, senza
+ * portarsi l'ORM nel bundle del telefono.
  *
  * Ma la ragione principale è un'altra, ed è un bug vero: prima di M2 ogni pagina
  * si scriveva i propri link a mano, e nell'intestazione della configurazione la
@@ -14,12 +17,26 @@
  * titolo che leggi in cima alla pagina e la voce da cui ci sei arrivato non
  * possono raccontare due cose diverse, perché sono lo stesso oggetto.
  *
- * ⚠ Le sezioni dipendono dal **ruolo** di chi guarda e mai dallo **stato**
- * dell'asta. Non è solo prevedibilità: il ruolo non cambia mentre guardi la
- * pagina, lo stato sì. Una sotto-navbar che dipendesse da `status` sarebbe
- * renderizzata dal server a inizio pagina e mostrerebbe voci sbagliate dopo la
- * prima transizione — a meno di alimentarla dallo snapshot, cioè di trasformare
- * la navigazione in stato di gioco (regola 7).
+ * ⚠ **Fino a M16 le sezioni dipendevano dal ruolo di chi guarda e mai dallo
+ * stato dell'asta**, e la regola aveva una ragione tecnica che vale ancora la
+ * pena conoscere: il ruolo non cambia mentre guardi la pagina, lo stato sì, e
+ * questa navbar è renderizzata dal server: se dipende da `status`, dopo una
+ * transizione mostra una voce vecchia finché non si naviga.
+ *
+ * La regola è stata **ristretta invece che abolita**, e la differenza è tutta
+ * qui: lo stato entra in **un caso solo**, la Lobby, e solo per nascondere una
+ * voce che porta a un rimbalzo — chi è membro, ad asta `LIVE`, dalla lobby viene
+ * spinto al portale da `LobbyLive`. Un link che rimanda indietro è peggio di un
+ * link assente. Il costo della staleness è piccolo per costruzione: il layout è
+ * dinamico e si rirenderizza a ogni navigazione, e **la spinta al portale è essa
+ * stessa una navigazione**, quindi il caso che conta si corregge da sé
+ * nell'istante in cui si verifica. Resta stantia solo per chi sta fermo su una
+ * pagina mentre l'asta cambia stato.
+ *
+ * ⚠ E lo stato **non** arriva dallo snapshot: arriva da `getAuctionOverview`,
+ * cioè dalla stessa lettura da cui esce il resto del layout. Alimentare la
+ * navigazione dallo stream sarebbe trasformarla in stato di gioco (regola 7), e
+ * quella riga della regola non si è mossa.
  */
 
 export const AUCTION_SECTION_KEYS = [
@@ -54,10 +71,23 @@ export type NavViewer = {
 };
 
 /**
+ * Lo stato dell'asta, ridotto a ciò che decide la navigazione.
+ *
+ * È un oggetto e non un `AuctionStatus` nudo perché il giorno che una seconda
+ * voce avesse bisogno di sapere qualcos'altro — la fase, il numero di lotti —
+ * la firma non cambia. Oggi ha un campo solo, e un campo solo lo usa.
+ */
+export type NavAuction = {
+  status: AuctionStatus;
+};
+
+/**
  * L'ordine è quello del flusso di una serata, non alfabetico: si configura, si
  * aspetta in lobby, si conduce, si gioca.
  */
-const SECTIONS: (AuctionSection & { visibleTo: (v: NavViewer) => boolean })[] = [
+const SECTIONS: (AuctionSection & {
+  visibleTo: (v: NavViewer, a: NavAuction) => boolean;
+})[] = [
   {
     key: "setup",
     segment: "setup",
@@ -70,7 +100,19 @@ const SECTIONS: (AuctionSection & { visibleTo: (v: NavViewer) => boolean })[] = 
     segment: "lobby",
     label: "Lobby",
     title: "Lobby",
-    visibleTo: (v) => v.isOwner || v.isMember,
+    // ⚠ **L'unica voce che guarda lo stato** (M16), e la condizione è copiata
+    // dal `router.push` di `LobbyLive`: chi è membro, ad asta `LIVE`, dalla
+    // lobby viene spinto al portale. Mostrargli il link vuol dire offrirgli un
+    // viaggio di andata e ritorno.
+    //
+    // Le due esclusioni dalla condizione sono deliberate. **`PAUSED` no**: in
+    // pausa la spinta non c'è — è stata tolta apposta, perché è il momento in
+    // cui si va a cambiare i tempi — quindi la lobby è una destinazione vera e
+    // il link funziona. **L'owner che non gioca no** (⚠ P11): non è membro,
+    // quindi non viene spinto da nessuna parte, e per lui la lobby ad asta in
+    // corso è la lista dei partecipanti con i loro pallini.
+    visibleTo: (v, a) =>
+      (v.isOwner || v.isMember) && !(v.isMember && a.status === "LIVE"),
   },
   {
     key: "manage",
@@ -106,8 +148,11 @@ const SECTIONS: (AuctionSection & { visibleTo: (v: NavViewer) => boolean })[] = 
 ];
 
 /** Le sezioni che questo viewer può raggiungere, nell'ordine della sotto-navbar. */
-export function auctionSections(viewer: NavViewer): AuctionSection[] {
-  return SECTIONS.filter((section) => section.visibleTo(viewer)).map(
+export function auctionSections(
+  viewer: NavViewer,
+  auction: NavAuction,
+): AuctionSection[] {
+  return SECTIONS.filter((section) => section.visibleTo(viewer, auction)).map(
     ({ key, segment, label, title }) => ({ key, segment, label, title }),
   );
 }
@@ -122,13 +167,26 @@ export function sectionHref(auctionId: string, section: AuctionSection): string 
  * Ricavarla dall'URL invece di farsela dichiarare da ogni pagina è ciò che
  * rende impossibile a una pagina mentire su dove si trova: il titolo lo decide
  * la rotta, e la rotta è quella che c'è nella barra degli indirizzi.
+ *
+ * ⚠ **Legge il catalogo intero e non passa da `auctionSections`**, ed è la
+ * riga che tiene in piedi la restrizione di M16. Una sezione può essere
+ * *nascosta dal menù* e *raggiunta lo stesso* — la Lobby ad asta `LIVE` è
+ * esattamente quel caso, perché il link sparisce ma l'URL funziona ancora e
+ * l'owner che non gioca ci vive. Se il titolo venisse cercato fra le voci
+ * visibili, quella pagina perderebbe la propria intestazione proprio nello
+ * stato in cui la voce è nascosta: si leggerebbe il nome dell'asta al posto di
+ * «Lobby», che è il ripiego di `AuctionNav` quando non riconosce la rotta.
+ *
+ * Fino a M16 la distinzione non esisteva — le voci erano tutte raggiungibili e
+ * il trucco era chiedere le sezioni di un viewer onnipotente — e adesso esiste.
  */
 export function activeSection(pathname: string): AuctionSection | null {
   const parts = pathname.split("/").filter((part) => part !== "");
   // ["auctions", "<id>", "<segmento>"] — meno di tre pezzi vuol dire che siamo
   // sulla lista delle aste o su una rotta che con l'asta non c'entra.
   if (parts.length < 3 || parts[0] !== "auctions") return null;
-  return auctionSections({ isOwner: true, isMember: true }).find(
-    (section) => section.segment === parts[2],
-  ) ?? null;
+  const section = SECTIONS.find((s) => s.segment === parts[2]);
+  if (section === undefined) return null;
+  const { key, segment, label, title } = section;
+  return { key, segment, label, title };
 }
