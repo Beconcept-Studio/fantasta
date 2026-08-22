@@ -435,14 +435,19 @@ export function InsightsLine({
             </span>
           )}
           <TitolaritaAnyBadge insights={insights} carmy={carmy} compact />
-          {/* Il rapporto grezzo accanto al giudizio: è la sua prova, e la divergenza
-              è l'informazione. Solo quando il badge viene da Carmy — altrimenti il
-              badge già dice la percentuale, e ripeterla due volte è rumore. */}
-          {t?.fonte === "carmy" && t.quota !== null && (
-            <span>
-              {t.quota.starts}/{t.quota.giornate}
-            </span>
-          )}
+          {/*
+            ⚠ **Il rapporto grezzo (`31/38`) è stato tolto** su richiesta
+            dell'owner (2026-08-22), e va saputo cosa se ne va con lui: era la
+            **prova** del giudizio di Carmy — che è un voto da 1 a 5 e non una
+            percentuale — e la divergenza fra i due era l'informazione. Un
+            «titolarità 5» su un giocatore con 12 presenze da titolare è una cosa
+            che si vedeva solo lì.
+
+            Non è però sparito dall'applicazione: `InsightsMacro` lo scrive per
+            esteso — «31/38 da titolare» — nel modale d'offerta, cioè nel momento
+            in cui ci sono i secondi per leggerlo. Nella lista di chiamata, dove si
+            scorre, resta la titolarità e i minuti medi.
+          */}
           {minuti !== null && <span>{Math.round(minuti)}′</span>}
           {/*
             ⚠ **Il PMA con accanto la sua cifra in crediti**, che è la parte nuova:

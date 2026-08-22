@@ -3162,9 +3162,16 @@ gioco e non cambia durante la serata. M17 §8 dice che un dato mancante nello sn
 fermarsi e chiedere; qui non è servito, perché quella strada esisteva già e `serializeSnapshot` non è
 stato toccato (I8 intatto).
 
-**Cosa è rimasto dov'era, e non è una dimenticanza.** Il rapporto grezzo (`31/38`) e i minuti medi
-non erano nell'elenco della richiesta ma restano sulla riga 1, attaccati alla titolarità di cui sono
-la prova: togliere un dato che nessuno ha chiesto di togliere è peggio che tenerlo. La fascia sta
-sulla riga 2 con le note, che è dove un giudizio qualitativo appartiene. Affidabilità e integrità
-restano fuori da entrambe, come da M10B: vivono nel modale d'offerta, dove ci sono i secondi per
-leggerle.
+**Cosa è stato tolto, e cosa è rimasto.** Il rapporto grezzo `31/38` era stato tenuto in un primo
+giro perché non era nell'elenco della richiesta, e l'owner ha chiesto di **toglierlo** guardandolo.
+
+⚠ **Va saputo cosa se ne va con lui**: era la *prova* del giudizio di Carmy, che è un voto da 1 a 5 e
+non una percentuale, e la **divergenza** fra i due era l'informazione — un «titolarità 5» su un
+giocatore con dodici presenze da titolare si vedeva solo lì. Non è però sparito dall'applicazione:
+`InsightsMacro` lo scrive per esteso («31/38 da titolare») nel **modale d'offerta**, cioè nel momento
+in cui ci sono i secondi per leggerlo. La lista di chiamata è il posto in cui si scorre, e lì restano
+la titolarità e i minuti medi.
+
+I minuti medi restano sulla riga 1 accanto alla titolarità. La fascia sta sulla riga 2 con le note,
+che è dove un giudizio qualitativo appartiene. Affidabilità e integrità restano fuori da entrambe,
+come da M10B: vivono nel modale d'offerta.
