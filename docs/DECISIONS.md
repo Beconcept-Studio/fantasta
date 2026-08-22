@@ -3225,3 +3225,150 @@ troverebbe partendo dal codice.
 perimetro per M17 §8, che dice esplicitamente che il modale d'offerta resta com'è. Il primo è in
 perimetro e **non è stato cambiato di iniziativa**: se la sigla è incomprensibile lì com'era nella
 lista, va tolta o rinominata in tutti e due, e quella è una decisione da prendere guardandoli.
+
+---
+
+## 2026-08-22/23 — M18: la rosa a fisarmonica, le quote di reparto, l'ordine di estrazione
+
+Quattro decisioni prese dall'owner il 2026-08-22, tutte **prima** che fosse scritta una riga di
+codice, più due cose emerse lavorando il 23.
+
+### La percentuale è sul budget a disposizione, non sulla spesa fatta
+
+«Se spendo 250 su 500 sui portieri, ho investito il 50%.» Il denominatore è quindi
+`crediti + Σ prezzi`, cioè il budget, e non `Σ prezzi`.
+
+Perché la spesa sarebbe stata la scelta sbagliata: **è volatile e insegna poco**. Al primo acquisto
+il reparto starebbe al 100%; a metà asta direbbe come si è distribuito ciò che si è speso, non quanto
+budget è impegnato. La quota sul budget invece è confrontabile con la ripartizione che uno si è
+prefissato prima di sedersi, ed è il numero su cui si decide se fermarsi.
+
+**Conseguenza voluta: le quattro percentuali non fanno 100.** Ciò che manca sono i crediti ancora in
+cassa, che è a sua volta un'informazione. Non è una somma da far quadrare, e non va «corretta».
+
+⚠ **Le rettifiche di budget (I3) entrano nel denominatore.** `credits` include già `Σ ledger.delta`,
+quindi il denominatore è il budget **corrente**, non quello di partenza: dopo una rettifica le quattro
+quote si spostano tutte. È la lettura giusta di «crediti a disposizione», ed è anche l'unica onesta —
+è cambiato il totale su cui si sta ragionando.
+
+Il budget iniziale **non è stato aggiunto allo snapshot**: `crediti + speso` lo ricostruisce, ed è la
+stessa identità con cui si controlla a vista che i conti tornino. Il calcolo vive in
+`quotaPerRuolo` (`lib/realtime/portal.ts`), funzione pura, per la stessa ragione di `bidBounds` e
+`sceneTime`. E **`spentCredits` non è stato spostato** da `manage.ts`, dove ha un chiamante contento:
+serviva un totale, e sta dentro `quotaPerRuolo` (regola 8).
+
+**A zero speso si scrive `(0%)`**, non uno spazio bianco: è la lezione di M17 sull'anatomia fissa — un
+numero che compare solo a volte costringe a chiedersi perché non c'è. Il solo caso in cui non si
+scrive niente è budget 0, dove la quota non esiste.
+
+### Il ruolo in gioco si apre da sé, e lo fa con una `key`
+
+La fisarmonica non parte tutta chiusa: il reparto che l'asta sta chiamando adesso è aperto, e al cambio
+di ruolo l'apertura si sposta.
+
+⚠ **La forma sbagliata era un `useEffect`** che sincronizzasse `auction.currentRole` in uno stato
+locale: due sorgenti di verità, e un click dell'utente sovrascritto al prossimo snapshot — cioè un
+accordion che si richiude sotto le dita ogni due secondi, in un portale che riceve uno snapshot ogni
+pochi istanti. La forma giusta è una **chiave** su `currentRole`, e non serve niente altro.
+
+La proprietà che ne esce è esattamente quella voluta: **la scelta a mano vale finché il ruolo in gioco
+non cambia**. Aperti i difensori mentre l'asta chiama i centrocampisti, restano aperti — nessuno
+snapshot li richiude — ma quando l'asta passa agli attaccanti la fisarmonica si rimonta con gli
+attaccanti aperti. Lo stato locale non è mai *contro* lo snapshot: è azzerato da lui.
+
+È la stessa famiglia dei `dismissed*` di M17 e sta dentro I10 (`PLAN §8bis`) per la stessa ragione:
+**niente è raggiungibile solo perché eri qui prima**. Chi ricarica ritrova il reparto in gioco aperto e
+gli altri chiusi, cioè lo stato di chi non si è mai mosso, e **nessuna informazione vive solo dentro un
+pannello aperto** — la riga chiusa dice già nome, quota e `n/tot`. È ciò che rende accettabile perdere
+l'apertura con un F5.
+
+**Con `currentRole = null` è tutto chiuso**, cioè ad asta non iniziata e ad asta conclusa: a fine asta
+la rosa completa si presenta come quattro righe con le quattro quote e i quattro `n/tot`, che è il
+riepilogo giusto per quel momento. È una scelta e non una dimenticanza — «a `null` apro il primo
+reparto» darebbe un reparto aperto a caso.
+
+### La fisarmonica vale solo in `/play`: due componenti, non una prop booleana
+
+In regia la rosa dei membri resta piatta come prima: lì servono 8–12 rose a colpo d'occhio, e un
+accordion le nasconderebbe tutte. Niente percentuali nemmeno lì — accanto c'è già la `Figure` «speso»,
+e dodici card con quattro percentuali ciascuna sono quarantotto numeri che nessuno legge.
+
+⚠ **La strada breve era `<RosterGrid fisarmonica />`, e è stata scartata**: un booleano che accende
+**due cose diverse** — la fisarmonica *e* le percentuali — e un componente che si porta dentro due
+alberi che non si somigliano. Con due chiamanti veri e diversi la forma giusta sono **due componenti
+esportati** (`RosterGrid` per la regia, `RosterAccordion` per il portale) e **un corpo privato
+condiviso** nello stesso file per le righe dei presi e le caselline: è l'unica cosa davvero uguale
+nelle due forme. Non si esporta — è un dettaglio di quel file, non un'astrazione (regola 8).
+
+`Accordion` arriva **direttamente da `radix-ui`**, come già fanno `Dialog`, `Toast` e `Switch`, e
+**non** da un file nuovo in `components/ui/`: un accordion con un chiamante solo non è una primitiva
+del design system, e `npx shadcn add` riscriverebbe `layout.tsx` (l'inciampo di M15). ⚠ Utile saperlo:
+`Accordion.Header` rende un `Primitive.h3`, quindi **è** l'`<h3>` che c'era già — non va aggiunto un
+secondo titolo dentro.
+
+### L'ordine di estrazione vale ovunque, e la modifica è sottrattiva
+
+Portale, regia e TV. La lista era ordinata per prezzo, quindi un acquisto da 45 crediti non si
+aggiungeva in fondo al reparto: si metteva in cima e spingeva giù quello che si era appena finito di
+leggere. **La rosa non è una classifica, è un diario.**
+
+⚠ **La strada ovvia era sbagliata e costosa.** «Serve un `assignedAt` nello snapshot» porta a toccare
+`serializeSnapshot`, cioè il punto più delicato dell'app, **per niente**: `loadAuctionState` legge già
+le assegnazioni per `created_at, id` e `serializeMembers` non riordina, quindi `member.roster` **era
+già** in ordine di estrazione e i due `.sort((a, b) => b.price - a.price)` del client lo stavano
+disfacendo. Si sono tolti, e non è stato aggiunto niente.
+
+⚠ **Il `createdAt` è quello del motore, non un `defaultNow()`**: `persistAuctionState` scrive
+`toDate(a.createdAt)`. È ciò che rende l'ordine giusto anche nei dati del seed — con un `now()` del
+database, che in Postgres è per transazione e non per statement, tutte le assegnazioni scritte nella
+stessa transazione avrebbero condiviso il timestamp e in locale l'ordine dentro un reparto sarebbe
+stato arbitrario, cioè un finto bug da inseguire. **Verificato sui dati del seed**: i quattro
+difensori da 1 credito di un membro hanno timestamp distinti.
+
+**Il perché è scritto in un posto solo, e non è nei due consumatori**: sta in `serializeMembers`, cioè
+dove la garanzia è prodotta e dove guarderebbe chi un giorno pensasse di riordinare lì — con l'avviso
+che da M18 un `.sort()` aggiunto in quel punto cambia **tre** schermate. Due test nuovi in
+`tests/db/snapshot.test.ts` la dichiarano, con **la seconda assegnazione più costosa della prima**,
+che è l'unico modo di distinguere «ordine di estrazione» da «ordine per prezzo».
+
+Tre conseguenze da sapere in anticipo. **In TV il giocatore appena vinto è sempre l'ultima riga piena
+del suo gruppo**, cioè un posto fisso, mentre prima l'evidenziazione compariva dove il prezzo la
+mandava. **Una riassegnazione va in fondo** (`voidAssignment` + `manualAssign` creano una riga nuova,
+col `createdAt` della correzione) e non è un difetto: la rosa dice quando le cose sono state decise.
+**Il verbale delle rose (M3) non è stato toccato**: non ordinava per prezzo, quindi era già cronologico
+— dopo M18 sono le viste ad allinearsi a lui, non il contrario.
+
+### ⚠ Un flake preesistente chiuso dentro la macro, e la misura che non era aggiustabile
+
+`tests/db/delete-auction.test.ts` asseriva sul **contenuto** di `listone_players` e `player_insights`
+per provare che la cascata di M12 non porta via le tabelle globali. Sono tabelle possedute da altri
+due file di test — `listone.test.ts` scrive la regola del progetto: «una tabella globale, un file che
+la possiede» — e quel file le svuota con un `DELETE` senza `WHERE`, perché è ciò che fa `uploadListone`
+in produzione.
+
+M14 aveva già corretto quella misura una volta, da `toBe(length)` a **contenimento**: regge le righe
+*aggiunte* da un altro worker, non quelle *togliesse*. Il rosso che ne esce è `expected [] to deeply
+equal ArrayContaining{…}`. **Riprodotto e misurato prima di toccarlo**: due rossi su sei giri con M18
+addosso, **zero su cinque sulla baseline `origin/dev`** girata in un worktree — le due db-test nuove di
+M18-02 non c'entrano col listone, cambiano solo l'ordine dei lavori. È la stessa dinamica con cui il
+rosso era comparso lavorando a M14.
+
+⚠ **Non era aggiustabile una terza volta come misura**: nessuna riga-sentinella scritta da quel file
+sopravvive a un `DELETE` senza `WHERE` fatto altrove, e serializzare i file di test era già stato
+scartato (costa secondi a ogni `pnpm test` e lascia la trappola aperta al terzo file). La domanda vera
+— «la cancellazione di un'asta può portarsi via il listone?» — **non è una domanda sui dati, è una
+domanda sullo schema**: una cascata viaggia sulle foreign key, e quelle tre tabelle non ne hanno
+nessuna. L'asserzione è ora su `information_schema`, è più forte di quella empirica (vale per qualunque
+punto di partenza, anche per un ramo aggiunto domani sotto `auctions`) e non ha corse dentro. La
+chiamata a `deleteAuction` resta, con la verifica che l'asta è sparita per davvero. **Otto giri di
+suite verdi.**
+
+### ⚠ La verifica visiva del «prima» non è stata fatta, e va saputo
+
+M18-01 chiedeva di guardare la rosa nei tre posti — portale su portatile, portale sul telefono, TV —
+**prima** di cambiarla, perché dopo quel termine di paragone non esiste più. L'owner ha deciso di
+procedere senza (2026-08-22). Il paragone che resta è quello **misurato dal database** ed è annotato in
+`docs/features/18-rosa-a-fisarmonica.md`, task M18-01: la rosa di un membro con Vojvoda a 19 — quarto
+preso — in cima ai difensori, e le quote attese `P 5% · D 13% · C 6% · A 0%`. Non è la stessa cosa di
+uno sguardo, e se una scelta di misura o di spaziatura si rivelasse sbagliata, questa è la ragione per
+cui non se ne è accorto nessuno prima.

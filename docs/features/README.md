@@ -12,7 +12,28 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M17 è in produzione da `v1.17.0`** (2026-08-22): pianificata, aperta, lavorata,
+**[M18 — La rosa a fisarmonica](18-rosa-a-fisarmonica.md)**, aperta il 2026-08-22 su
+`feature/18-rosa-a-fisarmonica`. Baseline 897 test, ora **909**: dieci per `quotaPerRuolo`, due per
+l'ordine di estrazione. Codice fatto (M18-01 → M18-04), **manca la verifica guardata** — M18-05 e
+M18-06 — poi il gate e la chiusura.
+
+⚠ **Il paragone visivo del «prima» non c'è**: l'owner ha scelto di procedere senza (2026-08-22), quindi
+il termine di paragone è quello misurato dal database e sta nel task M18-01. Se una misura o una
+spaziatura si rivelasse sbagliata, quella è la ragione per cui nessuno se ne è accorto prima.
+
+⚠ **Un flake preesistente è stato chiuso dentro la macro**, come i tre di M14 e con la stessa
+disciplina — riprodotto e misurato prima di toccarlo: **due rossi su sei giri** con M18 addosso, **zero
+su cinque sulla baseline** girata in un worktree. `delete-auction.test.ts` asseriva sul **contenuto** di
+`listone_players`, che è posseduta da `listone.test.ts` e da lei svuotata senza `WHERE`. M14 aveva già
+corretto quella misura una volta (da `toBe(length)` a contenimento) e non bastava: il contenimento
+regge le righe aggiunte in parallelo, non quelle togliesse. **Non era aggiustabile una terza volta come
+misura** — nessuna riga-sentinella sopravvive a quel `DELETE` — quindi l'asserzione è passata **dai dati
+allo schema**: una cascata viaggia sulle foreign key, e quelle tabelle non ne hanno nessuna. Otto giri
+di suite verdi.
+
+---
+
+**M17 è in produzione da `v1.17.0`** (2026-08-22): pianificata, aperta, lavorata,
 provata dall'owner e rilasciata **nella stessa giornata**, il quarto caso di fila dopo M13, M14 e M16.
 Gate verde con **897 test in 52 file** (da 858), typecheck, lint e build. Su desktop il portale è tre
 colonne, la chiamata arriva dal basso come l'offerta, e la colonna dello stato ha la stessa anatomia
@@ -203,9 +224,11 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-**[M18 — La rosa a fisarmonica](18-rosa-a-fisarmonica.md)**, pianificata il 2026-08-22 dalle due
-richieste che l'owner ha scritto nel quaderno dopo `v1.17.0`. Non è aperta: c'è la spec, non il
-branch. `docs/REQUESTS.md` torna vuoto.
+Nessuna. Il quaderno `docs/REQUESTS.md` è vuoto: le due richieste che c'erano sono confluite in M18,
+qui sopra.
+
+Quello che segue è il ragionamento con cui **M18** è stata tagliata il 2026-08-22, e resta come
+archivio: dice il vero su perché è una macro sola.
 
 I ruoli della propria rosa diventano una fisarmonica con la **quota di budget del reparto** accanto
 al nome, e i giocatori si ordinano per **data di estrazione** invece che per prezzo — nel portale,

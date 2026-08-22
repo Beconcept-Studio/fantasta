@@ -361,9 +361,16 @@ solo da quei due. Nessun componente server perde niente.
       resto in cassa. La rettifica si prova come la vede il client — `credits` include già
       `Σ ledger.delta`, quindi due membri con la stessa rosa e crediti diversi danno quote diverse.
       **`spentCredits` non è stato spostato** da `manage.ts`: il totale se lo calcola `quotaPerRuolo`
-- [ ] **M18-04** — `RosterAccordion` e il corpo condiviso in `roster-grid.tsx` (§5), con `"use client"`
+- [x] **M18-04** — `RosterAccordion` e il corpo condiviso in `roster-grid.tsx` (§5), con `"use client"`
       e `Accordion` da `radix-ui`. La riga chiusa a tre elementi: chevron, etichetta con la quota,
       `n/tot`. **Nessun `dark:`**
+      → Fatto: `RosterGrid` (regia, piatta), `RosterAccordion` (portale) e `RosterBody` privato, più
+      `ownedOf` — che è dove vive il commento sul non-riordino, con due chiamanti veri. ⚠ **Verificato
+      invece che dedotto**: `Accordion.Header` rende un `Primitive.h3`, quindi **è** l'`<h3>` che
+      c'era già e non va aggiunto un secondo titolo dentro. Le animazioni sono
+      `animate-accordion-down/up`, che `tw-animate-css` ha già con la variabile
+      `--radix-accordion-content-height`: nessun keyframe da scrivere in `globals.css`. Nessun `dark:`,
+      nessun file nuovo in `components/ui/`, nessuna dipendenza aggiunta. Typecheck e lint verdi
 - [ ] **M18-05** — La chiave sul ruolo in gioco (§4), e provarla per davvero con la simulazione che
       gira: apro un reparto a mano e **resta aperto** al passare degli snapshot; al cambio di ruolo
       l'apertura si sposta; a `currentRole = null` è tutto chiuso; F5 a metà asta ritrova il reparto
