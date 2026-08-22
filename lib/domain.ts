@@ -592,6 +592,30 @@ export function titolarita(
 }
 
 /**
+ * Il `PMA` tradotto nei **crediti di questa asta**: una percentuale è un numero
+ * che non si può offrire, e sotto un countdown nessuno la converte a mente.
+ *
+ * ⚠ **Non è, e non deve diventare, il «prezzo consigliato».** Il foglio ha due
+ * colonne indipendenti — `prezzo`, un assoluto, e `pma`, una percentuale — e la
+ * misura sui byte dice che **non sono la stessa cosa in due unità**: solo 132
+ * righe su 385 rispettano `prezzo / 5`. Questa funzione converte `pma` e nient'altro,
+ * quindi il numero che produce **può differire** da `carmy.prezzo` che il modale
+ * d'offerta mostra come «consigliato NN». Non è un bug: sono due giudizi diversi
+ * di chi compila il foglio, e ricalcolare l'uno dall'altro vorrebbe dire
+ * sostituire il suo dato con una nostra stima. Il perché per esteso sta sulla
+ * colonna `pma` in `lib/db/schema.ts`.
+ *
+ * ⚠ **Il minimo è 1, e non è un dettaglio di arrotondamento.** Con un budget
+ * basso il `pma` più piccolo che il foglio scrive (0,2%) darebbe zero — e «zero
+ * crediti» è un'offerta che il motore rifiuta, cioè un suggerimento impossibile
+ * da seguire. È la stessa ragione per cui il parser traduce in assente il
+ * `prezzo` scritto `0` (M10B-02, DECISIONS 2026-08-12).
+ */
+export function pmaCrediti(pma: number, budget: number): number {
+  return Math.max(1, Math.round((pma / 100) * budget));
+}
+
+/**
  * Chi vede gli insight sul listone.
  *
  * ⚠ **Questo predicato decide una query, non un `className`.** Gli insight non

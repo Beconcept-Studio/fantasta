@@ -13,9 +13,16 @@ import {
   parseAmount,
   pausedRemaining,
   portalScreen,
+  sceneLabel,
+  sceneOf,
+  sceneTime,
   secondsLeft,
   shouldOpenBidDialog,
+  shouldOpenPickSheet,
   takenPlayerIds,
+  timeTone,
+  toneOf,
+  turnKey,
   tvConnected,
 } from "@/lib/realtime/portal";
 import type { PoolPlayer, Presence, Snapshot } from "@/lib/realtime/types";
@@ -551,5 +558,304 @@ describe("autoPickCandidate — chi comprerebbe il timer", () => {
   it("è `null` quando non c'è niente da comprare di quel ruolo", () => {
     expect(autoPickCandidate(pool, snapshot(), "P")).toBeNull();
     expect(autoPickCandidate(pool, snapshot(), null)).toBeNull();
+  });
+});
+
+// ─── Le nove scene, il tono, la banda del tempo (M17 §6 e §7) ────────────────
+
+/**
+ * ⚠ **Sono l'unica rete di questa macro.** In questo progetto la UI non ha test
+ * di rendering — non c'è `@testing-library`, non c'è jsdom, e i test stanno su
+ * funzioni pure e sul database. La conseguenza vincolante di M17 §1 è che tutto
+ * ciò che si può rendere una funzione pura **deve** esserlo e **deve** avere il
+ * suo test: quale scena, quale tono, quale scadenza. Ciò che resta è markup, e si
+ * verifica guardandolo.
+ */
+describe("sceneOf — la scena non è la fase", () => {
+  const live = (patch: Partial<Snapshot["auction"]>, rest: Partial<Snapshot> = {}) =>
+    snapshot({ auction: { ...snapshot().auction, ...patch }, ...rest });
+
+  it("⚠ LOT_OPEN al round 2 è lo spareggio, non le offerte: è la sola voce che non è uno a uno", () => {
+    expect(sceneOf(snapshot(), ME)).toBe("OFFERS");
+    const spareggio = snapshot({ currentLot: lot({ roundNo: 2, minAmount: 40 }) });
+    expect(sceneOf(spareggio, ME)).toBe("TIE_OPEN");
+    // La fase è la stessa in tutti e due: se un giorno qualcuno decide la scena
+    // sulla fase, questa riga è quella che se ne accorge.
+    expect(spareggio.auction.phase).toBe(snapshot().auction.phase);
+  });
+
+  it("le altre tre fasi di lotto hanno una scena ciascuna", () => {
+    expect(sceneOf(live({ phase: "LOT_TIE_PREP" }), ME)).toBe("TIE_PREP");
+    expect(sceneOf(live({ phase: "LOT_SEALED" }), ME)).toBe("SEALED");
+    expect(sceneOf(live({ phase: "LOT_REVEAL" }), ME)).toBe("REVEAL");
+  });
+
+  it("in chiamata distingue il mio turno da quello di un altro", () => {
+    const mio = live(
+      { phase: "WAITING_PICK", currentMemberId: ME },
+      { currentLot: null },
+    );
+    expect(sceneOf(mio, ME)).toBe("PICK_MINE");
+    const altrui = live(
+      { phase: "WAITING_PICK", currentMemberId: OTHER },
+      { currentLot: null },
+    );
+    expect(sceneOf(altrui, ME)).toBe("PICK_WAIT");
+  });
+
+  it("fuori da LIVE/PAUSED dice non iniziata o conclusa", () => {
+    expect(sceneOf(live({ status: "DRAFT", phase: null }, { currentLot: null }), ME)).toBe(
+      "NOT_STARTED",
+    );
+    expect(sceneOf(live({ status: "READY", phase: null }, { currentLot: null }), ME)).toBe(
+      "NOT_STARTED",
+    );
+    expect(
+      sceneOf(live({ status: "COMPLETED", phase: null }, { currentLot: null }), ME),
+    ).toBe("COMPLETED");
+  });
+
+  it("la pausa non cambia la scena: congela la fase, non la azzera", () => {
+    const inPausa = live({ status: "PAUSED", pausedAt: iso(-1_000) });
+    expect(sceneOf(inPausa, ME)).toBe(sceneOf(snapshot(), ME));
+  });
+});
+
+describe("toneOf — la fascia da 4px", () => {
+  const SCENE_ALL = [
+    "NOT_STARTED",
+    "COMPLETED",
+    "PICK_WAIT",
+    "PICK_MINE",
+    "OFFERS",
+    "TIE_PREP",
+    "TIE_OPEN",
+    "SEALED",
+    "REVEAL",
+  ] as const;
+
+  it("⚠ in pausa il tono è quello della pausa QUALUNQUE sia la scena", () => {
+    // È il test che conta di §7, e vale la pena che sia esaustivo invece di
+    // esemplificativo: una fascia che dicesse «round di offerte» mentre le
+    // offerte sono sospese direbbe una cosa falsa nel momento in cui qualcuno
+    // sta cercando di capire perché il suo pulsante non funziona.
+    for (const scene of SCENE_ALL) {
+      expect(toneOf(scene, "PAUSED")).toBe("PAUSED");
+    }
+  });
+
+  it("le tre scene in cui non c'è niente da fare sono grigie", () => {
+    expect(toneOf("NOT_STARTED", "READY")).toBe("NEUTRAL");
+    expect(toneOf("COMPLETED", "COMPLETED")).toBe("NEUTRAL");
+    expect(toneOf("PICK_WAIT", "LIVE")).toBe("NEUTRAL");
+  });
+
+  it("il mio turno ha un tono suo, e i due spareggi ne condividono uno", () => {
+    expect(toneOf("PICK_MINE", "LIVE")).toBe("MINE");
+    expect(toneOf("TIE_PREP", "LIVE")).toBe("TIE");
+    expect(toneOf("TIE_OPEN", "LIVE")).toBe("TIE");
+  });
+
+  it("⚠ offerte, buste da aprire ed esito sono tre toni diversi", () => {
+    // Fuori dalla pausa nessuna delle scene «qualcosa sta succedendo» condivide
+    // il tono con un'altra: se un giorno due si sovrappongono, il cambio di fase
+    // in mezzo diventa invisibile.
+    const toni = new Set([
+      toneOf("OFFERS", "LIVE"),
+      toneOf("SEALED", "LIVE"),
+      toneOf("REVEAL", "LIVE"),
+    ]);
+    expect(toni.size).toBe(3);
+  });
+
+  it("ogni scena ha un tono: nessun buco nella tabella", () => {
+    for (const scene of SCENE_ALL) {
+      expect(toneOf(scene, "LIVE")).toBeTruthy();
+      expect(sceneLabel(scene)).toBeTruthy();
+    }
+  });
+});
+
+describe("sceneTime — cosa scade, su quanto, e se la scadenza è mia", () => {
+  const live = (patch: Partial<Snapshot["auction"]>) =>
+    snapshot({ auction: { ...snapshot().auction, ...patch } });
+
+  it("le due scene senza scadenza non hanno banda", () => {
+    // Un anello vuoto con un «—» al posto della cifra fa sembrare la card rotta:
+    // meglio due card più corte delle altre sette.
+    expect(sceneTime("NOT_STARTED", snapshot())).toBeNull();
+    expect(sceneTime("COMPLETED", snapshot())).toBeNull();
+  });
+
+  it("⚠ le offerte leggono la scadenza del round e non quella della fase", () => {
+    const s = snapshot({
+      auction: { ...snapshot().auction, phaseDeadline: iso(99_000) },
+      currentLot: lot({ endsAt: iso(30_000) }),
+    });
+    expect(sceneTime("OFFERS", s)?.deadline).toBe(iso(30_000));
+    expect(sceneTime("TIE_OPEN", s)?.deadline).toBe(iso(30_000));
+    // Tutte le altre stanno sulla fase.
+    expect(sceneTime("SEALED", s)?.deadline).toBe(iso(99_000));
+    expect(sceneTime("REVEAL", s)?.deadline).toBe(iso(99_000));
+    expect(sceneTime("PICK_MINE", s)?.deadline).toBe(iso(99_000));
+  });
+
+  it("ogni scena prende il totale dal suo timer", () => {
+    const s = live({
+      timers: {
+        bidSeconds: 30,
+        pickSeconds: 60,
+        tiePrepSeconds: 5,
+        revealSeconds: 10,
+        resultGateSeconds: 7,
+      },
+    });
+    expect(sceneTime("OFFERS", s)?.totalSeconds).toBe(30);
+    expect(sceneTime("PICK_MINE", s)?.totalSeconds).toBe(60);
+    expect(sceneTime("PICK_WAIT", s)?.totalSeconds).toBe(60);
+    expect(sceneTime("TIE_PREP", s)?.totalSeconds).toBe(5);
+    expect(sceneTime("REVEAL", s)?.totalSeconds).toBe(10);
+    expect(sceneTime("SEALED", s)?.totalSeconds).toBe(7);
+  });
+
+  it("⚠ `pressing` è vero solo dove c'è una scadenza MIA da mancare", () => {
+    // È la risposta a «dove il rosso ha senso» (decisione dell'owner del
+    // 2026-08-22): con il colore acceso in tutte le scene la banda diventerebbe
+    // rossa a ogni lotto, duecento volte in una serata, anche dove non è chiesto
+    // niente — e un rosso che non chiede mai niente si impara a ignorare.
+    for (const scene of ["PICK_MINE", "OFFERS", "TIE_OPEN"] as const) {
+      expect(sceneTime(scene, snapshot())?.pressing).toBe(true);
+    }
+    for (const scene of ["PICK_WAIT", "TIE_PREP", "SEALED", "REVEAL"] as const) {
+      expect(sceneTime(scene, snapshot())?.pressing).toBe(false);
+    }
+  });
+});
+
+describe("timeTone — le tre soglie, in un posto solo", () => {
+  it("sono quelle che CountdownBar aveva già: 50% e 20%", () => {
+    expect(timeTone(1, true)).toBe("OK");
+    expect(timeTone(0.51, true)).toBe("OK");
+    expect(timeTone(0.5, true)).toBe("WARN");
+    expect(timeTone(0.21, true)).toBe("WARN");
+    expect(timeTone(0.2, true)).toBe("HOT");
+    expect(timeTone(0, true)).toBe("HOT");
+  });
+
+  it("senza una scadenza mia il tempo non grida mai, per quanto poco ne resti", () => {
+    expect(timeTone(0.9, false)).toBe("CALM");
+    expect(timeTone(0.01, false)).toBe("CALM");
+  });
+
+  it("senza scadenza è calmo e non rosso: un `null` non è un tempo scaduto", () => {
+    expect(timeTone(null, true)).toBe("CALM");
+    expect(timeTone(null, false)).toBe("CALM");
+  });
+});
+
+// ─── Il pannello di chiamata (M17 §4) ────────────────────────────────────────
+
+describe("turnKey — con che chiave si ricorda «l'ho chiuso»", () => {
+  it("è la scadenza della fase", () => {
+    expect(turnKey(snapshot())).toBe(iso(30_000));
+  });
+
+  it("⚠ e NON la coppia membro+ruolo, perché dentro un ruolo lo stesso posto chiama più volte", () => {
+    // Otto difensori vogliono otto turni dello stesso membro sullo stesso ruolo.
+    // Con `currentMemberId + currentRole` come chiave, chi chiude il pannello al
+    // primo dei suoi difensori se lo ritroverebbe chiuso per tutti gli altri —
+    // cioè per la serata. Queste due chiamate hanno membro e ruolo identici:
+    const primo = snapshot({
+      auction: {
+        ...snapshot().auction,
+        phase: "WAITING_PICK",
+        currentMemberId: ME,
+        currentRole: "D",
+        phaseDeadline: iso(60_000),
+      },
+      currentLot: null,
+    });
+    const secondo = snapshot({
+      auction: { ...primo.auction, phaseDeadline: iso(180_000) },
+      currentLot: null,
+    });
+    expect(primo.auction.currentMemberId).toBe(secondo.auction.currentMemberId);
+    expect(primo.auction.currentRole).toBe(secondo.auction.currentRole);
+    // …e chiavi diverse, che è l'unica cosa che salva il secondo turno.
+    expect(turnKey(primo)).not.toBe(turnKey(secondo));
+  });
+});
+
+describe("shouldOpenPickSheet — il secondo modale che si apre da sé", () => {
+  const mioTurno = (patch: Partial<Snapshot["auction"]> = {}) =>
+    snapshot({
+      auction: {
+        ...snapshot().auction,
+        phase: "WAITING_PICK",
+        currentMemberId: ME,
+        currentRole: "D",
+        ...patch,
+      },
+      currentLot: null,
+    });
+
+  it("si apre quando tocca a me e non l'ho chiuso", () => {
+    expect(shouldOpenPickSheet(mioTurno(), ME, null)).toBe(true);
+  });
+
+  it("resta chiuso se l'ho chiuso io, per questo turno", () => {
+    const s = mioTurno();
+    expect(shouldOpenPickSheet(s, ME, turnKey(s))).toBe(false);
+  });
+
+  it("⚠ si riapre al turno successivo dello stesso ruolo: la chiave è cambiata", () => {
+    const primo = mioTurno({ phaseDeadline: iso(60_000) });
+    const chiuso = turnKey(primo);
+    const secondo = mioTurno({ phaseDeadline: iso(180_000) });
+    expect(shouldOpenPickSheet(secondo, ME, chiuso)).toBe(true);
+  });
+
+  it("non si apre se tocca a un altro", () => {
+    expect(shouldOpenPickSheet(mioTurno({ currentMemberId: OTHER }), ME, null)).toBe(
+      false,
+    );
+  });
+
+  it("non si apre fuori da WAITING_PICK: durante un lotto la chiamata è passata", () => {
+    // È ciò che fa chiudere il pannello **da sé** quando ho scelto: non è il
+    // pannello a chiudersi, è questa condizione a diventare falsa quando arriva
+    // lo snapshot successivo.
+    expect(shouldOpenPickSheet(snapshot(), ME, null)).toBe(false);
+  });
+
+  it("non si apre in pausa: il server rifiuterebbe la chiamata", () => {
+    const s = mioTurno({ status: "PAUSED", pausedAt: iso(-1_000) });
+    expect(shouldOpenPickSheet(s, ME, null)).toBe(false);
+  });
+
+  it("⚠ ma dopo il resume si riapre, ed è il comportamento voluto", () => {
+    // Al resume le scadenze sono traslate, quindi la chiave di chi l'aveva chiuso
+    // prima della pausa non combacia più. L'owner l'ha accettato sapendolo
+    // (2026-08-22): la pausa finisce e la domanda ti viene rifatta. Se guardandolo
+    // non convincesse, è la chiave da cambiare — e questa riga è dove si vede.
+    const primaDellaPausa = mioTurno({ phaseDeadline: iso(60_000) });
+    const chiuso = turnKey(primaDellaPausa);
+    const dopoIlResume = mioTurno({ phaseDeadline: iso(72_000) });
+    expect(shouldOpenPickSheet(dopoIlResume, ME, chiuso)).toBe(true);
+  });
+
+  it("senza un membro non si apre niente: chi guarda da fuori non chiama", () => {
+    expect(shouldOpenPickSheet(mioTurno(), null, null)).toBe(false);
+  });
+
+  it("ha la stessa forma della gemella d'offerta: due condizioni, mai una sequenza", () => {
+    // Quando scelgo, lo snapshot successivo porta `LOT_OPEN`: una diventa falsa e
+    // l'altra vera nello stesso istante, senza che nessuno le coordini.
+    const chiamata = mioTurno();
+    expect(shouldOpenPickSheet(chiamata, ME, null)).toBe(true);
+    expect(shouldOpenBidDialog(chiamata, ME, null)).toBe(false);
+    const lottoAperto = snapshot();
+    expect(shouldOpenPickSheet(lottoAperto, ME, null)).toBe(false);
+    expect(shouldOpenBidDialog(lottoAperto, ME, null)).toBe(true);
   });
 });

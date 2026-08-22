@@ -1,4 +1,4 @@
-import { ROLE_LABELS, type Role } from "@/lib/domain";
+import { ROLE_LABELS, type AuctionStatus, type Role } from "@/lib/domain";
 
 import type {
   PoolPlayer,
@@ -153,10 +153,34 @@ export function portalScreen(
  * gioco.
  */
 export function phaseLabel(snapshot: Snapshot): string {
-  const { status, phase, currentRole } = snapshot.auction;
+  const { status } = snapshot.auction;
   if (status === "PAUSED") return "in pausa";
   if (status === "COMPLETED") return "finita";
   if (status === "DRAFT" || status === "READY") return "non iniziata";
+  return phaseLabelIgnoringPause(snapshot);
+}
+
+/**
+ * La stessa frase di `phaseLabel`, **senza la precedenza della pausa**: dice a
+ * che punto del lotto siamo anche mentre l'asta è ferma.
+ *
+ * ⚠ **Non è una seconda copia delle frasi, ed è per questo che `phaseLabel` la
+ * chiama** invece di ripetere lo `switch`: «offerte», «spareggio», «buste da
+ * aprire» esistono in un posto solo, e chi ne cambia una le cambia per tutti i
+ * chiamanti — TV, regia e portale.
+ *
+ * Serve alla **card di stato** del portale (M17 §5), che ha il badge dello stato
+ * dell'asta e la riga della fase uno accanto all'altro. Con `phaseLabel` in
+ * pausa direbbero la stessa parola due volte — badge «in pausa», fase «in pausa»
+ * — e una card che si ripete si legge come una card rotta. Così invece dice
+ * **entrambe le cose**: in pausa, *durante un round di offerte*, che è
+ * precisamente ciò che significa «la pausa congela la fase, non la azzera».
+ *
+ * Fuori da `LIVE`/`PAUSED` non ha niente da dire — `phase` è `null` — e chi
+ * chiama non deve renderizzare la riga: lo stato lo dice già il badge.
+ */
+export function phaseLabelIgnoringPause(snapshot: Snapshot): string {
+  const { phase, currentRole } = snapshot.auction;
   const role =
     currentRole === null ? "" : ` ${ROLE_LABELS[currentRole].toLowerCase()}`;
   switch (phase) {
@@ -178,6 +202,280 @@ export function phaseLabel(snapshot: Snapshot): string {
     default:
       return "in corso";
   }
+}
+
+/**
+ * Lo stato dell'asta in due parole, per il badge della card di stato (M17 §5).
+ *
+ * È una funzione dello **stato** e non dello snapshot intero di proposito: qui
+ * non c'è niente da dedurre dalla fase o dal lotto, e prendere lo snapshot
+ * inviterebbe a metterci dentro condizioni che appartengono a `phaseLabel`.
+ *
+ * `DRAFT` e `READY` dicono la stessa cosa a chi gioca — «non è ancora
+ * cominciata» — e la differenza fra le due (listone importato o no) è una
+ * faccenda di chi prepara l'asta, che la vede nella configurazione.
+ */
+export function statusLabel(status: AuctionStatus): string {
+  switch (status) {
+    case "DRAFT":
+    case "READY":
+      return "non iniziata";
+    case "LIVE":
+      return "in corso";
+    case "PAUSED":
+      return "in pausa";
+    case "COMPLETED":
+      return "conclusa";
+  }
+}
+
+// ─── La scena, il tono, il tempo (M17 §6 e §7) ───────────────────────────────
+
+/**
+ * **Le nove scene della colonna 3**, che non sono le cinque schermate di
+ * `portalScreen` e non sono le cinque fasi della macchina.
+ *
+ * ⚠ **La scena non è la fase, e il conto non torna se lo si dà per scontato**:
+ * `LOT_OPEN` con `roundNo = 2` è lo *spareggio*, cioè una scena diversa dalla
+ * stessa fase con `roundNo = 1`. È l'unico punto in cui questa mappa non è una
+ * corrispondenza uno a uno, ed è il motivo per cui esiste come funzione invece
+ * di come `switch` dentro un componente.
+ *
+ * Perché nove e non sei come i contenitori di prima: fino a v1.16.0 due card ne
+ * coprivano più d'una con un `if` interno — `LotCard` faceva offerte, spareggio
+ * in preparazione e spareggio, `LotClosedCard` cancello ed esito. Dopo M17 le
+ * scene sono nove e la cornice è **una**: cambia il corpo, non il contenitore, e
+ * chi decide quale corpo è questa funzione.
+ */
+export type Scene =
+  | "NOT_STARTED"
+  | "COMPLETED"
+  /** Sta chiamando qualcun altro. */
+  | "PICK_WAIT"
+  /** Tocca a me chiamare. */
+  | "PICK_MINE"
+  /** `LOT_OPEN` al round 1. */
+  | "OFFERS"
+  /** `LOT_TIE_PREP`: lo spareggio sta per riaprirsi. */
+  | "TIE_PREP"
+  /** `LOT_OPEN` al round 2: lo spareggio è aperto. */
+  | "TIE_OPEN"
+  /** `LOT_SEALED`: il cancello dei risultati (M14). */
+  | "SEALED"
+  /** `LOT_REVEAL`: le buste sono aperte. */
+  | "REVEAL";
+
+/**
+ * Costruita **sopra `portalScreen`** e non accanto: chi decide se siamo in un
+ * lotto, in attesa o fuori dall'asta resta uno, e questa funzione si limita ad
+ * aprire il caso `LOT` nelle sue cinque scene. Due funzioni che decidessero
+ * entrambe «siamo in un lotto?» divergerebbero il giorno in cui una fase nuova
+ * entra nella macchina — che è successo con `LOT_SEALED` e succederà ancora.
+ */
+export function sceneOf(snapshot: Snapshot, myMemberId: string | null): Scene {
+  const screen = portalScreen(snapshot, myMemberId);
+  switch (screen.kind) {
+    case "NOT_STARTED":
+      return "NOT_STARTED";
+    case "COMPLETED":
+      return "COMPLETED";
+    case "PICK_MINE":
+      return "PICK_MINE";
+    case "PICK_WAIT":
+      return "PICK_WAIT";
+    case "LOT":
+      switch (snapshot.auction.phase) {
+        case "LOT_TIE_PREP":
+          return "TIE_PREP";
+        case "LOT_SEALED":
+          return "SEALED";
+        case "LOT_REVEAL":
+          return "REVEAL";
+        default:
+          // ⚠ Qui e in nessun altro posto: il round decide la scena.
+          return snapshot.currentLot?.roundNo === 2 ? "TIE_OPEN" : "OFFERS";
+      }
+  }
+}
+
+/**
+ * **La fascia da 4px in testa alla card**, cioè la sola cosa della colonna 3 che
+ * si percepisce senza leggere.
+ *
+ * I toni sono sette per nove scene, e le due coincidenze sono volute: «non
+ * iniziata», «conclusa» e «sta chiamando un altro» sono grigie perché sono le
+ * tre scene in cui **non c'è niente da fare** — e la terza è la più frequente
+ * della serata, undici turni su dodici. Vuol dire che per la maggior parte del
+ * tempo la striscia è grigia e il colore parla solo quando qualcosa riguarda me,
+ * che è precisamente il messaggio voluto (decisione dell'owner, 2026-08-22).
+ *
+ * ⚠ **La pausa vince su tutte**, e non è una scelta nuova: `phaseLabel` applica
+ * già la stessa precedenza per la stessa ragione. Una fascia che dicesse «round
+ * di offerte» mentre le offerte sono sospese direbbe una cosa falsa nel momento
+ * in cui qualcuno sta cercando di capire perché il suo pulsante non funziona.
+ */
+export type SceneTone =
+  /** Grigio: niente da fare. */
+  | "NEUTRAL"
+  /** Nero pieno: tocca a me. */
+  | "MINE"
+  /** Verde: si offre. */
+  | "OPEN"
+  /** Ambra: spareggio, in preparazione o aperto. */
+  | "TIE"
+  /** Ambra scuro: le buste sono chiuse e nessuno sa niente. */
+  | "SEALED"
+  /** Verde pieno: è deciso. */
+  | "DONE"
+  /** Ambra a righe: l'asta è ferma. */
+  | "PAUSED";
+
+export function toneOf(scene: Scene, status: AuctionStatus): SceneTone {
+  if (status === "PAUSED") return "PAUSED";
+  switch (scene) {
+    case "NOT_STARTED":
+    case "COMPLETED":
+    case "PICK_WAIT":
+      return "NEUTRAL";
+    case "PICK_MINE":
+      return "MINE";
+    case "OFFERS":
+      return "OPEN";
+    case "TIE_PREP":
+    case "TIE_OPEN":
+      return "TIE";
+    case "SEALED":
+      return "SEALED";
+    case "REVEAL":
+      return "DONE";
+  }
+}
+
+/** L'etichetta in alto a sinistra della card di scena, sempre in quel posto. */
+export function sceneLabel(scene: Scene): string {
+  switch (scene) {
+    case "NOT_STARTED":
+      return "In attesa";
+    case "COMPLETED":
+      return "La tua asta";
+    case "PICK_WAIT":
+      return "Sta chiamando";
+    case "PICK_MINE":
+      return "Tocca a te";
+    case "OFFERS":
+      return "Offerte aperte";
+    case "TIE_PREP":
+      return "Spareggio fra poco";
+    case "TIE_OPEN":
+      return "Spareggio aperto";
+    case "SEALED":
+      return "Buste consegnate";
+    case "REVEAL":
+      return "Lotto assegnato";
+  }
+}
+
+/**
+ * **La banda del tempo in fondo alla card**: cosa scade, quando, su quanto, e se
+ * la scadenza è mia.
+ *
+ * `null` nelle due scene che non hanno una scadenza — ad asta non iniziata e ad
+ * asta conclusa non c'è niente che scorre, e una banda con un `—` al posto della
+ * cifra fa sembrare la card rotta.
+ *
+ * ⚠ **`pressing` è la risposta alla domanda «dove il rosso ha senso»** (decisione
+ * dell'owner, 2026-08-22), e vale la pena leggerla per quello che è: con il
+ * colore acceso in tutte le scene la banda diventa rossa anche in «esito», «buste
+ * da aprire» e «sta chiamando un altro», cioè a **ogni lotto** — duecento volte
+ * in una serata a 8 con 25 slot. Un rosso che non chiede mai niente si impara a
+ * ignorare, e poi non funziona più nelle tre in cui vuol dire «muoviti». Qui è
+ * `true` solo dove c'è una scadenza **mia** da mancare, e altrove la banda resta
+ * grigia: il tempo si legge, non grida.
+ *
+ * ⚠ Le offerte leggono `lot.endsAt` e non `phaseDeadline`: sono la stessa cosa
+ * finché il round è aperto, ma `endsAt` è la scadenza del **round** e sopravvive
+ * a un cambio di fase arrivato un tick prima dello snapshot. È la scelta che
+ * `LotCard` faceva già.
+ */
+export type SceneTime = {
+  /** «si chiude fra», «scegli entro», «risultati fra»… */
+  label: string;
+  deadline: string | null;
+  /** Il totale su cui la misura è una frazione. */
+  totalSeconds: number;
+  /** Se il tempo va colorato: c'è una scadenza mia da mancare. */
+  pressing: boolean;
+};
+
+export function sceneTime(scene: Scene, snapshot: Snapshot): SceneTime | null {
+  const { phaseDeadline, timers } = snapshot.auction;
+  const lotEnd = snapshot.currentLot?.endsAt ?? phaseDeadline;
+  switch (scene) {
+    case "NOT_STARTED":
+    case "COMPLETED":
+      return null;
+    case "PICK_WAIT":
+      return {
+        label: "scade fra",
+        deadline: phaseDeadline,
+        totalSeconds: timers.pickSeconds,
+        pressing: false,
+      };
+    case "PICK_MINE":
+      return {
+        label: "scegli entro",
+        deadline: phaseDeadline,
+        totalSeconds: timers.pickSeconds,
+        pressing: true,
+      };
+    case "OFFERS":
+    case "TIE_OPEN":
+      return {
+        label: "si chiude fra",
+        deadline: lotEnd,
+        totalSeconds: timers.bidSeconds,
+        pressing: true,
+      };
+    case "TIE_PREP":
+      return {
+        label: "si riapre fra",
+        deadline: phaseDeadline,
+        totalSeconds: timers.tiePrepSeconds,
+        pressing: false,
+      };
+    case "SEALED":
+      return {
+        label: "risultati fra",
+        deadline: phaseDeadline,
+        totalSeconds: timers.resultGateSeconds,
+        pressing: false,
+      };
+    case "REVEAL":
+      return {
+        label: "prossimo turno fra",
+        deadline: phaseDeadline,
+        totalSeconds: timers.revealSeconds,
+        pressing: false,
+      };
+  }
+}
+
+/**
+ * Il tono del tempo, dalle **tre soglie che c'erano già** in `CountdownBar`:
+ * sopra il 50% verde, sopra il 20% ambra, sotto rosso. Non è una regola nuova,
+ * è quella di v1.0.0 spostata dove la possono leggere in due — la banda della
+ * card di scena e la barra dentro i due pannelli.
+ *
+ * `CALM` è il tono di chi non ha una scadenza sua: grigio, la misura si vede e
+ * non chiama. Vale ovunque `sceneTime().pressing` sia falso, e in pausa.
+ */
+export type TimeTone = "CALM" | "OK" | "WARN" | "HOT";
+
+export function timeTone(ratio: number | null, pressing: boolean): TimeTone {
+  if (!pressing || ratio === null) return "CALM";
+  if (ratio > 0.5) return "OK";
+  if (ratio > 0.2) return "WARN";
+  return "HOT";
 }
 
 // ─── Il modale ───────────────────────────────────────────────────────────────
@@ -212,6 +510,66 @@ export function shouldOpenBidDialog(
   if (lot === null) return false;
   if (!amEligible(lot, myMemberId)) return false;
   return dismissedLotId !== lot.id;
+}
+
+// ─── Il pannello di chiamata (M17 §4) ────────────────────────────────────────
+
+/**
+ * **La chiave con cui «ho chiuso il pannello» viene ricordata**: la scadenza
+ * della fase.
+ *
+ * ⚠ **Non `currentMemberId` e non `currentRole`**, ed è l'errore che questa
+ * funzione esiste per non far fare: dentro un ruolo lo stesso posto chiama più
+ * volte — otto difensori vogliono otto turni dello stesso membro sullo stesso
+ * ruolo — quindi quella coppia si ripete e il pannello resterebbe chiuso per
+ * **tutte** le chiamate successive di quella persona. Chi lo chiude una volta lo
+ * chiuderebbe per la serata.
+ *
+ * `phaseDeadline` invece è nuova a ogni turno, perché ogni `WAITING_PICK` apre la
+ * sua finestra. Ed è il gemello di `dismissedLotId` per il modale d'offerta: là
+ * l'id del lotto cambia al lotto successivo, qui la scadenza cambia al turno
+ * successivo, e in entrambi i casi lo stato locale diventa irrilevante da sé
+ * senza che nessuno lo ripulisca.
+ *
+ * ⚠ **La conseguenza da conoscere è che una pausa riapre il pannello**: al resume
+ * le scadenze sono traslate, quindi la chiave non combacia più. Sembra giusto —
+ * la pausa finisce e la domanda ti viene rifatta — e l'owner l'ha accettata
+ * sapendolo (2026-08-22), ma è nella lista di verifica: se guardandola non
+ * convince, si cambia la chiave, non si accetta il comportamento.
+ */
+export function turnKey(snapshot: Snapshot): string | null {
+  return snapshot.auction.phaseDeadline;
+}
+
+/**
+ * **Gemella di `shouldOpenBidDialog`**, e volutamente della stessa forma: il
+ * pannello di chiamata è il secondo modale dell'app che si apre da sé, e vale per
+ * lui §8bis alla lettera.
+ *
+ * Si apre in funzione dello snapshot, chiuderlo non nasconde niente — la card
+ * «Tocca a te» porta il tempo che resta e il pulsante che lo riapre — e chi
+ * ricarica la pagina a metà turno ritrova esattamente la stessa schermata di chi
+ * non si è mai mosso (I10).
+ *
+ * **Si chiude da sé quando non tocca più a me**, perché ho scelto o perché è
+ * scaduto e ha scelto l'auto-pick. E non è il pannello a chiudersi: è questa
+ * condizione a diventare falsa quando arriva lo snapshot successivo — regola 1 e
+ * regola 7 nello stesso punto. È anche ciò che fa apparire il modale d'offerta
+ * subito dopo senza che nessuno coordini le due cose.
+ *
+ * In pausa non si apre: il server rifiuterebbe la chiamata, e un pannello con
+ * quaranta pulsanti che non possono funzionare è peggio di nessun pannello.
+ */
+export function shouldOpenPickSheet(
+  snapshot: Snapshot,
+  myMemberId: string | null,
+  dismissedTurnKey: string | null,
+): boolean {
+  const { status, phase, currentMemberId } = snapshot.auction;
+  if (status !== "LIVE") return false;
+  if (phase !== "WAITING_PICK") return false;
+  if (myMemberId === null || currentMemberId !== myMemberId) return false;
+  return dismissedTurnKey !== turnKey(snapshot);
 }
 
 // ─── Quanto posso offrire ────────────────────────────────────────────────────

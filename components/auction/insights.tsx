@@ -5,7 +5,7 @@ import {
   type CarmyJudgement,
   GIORNATE,
   type PlayerInsights,
-  minutiMedi,
+  pmaCrediti,
   showableInsights,
   titolarita,
 } from "@/lib/domain";
@@ -29,10 +29,17 @@ import { cn } from "@/lib/utils";
  *
  * ⚠ **`TitolaritaAnyBadge` e `SetPieceBadges` sono esportati da M10**, che è il
  * terzo chiamante e quello che li rende un componente invece di tre `className`:
- * il Centro dati li usa in due colonne separate, quindi non gli servono le due
- * composizioni pronte (`InsightsLine`, `InsightsMacro`) ma i due pezzi. Il tono,
- * la soglia e la regola «il colore non è mai l'unica informazione» restano
- * decisi qui dentro, in un posto solo.
+ * il Centro dati li usa in due colonne separate, quindi non gli serve una
+ * composizione pronta ma i due pezzi. Il tono, la soglia e la regola «il colore
+ * non è mai l'unica informazione» restano decisi qui dentro, in un posto solo.
+ *
+ * ⚠ **Da M17 di composizioni pronte ne resta una sola, `InsightsMacro`.** C'era
+ * anche `InsightsLine`, che disegnava tutto il blocco della lista di chiamata, ed è
+ * stata **sciolta** quando l'owner ha ridisegnato la card in quattro righe
+ * (2026-08-22): i suoi tre pezzi sono finiti in tre posti diversi della card, e una
+ * composizione con un solo chiamante che va spezzata in tre non è un'astrazione, è
+ * un ostacolo. Al suo posto ci sono `ValoriCarmy` e `BonusENote`, che sono pezzi
+ * come gli altri.
  *
  * ⚠ **Da M10B il badge della titolarità è uno solo per due fonti**, e prima erano
  * due componenti: c'era `TitolaritaBadge` che leggeva le presenze, e il giudizio di
@@ -327,26 +334,73 @@ export function FasciaBadge({
 }
 
 /**
- * La riga densa, per la lista di chiamata: si legge in mezzo secondo, con quaranta
- * nomi sotto e un countdown che scorre.
+ * **I due numeri che si confrontano**: la fantamedia attesa e il PMA con la sua
+ * cifra in crediti (M17, 2026-08-22).
  *
- * ## ⚠ Cosa ci sta, e come ci è arrivato
+ * ## Perché non è più una riga sola
  *
- * M10B §6 aveva scritto «la titolarità di Carmy e, **al più, un tag**», con la
- * ragione giusta: la riga è larga quanto un telefono, e la regola di M9 §4 dice
- * «tre informazioni, non dieci». L'owner ha chiesto il contrario **dopo averla
- * guardata** (2026-08-12): nella schermata in cui si *scegli* chi chiamare servono
- * **fascia, fantamedia attesa, PMA, titolarità e note** — cioè quasi tutto il
- * foglio.
+ * Fino a v1.16.0 esisteva `InsightsLine`, che disegnava tutto il blocco insight
+ * della lista di chiamata in due righe: sopra i numeri di stagione, sotto il
+ * giudizio del foglio. È stata **sciolta** quando l'owner ha ridisegnato la card
+ * in quattro righe (2026-08-22), perché i suoi tre pezzi sono finiti in tre posti
+ * diversi — la titolarità in alto a destra accanto alla squadra, questi due numeri
+ * accanto al nome, i bonus e le note su una riga loro.
  *
- * La densità si paga, e per pagarla il meno possibile la riga è **su due righe
- * invece di una**: sopra i numeri di stagione (titolarità, rapporto grezzo, minuti,
- * piazzati), sotto il giudizio del foglio (fascia, attesa, PMA, note). Due blocchi
- * da tre o quattro cose si scorrono; uno da otto no. ⚠ **Affidabilità e integrità
- * restano comunque fuori** — non sono state chieste, e sono i due numeri che
- * nessuno confronterebbe sotto un countdown: vivono nel modale d'offerta.
+ * Non è una perdita: questo file esporta **pezzi** e non composizioni pronte già
+ * da M10, quando il Centro dati ha voluto `TitolaritaAnyBadge` e `SetPieceBadges`
+ * separati. Una composizione con un solo chiamante che deve essere spezzata in tre
+ * non è un'astrazione, è un ostacolo.
+ *
+ * ⚠ **`fvm` non è più su questa riga, e non era un mio dato da difendere**: era il
+ * Fantavalore di Mercato, che l'owner ha chiesto di togliere non capendo cosa
+ * fosse (2026-08-22) — ed era precisamente il rischio che il commento su `FMA`
+ * aveva previsto due ore prima. La conseguenza da conoscere sta sul chiamante:
+ * **quel numero ordina ancora la lista**.
  */
-export function InsightsLine({
+export function ValoriCarmy({ carmy, budget }: { carmy?: CarmyJudgement; budget: number }) {
+  if (carmy?.fmvExp == null && carmy?.pma == null) return null;
+  return (
+    <span className="text-muted-foreground flex shrink-0 items-baseline gap-1.5 text-xs tabular-nums">
+      {/*
+        ⚠ **«FMA» e non «FMV»**, ed è la sigla su cui questa card ha già inciampato
+        una volta: `fvm` era il Fantavalore di Mercato e stava sulla stessa riga, a
+        pochi centimetri: due sigle di tre lettere con le stesse due consonanti per
+        due cose che non si somigliano. Adesso `fvm` non si mostra più e la
+        collisione non esiste — ma se un giorno tornasse, torna anche il problema.
+      */}
+      {carmy?.fmvExp != null && (
+        <span>
+          <span className="opacity-70">FMA</span> {carmy.fmvExp.toFixed(2)}
+        </span>
+      )}
+      {/*
+        ⚠ Il PMA con accanto la sua cifra in crediti: una percentuale non si può
+        offrire, e sotto un countdown nessuno la converte a mente. La conversione è
+        `pmaCrediti`, e **non** è il «prezzo consigliato» del foglio — quello è una
+        colonna sua e può dire un numero diverso sullo stesso giocatore.
+      */}
+      {carmy?.pma != null && (
+        <span>
+          <span className="opacity-70">PMA</span> {formatPma(carmy.pma)}% (
+          {pmaCrediti(carmy.pma, budget)})
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * **Cosa porta in più**: rigori, piazzati, fascia e le note del foglio.
+ *
+ * Sono le informazioni qualitative della card, e stanno insieme perché hanno in
+ * comune il modo in cui si leggono: non si sommano e non si confrontano fra due
+ * giocatori — si notano. È l'altra metà del taglio «per domanda» che ha
+ * sostituito il taglio «per fonte» (2026-08-22).
+ *
+ * `null` quando non c'è niente da dire, così senza il foglio caricato **e** senza
+ * insight la card resta identica a quella di v1.10.0, altezza compresa.
+ */
+export function BonusENote({
   insights,
   carmy,
 }: {
@@ -354,48 +408,15 @@ export function InsightsLine({
   carmy?: CarmyJudgement;
 }) {
   const i = showableInsights(insights);
-  const t = titolarita(insights, carmy);
-  // Niente da dire affatto: né un giudizio, né i numeri di quest'anno.
-  if (t === null && i === null && !carmy) return null;
-
-  const minuti = i === null ? null : minutiMedi(i);
-  // La seconda riga esiste solo se ha qualcosa dentro: senza il foglio caricato la
-  // lista di chiamata resta identica a quella di v1.10.0, altezza compresa.
-  const conGiudizio =
-    carmy !== undefined &&
-    (carmy.fascia !== null ||
-      carmy.fmvExp !== null ||
-      carmy.pma !== null ||
-      carmy.tags.length > 0);
+  const conBonus = i !== null && (i.rigoristaRank !== null || i.piazzatiRank !== null);
+  const conNote = carmy !== undefined && (carmy.fascia !== null || carmy.tags.length > 0);
+  if (!conBonus && !conNote) return null;
 
   return (
-    <span className="text-muted-foreground block space-y-0.5 text-xs tabular-nums">
-      <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-        <TitolaritaAnyBadge insights={insights} carmy={carmy} compact />
-        {/* Il rapporto grezzo accanto al giudizio: è la sua prova, e la divergenza
-            è l'informazione. Solo quando il badge viene da Carmy — altrimenti il
-            badge già dice la percentuale, e ripeterla due volte è rumore. */}
-        {t?.fonte === "carmy" && t.quota !== null && (
-          <span>
-            {t.quota.starts}/{t.quota.giornate}
-          </span>
-        )}
-        {minuti !== null && <span>{Math.round(minuti)}′</span>}
-        {i !== null && <SetPieceBadges insights={i} compact />}
-      </span>
-
-      {conGiudizio && (
-        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-          {carmy.fascia !== null && <FasciaBadge fascia={carmy.fascia} compact />}
-          {/* ⚠ «attesa» e non «FMV»: in questo progetto `fvm` è il Fantavalore di
-              Mercato — che sta sulla **stessa riga**, a destra, come `fvm 300` — e
-              `FMV Exp.` è la fantamedia attesa, 7.36. Due sigle quasi identiche per
-              due cose che non si somigliano: accanto, l'una si legge per l'altra. */}
-          {carmy.fmvExp !== null && <span>attesa {carmy.fmvExp.toFixed(2)}</span>}
-          {carmy.pma !== null && <span>{formatPma(carmy.pma)}%</span>}
-          <CarmyTags tags={carmy.tags} compact />
-        </span>
-      )}
+    <span className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+      {i !== null && <SetPieceBadges insights={i} compact />}
+      {carmy?.fascia != null && <FasciaBadge fascia={carmy.fascia} compact />}
+      {carmy !== undefined && <CarmyTags tags={carmy.tags} compact />}
     </span>
   );
 }

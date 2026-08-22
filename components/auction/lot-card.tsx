@@ -1,154 +1,120 @@
 "use client";
 
 import { Campioncino } from "@/components/auction/campioncino";
-import { Countdown, CountdownBar } from "@/components/auction/countdown";
 import { TiePanel } from "@/components/auction/reveal-panel";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
-import {
-  amEligible,
-  amInTie,
-  memberById,
-  memberLabel,
-} from "@/lib/realtime/portal";
+import { amEligible, amInTie, memberById, memberLabel } from "@/lib/realtime/portal";
 import type { Snapshot } from "@/lib/realtime/types";
 
 /**
- * La card del **lotto vivo** (F5-04): `LOT_OPEN` e `LOT_TIE_PREP`. Quando le
- * buste si aprono il testimone passa a `LotClosedCard`, che ha un'altra faccia
- * perché è un altro momento.
+ * Il **corpo** del lotto vivo: chi è a lotto, quanto ho offerto io, e — durante
+ * `LOT_TIE_PREP` — che c'è uno spareggio in arrivo.
  *
- * È la risposta di §8bis al problema che l'anno scorso rendeva l'app
- * inutilizzabile: se l'unica interfaccia per offrire è un modale, chi lo chiude
- * per sbaglio — o chi ha il telefono che va in standby — non ha più modo di
- * rientrare nel lotto. La card non sparisce mai: mostra a che punto siamo,
- * quanto ho offerto io, e ha il pulsante che riapre il modale.
+ * ## Cosa non c'è più (M17 §6)
  *
- * **Degli altri non dice niente** (M1). Fino a v1.1.0 c'era un elenco delle
- * buste consegnate, un pallino verde per chi si era mosso: informazione che lo
- * snapshot non porta più, perché in una stanza dove ci si guarda in faccia
- * sapere chi ha già consegnato basta per fare strategia anche senza sapere
- * quanto. Al suo posto c'è una riga che spiega il silenzio — se non si dice
- * perché, la card sembra rotta.
+ * Fino a v1.16.0 questo componente era una card intera: si disegnava il suo
+ * `rounded-xl border`, la sua intestazione, il suo countdown da 30px e la sua
+ * barra. Da M17 tutto quello è la cornice — `SceneCard` — e qui resta il
+ * contenuto. Anche il pulsante «Apri offerta» è uscito: sta nello slot `action`
+ * della cornice, che lo mette a piena larghezza in fondo in **tutte** le scene,
+ * invece che in un posto un po' diverso per card.
+ *
+ * Il senso della sottrazione: la card del lotto non sparisce mai (§8bis punto 2)
+ * e non è questo componente a garantirlo — lo garantisce la cornice, che c'è in
+ * tutte e nove le scene. Quello che resta qui è la sola cosa che cambia da una
+ * scena all'altra.
+ *
+ * **Degli altri non dice niente** (M1). Fino a v1.1.0 c'era un elenco delle buste
+ * consegnate, un pallino verde per chi si era mosso: informazione che lo snapshot
+ * non porta più, perché in una stanza dove ci si guarda in faccia sapere chi ha
+ * già consegnato basta per fare strategia anche senza sapere quanto. Al suo posto
+ * c'è una riga che spiega il silenzio — se non si dice perché, la card sembra
+ * rotta.
  */
 export function LotCard({
   snapshot,
   myMemberId,
-  offset,
-  onOpenBid,
 }: {
   snapshot: Snapshot;
   myMemberId: string | null;
-  offset: number;
-  onOpenBid: () => void;
 }) {
   const lot = snapshot.currentLot;
   if (lot === null) return null;
 
-  const { phase, status, pausedAt, timers } = snapshot.auction;
-  const frozen = status === "PAUSED";
-  const pausedFor = frozen ? pausedAt : null;
+  const { phase } = snapshot.auction;
   const open = phase === "LOT_OPEN";
   const eligible = amEligible(lot, myMemberId);
   const caller = memberById(snapshot, lot.calledByMemberId);
   const iCalled = lot.calledByMemberId === myMemberId;
 
   return (
-    <section className="bg-muted/40 overflow-hidden rounded-xl border shadow-sm">
-      {/* ── Il giocatore, e quanto tempo resta ── */}
-      <header className="space-y-2 p-4 pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            {/*
-              ⚠ 68×100, a sinistra del nome (M7 §6). Venti pixel di altezza in
-              più rispetto ai 54×80 provati sono il prezzo minimo perché sia una
-              figurina invece di una macchia colorata; a 81×120 si vedrebbe
-              meglio, ma costerebbe quaranta pixel su uno schermo da 667. Se non
-              c'è, sparisce e il testo scorre a sinistra.
-            */}
-            <Campioncino
-              extId={lot.player.extId}
-              className="h-25 w-17 shrink-0 rounded-md"
-            />
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">{ROLE_LABELS[lot.player.role]}</Badge>
-                {lot.roundNo === 2 && <Badge>Spareggio</Badge>}
-                {lot.autoCalled && (
-                  <Badge variant="outline" title="Nessuno ha chiamato in tempo">
-                    auto
-                  </Badge>
-                )}
-              </div>
-              <h2 className="mt-1.5 truncate text-2xl leading-tight font-semibold">
-                {lot.player.name}
-              </h2>
-              <p className="text-muted-foreground truncate text-sm">
-                {lot.player.team} · fvm {lot.player.fvm} · chiamato da{" "}
-                {iCalled ? "te" : memberLabel(caller)}
-              </p>
-            </div>
+    <>
+      {/* ── Chi è a lotto ── */}
+      <div className="flex items-start gap-3">
+        {/*
+          ⚠ 68×100, a sinistra del nome (M7 §6). Venti pixel di altezza in più
+          rispetto ai 54×80 provati sono il prezzo minimo perché sia una figurina
+          invece di una macchia colorata; a 81×120 si vedrebbe meglio, ma
+          costerebbe quaranta pixel su uno schermo da 667. Se non c'è, sparisce e
+          il testo scorre a sinistra.
+        */}
+        <Campioncino
+          extId={lot.player.extId}
+          className="h-25 w-17 shrink-0 rounded-md"
+        />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          {/*
+            ⚠ Il badge dello **spareggio** non è più qui: da M17 lo spareggio è
+            una scena sua, quindi lo dicono la fascia ambra, l'etichetta
+            «Spareggio aperto» e il badge nell'angolo della cornice. Ripeterlo
+            accanto al nome sarebbe la terza volta nella stessa card.
+          */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{ROLE_LABELS[lot.player.role]}</Badge>
+            {lot.autoCalled && (
+              <Badge variant="outline" title="Nessuno ha chiamato in tempo">
+                auto
+              </Badge>
+            )}
           </div>
-          <p className="text-right text-3xl leading-none font-semibold">
-            <Countdown
-              deadline={open ? lot.endsAt : snapshot.auction.phaseDeadline}
-              offset={offset}
-              pausedAt={pausedFor}
-            />
+          <h3 className="truncate text-2xl leading-tight font-semibold">
+            {lot.player.name}
+          </h3>
+          <p className="text-muted-foreground text-sm">
+            {lot.player.team} · fvm {lot.player.fvm}
+            <br />
+            chiamato da {iCalled ? "te" : memberLabel(caller)}
           </p>
         </div>
-        <CountdownBar
-          deadline={open ? lot.endsAt : snapshot.auction.phaseDeadline}
-          offset={offset}
-          totalSeconds={open ? timers.bidSeconds : timers.tiePrepSeconds}
-          pausedAt={pausedFor}
-        />
-      </header>
-
-      {/* ── Il cuore, che cambia con la fase ── */}
-      <div className="space-y-3 px-4 pb-4">
-        {phase === "LOT_TIE_PREP" && lot.tie !== null && (
-          <TiePanel
-            amount={lot.tie.amount}
-            amInTie={amInTie(snapshot, myMemberId)}
-          />
-        )}
-
-        {open && (
-          <>
-            <MyBidRow
-              snapshot={snapshot}
-              eligible={eligible}
-              iCalled={iCalled}
-            />
-            {eligible && (
-              <Button
-                type="button"
-                className="h-12 w-full text-base"
-                onClick={onOpenBid}
-                disabled={frozen}
-              >
-                {snapshot.myBid === null ? "Apri offerta" : "Modifica offerta"}
-              </Button>
-            )}
-          </>
-        )}
-
-        {/*
-          ── Il silenzio, spiegato: delle buste altrui non si sa niente (M1) ──
-          Solo in LOT_OPEN: durante lo spareggio i pareggianti sono già stati
-          annunciati, e ripetere che le buste sono segrete si contraddirebbe con
-          il pannello qui sopra.
-        */}
-        {open && (
-          <p className="text-muted-foreground text-center text-xs">
-            Le buste sono segrete: chi ha offerto, e quanto, si vede
-            all&apos;apertura.
-          </p>
-        )}
       </div>
-    </section>
+
+      {/* ── Lo spareggio che sta per riaprirsi ── */}
+      {phase === "LOT_TIE_PREP" && lot.tie !== null && (
+        <TiePanel
+          amount={lot.tie.amount}
+          amInTie={amInTie(snapshot, myMemberId)}
+        />
+      )}
+
+      {/* ── La mia offerta, l'unica cifra mostrabile durante LOT_OPEN (I8) ── */}
+      {open && (
+        <MyBidRow snapshot={snapshot} eligible={eligible} iCalled={iCalled} />
+      )}
+
+      {/*
+        ── Il silenzio, spiegato: delle buste altrui non si sa niente (M1) ──
+        Solo in LOT_OPEN: durante lo spareggio i pareggianti sono già stati
+        annunciati, e ripetere che le buste sono segrete si contraddirebbe con il
+        pannello qui sopra.
+      */}
+      {open && (
+        <p className="text-muted-foreground text-center text-xs">
+          Le buste sono segrete: chi ha offerto, e quanto, si vede
+          all&apos;apertura.
+        </p>
+      )}
+    </>
   );
 }
 
