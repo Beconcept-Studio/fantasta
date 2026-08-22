@@ -4,7 +4,12 @@ import { Dialog } from "radix-ui";
 import { useMemo, useState } from "react";
 
 import { Countdown, CountdownBar } from "@/components/auction/countdown";
-import { InsightsLine } from "@/components/auction/insights";
+import {
+  BonusENote,
+  TitolaritaAnyBadge,
+  ValoriCarmy,
+} from "@/components/auction/insights";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   CARMY_FASCE,
@@ -36,6 +41,19 @@ import { cn } from "@/lib/utils";
  * L'ordinamento non è cosmetico: è `fvm DESC, quot DESC`, lo stesso dell'auto-pick.
  * Il primo nome della lista è quello che il timer sceglierebbe al posto tuo, e
  * saperlo cambia la fretta con cui si guarda il countdown.
+ *
+ * ⚠ **Da M17 quell'ordine non ha più una giustificazione visibile**, e va saputo
+ * perché cambia cosa la lista sembra dire. `fvm` era scritto su ogni riga e
+ * spiegava l'ordinamento a chi lo guardava; l'owner ha chiesto di togliere «un
+ * valore FMV che non capisco cosa sia» (2026-08-22) — era il Fantavalore di
+ * Mercato — e la card adesso mostra `FMA` e `PMA`, che **non sono monotoni**.
+ * Scorrendo, la lista sembrerà ordinata per niente.
+ *
+ * L'ordine però è identico: `availablePlayers` non è stato toccato, e resta quello
+ * dell'auto-pick. Ciò che tiene in piedi la promessa «il primo è quello che il
+ * timer prenderebbe» è la **riga dell'auto-pick** sopra l'elenco, che lo dice per
+ * nome invece di lasciarlo dedurre da una colonna di numeri — cioè la strada che
+ * M10B §6 aveva già scelto per un'altra ragione, e che qui regge da sola.
  */
 
 const MAX_ROWS = 40;
@@ -363,7 +381,7 @@ export function PickSheet({
                     disabled={frozen || pending !== null}
                     onClick={() => void pick(player.id)}
                     className={cn(
-                      "hover:bg-accent flex min-h-12 w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition disabled:opacity-50",
+                      "hover:bg-accent flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition disabled:opacity-50",
                       // Il giocatore tenuto in cima contro il filtro va marcato: una
                       // riga che il filtro dice di aver tolto e che invece c\'è, senza
                       // un segno, è un elenco che mente su sé stesso in un altro modo.
@@ -373,27 +391,58 @@ export function PickSheet({
                         "border-amber-600/40 bg-amber-600/5",
                     )}
                   >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{player.name}</span>
-                      <span className="text-muted-foreground block truncate text-xs">
+                    {/* ── Riga 0: la squadra a sinistra, la titolarità a destra ── */}
+                    <span className="flex items-center justify-between gap-2">
+                      <Badge variant="secondary" className="h-4.5 px-1.5 py-0 text-[10px]">
                         {player.team}
-                      </span>
-                      {/* ⚠ Sotto la squadra e non accanto a `fvm`: la riga è già larga
-                          quanto un telefono, e i numeri che si confrontano fra loro
-                          stanno incolonnati a destra. Chi non ha il permesso, o chi ha
-                          solo la stagione precedente, non vede niente — e la riga non
-                          cambia altezza, perché era già su due righe. */}
-                      <InsightsLine
+                      </Badge>
+                      {/* ⚠ **Solo il badge**: i minuti medi sono stati tolti su
+                          richiesta dell'owner (2026-08-22). Erano il secondo numero
+                          della titolarità, e il badge già porta la sua misura dentro
+                          — la percentuale quando viene dalle presenze, il voto su 5
+                          quando viene dal foglio. */}
+                      <TitolaritaAnyBadge
                         insights={player.insights}
                         carmy={player.carmy}
-                        budget={budget}
+                        compact
                       />
                     </span>
-                    <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                      fvm {player.fvm}
+
+                    {/* ── Riga 1: il nome a sinistra, i due numeri a destra ── */}
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="min-w-0 flex-1 truncate text-[0.9375rem] font-medium">
+                        {player.name}
+                      </span>
+                      <ValoriCarmy carmy={player.carmy} budget={budget} />
                     </span>
-                    <span className="shrink-0 text-sm font-medium">
-                      {pending === player.id ? "…" : "Chiama"}
+
+                    {/*
+                      ── Riga 2: i bonus e le note ──
+                      ⚠ `fvm` **non c'è più** su questa card: l'owner ha chiesto di
+                      togliere «un valore FMV che non capisco cosa sia» (2026-08-22),
+                      ed era il Fantavalore di Mercato. La conseguenza da conoscere è
+                      che **quel numero ordina ancora la lista** — `availablePlayers`
+                      ordina `fvm DESC, quot DESC`, che è l'ordine esatto
+                      dell'auto-pick — quindi da qui l'ordinamento non ha più una
+                      giustificazione visibile: `FMA` e `PMA` non sono monotoni, e
+                      scorrendo la lista sembrerà ordinata per niente. Ciò che regge
+                      la promessa «il primo è quello che il timer prenderebbe» è la
+                      riga dell'auto-pick sopra l'elenco, che lo dice per nome.
+                    */}
+                    <BonusENote insights={player.insights} carmy={player.carmy} />
+
+                    {/*
+                      ── Riga 3: il pulsante ──
+                      ⚠ **È uno `<span>` e non un `<button>`**, e non è una svista: un
+                      `button` dentro un `button` è HTML non valido, e la card intera è
+                      già il bersaglio. Tenerla cliccabile per tutta la sua area vale
+                      più di un bersaglio preciso — si preme in piedi, sotto un
+                      countdown, e qui un tocco a lato costa un giocatore sbagliato. Il
+                      pulsante è quindi l'**affordance** di ciò che la card fa, non un
+                      secondo comando.
+                    */}
+                    <span className="bg-primary text-primary-foreground flex h-9 items-center justify-center rounded-md text-sm font-medium">
+                      {pending === player.id ? "Chiamo…" : "Chiama"}
                     </span>
                   </button>
                 </li>

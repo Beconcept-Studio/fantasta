@@ -3175,3 +3175,53 @@ la titolarità e i minuti medi.
 I minuti medi restano sulla riga 1 accanto alla titolarità. La fascia sta sulla riga 2 con le note,
 che è dove un giudizio qualitativo appartiene. Affidabilità e integrità restano fuori da entrambe,
 come da M10B: vivono nel modale d'offerta.
+
+### La card di chiamata in quattro righe, e `fvm` che sparisce
+
+Chiesto dall'owner il 2026-08-22, dopo aver caricato i due file e visto la riga piena per la prima
+volta. La card di ogni giocatore passa da «un nome con dei numeri a destra» a **quattro righe**:
+
+0. la **squadra** in un badge grigio a sinistra, la **titolarità** a destra — solo il badge;
+1. il **nome** a sinistra, un po' più piccolo, e **FMA + PMA** a destra;
+2. **bonus e note** — rigori, piazzati, fascia, i tag del foglio;
+3. il **pulsante «Chiama»** a piena larghezza.
+
+**I minuti medi sono stati tolti.** Erano il secondo numero della titolarità, e il badge porta già la
+sua misura dentro: la percentuale quando viene dalle presenze, il voto su 5 quando viene dal foglio.
+
+⚠ **`InsightsLine` non esiste più.** Era la composizione che disegnava tutto il blocco insight della
+lista, e i suoi tre pezzi sono finiti in tre posti diversi della card: si è sciolta in `ValoriCarmy`
+e `BonusENote`, che sono pezzi come `TitolaritaAnyBadge` e `SetPieceBadges`. Non è una perdita di
+astrazione — quel file esporta pezzi e non composizioni pronte da M10, e una composizione con un solo
+chiamante che va spezzata in tre non è un'astrazione ma un ostacolo.
+
+⚠ **Il pulsante «Chiama» è uno `<span>` e non un `<button>`.** Un `button` dentro un `button` è HTML
+non valido, e la card intera è già il bersaglio. Tenerla cliccabile per tutta la sua area vale più di
+un bersaglio preciso: si preme in piedi, sotto un countdown, e un tocco a lato costa un giocatore
+sbagliato. Il pulsante è l'**affordance** di ciò che la card fa, non un secondo comando.
+
+### ⚠ `fvm` toglie l'ordine da sotto gli occhi, e va saputo
+
+«C'è un valore FMV che non capisco cosa sia, toglilo» — era **`fvm`, il Fantavalore di Mercato**, e
+la richiesta è la conferma di un rischio che il codice aveva messo per iscritto **due ore prima**,
+introducendo l'etichetta `FMA`: due sigle di tre lettere con le stesse due consonanti, a pochi
+centimetri l'una dall'altra, per due cose che non si somigliano. Il rimedio previsto era «dare un nome
+anche al numero a destra»; l'owner ha scelto il rimedio più corto, cioè non mostrarlo.
+
+**La conseguenza non è cosmetica e non è nel dato**: `availablePlayers` **non è stato toccato** e
+ordina ancora `fvm DESC, quot DESC`, che è l'ordine esatto dell'auto-pick. Ma quel numero era anche
+**la spiegazione visibile dell'ordinamento**, e adesso la card mostra `FMA` e `PMA`, che non sono
+monotoni: scorrendo, la lista sembrerà ordinata per niente.
+
+Ciò che tiene in piedi la promessa «il primo della lista è quello che il timer prenderebbe» è la
+**riga dell'auto-pick** sopra l'elenco, che lo dice **per nome** invece di lasciarlo dedurre da una
+colonna di numeri. È la strada che M10B §6 aveva già scelto per un'altra ragione — un filtro acceso
+rompeva la deduzione — e che qui si ritrova a reggere da sola. Se un giorno quella riga venisse
+togliesse, l'ordinamento diventerebbe muto: è annotato qui perché è il collegamento che nessuno
+troverebbe partendo dal codice.
+
+⚠ **`fvm` resta scritto in due posti che questa richiesta non ha toccato**: la card del lotto («fvm
+118» sotto il nome del giocatore a lotto) e l'intestazione del modale d'offerta. Il secondo è fuori
+perimetro per M17 §8, che dice esplicitamente che il modale d'offerta resta com'è. Il primo è in
+perimetro e **non è stato cambiato di iniziativa**: se la sigla è incomprensibile lì com'era nella
+lista, va tolta o rinominata in tutti e due, e quella è una decisione da prendere guardandoli.
