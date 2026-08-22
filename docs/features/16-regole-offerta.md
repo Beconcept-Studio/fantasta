@@ -1,6 +1,12 @@
 # M16 — Le regole dell'offerta: niente scorciatoie, niente ritiro
 
-> **Stato:** **pianificata** il 2026-08-22, non ancora aperta. Nasce da due delle tre richieste che
+> **Stato:** **aperta** il 2026-08-22 su `feature/16-regole-offerta`, codice completo e gate verde
+> (852 test in 52 file, da 860 in 51 — 13 tolti col ritiro, 5 aggiunti; typecheck e build puliti).
+> Restano il collaudo a occhio dell'owner e la chiusura (M16-10).
+> ⚠ **La versione di chiusura è `v1.16.0`**, non quella che si sarebbe potuta dedurre: in produzione
+> c'è `v1.15.1`, e `package.json`, `CHANGELOG.md` e i tag concordano tutti e tre.
+>
+> Nasce da due delle tre richieste che
 > l'owner ha scritto nel quaderno dopo `v1.15.1`, insieme a **M17** — e le due macro sono state
 > tagliate di proposito (§0 di questo file, e `docs/features/README.md`).
 >
@@ -242,37 +248,64 @@ posto è lo sweep che esiste già, non un timer nuovo.
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M16-01** — Aprire `feature/16-regole-offerta` da `dev`. Rileggere questo file e `PLAN §15`
+- [x] **M16-01** — Aprire `feature/16-regole-offerta` da `dev`. Rileggere questo file e `PLAN §15`
       (il vincolo mobile-first sul modale). Dare `pnpm test` **prima** di toccare qualunque cosa e
       annotare il conteggio come baseline: la baseline attesa è quella di `v1.15.1`
-- [ ] **M16-02** — Via la riga dei quattro valori suggeriti da `bid-modal.tsx` (§2). Non toccare
+      → **860 test in 51 file, verdi**, che è esattamente la baseline attesa
+- [x] **M16-02** — Via la riga dei quattro valori suggeriti da `bid-modal.tsx` (§2). Non toccare
       `bump()`, non toccare `max` nell'intestazione, non toccare `PrezzoConsigliato`. Verificare a
       occhio sul telefono che il modale con la tastiera aperta non sia peggiorato: la riga tolta
       libera ~44px di altezza, che è spazio guadagnato dove serviva
-- [ ] **M16-03** — Il ritiro via dal **client**: modale, card, portale, `lib/realtime/portal.ts`,
+      → codice fatto; ⏳ **la verifica a occhio sul telefono resta all'owner**
+- [x] **M16-03** — Il ritiro via dal **client**: modale, card, portale, `lib/realtime/portal.ts`,
       `lib/realtime/action.ts` (§3). A fine task `grep -rn "withdraw" components app/auctions` deve
       restituire **solo** le due righe di `lots-log.tsx` e quella di `tv-view.tsx`, che sono lettori
-- [ ] **M16-04** — Il ritiro via dal **motore**: la rotta, `actions.ts`, `machine.ts` (evento,
+      → ⚠ **quel grep era incompleto, e la spec di §3 aveva ragione contro il suo stesso task.**
+      Restituisce anche **quattro righe di `components/auction/reveal-panel.tsx`**, che è il gemello
+      nel portale del `line-through` della TV: legge `bid.withdrawnAt` per barrare le buste ritirate
+      di un'asta già giocata. È un **lettore**, quindi resta — la regola «via tutti gli scrittori,
+      restano tutti i lettori» decide, non l'elenco. Il conto giusto è: 2 righe di `lots-log.tsx` +
+      4 di `reveal-panel.tsx` sotto `components`/`app/auctions`, più quella di `tv-view.tsx` che sta
+      sotto `app/tv` e che quel grep non guardava nemmeno
+- [x] **M16-04** — Il ritiro via dal **motore**: la rotta, `actions.ts`, `machine.ts` (evento,
       funzione e la guardia irraggiungibile dentro `placeBid`), `types.ts`, `errors.ts` (§3).
       ⚠ **Non** toccare `ROUTINE_EVENT_TYPES` in `auction-log.ts`, per la ragione scritta in §3, e
       **non** toccare nessun lettore di `withdrawn_at`
-- [ ] **M16-05** — Aggiornare le due frasi di §4 e il commento di `resolveRound`. Rileggere i commenti
+      → fatto; `ROUTINE_EVENT_TYPES` è intatto e ha guadagnato il commento che spiega perché quella
+      riga resta, che è la difesa vera contro la prossima ripulitura
+- [x] **M16-05** — Aggiornare le due frasi di §4 e il commento di `resolveRound`. Rileggere i commenti
       di testa dei file toccati: `bid-modal.tsx` e `portal.ts` **spiegano** il ritiro in prosa, e un
       commento che descrive del codice cancellato è peggio di nessun commento
-- [ ] **M16-06** — I test: togliere quelli sul ritiro (≈45 occorrenze in 9 file, contate il
+- [x] **M16-06** — I test: togliere quelli sul ritiro (≈45 occorrenze in 9 file, contate il
       2026-08-22) e **aggiungerne uno al contrario** — un `POST` con `{type:"WITHDRAW"}` torna
       `INVALID_REQUEST` e a database non cambia niente. È la verifica che la regola non vive solo
       nella UI. ⚠ Controllare che `tests/engine/helpers.ts` non costruisca offerte ritirate per altri
       test che non parlano di ritiro
-- [ ] **M16-07** — I pallini in TV (§5): il pallino in `TeamCard` e la mappa a due stati in una
+      → **13 test tolti**, e il test al contrario è `tests/db/withdraw-gone.test.ts`, che passa dalla
+      rotta vera con la sessione mockata. `helpers.ts` **resta com'è**: la sua opzione `withdrawnAt`
+      ha un chiamante solo, il test di `resolveRound` in `tests/engine/rules.test.ts`, che è
+      precisamente il lettore da continuare a difendere
+- [x] **M16-07** — I pallini in TV (§5): il pallino in `TeamCard` e la mappa a due stati in una
       funzione pura con il suo test. Guardarli **con una simulazione accesa**, dove i bot battono il
       colpo, e poi con un telefono vero che si scollega — il rosso deve arrivare entro ~15 secondi
-- [ ] **M16-08** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ la build vuole il dev
+      → `TvPresenceDot` in `tv-view.tsx` e `tvConnected` in `lib/realtime/portal.ts`, con tre test.
+      ⚠ **La funzione pura sta in `portal.ts` e non «accanto al componente»** come diceva la spec: è
+      la stessa ragione di `use-auction-stream.ts` — vitest include solo `**/*.test.ts`, e un test
+      che importasse un `.tsx` client si tirerebbe dietro React in ambiente `node`. `tv-view.tsx`
+      importa già `portalScreen` da lì, quindi il precedente c'era. ⏳ **Il collaudo a occhio con la
+      simulazione e con un telefono che si scollega resta all'owner**
+- [x] **M16-08** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ la build vuole il dev
       server **spento**, e la prima dopo una sessione di `pnpm dev` può morire da sola sulla rotta
       dello stream: prima di indagare, ridarla)
-- [ ] **M16-09** — Documentazione: `docs/DECISIONS.md` con le quattro decisioni del 2026-08-22 e la
+      → **852 test in 52 file**, typecheck pulito, build pulita al primo colpo (nessun dev server
+      acceso: verificato con `lsof` prima di darla)
+- [x] **M16-09** — Documentazione: `docs/DECISIONS.md` con le quattro decisioni del 2026-08-22 e la
       ratifica su `PLAN §297/§314/§683-684`; `docs/ARCHITECTURE.md` dove racconta il modale d'offerta
       e il ciclo di un lotto — oggi dice che si può ritirare
+      → in `ARCHITECTURE.md` sono **sei** i punti riscritti, non due: gli eventi del motore («sette»
+      non erano più sette), «Chi chiama è vincolato» con accanto la sezione nuova «Chi offre tiene»,
+      il paragrafo sull'irreversibilità del ritiro, l'elenco delle azioni di `actions.ts`, le domande
+      pure di `portal.ts`, e il modale d'offerta. Più la TV, per i pallini
 - [ ] **M16-10** — Chiusura: merge `--no-ff` su `dev`, prova in locale con `pnpm bots` e un telefono
       in LAN, poi `CHANGELOG.md` e `package.json` a `v1.16.0`, merge su `main`, tag. **Nessun passo a
       mano sul server**, e va scritto nel changelog che non ce n'è: è l'informazione che si cerca

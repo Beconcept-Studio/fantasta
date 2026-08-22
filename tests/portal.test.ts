@@ -7,7 +7,6 @@ import {
   autoPickCandidate,
   availablePlayers,
   bidBounds,
-  canWithdraw,
   checkAmount,
   countdownLabel,
   hasCarmyFilters,
@@ -17,8 +16,9 @@ import {
   secondsLeft,
   shouldOpenBidDialog,
   takenPlayerIds,
+  tvConnected,
 } from "@/lib/realtime/portal";
-import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
+import type { PoolPlayer, Presence, Snapshot } from "@/lib/realtime/types";
 
 import {
   ME,
@@ -140,7 +140,6 @@ describe("§8bis — la schermata è funzione dello snapshot", () => {
     expect(portalScreen(s, ME)).toEqual({ kind: "LOT", frozen: true });
     // In pausa il server rifiuta le offerte: nessun modale che finge di poter salvare.
     expect(shouldOpenBidDialog(s, ME, null)).toBe(false);
-    expect(canWithdraw(s, ME)).toBe(false);
   });
 
   /**
@@ -168,9 +167,8 @@ describe("§8bis — la schermata è funzione dello snapshot", () => {
     // ⚠ Dell'esito non esce niente: non è nascosto in un campo, non c'è.
     expect(s.currentLot?.reveal).toBeNull();
     expect(s.currentLot?.tie).toBeNull();
-    // Il round è chiuso: niente modale, niente ritiro.
+    // Il round è chiuso: niente modale.
     expect(shouldOpenBidDialog(s, ME, null)).toBe(false);
-    expect(canWithdraw(s, ME)).toBe(false);
     // Il countdown è quello vero, dedotto dalla deadline dello snapshot.
     expect(secondsLeft(6_000)).toBe(6);
   });
@@ -280,35 +278,38 @@ describe("confini dell'offerta", () => {
   });
 });
 
-// ─── Ritiro (F5-07) ──────────────────────────────────────────────────────────
+// ─── Ritiro (F5-07, tolto da M16) ────────────────────────────────────────────
+//
+// Non c'è niente da collaudare, e i cinque test che stavano qui — «si può
+// ritirare un'offerta propria nel round 1», i tre divieti, «il ritiro è
+// definitivo» — sono spariti con `canWithdraw`. Chi offre tiene, e al massimo
+// rilancia.
+//
+// ⚠ La verifica che la regola è **del server** e non del browser non sta qui:
+// sta in `tests/db/withdraw-gone.test.ts`, dove un `WITHDRAW` arriva alla rotta
+// vera e torna `INVALID_REQUEST` senza toccare il database. Questo file prova
+// funzioni pure, e la funzione da provare non esiste più.
 
-describe("ritiro", () => {
-  const withMyBid = (patch: Partial<Snapshot> = {}) =>
-    snapshot({ myBid: { amount: 30, amountSetAt: iso(-3_000), withdrawnAt: null }, ...patch });
+// ─── La presence come la legge la TV (M16) ───────────────────────────────────
 
-  it("si può ritirare un'offerta propria nel round 1", () => {
-    expect(canWithdraw(withMyBid(), ME)).toBe(true);
+describe("tvConnected", () => {
+  it("verde chi è collegato: LIVE e IDLE contano tutti e due", () => {
+    // ⚠ È il cuore della scelta, non un dettaglio: chi ha il tab in secondo
+    // piano ha il telefono in tasca ed è nella stanza. In TV la domanda è
+    // «possiamo far partire il round?», e la risposta per lui è sì.
+    expect(tvConnected("LIVE")).toBe(true);
+    expect(tvConnected("IDLE")).toBe(true);
   });
 
-  it("il chiamante non può ritirare: può solo rilanciare", () => {
-    const s = withMyBid({ currentLot: lot({ calledByMemberId: ME }) });
-    expect(canWithdraw(s, ME)).toBe(false);
+  it("rosso solo chi non batte più il colpo", () => {
+    expect(tvConnected("OFFLINE")).toBe(false);
   });
 
-  it("nello spareggio il ritiro non esiste", () => {
-    const s = withMyBid({ currentLot: lot({ roundNo: 2, minAmount: 30 }) });
-    expect(canWithdraw(s, ME)).toBe(false);
-  });
-
-  it("senza un'offerta non c'è niente da ritirare", () => {
-    expect(canWithdraw(snapshot(), ME)).toBe(false);
-  });
-
-  it("il ritiro è definitivo: non si ritira due volte ⚠ P10", () => {
-    const s = snapshot({
-      myBid: { amount: 30, amountSetAt: iso(-3_000), withdrawnAt: iso(-1_000) },
-    });
-    expect(canWithdraw(s, ME)).toBe(false);
+  it("due colori e non tre: nessuno stato resta senza risposta", () => {
+    const all: Presence[] = ["LIVE", "IDLE", "OFFLINE"];
+    for (const presence of all) {
+      expect(typeof tvConnected(presence), presence).toBe("boolean");
+    }
   });
 });
 

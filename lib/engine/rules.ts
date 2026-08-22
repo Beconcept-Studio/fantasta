@@ -136,11 +136,16 @@ export type RoundOutcome =
  * (→ spareggio), nel round 2 si risolve per `MIN(amount_set_at)` — è qui che
  * il carry-forward premia chi era arrivato per primo a quella cifra — e, a
  * timestamp identici, per `MIN(id)`.
+ *
+ * ⚠ Il filtro sulle ritirate **resta** anche se da M16 nessuno ritira più: le
+ * aste già giocate hanno delle offerte ritirate a database, e rileggerle senza
+ * il filtro cambierebbe chi ha vinto un lotto del passato.
  */
 export function resolveRound(round: LotRound): RoundOutcome {
   const active = round.bids.filter((b) => b.withdrawnAt === null);
   if (active.length === 0) {
-    // Il chiamante non può ritirare: un round senza offerte attive è un bug.
+    // Da M16 non ritira nessuno, e il chiamante non poteva farlo nemmeno prima:
+    // un round senza offerte attive è un bug in tutt'e due i mondi.
     throw new Error("round senza offerte attive");
   }
   const max = Math.max(...active.map((b) => b.amount));

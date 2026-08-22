@@ -2847,3 +2847,63 @@ viene proxato come tutto il resto, poi `sudo nginx -t && sudo systemctl reload n
 aggiunge un `location = /favicon.ico` nel *nostro* file: sarebbe un secondo match esatto sullo stesso
 percorso nello stesso server block, e nginx rifiuta di ripartire. Va **sostituito** quello di Ploi, non
 affiancato.
+
+---
+
+## 2026-08-22 — M16: il ritiro si toglie fino in fondo, i valori suggeriti spariscono
+
+Quattro decisioni dell'owner, prese aprendo M16 e ratificate qui perché tre di esse cambiano una
+regola del gioco e la quarta cambia il perimetro di due macro.
+
+**1. Il ritiro si toglie fino in fondo, motore compreso** — non solo il pulsante. La ragione è la
+regola 6 letta al contrario: la regola dice «la UI disabilita, il server rifiuta comunque», e se si
+fosse tolto solo il pulsante il server **non** avrebbe rifiutato. Un `POST` costruito a mano avrebbe
+continuato a ritirare un'offerta, e la nuova regola del gioco sarebbe vissuta soltanto nel codice
+del browser. In un'asta fra amici il rischio pratico è nullo; il punto è un altro, ed è che questo
+progetto non ha mai una regola che esista solo lato client — lasciarne una qui vuol dire che fra sei
+mesi nessuno saprà più se il ritiro c'è o no. Spariscono quindi `WITHDRAW_BID` dalla macchina a
+stati, `withdrawBid` dalle azioni, il `case "WITHDRAW"` dalla rotta, i codici `BID_WITHDRAWN` e
+`WITHDRAW_FORBIDDEN`, e `canWithdraw`/`haveWithdrawn` dal portale. Un `WITHDRAW` adesso cade nel
+`default` della rotta e riceve `INVALID_REQUEST` — «questa azione non esiste», che è la risposta
+giusta e non «non puoi ritirare adesso».
+
+**2. La colonna `withdrawn_at` resta, con tutti i suoi lettori.** Nessun `pnpm db:push`, nessun
+backfill, nessun `pg_dump` prima del rilascio: la macro toglie tutti gli **scrittori** e non tocca
+**nessun lettore**. Restano il filtro di `resolveRound`, il round-trip di `mutate.ts`, il campo negli
+snapshot, il `line-through` del reveal — in TV e nel portale — e le righe del log dei lotti. Su
+tutto ciò che si scrive da qui in avanti è `null`, ma le aste già giocate hanno dei ritiri dentro:
+un lettore tolto non semplificherebbe niente, riscriverebbe il passato.
+
+⚠ **E `"WITHDRAW_BID"` resta dentro `ROUTINE_EVENT_TYPES` in `lib/auction-log.ts`**, che è la riga
+che sembra più di tutte da cancellare e va lasciata. Quel file ha una scelta deliberata scritta in
+un commento — *un tipo sconosciuto è notevole* — perché lo storico delle correzioni deve mostrare un
+evento nuovo anche se nessuno si è ricordato di elencarlo. La conseguenza è che togliere
+`WITHDRAW_BID` da quell'elenco non farebbe sparire i ritiri storici: li **promuoverebbe**, facendoli
+comparire di colpo nel blocco delle correzioni di un'asta già giocata, dove non sono mai stati.
+
+**3. In TV due colori e non tre**, e `IDLE` conta come collegato. In TV la domanda è «possiamo far
+partire il round?», e un tab in secondo piano non è una persona assente: è qualcuno che ha il
+telefono in tasca ed è nella stanza. È anche l'unico punto dell'app in cui l'ambra sarebbe stata
+sbagliata — in TV l'ambra è già la pausa e già la riconnessione, e un terzo significato sullo stesso
+colore, a tre metri, non si distingue. La mappa sta in `tvConnected` (`lib/realtime/portal.ts`), in
+un posto solo e con il suo test.
+
+**4. M16 esce prima di M17**, che è più grande e più rischiosa. Sono indipendenti e l'ordine si
+potrebbe invertire, ma M17 ridisegna una card da cui M16 ha già tolto un ramo — e soprattutto, se il
+layout a tre colonne di M17 non convincesse, tornare indietro **non deve rimettere in piedi il
+pulsante «Ritira»**. Due tag, due punti di rollback. Il precedente che pesa è M15, guardata e
+buttata.
+
+### Cosa questo rende parzialmente falso, e non si riscrive
+
+`docs/PLAN.md` è **archivio**: §297 («il chiamante non può ritirare, può solo rilanciare»), §314
+(«il ritiro è disabilitato nel round 2»), la firma di §544 e gli scenari 7 e 8 di §683-684
+descrivono un comportamento che dopo questa macro non esiste più. Restano scritti come stanno, ed è
+il precedente letterale di M13, che ha ribaltato M6 §8 senza riscrivere il file di M6. La ratifica è
+questa nota, insieme a `docs/ARCHITECTURE.md`, che è il documento che si legge per capire com'è
+l'app **adesso**.
+
+⚠ Nessuno degli invarianti I1–I10 viene modificato: non nominano il ritiro. **I5** — il tetto
+`max_bid` — è l'unico che la macro sfiora, e lo sfiora per rafforzarlo: `max NN` resta scritto
+nell'intestazione del modale, perché è il limite che il server applica e non un valore suggerito.
+Sparisce il pulsante che scriveva quel numero nel campo, non l'informazione che il tetto è quello.

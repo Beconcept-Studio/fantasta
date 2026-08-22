@@ -660,8 +660,10 @@ direttamente dentro le pagine non si può collaudare, e si scopre che è sbaglia
 Il motore è una funzione: `transition(stato, evento, adesso) → nuovo stato`. Lo stato è un
 oggetto in memoria (`AuctionState` in `types.ts`) che rispecchia le tabelle del database — membri,
 giocatori, lotti, round, offerte, assegnazioni, rettifiche — ma non ne dipende. Gli eventi sono
-sette: l'avvio, la chiamata di un giocatore, un'offerta, un ritiro, lo scattare di una scadenza,
-la pausa e la ripresa. Non c'è nient'altro che possa far muovere un'asta.
+pochi e si contano: l'avvio, la chiamata di un giocatore, un'offerta, lo scattare di una scadenza,
+l'apertura anticipata delle buste, l'annullamento di un lotto, la pausa e la ripresa. Non c'è
+nient'altro che possa far muovere un'asta — e fino a M16 ce n'era uno in più, il ritiro di
+un'offerta, che è stato tolto (vedi «Chi offre tiene» qui sotto).
 
 Il vantaggio si tocca con mano nei test: l'intera suite del regolamento — le buste, gli spareggi,
 i casi patologici — gira in una manciata di millisecondi, senza avviare niente. Un'asta completa
@@ -702,11 +704,33 @@ passato quello, se il massimo è unico si va al `LOT_REVEAL`, altrimenti c'è lo
 (`LOT_TIE_PREP`, poi di nuovo `LOT_OPEN` come round 2); il reveal scade e il turno avanza — o
 l'asta finisce.
 
-Dentro questo giro ci sono quattro scelte che meritano una spiegazione.
+Dentro questo giro ci sono cinque scelte che meritano una spiegazione.
 
 **Chi chiama è vincolato.** All'apertura del lotto il motore registra da solo un'offerta a 1 del
-chiamante, con il timestamp dell'apertura. Il chiamante può rilanciare ma non ritirarsi: un lotto
-ha sempre almeno un'offerta valida, e "nessuno offre" non è uno stato possibile.
+chiamante, con il timestamp dell'apertura. Il chiamante può rilanciare, e basta: un lotto ha sempre
+almeno un'offerta valida, e "nessuno offre" non è uno stato possibile.
+
+**Chi offre tiene, e al massimo rilancia** (M16, `v1.16.0`). Per tutta la vita dell'app fino a
+quella versione esisteva un ritiro: chi aveva consegnato la busta poteva toglierla entro la
+scadenza, e il motore le scriveva addosso un `withdrawn_at` che la escludeva dalla risoluzione.
+Non c'è più, e la cosa da capire è **quanto** non c'è più: non è stato nascosto il pulsante, è
+stato tolto l'evento. `WITHDRAW_BID` non esiste nella macchina a stati, `withdrawBid` non esiste
+fra le azioni, e la rotta `/action` non ha un `case` per lui — un `POST` costruito a mano riceve
+`INVALID_REQUEST`, cioè «questa azione non esiste».
+
+La ragione di tanta insistenza è la sesta regola letta al contrario. La regola dice che la UI
+disabilita e il server rifiuta comunque; se si fosse tolto solo il pulsante, il server **non**
+avrebbe rifiutato, e la nuova regola del gioco sarebbe vissuta soltanto nel codice del browser. In
+un'asta fra amici nessuno costruirà mai quel `POST`: il rischio vero è un altro, ed è che fra sei
+mesi nessuno sappia più con certezza se il ritiro c'è o no.
+
+⚠ **La colonna `bids.withdrawn_at` invece è rimasta**, con tutti i suoi lettori: il filtro di
+`resolveRound`, il `line-through` nel reveal — sia in TV che nel portale — e le righe del log dei
+lotti. Su tutto ciò che si scrive da M16 in avanti è `null` e resterà `null`, ma le aste già
+giocate hanno dei ritiri dentro, e un lettore tolto non semplificherebbe niente: riscriverebbe il
+passato. È la stessa logica per cui `"WITHDRAW_BID"` resta elencato fra gli eventi «di routine» in
+`lib/auction-log.ts` — lì un tipo *sconosciuto* è notevole, quindi cancellare quella riga non farebbe
+sparire i ritiri storici, li farebbe comparire nello storico delle correzioni, dove non sono mai stati.
 
 **Lo spareggio eredita i timestamp.** Se il round 1 finisce in parità, il round 2 si apre con i
 soli pareggianti e con le loro offerte *copiate*, ciascuna con l'`amount_set_at` originale. Chi
@@ -865,10 +889,11 @@ tipizzato con un messaggio già pronto (`NOT_YOUR_TURN`, `BID_TOO_HIGH`, `ROUND_
 eccezioni restano per gli stati che non dovrebbero esistere — un round senza offerte, una fase di
 lotto senza lotto — dove l'unica cosa onesta da fare è esplodere e farsi vedere.
 
-C'è un dettaglio di questa famiglia che vale la pena conoscere prima della serata: **il ritiro di
-un'offerta è irreversibile**. Chi ritira non può più rientrare su quel lotto, nemmeno cambiando
-idea entro la scadenza. È una regola del regolamento, non un limite tecnico, e la UI della Fase 5
-dovrà comunicarla per quello che è.
+C'è un dettaglio di questa famiglia che vale la pena conoscere prima della serata: **un'offerta
+consegnata non si toglie più**. Si può rilanciare fino alla scadenza, mai ritirare. È una regola
+del regolamento e non un limite tecnico — fino a `v1.15.1` il ritiro esisteva ed era *irreversibile*,
+da M16 non esiste affatto — e la UI non la annuncia, perché una regola che non esiste non si
+annuncia: nel modale non c'è nessun pulsante che tolga qualcosa, e tanto basta.
 
 ---
 
@@ -918,7 +943,7 @@ sweep può bussare ogni secondo senza generare traffico.
 ### Le azioni, e chi può fare cosa
 
 `actions.ts` è il punto in cui un utente autenticato incontra il motore: `startAuction`,
-`pickPlayer`, `placeBid`, `withdrawBid`, `pauseAuction`, `resumeAuction`, più `advancePhase` che
+`pickPlayer`, `placeBid`, `pauseAuction`, `resumeAuction`, più `advancePhase` che
 non ha un utente — la chiamano i timer. La divisione dei compiti è netta: le azioni traducono
 l'utente nel suo membro e controllano le autorizzazioni (l'avvio e la pausa sono dell'owner);
 **le regole del gioco restano tutte nel motore**, e i suoi rifiuti tipizzati risalgono così come
@@ -1414,8 +1439,8 @@ chi era connesso al momento giusto. Chiudere il tab e riaprirlo produce la stess
 perché ci sia un recupero, ma perché non c'era niente da recuperare.
 
 La conseguenza pratica è che la domanda «quale schermata devo mostrare?» è una funzione pura, e sta
-in `lib/realtime/portal.ts` insieme a «quanto posso offrire?», «posso ritirarmi?», «chi è ancora
-libero?». Girano in ambiente `node`, senza DOM, in millisecondi: i cinque casi di rientro di §8bis —
+in `lib/realtime/portal.ts` insieme a «quanto posso offrire?», «chi è ancora libero?» e — da M16 —
+«questa squadra è collegata?», che è la domanda a cui rispondono i pallini della TV. Girano in ambiente `node`, senza DOM, in millisecondi: i cinque casi di rientro di §8bis —
 durante le offerte, durante lo spareggio, durante il reveal, a turno di chiamata già scaduto, ad
 asta in pausa — sono **test automatici** che costruiscono lo snapshot di quell'istante e chiedono
 alla funzione cosa mostrerebbe. Il collaudo a mano sui browser veri resta, ed è il cancello di fase;
@@ -1531,11 +1556,28 @@ questa app», e la risposta è un `✓ Offerta salvata: 9` che arriva dalla risp
 dallo snapshot successivo. La distinzione conta: il verdetto sull'**invio** è immediato, il **mondo**
 lo riscrive solo lo snapshot. Non c'è nessun aggiornamento ottimistico dello stato dell'asta.
 
-Tre casi hanno un messaggio invece di un silenzio, perché sono i tre che generano discussioni in
+Due casi hanno un messaggio invece di un silenzio, perché sono quelli che generano discussioni in
 diretta: chi riconferma la stessa cifra legge «sei già a 9: nulla è cambiato» (il timestamp resta
-quello del primo invio, e nello spareggio è la posizione in coda che conta); chi ha chiamato il
-giocatore legge che l'apertura a 1 è già registrata e che può solo rilanciare; e il ritiro chiede
-una seconda conferma, perché è definitivo — chi si ritira non torna a offrire su quel lotto.
+quello del primo invio, e nello spareggio è la posizione in coda che conta), e chi ha chiamato il
+giocatore legge che l'apertura a 1 è già registrata.
+
+⚠ Quella seconda frase da M16 finisce lì, e la coda che aveva prima — «e non puoi ritirarti, solo
+rilanciare» — è stata tolta apposta: dire al chiamante che *lui* non può ritirarsi implica che
+qualcun altro possa, e non è più vero per nessuno.
+
+**Nel modale si scrive un numero, e non c'è altro che scriva una cifra al posto tuo.** Fino a
+`v1.15.1` sotto al campo c'era una riga di quattro pulsanti — `+5`, `+10`, `+25` e un `max` che ci
+scriveva dentro il tetto — e M16 li ha tolti tutti e quattro. Restano `−1` e `+1` ai lati del campo,
+per l'aggiustamento dell'ultimo secondo. Le due comodità tolte da questa macro spingevano nella
+stessa direzione: la prima trasformava la scelta della cifra in un tocco su un incremento tondo, la
+seconda trasformava la busta chiusa in una cosa reversibile, e in un'asta in cui la cifra è l'unica
+informazione che conta la comodità è il difetto.
+
+⚠ Il `max NN` nell'intestazione **resta**, e non è una dimenticanza: quel numero non è un valore
+suggerito, è il tetto dell'invariante I5 che il server applica a ogni offerta. Toglierlo vorrebbe
+dire far scrivere una cifra al buio e poi farla rifiutare dal motore, mentre il vincolo mobile-first
+chiede l'opposto — che il tetto resti leggibile anche con la tastiera aperta. È sparito il pulsante
+che *scriveva* `max` nel campo, non l'informazione che il tetto è `max`.
 
 Le validazioni della pagina non sostituiscono quelle del server, lo anticipano: la UI disabilita il
 pulsante e spiega perché, il motore rifiuta comunque con il proprio codice tipizzato. Se i due non
@@ -1666,6 +1708,30 @@ strette. Gli slot ancora da riempire restano **disegnati**, tratteggiati: ogni c
 dalla prima chiamata all'ultima, la griglia non balla a ogni acquisto, e chi è indietro si vede a
 colpo d'occhio. È questa l'informazione che nessuno in quella stanza può tenere a mente da solo, ed
 è per questo che merita lo schermo grande.
+
+Da M16 ogni card ha un **pallino prima del nome squadra**: verde chi è collegato, rosso chi non lo
+è. Il dato non è nuovo — `member.presence` viaggia in ogni snapshot da sempre, derivato
+dall'ultimo heartbeat e dal flag di visibilità della pagina — è nuovo solo il fatto che il tabellone
+lo mostri, e serve a una domanda che in quella stanza si fa a voce almeno una volta a serata:
+possiamo far partire il round, o manca qualcuno?
+
+Due dettagli di quel pallino non sono ovvi. Il primo: **i colori sono due e non tre**, e `IDLE` —
+il tab in secondo piano — conta come collegato. Nel portale la distinzione fra `LIVE` e `IDLE` serve
+e `PresenceDot` la mostra in ambra; qui no, perché chi ha il telefono in tasca è nella stanza, e
+perché in TV l'ambra è già la pausa ed è già la riconnessione: un terzo significato sullo stesso
+colore, letto da tre metri, non si distingue dagli altri due. La mappa da tre stati a due sta in un
+posto solo, `tvConnected` in `lib/realtime/portal.ts`, ed è una funzione pura con il suo test.
+
+Il secondo: **la TV non riusa `PresenceDot`**, per la stessa ragione per cui non riusa gli altri
+componenti condivisi — quel pallino disegna l'`OFFLINE` con un grigio del tema che su fondo nero
+diventa *chiaro*, cioè il contrario di ciò che deve comunicare. Qui i due colori sono scritti a mano.
+
+⚠ E un limite, dichiarato invece che scoperto la sera dell'asta: la presence si ricalcola quando
+*qualcuno* batte il colpo. Con otto o dodici telefoni che lo fanno ogni dieci secondi un pallino
+diventa rosso entro circa un secondo dalla scadenza della finestra di quindici, ma se si
+scollegassero tutti insieme non arriverebbe nessun heartbeat e la TV resterebbe con tutti i pallini
+verdi. Non si risolve, ed è una scelta: la cura sarebbe un timer nuovo nel processo, e non vale un
+caso in cui non c'è più nessuno da mostrare.
 
 Il quarto rimanente è il lotto in corso — giocatore, countdown, buste aperte — che resta il più
 leggibile della colonna ma non più della pagina. Sopra, una striscia dice nome dell'asta, fase e —

@@ -70,6 +70,12 @@ export function RevealBids({
             <ul className="space-y-1">
               {ordered.map((bid) => {
                 const member = memberById(snapshot, bid.memberId);
+                // ⚠ **Lettore, e resta** (M16): da qui in avanti `withdrawnAt`
+                // è sempre `null` perché il ritiro non esiste più, ma le aste
+                // già giocate hanno delle buste ritirate dentro e il reveal
+                // deve continuare a mostrarle per quello che erano — barrate,
+                // con «ritirata» al posto dell'orario. Toglierlo non
+                // semplificherebbe niente: riscriverebbe il passato.
                 const withdrawn = bid.withdrawnAt !== null;
                 const isWinner =
                   bid.memberId === reveal.winnerMemberId &&
