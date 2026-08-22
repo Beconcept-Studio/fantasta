@@ -1,9 +1,10 @@
 # M17 — Il portale a tre colonne: la chiamata a pannello, e una colonna che si legge a colpo d'occhio
 
-> **Stato:** **aperta** il 2026-08-22 su `feature/17-portale-tre-colonne`, da `dev` a `0bba393`.
-> Baseline `pnpm test`: **858 test in 52 file**, cioè quella di `v1.16.0`. Task M17-01→08 e M17-11
-> fatti; restano **M17-09** (la tavolozza guardata con una simulazione), **M17-10** (il gate finale) e
-> **M17-12** (la chiusura). Pianificata lo stesso giorno. Nasce dalla terza richiesta del
+> **Stato:** **chiusa**, in produzione da **`v1.17.0`** (2026-08-22) — pianificata, aperta, lavorata,
+> provata dall'owner e rilasciata **nella stessa giornata**, il quarto caso di fila dopo M13, M14 e
+> M16. Gate: **897 test in 52 file** (da 858), typecheck, lint e build. **Nessun passo a mano sul
+> server**: nessun `pnpm db:push`, nessun backfill, nessun file da caricare — verificato, il diff
+> `origin/main..dev` non tocca `lib/db/schema.ts`. Nasce dalla terza richiesta del
 > quaderno, insieme a **M16** — il taglio in due è spiegato in `16-regole-offerta.md` §0 e va letto
 > prima di questa riga. **Esce dopo M16**, che toglie da `lot-card.tsx` un ramo che qui verrebbe
 > ridisegnato per niente.
@@ -310,14 +311,14 @@ in un posto solo è precisamente ciò che rende il cambio d'idea gratuito.
       il pannello è peggio della pagina che sostituisce e va rifatto, non accettato
 - [x] **M17-08** — La card «Tocca a te» nella colonna 3, col countdown e il pulsante che riapre il
       pannello. Provare il giro completo: pannello → scelgo → si chiude → si apre l'offerta
-- [ ] **M17-09** — La tavolozza, **guardata** con una simulazione che gira: le otto scene una dopo
+- [x] **M17-09** — La tavolozza, **guardata** con una simulazione che gira: le otto scene una dopo
       l'altra, e la pausa dentro ciascuna. Correggere qui, non «più avanti» (§7)
-- [ ] **M17-10** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con dev server
+- [x] **M17-10** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con dev server
       spento; la prima dopo una sessione di `pnpm dev` può morire da sola e passare al secondo giro)
 - [x] **M17-11** — Documentazione: `docs/DECISIONS.md` con le cinque decisioni del 2026-08-22 e
       l'esito della tavolozza guardata; `docs/ARCHITECTURE.md`, il capitolo del portale, che oggi
       descrive una colonna sola
-- [ ] **M17-12** — Chiusura: merge `--no-ff` su `dev`, prova a due dispositivi (portatile + telefono
+- [x] **M17-12** — Chiusura: merge `--no-ff` su `dev`, prova a due dispositivi (portatile + telefono
       in LAN) con i bot, `CHANGELOG.md` e `package.json` a `v1.17.0`, merge su `main`, tag. Nessun
       passo a mano sul server, e va scritto nel changelog che non ce n'è
 
