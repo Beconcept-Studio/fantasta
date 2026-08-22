@@ -48,6 +48,13 @@ partenza è peggio di un link che non c'è. Resta invece **quando l'asta è in p
 nessuno, ed è la strada per andare a cambiare i tempi — e resta sempre **per chi organizza senza
 giocare**, che dalla lobby vede la lista dei partecipanti e i loro pallini.
 
+**Il portale è un po' più largo e un po' più calmo.** Non fa parte di M16 ed è entrato prima, ma esce
+qui perché è la prima versione che lo porta in produzione: l'intestazione del portale usa tutta la
+larghezza invece di stringersi a metà schermo, il nome dell'asta e il badge dello stato non le
+stanno più addosso — sopra c'è già la navigazione che li dice — e le sezioni della pagina hanno
+sfondi più tenui, così le card si distinguono dal fondo senza gridare. Il «max» dei crediti non è
+più in grassetto: era l'unico numero della riga a esserlo, e attirava l'occhio più di quanto meriti.
+
 **Nessun passo a mano sul server**: nessuna colonna nuova, nessun dato da correggere, nessun file da
 caricare. Il deploy basta, e quando dice «completato» ha finito davvero.
 
