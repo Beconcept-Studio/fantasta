@@ -12,80 +12,53 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-**M17 — il portale a tre colonne**, aperta il 2026-08-22 su `feature/17-portale-tre-colonne`.
-Task M17-01→08 e M17-11 fatti, gate verde con **893 test in 52 file** (da 858). Restano la tavolozza
-**guardata** con una simulazione (M17-09, che è un criterio di chiusura), il gate finale e la chiusura.
-Nessun `pnpm db:push`, nessun backfill: verificato, non dedotto — il `git diff` della macro non tocca
-`lib/db/schema.ts`.
+Nessuna aperta. **M17 è in produzione da `v1.17.0`** (2026-08-22): pianificata, aperta, lavorata,
+provata dall'owner e rilasciata **nella stessa giornata**, il quarto caso di fila dopo M13, M14 e M16.
+Gate verde con **897 test in 52 file** (da 858), typecheck, lint e build. Su desktop il portale è tre
+colonne, la chiamata arriva dal basso come l'offerta, e la colonna dello stato ha la stessa anatomia
+in tutte le nove scene. **Nessun `pnpm db:push`, nessun backfill, nessun file da caricare**:
+verificato, non dedotto — il diff `origin/main..dev` non tocca `lib/db/schema.ts`.
 
 ⚠ **Il provino statico prima del React è ciò che ha salvato questa macro dal finire come M15**, e
 vale come metodo più che come aneddoto. Le tre colonne, le nove scene e la tavolozza sono state
 guardate come HTML statico con i token copiati da `app/globals.css` **prima** che esistesse un
-componente: quel giro ha cambiato **quattro decisioni su cinque** — l'identità inglobata e grigia
+componente, e quel giro ha cambiato **quattro decisioni su cinque**: l'identità inglobata e grigia
 invece di una card a sé, l'ordine di chiamata tolto dal titolo, il timer da numero grande a banda in
-fondo, e la misura da barra ad anello. Ognuna di quelle scoperte, fatta a React scritto, sarebbe stata
+fondo, la misura da barra ad anello. Ognuna di quelle scoperte, fatta a React scritto, sarebbe stata
 un rifacimento.
 
-⚠ **Le due cose che il provino ha fatto emergere e che la spec non prevedeva.** La prima:
-`CountdownBar` **cambiava già colore col tempo** (verde/ambra/rosso), quindi la fascia della scena e
-la barra del countdown avrebbero avuto due verdi e due ambra nella stessa card con significati
-diversi — a tre secondi dalla chiusura la fascia verde sopra una barra rossa. La banda in fondo lo
-scioglie per posizione (fascia in testa, misura in coda, un bordo in mezzo), e le tre soglie stanno
-adesso in `timeTone`, da cui `CountdownBar` le rilegge. La seconda: il badge «riconnessione…» viveva
-**solo** nella barra incollata, che da `lg` sparisce — sarebbe diventato invisibile su desktop senza
-che niente lo segnalasse.
+⚠ **E le cinque correzioni dopo il provino sono arrivate tutte dalla simulazione**, cioè da M17-09,
+che esiste per quello: il pulsante «Prosegui asta» spostato sotto il vincitore e reso nero, il taglio
+della riga giocatore da «per fonte» a «per domanda», il rapporto grezzo via, la card in quattro
+righe, e alla fine il pulsante «Chiama» via del tutto. **Nessuna di queste era nella spec**, e
+nessuna si sarebbe vista leggendo il codice.
 
-⚠ **Il rosso è stato limitato alle tre scene in cui si agisce**, ed è una decisione presa contando:
-con una regola sola la banda diventerebbe rossa ~200 volte in una serata a 8 con 25 slot, e tre volte
-su sette dove non è chiesto niente. Un rosso che non chiede mai niente si impara a ignorare.
+⚠ **Le tre cose da non riscoprire da capo.** La prima: `CountdownBar` **cambiava già colore col
+tempo** (verde/ambra/rosso), quindi fascia della scena e barra del countdown avrebbero avuto due
+verdi e due ambra nella stessa card con significati diversi — a tre secondi dalla chiusura, fascia
+verde sopra barra rossa. La banda in fondo lo scioglie **per posizione** (fascia in testa, misura in
+coda, un bordo in mezzo), e le tre soglie stanno adesso in `timeTone`, da cui `CountdownBar` le
+rilegge. La seconda: il badge «riconnessione…» viveva **solo** nella barra incollata, che da `lg`
+sparisce — sarebbe diventato invisibile su desktop senza che niente lo segnalasse, e sta ora in
+`<Identity>`. La terza: `phaseLabel` in pausa restituisce «in pausa», che è già quello che dice il
+badge accanto; la card si ripeteva, e il rimedio è stato **fattorizzare** lo `switch` in
+`phaseLabelIgnoringPause` — non scrivere una seconda frase, che §5 vietava. C'è un test sulla
+**relazione** fra le due funzioni.
 
-⚠ **Una cosa è stata tolta e non sostituita, e va saputo**: l'ordine di chiamata dei ruoli
-(`roleOrder`) non si legge più da nessuna parte nell'app. Il portale era l'unico posto che lo
-scriveva, e `RosterGrid` elenca i ruoli nel suo ordine fisso (P → D → C → A). Il perché sta in
-`docs/DECISIONS.md` alla data.
+⚠ **Il rosso è limitato alle tre scene in cui si agisce**, ed è una decisione presa contando: con una
+regola sola la banda diventerebbe rossa ~200 volte in una serata a 8 con 25 slot, e tre volte su
+sette dove non è chiesto niente. Un rosso che non chiede mai niente si impara a ignorare.
 
----
+⚠ **Due dati non si leggono più da nessuna parte, e sono stati tolti su richiesta**: l'ordine di
+chiamata dei ruoli (`roleOrder` — il portale era l'unico posto che lo scriveva, e `RosterGrid`
+elenca i ruoli nel suo ordine fisso) e `fvm` nella lista di chiamata. ⚠ Il secondo **ordina ancora
+la lista**: ciò che tiene in piedi la promessa «il primo è quello che il timer prenderebbe» è la riga
+dell'auto-pick sopra l'elenco, che lo dice per nome. Se un giorno quella riga venisse togliesse,
+l'ordinamento diventerebbe muto.
 
-**M16 è in produzione da `v1.16.0`** (2026-08-22): aperta, lavorata, provata
-dall'owner e rilasciata **nella stessa giornata**, il terzo caso di fila dopo M13 e M14. Gate verde
-con **858 test in 52 file** (da 860 in 51 — 13 tolti insieme al ritiro, 11 aggiunti), typecheck e
-build puliti. Un'offerta è una decisione che si prende una volta: via i quattro valori suggeriti dal
-modale, via il ritiro **fino in fondo** — evento del motore compreso — e i pallini di presence in TV.
-**Nessun `pnpm db:push`, nessun backfill, nessun file da caricare**: verificato, non dedotto — il
-`git diff` della macro non tocca `lib/db/schema.ts`.
-
-⚠ **È la prima macro che toglie righe di test invece di aggiungerne**, e il conto va letto per
-quello che è: 13 test spariti non sono copertura persa, sono cinque divieti e un evento che non
-esistono più. Quello che restava da difendere è stato spostato dove ha senso — il filtro delle
-ritirate in `resolveRound` è provato in `tests/engine/rules.test.ts` costruendo la riga a mano,
-perché è un **lettore** e i lettori sopravvivono a chi scriveva.
-
-⚠ **Porta anche una correzione fuori tema**, chiesta dall'owner a macro già chiusa su `dev` e
-accettata dentro M16 perché `CLAUDE.md` vuole le correzioni piccole nella macro aperta: **la voce
-«Lobby» sparisce dal menù ad asta `LIVE`**, dove portava a un rimbalzo. Restringe — in un caso solo,
-e senza toccare la ragione che la motivava — la regola di `lib/auction-nav.ts` per cui le sezioni
-dipendono dal ruolo e mai dallo stato. Il perché sta in `docs/DECISIONS.md` alla data.
-
-⚠ **Il ritiro è stato tolto dal server e non solo dal pulsante**, ed è il senso della macro: la
-regola 6 dice «la UI disabilita, il server rifiuta comunque», quindi togliere solo il pulsante
-avrebbe lasciato una regola del gioco viva soltanto nel browser. Un `POST` con `{type:"WITHDRAW"}`
-riceve ora `INVALID_REQUEST`, e il test che lo dimostra passa dalla rotta vera
-(`tests/db/withdraw-gone.test.ts`).
-
-⚠ **Due cose che la spec non aveva previsto, e che sono la cronaca utile di questa macro.** La prima:
-il grep di controllo di M16-03 era incompleto — `components/auction/reveal-panel.tsx` legge
-`withdrawnAt` per barrare le buste ritirate ed è il gemello nel portale del `line-through` della TV.
-È un **lettore**, quindi resta: la regola «via tutti gli scrittori, restano tutti i lettori» vince
-sull'elenco, e il file ha guadagnato il commento che dice perché. La seconda: `tvConnected`, la mappa
-da tre stati di presence a due, sta in `lib/realtime/portal.ts` e non «accanto al componente» come
-chiedeva §5 — vitest include solo `**/*.test.ts`, e un test che importasse un `.tsx` client
-trascinerebbe React in ambiente `node`. È lo stesso motivo per cui esiste `use-auction-stream.ts`, e
-`tv-view.tsx` importava già `portalScreen` da lì.
-
-⚠ **`"WITHDRAW_BID"` in `ROUTINE_EVENT_TYPES` (`lib/auction-log.ts`) NON è stato tolto**, come la
-pianificazione aveva avvertito: in quel file un tipo *sconosciuto* è notevole, quindi cancellare
-quella riga non farebbe sparire i ritiri storici — li **promuoverebbe** nel blocco delle correzioni
-di un'asta già giocata, dove non sono mai stati. Adesso la riga porta il commento che lo spiega.
+⚠ **E `InsightsLine` non esiste più**: si è sciolta in `ValoriCarmy` e `BonusENote` quando la card è
+passata a quattro righe. Una composizione con un solo chiamante da spezzare in tre non è
+un'astrazione ma un ostacolo, e quel file esporta pezzi da M10.
 
 ---
 
@@ -231,8 +204,8 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 ## Da pianificare
 
 **Nessuna.** Le due pianificate il 2026-08-22 dalle tre richieste che l'owner aveva scritto nel
-quaderno dopo `v1.15.1` sono entrambe partite: **M16 è chiusa e in produzione**, **M17 è aperta** (qui
-sopra). **`docs/REQUESTS.md` resta vuoto.**
+quaderno dopo `v1.15.1` sono **entrambe chiuse e in produzione** — M16 in `v1.16.0`, M17 in
+`v1.17.0`, nella stessa giornata. **`docs/REQUESTS.md` resta vuoto.**
 
 Quello che segue è il ragionamento con cui le due sono state tagliate, e resta come archivio.
 
@@ -352,6 +325,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M17](17-portale-tre-colonne.md) | Il portale a tre colonne: la chiamata a pannello, e una colonna di stato che si legge a colpo d'occhio | v1.17.0 — 2026-08-22 |
 | [M16](16-regole-offerta.md) | Le regole dell'offerta: via i valori suggeriti, via il ritiro (motore compreso), i pallini di presence in TV | v1.16.0 — 2026-08-22 |
 | [M14](14-cancello-risultati.md) | Il cancello dei risultati: fra la chiusura di un round e la rivelazione delle buste un istante che appartiene a chi conduce, e un lotto che si può annullare | v1.15.0 — 2026-08-18 |
 | [M13](13-utenti-admin.md) | La pagina utenti: sei colonne in sola lettura con la ricerca, e un pannello laterale che modifica | v1.14.0 — 2026-08-18 |
