@@ -57,7 +57,7 @@ export function LotCard({
   const withdrawn = haveWithdrawn(snapshot);
 
   return (
-    <section className="bg-card overflow-hidden rounded-xl border shadow-sm">
+    <section className="bg-muted/40 overflow-hidden rounded-xl border shadow-sm">
       {/* ── Il giocatore, e quanto tempo resta ── */}
       <header className="space-y-2 p-4 pb-3">
         <div className="flex items-start justify-between gap-3">

@@ -390,7 +390,7 @@ export function PickWaiting({
 }) {
   const role = snapshot.auction.currentRole;
   return (
-    <section className="bg-card space-y-2 rounded-xl border p-6 text-center shadow-sm">
+    <section className="bg-muted/40 space-y-2 rounded-xl border p-6 text-center shadow-sm">
       <p className="text-muted-foreground text-xs tracking-wide uppercase">
         Sta chiamando
       </p>
