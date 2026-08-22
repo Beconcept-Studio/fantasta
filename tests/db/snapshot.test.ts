@@ -7,6 +7,7 @@ import {
   startAuction,
 } from "@/lib/engine/actions";
 import { setBroadcastHook } from "@/lib/engine/mutate";
+import { manualAssign, voidAssignment } from "@/lib/engine/override";
 import { derivePresence } from "@/lib/engine/presence";
 import { createScheduler } from "@/lib/engine/scheduler";
 import { loadForSnapshot, serializeSnapshot } from "@/lib/engine/snapshot";
@@ -164,6 +165,115 @@ describe.runIf(dbUp)("F4-01 — §12.32, il membro non idoneo", () => {
     expect(seat0?.roster).toHaveLength(1);
     expect(seat0?.slotsFilled.P).toBe(1);
     expect(seat0?.credits).toBe(99);
+  });
+});
+
+/**
+ * M18 §2 — **`member.roster` è in ordine di estrazione**, e da qui in avanti è
+ * una proprietà dichiarata invece che soltanto vera.
+ *
+ * Vale per costruzione: `loadAuctionState` legge le assegnazioni con
+ * `.orderBy(asc(assignments.createdAt), asc(assignments.id))` e
+ * `serializeMembers` filtra e mappa **senza riordinare**. Fino a M18 nessuno lo
+ * verificava, perché erano le due viste a riordinare per prezzo nel client: da
+ * quando quel `.sort()` non c'è più, l'ordine dello snapshot è l'ordine che si
+ * legge a schermo, e una modifica a `mutate.ts` o a `serializeMembers` potrebbe
+ * togliersela senza che niente protesti.
+ *
+ * ⚠ **È un test che passerebbe anche prima di M18**, ed è precisamente il motivo
+ * per cui va scritto: non prova una modifica, protegge un presupposto.
+ */
+describe.runIf(dbUp)("M18 §2 — la rosa è in ordine di estrazione", () => {
+  it("due assegnazioni nello stesso ruolo restano in ordine di creazione, non di prezzo", async () => {
+    const game = await gameAuction();
+    const t0 = Date.now();
+    const strikers = await playersOfRole(game.auctionId, "A");
+
+    // ⚠ **La seconda è più costosa della prima**: è l'unico modo di distinguere
+    // «ordine di estrazione» da «ordine per prezzo decrescente», che su una rosa
+    // comprata in ordine di prezzo darebbero la stessa lista.
+    unwrap(
+      await manualAssign(
+        game.ownerId,
+        game.auctionId,
+        { memberId: game.memberIds[0], playerId: strikers[0].id, price: 12 },
+        t0,
+      ),
+    );
+    // `force` deroga a I4 perché l'asta di prova ha 1 slot per ruolo: la deroga
+    // è del setup, non della proprietà sotto esame.
+    unwrap(
+      await manualAssign(
+        game.ownerId,
+        game.auctionId,
+        {
+          memberId: game.memberIds[0],
+          playerId: strikers[1].id,
+          price: 45,
+          force: true,
+        },
+        t0 + 1_000,
+      ),
+    );
+
+    const snap = await snapshotOf(game.auctionId, game.memberIds[0], t0 + 1_100);
+    const rosa = snap.members.find((m) => m.id === game.memberIds[0])!.roster;
+
+    expect(rosa.map((entry) => entry.playerId)).toEqual([
+      strikers[0].id,
+      strikers[1].id,
+    ]);
+    // I prezzi salgono: se qualcuno rimettesse un riordino per prezzo, questa
+    // riga sarebbe la prima a diventare rossa.
+    expect(rosa.map((entry) => entry.price)).toEqual([12, 45]);
+  });
+
+  it("⚠ una riassegnazione va in fondo: la rosa dice quando le cose sono state decise", async () => {
+    const game = await gameAuction();
+    const t0 = Date.now();
+    const strikers = await playersOfRole(game.auctionId, "A");
+    const defenders = await playersOfRole(game.auctionId, "D");
+
+    const primo = unwrap(
+      await manualAssign(
+        game.ownerId,
+        game.auctionId,
+        { memberId: game.memberIds[0], playerId: strikers[0].id, price: 30 },
+        t0,
+      ),
+    );
+    unwrap(
+      await manualAssign(
+        game.ownerId,
+        game.auctionId,
+        { memberId: game.memberIds[0], playerId: defenders[0].id, price: 5 },
+        t0 + 1_000,
+      ),
+    );
+    // La correzione di M18 §2: `voidAssignment` + `manualAssign` creano una riga
+    // nuova, con il `createdAt` del momento in cui la correzione è stata fatta.
+    unwrap(
+      await voidAssignment(game.ownerId, game.auctionId, primo.assignmentId, t0 + 2_000),
+    );
+    unwrap(
+      await manualAssign(
+        game.ownerId,
+        game.auctionId,
+        { memberId: game.memberIds[0], playerId: strikers[1].id, price: 30 },
+        t0 + 3_000,
+      ),
+    );
+
+    const snap = await snapshotOf(game.auctionId, game.memberIds[0], t0 + 3_100);
+    const rosa = snap.members.find((m) => m.id === game.memberIds[0])!.roster;
+
+    // L'annullata non c'è più, e il rimpiazzo è **in coda** — non al posto che
+    // occupava il giocatore che ha sostituito. Non è un difetto: è stato deciso
+    // allora.
+    expect(rosa.map((entry) => entry.playerId)).toEqual([
+      defenders[0].id,
+      strikers[1].id,
+    ]);
   });
 });
 

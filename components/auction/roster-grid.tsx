@@ -23,9 +23,13 @@ export function RosterGrid({
   return (
     <div className={cn("space-y-3", className)}>
       {ROLES.map((role) => {
-        const owned = member.roster
-          .filter((entry) => entry.role === role)
-          .sort((a, b) => b.price - a.price);
+        // ⚠ **Nessun riordino**: `member.roster` arriva già in ordine di
+        // estrazione, ed è l'ordine che si vuole leggere (M18 §2). Fino a M18
+        // qui c'era un `.sort((a, b) => b.price - a.price)`, che lo disfaceva:
+        // un acquisto da 45 crediti non si aggiungeva in fondo al reparto, si
+        // metteva in cima e spingeva giù quello che si era appena finito di
+        // leggere. La rosa non è una classifica, è un diario.
+        const owned = member.roster.filter((entry) => entry.role === role);
         const empty = Math.max(0, slots[role] - owned.length);
         return (
           <div key={role} className="space-y-1.5">

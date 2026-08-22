@@ -1,4 +1,4 @@
-import { ROLE_LABELS, type AuctionStatus, type Role } from "@/lib/domain";
+import { ROLES, ROLE_LABELS, type AuctionStatus, type Role } from "@/lib/domain";
 
 import type {
   PoolPlayer,
@@ -811,4 +811,59 @@ export function autoPickCandidate(
 ): PoolPlayer | null {
   // Nessun filtro, nessuna ricerca: è **esattamente** l'ordine del motore.
   return availablePlayers(pool, snapshot, role)[0] ?? null;
+}
+
+// ─── La quota di budget per reparto (M18) ────────────────────────────────────
+
+/**
+ * Quanto del budget a disposizione è finito in ogni reparto, in percentuale
+ * intera. `null` per un ruolo quando il budget è 0 — non si divide per zero e
+ * non si scrive `NaN%` in faccia a nessuno.
+ *
+ * **Il denominatore è il budget, non la spesa fatta** (decisione dell'owner del
+ * 2026-08-22): «se spendo 250 su 500 sui portieri, ho investito il 50%». La
+ * quota sulla spesa sarebbe volatile e insegnerebbe poco — al primo acquisto il
+ * reparto starebbe al 100% — mentre questa è confrontabile con la ripartizione
+ * che uno si è prefissato prima di sedersi, cioè è il numero su cui si decide se
+ * fermarsi. Conseguenza voluta: **le quattro percentuali non fanno 100**, e ciò
+ * che manca sono i crediti ancora in cassa, che è a sua volta un'informazione.
+ *
+ * Il budget iniziale non viaggia nello snapshot e non serve: `crediti + speso`
+ * lo ricostruisce, ed è la stessa identità con cui si controlla a vista che i
+ * conti tornino (I3) — la stessa che sta nel commento di `spentCredits`.
+ *
+ * ⚠ **Le rettifiche di budget (I3) entrano nel denominatore**, perché `credits`
+ * include già `Σ ledger.delta`: il denominatore è il budget **corrente**, non
+ * quello di partenza. Dopo una rettifica le quattro quote si spostano tutte, ed
+ * è la lettura giusta di «crediti a disposizione» — è cambiato il totale su cui
+ * si sta ragionando.
+ *
+ * Sta qui e non in un componente per la stessa ragione di `bidBounds` e
+ * `sceneTime`: è una formula, e una formula si collauda in millisecondi senza
+ * DOM. Il totale se lo calcola da sé invece di chiamare `spentCredits`, che vive
+ * in `manage.ts` con un chiamante già contento: spostarlo sarebbe un refactor
+ * che nessuno ha chiesto (regola 8).
+ */
+export function quotaPerRuolo(
+  member: SnapshotMember,
+): Record<Role, number | null> {
+  const speso: Record<Role, number> = { P: 0, D: 0, C: 0, A: 0 };
+  for (const entry of member.roster) speso[entry.role] += entry.price;
+
+  const budget =
+    member.credits + ROLES.reduce((somma, role) => somma + speso[role], 0);
+
+  // Impossibile in pratica — `budgetInitial` è positivo e I3 tiene i crediti ≥
+  // slot residui — quindi la guardia non è una precauzione contro la realtà: è
+  // contro il `NaN%` che comparirebbe in un test o in un'asta manipolata a mano
+  // dalla regia.
+  const quota = (parziale: number) =>
+    budget === 0 ? null : Math.round((100 * parziale) / budget);
+
+  return {
+    P: quota(speso.P),
+    D: quota(speso.D),
+    C: quota(speso.C),
+    A: quota(speso.A),
+  };
 }
