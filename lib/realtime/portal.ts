@@ -1,4 +1,4 @@
-import { ROLE_LABELS, type Role } from "@/lib/domain";
+import { ROLE_LABELS, type AuctionStatus, type Role } from "@/lib/domain";
 
 import type {
   PoolPlayer,
@@ -153,10 +153,34 @@ export function portalScreen(
  * gioco.
  */
 export function phaseLabel(snapshot: Snapshot): string {
-  const { status, phase, currentRole } = snapshot.auction;
+  const { status } = snapshot.auction;
   if (status === "PAUSED") return "in pausa";
   if (status === "COMPLETED") return "finita";
   if (status === "DRAFT" || status === "READY") return "non iniziata";
+  return phaseLabelIgnoringPause(snapshot);
+}
+
+/**
+ * La stessa frase di `phaseLabel`, **senza la precedenza della pausa**: dice a
+ * che punto del lotto siamo anche mentre l'asta è ferma.
+ *
+ * ⚠ **Non è una seconda copia delle frasi, ed è per questo che `phaseLabel` la
+ * chiama** invece di ripetere lo `switch`: «offerte», «spareggio», «buste da
+ * aprire» esistono in un posto solo, e chi ne cambia una le cambia per tutti i
+ * chiamanti — TV, regia e portale.
+ *
+ * Serve alla **card di stato** del portale (M17 §5), che ha il badge dello stato
+ * dell'asta e la riga della fase uno accanto all'altro. Con `phaseLabel` in
+ * pausa direbbero la stessa parola due volte — badge «in pausa», fase «in pausa»
+ * — e una card che si ripete si legge come una card rotta. Così invece dice
+ * **entrambe le cose**: in pausa, *durante un round di offerte*, che è
+ * precisamente ciò che significa «la pausa congela la fase, non la azzera».
+ *
+ * Fuori da `LIVE`/`PAUSED` non ha niente da dire — `phase` è `null` — e chi
+ * chiama non deve renderizzare la riga: lo stato lo dice già il badge.
+ */
+export function phaseLabelIgnoringPause(snapshot: Snapshot): string {
+  const { phase, currentRole } = snapshot.auction;
   const role =
     currentRole === null ? "" : ` ${ROLE_LABELS[currentRole].toLowerCase()}`;
   switch (phase) {
@@ -177,6 +201,31 @@ export function phaseLabel(snapshot: Snapshot): string {
       return "buste aperte";
     default:
       return "in corso";
+  }
+}
+
+/**
+ * Lo stato dell'asta in due parole, per il badge della card di stato (M17 §5).
+ *
+ * È una funzione dello **stato** e non dello snapshot intero di proposito: qui
+ * non c'è niente da dedurre dalla fase o dal lotto, e prendere lo snapshot
+ * inviterebbe a metterci dentro condizioni che appartengono a `phaseLabel`.
+ *
+ * `DRAFT` e `READY` dicono la stessa cosa a chi gioca — «non è ancora
+ * cominciata» — e la differenza fra le due (listone importato o no) è una
+ * faccenda di chi prepara l'asta, che la vede nella configurazione.
+ */
+export function statusLabel(status: AuctionStatus): string {
+  switch (status) {
+    case "DRAFT":
+    case "READY":
+      return "non iniziata";
+    case "LIVE":
+      return "in corso";
+    case "PAUSED":
+      return "in pausa";
+    case "COMPLETED":
+      return "conclusa";
   }
 }
 

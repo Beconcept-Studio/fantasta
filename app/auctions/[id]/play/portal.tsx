@@ -6,14 +6,15 @@ import { useState } from "react";
 import { useDeletedRedirect } from "@/app/auctions/use-deleted-redirect";
 import { BidModal } from "@/components/auction/bid-modal";
 import { DeletedCurtain } from "@/components/auction/deleted-curtain";
+import { Identity } from "@/components/auction/identity";
 import { LotCard } from "@/components/auction/lot-card";
 import { LotClosedCard } from "@/components/auction/lot-closed-card";
 import { MembersPanel } from "@/components/auction/members-panel";
 import { PickPanel, PickWaiting } from "@/components/auction/pick-panel";
 import { PortalHeader } from "@/components/auction/portal-header";
 import { RosterGrid } from "@/components/auction/roster-grid";
+import { StatusCard } from "@/components/auction/status-card";
 import { Button } from "@/components/ui/button";
-import { ROLE_LABELS } from "@/lib/domain";
 import { sendAction } from "@/lib/realtime/action";
 import { managerControls } from "@/lib/realtime/manage";
 import {
@@ -126,124 +127,179 @@ export function Portal({
     <>
       <PortalHeader snapshot={snapshot} me={me} connected={connected} />
 
-      <main className="mx-auto w-full max-w-xl space-y-4 p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-        {screen.frozen && (
-          <section
-            role="status"
-            className="space-y-1 rounded-xl border border-amber-500/50 bg-amber-500/10 p-4"
-          >
-            <h2 className="font-semibold">Asta in pausa</h2>
-            <p className="text-sm">
-              Chi gestisce l&apos;asta l&apos;ha messa in pausa. I countdown sono
-              congelati e le offerte sospese: quando riprende, il tempo che
-              restava riparte da dov&apos;era.
-            </p>
-          </section>
-        )}
-
-        {screen.kind === "NOT_STARTED" && (
-          <section className="bg-card space-y-3 rounded-xl border p-6 text-center shadow-sm">
-            <h2 className="text-lg font-semibold">L&apos;asta non è iniziata</h2>
-            <p className="text-muted-foreground text-sm">
-              Tieni questa pagina aperta: si parte quando chi gestisce
-              l&apos;asta la avvia, e serve che siate tutti collegati.
-            </p>
-            <Button asChild variant="outline">
-              <Link href={`/auctions/${auctionId}/lobby`}>Vai alla lobby</Link>
-            </Button>
-          </section>
-        )}
-
-        {screen.kind === "COMPLETED" && (
-          <section className="bg-card/40 space-y-2 rounded-xl border p-6 text-center shadow-sm">
-            <h2 className="text-lg font-semibold">Asta conclusa</h2>
-            <p className="text-muted-foreground text-sm">
-              Le rose sono chiuse. Qui sotto la tua, con i prezzi pagati.
-            </p>
-          </section>
-        )}
-
+      {/*
+        ⚠ **max-w-6xl e non max-w-xl** (M17 §2): fino a v1.16.0 la larghezza
+        larga stava nell'intestazione e quella stretta nel corpo, cioè al
+        contrario di come si legge. Da qui il corpo è la cosa larga, e a
+        1024px le tre colonne vengono ~350px ciascuna.
+      */}
+      <main className="mx-auto w-full max-w-6xl p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         {/*
-          Due card per lo stesso posto: il lotto vivo e il lotto chiuso sono due
-          momenti diversi e devono avere due facce diverse (M1). La scelta è
-          della fase, quindi dello snapshot: chi rientra a metà reveal trova la
-          card chiusa come chi non si è mai disconnesso (I10).
+          ⚠ **L'ordine nel DOM è quello del telefono, non quello del desktop**, e
+          letto senza questa nota sembra un errore.
 
-          ⚠ **Da M14 le fasi chiuse sono due, ma le card restano due** — il cancello
-          dei risultati (`LOT_SEALED`) porta la card chiusa nel suo stato sigillato,
-          non una terza cornice. Il perché sta su `LotClosedCard`: per chi guarda il
-          telefono la cosa già accaduta — «non si offre più» — è la stessa, e ciò che
-          cambia è solo se il risultato si conosce.
+          Sotto `lg` c'è una colonna sola e conta solo l'ordine sorgente: la prima
+          cosa dopo l'intestazione deve restare **la scena** — il lotto su cui si
+          sta offrendo — perché è ciò per cui si tiene il telefono in mano. Se le
+          colonne fossero scritte 1-2-3, chi gioca dal telefono dovrebbe scorrere
+          oltre la propria rosa e oltre gli altri per arrivare all'offerta, cioè
+          il contrario di quello che il portale fa da v1.0.0.
+
+          Da `lg` le tre si rimettono in fila con `lg:order-*`, che è l'unica cosa
+          che le tre classi qui sotto fanno. Non è ottimizzazione: è il prezzo di
+          tre classi per non peggiorare il dispositivo con cui si gioca davvero.
         */}
-        {screen.kind === "LOT" &&
-          lot !== null &&
-          (snapshot.auction.phase === "LOT_REVEAL" ||
-          snapshot.auction.phase === "LOT_SEALED" ? (
-            <LotClosedCard
-              snapshot={snapshot}
-              myMemberId={myMemberId}
-              offset={offset}
-              onSkip={
-                viewerIsOwner && managerControls(snapshot).canSkipReveal
-                  ? skipReveal
-                  : null
-              }
-              onShowResults={
-                viewerIsOwner && managerControls(snapshot).canShowResults
-                  ? showResults
-                  : null
-              }
-              skipPending={skipping}
-            />
-          ) : (
-            <LotCard
-              snapshot={snapshot}
-              myMemberId={myMemberId}
-              offset={offset}
-              onOpenBid={() => setDismissedLotId(null)}
-            />
-          ))}
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+          <div className="flex min-w-0 flex-col gap-4 lg:order-3">
+            <StatusCard snapshot={snapshot} />
 
-        {screen.kind === "PICK_MINE" && (
-          <PickPanel
-            snapshot={snapshot}
-            pool={pool}
-            offset={offset}
-            frozen={screen.frozen}
-            onPick={(playerId) => sendAction(auctionId, { type: "PICK", playerId })}
-          />
-        )}
-
-        {screen.kind === "PICK_WAIT" && (
-          <PickWaiting
-            snapshot={snapshot}
-            offset={offset}
-            frozen={screen.frozen}
-            callerName={memberLabel(
-              memberById(snapshot, snapshot.auction.currentMemberId),
+            {/*
+              ⚠ **Senza intestazione, e non è una dimenticanza**: «L'asta non è
+              iniziata» era il titolo di questa card fino a v1.16.0, e da M17 lo
+              dice la card di stato dieci pixel più su. Qui resta ciò che quella
+              non dice: cosa fare mentre si aspetta, e la strada per la lobby.
+            */}
+            {screen.kind === "NOT_STARTED" && (
+              <section className="bg-card space-y-3 rounded-xl border p-6 text-center shadow-sm">
+                <p className="text-muted-foreground text-sm">
+                  Tieni questa pagina aperta: si parte quando chi gestisce
+                  l&apos;asta la avvia, e serve che siate tutti collegati.
+                </p>
+                <Button asChild variant="outline">
+                  <Link href={`/auctions/${auctionId}/lobby`}>Vai alla lobby</Link>
+                </Button>
+              </section>
             )}
-          />
-        )}
 
-        {me !== null && (
-          <section className="space-y-2">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-              <h2 className="font-semibold">La tua rosa</h2>
-              <p className="text-muted-foreground text-xs">
-                {snapshot.auction.roleOrder
-                  .map((role) => ROLE_LABELS[role])
-                  .join(" → ")}
-              </p>
-            </div>
-            <RosterGrid member={me} slots={snapshot.auction.slots} />
+            {/*
+              ⚠ «Qui sotto la tua» non si può più scrivere: da M17 la propria rosa
+              è **accanto** su desktop e sotto sul telefono, quindi qualunque
+              indicazione di direzione sarebbe falsa metà delle volte. Il rimando
+              se ne va e non viene sostituito da un «qui accanto»: la rosa è la
+              cosa più grande della pagina e non ha bisogno di essere additata.
+            */}
+            {screen.kind === "COMPLETED" && (
+              <section className="bg-card/40 space-y-2 rounded-xl border p-6 text-center shadow-sm">
+                <p className="text-muted-foreground text-sm">
+                  Le rose sono chiuse, con i prezzi pagati.
+                </p>
+              </section>
+            )}
+
+            {/*
+              Due card per lo stesso posto: il lotto vivo e il lotto chiuso sono due
+              momenti diversi e devono avere due facce diverse (M1). La scelta è
+              della fase, quindi dello snapshot: chi rientra a metà reveal trova la
+              card chiusa come chi non si è mai disconnesso (I10).
+
+              ⚠ **Da M14 le fasi chiuse sono due, ma le card restano due** — il cancello
+              dei risultati (`LOT_SEALED`) porta la card chiusa nel suo stato sigillato,
+              non una terza cornice. Il perché sta su `LotClosedCard`: per chi guarda il
+              telefono la cosa già accaduta — «non si offre più» — è la stessa, e ciò che
+              cambia è solo se il risultato si conosce.
+            */}
+            {screen.kind === "LOT" &&
+              lot !== null &&
+              (snapshot.auction.phase === "LOT_REVEAL" ||
+              snapshot.auction.phase === "LOT_SEALED" ? (
+                <LotClosedCard
+                  snapshot={snapshot}
+                  myMemberId={myMemberId}
+                  offset={offset}
+                  onSkip={
+                    viewerIsOwner && managerControls(snapshot).canSkipReveal
+                      ? skipReveal
+                      : null
+                  }
+                  onShowResults={
+                    viewerIsOwner && managerControls(snapshot).canShowResults
+                      ? showResults
+                      : null
+                  }
+                  skipPending={skipping}
+                />
+              ) : (
+                <LotCard
+                  snapshot={snapshot}
+                  myMemberId={myMemberId}
+                  offset={offset}
+                  onOpenBid={() => setDismissedLotId(null)}
+                />
+              ))}
+
+            {screen.kind === "PICK_MINE" && (
+              <PickPanel
+                snapshot={snapshot}
+                pool={pool}
+                offset={offset}
+                frozen={screen.frozen}
+                onPick={(playerId) => sendAction(auctionId, { type: "PICK", playerId })}
+              />
+            )}
+
+            {screen.kind === "PICK_WAIT" && (
+              <PickWaiting
+                snapshot={snapshot}
+                offset={offset}
+                frozen={screen.frozen}
+                callerName={memberLabel(
+                  memberById(snapshot, snapshot.auction.currentMemberId),
+                )}
+              />
+            )}
+          </div>
+
+          {/* ── Colonna 1: la rosa, con l'identità inglobata in testa ── */}
+          {me !== null && (
+            <section
+              className="bg-card min-w-0 overflow-hidden rounded-xl border shadow-sm lg:order-1"
+              aria-label="La tua rosa"
+            >
+              {/*
+                ⚠ **Grigia, e dentro la card della rosa invece che sopra**
+                (decisione dell'owner del 2026-08-22). Una colonna che comincia
+                con due cornici bianche una sopra l'altra chiede a chi guarda di
+                capire perché sono due; il fondo grigio dice in un colpo che quello
+                è un altro genere di cosa — i miei numeri, non i miei giocatori —
+                senza spendere una seconda cornice.
+
+                `hidden lg:block`: sotto `lg` gli stessi numeri sono nella barra
+                incollata, e ripeterli qui sarebbe la seconda copia che `Identity`
+                esiste per evitare.
+              */}
+              <div className="bg-muted hidden border-b p-4 lg:block">
+                <Identity
+                  me={me}
+                  slots={snapshot.auction.slots}
+                  connected={connected}
+                />
+              </div>
+              <div className="p-4">
+                {/*
+                  ⚠ Nella riga del titolo c'è **solo il titolo** (decisione
+                  dell'owner del 2026-08-22): l'ordine di chiamata dei ruoli, che
+                  stava qui accanto, non c'è più. Va saputo che era **l'unico
+                  posto** dell'app che lo scriveva, e che `RosterGrid` elenca i
+                  ruoli nel suo ordine fisso (P → D → C → A) e non in quello
+                  dell'asta — quindi in un'asta che chiama i portieri per ultimi
+                  quell'informazione adesso non si legge da nessuna parte. Quale
+                  ruolo è in gioco *adesso* lo dice la card di stato.
+                */}
+                <h2 className="mb-3 font-semibold">La tua rosa</h2>
+                <RosterGrid member={me} slots={snapshot.auction.slots} />
+              </div>
+            </section>
+          )}
+
+          {/* ── Colonna 2: gli altri ── */}
+          <section
+            className="bg-card min-w-0 space-y-2 rounded-xl border p-4 shadow-sm lg:order-2"
+            aria-label="Gli altri partecipanti"
+          >
+            <h2 className="font-semibold">Gli altri</h2>
+            <MembersPanel snapshot={snapshot} myMemberId={myMemberId} />
           </section>
-        )}
-
-        <section className="space-y-2">
-          <h2 className="font-semibold">Gli altri</h2>
-          <MembersPanel snapshot={snapshot} myMemberId={myMemberId} />
-        </section>
-
+        </div>
       </main>
 
       {lot !== null && (
