@@ -10,7 +10,7 @@ import { Identity } from "@/components/auction/identity";
 import { LotCard } from "@/components/auction/lot-card";
 import { LotClosedCard } from "@/components/auction/lot-closed-card";
 import { MembersPanel } from "@/components/auction/members-panel";
-import { PickPanel, PickWaiting } from "@/components/auction/pick-panel";
+import { PickSheet, PickWaiting } from "@/components/auction/pick-panel";
 import { PortalHeader } from "@/components/auction/portal-header";
 import { RosterGrid } from "@/components/auction/roster-grid";
 import { SceneCard } from "@/components/auction/scene-card";
@@ -19,8 +19,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { sendAction } from "@/lib/realtime/action";
 import { managerControls } from "@/lib/realtime/manage";
+import { ROLE_LABELS_ONE } from "@/lib/domain";
 import {
   amEligible,
+  autoPickCandidate,
   memberById,
   memberLabel,
   myMember,
@@ -29,7 +31,9 @@ import {
   sceneOf,
   sceneTime,
   shouldOpenBidDialog,
+  shouldOpenPickSheet,
   toneOf,
+  turnKey,
   type Scene,
 } from "@/lib/realtime/portal";
 import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
@@ -89,6 +93,17 @@ export function Portal({
   // ⚠ §8bis — vive **solo** qui: non è persistito, non è sincronizzato, e al
   // lotto successivo diventa irrilevante da sé perché l'id cambia.
   const [dismissedLotId, setDismissedLotId] = useState<string | null>(null);
+  /**
+   * Il gemello del precedente per il pannello di chiamata (M17 §4), ed è il
+   * **secondo e ultimo** pezzo di stato locale del portale.
+   *
+   * Che siano due e non uno non allenta la regola 7: sono due dello stesso tipo —
+   * «questa cosa che si apre da sé l'ho chiusa io» — e nessuno dei due può
+   * rendere una schermata irraggiungibile a chi si collega dopo. La chiave è la
+   * scadenza della fase e non `currentMemberId`: il perché sta su `turnKey`, e in
+   * breve è che dentro un ruolo lo stesso posto chiama più volte.
+   */
+  const [dismissedTurnKey, setDismissedTurnKey] = useState<string | null>(null);
   const [skipping, setSkipping] = useState(false);
 
   async function skipReveal() {
@@ -134,6 +149,7 @@ export function Portal({
   // di M17 §6/§7 esiste (`lib/realtime/portal.ts`, con i test).
   const scene = sceneOf(snapshot, myMemberId);
   const tone = toneOf(scene, snapshot.auction.status);
+  const pickOpen = shouldOpenPickSheet(snapshot, myMemberId, dismissedTurnKey);
 
   return (
     <>
@@ -194,6 +210,7 @@ export function Portal({
                   frozen={screen.frozen}
                   skipPending={skipping}
                   onOpenBid={() => setDismissedLotId(null)}
+                  onOpenPick={() => setDismissedTurnKey(null)}
                   onSkip={skipReveal}
                   onShowResults={showResults}
                 />
@@ -203,25 +220,9 @@ export function Portal({
                 scene={scene}
                 snapshot={snapshot}
                 myMemberId={myMemberId}
+                pool={pool}
               />
             </SceneCard>
-
-            {/*
-              ⚠ **La chiamata è ancora una sezione di pagina e non un pannello**:
-              in una colonna da 350px, con la ricerca, le pastiglie dei filtri e
-              quaranta righe, è strettissima. È M17-07 che la sposta nello sheet
-              con la cornice del `BidModal`; fino a lì questa è la parte che sembra
-              rotta e non lo è.
-            */}
-            {screen.kind === "PICK_MINE" && (
-              <PickPanel
-                snapshot={snapshot}
-                pool={pool}
-                offset={offset}
-                frozen={screen.frozen}
-                onPick={(playerId) => sendAction(auctionId, { type: "PICK", playerId })}
-              />
-            )}
           </div>
 
           {/* ── Colonna 1: la rosa, con l'identità inglobata in testa ── */}
@@ -277,6 +278,29 @@ export function Portal({
         </div>
       </main>
 
+      {/*
+        ⚠ **I due pannelli si alternano senza che nessuno li coordini**, ed è la
+        cosa che vale la pena capire di questa coppia. Quando scelgo il giocatore
+        lo snapshot successivo porta `phase = LOT_OPEN`: `shouldOpenPickSheet`
+        diventa falsa e `shouldOpenBidDialog` diventa vera, nello stesso istante e
+        senza che una riga di codice dica «adesso chiudi quello e apri questo».
+        Sono due condizioni sullo stesso stato, non una sequenza — ed è per questo
+        che funziona identico per chi si è appena ricollegato (regola 1, regola 7).
+      */}
+      <PickSheet
+        open={pickOpen}
+        // Chiudere non nasconde niente: la card «Tocca a te» tiene il tempo che
+        // resta e il pulsante che riapre.
+        onOpenChange={(open) =>
+          setDismissedTurnKey(open ? null : turnKey(snapshot))
+        }
+        snapshot={snapshot}
+        pool={pool}
+        offset={offset}
+        frozen={screen.frozen}
+        onPick={(playerId) => sendAction(auctionId, { type: "PICK", playerId })}
+      />
+
       {lot !== null && (
         <BidModal
           open={bidOpen}
@@ -313,10 +337,12 @@ function SceneBody({
   scene,
   snapshot,
   myMemberId,
+  pool,
 }: {
   scene: Scene;
   snapshot: Snapshot;
   myMemberId: string | null;
+  pool: PoolPlayer[];
 }) {
   switch (scene) {
     case "NOT_STARTED":
@@ -342,14 +368,7 @@ function SceneBody({
         />
       );
     case "PICK_MINE":
-      // ⚠ Provvisorio: M17-08 mette qui il corpo vero — chi comprerebbe il timer
-      // e il pulsante che riapre il pannello. Finché la chiamata è una sezione di
-      // pagina, quel pulsante non avrebbe niente da riaprire.
-      return (
-        <p className="text-sm">
-          Scegli il giocatore da chiamare qui sotto.
-        </p>
-      );
+      return <PickMineBody snapshot={snapshot} pool={pool} />;
     case "OFFERS":
     case "TIE_PREP":
     case "TIE_OPEN":
@@ -358,6 +377,45 @@ function SceneBody({
     case "REVEAL":
       return <LotClosedCard snapshot={snapshot} myMemberId={myMemberId} />;
   }
+}
+
+/**
+ * Il corpo di «Tocca a te» (M17 §4 e M17-08): **la card che rende richiudibile il
+ * pannello**.
+ *
+ * Senza di lei un pannello che si apre da sé sarebbe una trappola: chi lo chiude
+ * per sbaglio — o chi ha il telefono che va in standby — non avrebbe più né il
+ * tempo che resta né la strada per tornare. Il tempo lo porta la banda della
+ * cornice, la strada è il pulsante nello slot `action`, e insieme sono la stessa
+ * promessa che la card del lotto fa al modale d'offerta (§8bis punto 2).
+ *
+ * ⚠ **Dice chi comprerebbe il timer, e lo dice senza filtri**: `autoPickCandidate`
+ * pesca dal pool intero come fa `machine.ts`, e non dalla lista che il pannello
+ * sta mostrando. È lo stesso vincolo di M10B §6 letto da un secondo posto — se
+ * qui comparisse il primo nome della lista filtrata, questa card mentirebbe
+ * esattamente come l'elenco mentiva prima che quella macro lo sistemasse.
+ */
+function PickMineBody({
+  snapshot,
+  pool,
+}: {
+  snapshot: Snapshot;
+  pool: PoolPlayer[];
+}) {
+  const role = snapshot.auction.currentRole;
+  const autoPick = autoPickCandidate(pool, snapshot, role);
+  return (
+    <div className="space-y-1.5">
+      <h3 className="text-xl leading-tight font-semibold">
+        Chiama un {role === null ? "giocatore" : ROLE_LABELS_ONE[role]}
+      </h3>
+      <p className="text-muted-foreground text-sm">
+        {autoPick === null
+          ? "Se scade, il timer chiama al posto tuo."
+          : `Se scade, il timer compra ${autoPick.name} (${autoPick.team}) a 1.`}
+      </p>
+    </div>
+  );
 }
 
 /**
@@ -436,6 +494,7 @@ function SceneAction({
   frozen,
   skipPending,
   onOpenBid,
+  onOpenPick,
   onSkip,
   onShowResults,
 }: {
@@ -447,6 +506,7 @@ function SceneAction({
   frozen: boolean;
   skipPending: boolean;
   onOpenBid: () => void;
+  onOpenPick: () => void;
   onSkip: () => void;
   onShowResults: () => void;
 }) {
@@ -456,6 +516,21 @@ function SceneAction({
     return (
       <Button asChild variant="outline" className="w-full">
         <Link href={`/auctions/${auctionId}/lobby`}>Vai alla lobby</Link>
+      </Button>
+    );
+  }
+
+  // La strada per tornare al pannello: senza di lei chiuderlo sarebbe definitivo
+  // fino al turno successivo, cioè un vicolo cieco a timer che scorre.
+  if (scene === "PICK_MINE") {
+    return (
+      <Button
+        type="button"
+        className="h-12 w-full text-base"
+        onClick={onOpenPick}
+        disabled={frozen}
+      >
+        Scegli il giocatore
       </Button>
     );
   }

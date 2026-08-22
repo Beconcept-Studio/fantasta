@@ -13,14 +13,16 @@ import {
   parseAmount,
   pausedRemaining,
   portalScreen,
-  secondsLeft,
-  shouldOpenBidDialog,
   sceneLabel,
   sceneOf,
   sceneTime,
+  secondsLeft,
+  shouldOpenBidDialog,
+  shouldOpenPickSheet,
   takenPlayerIds,
   timeTone,
   toneOf,
+  turnKey,
   tvConnected,
 } from "@/lib/realtime/portal";
 import type { PoolPlayer, Presence, Snapshot } from "@/lib/realtime/types";
@@ -748,5 +750,112 @@ describe("timeTone — le tre soglie, in un posto solo", () => {
   it("senza scadenza è calmo e non rosso: un `null` non è un tempo scaduto", () => {
     expect(timeTone(null, true)).toBe("CALM");
     expect(timeTone(null, false)).toBe("CALM");
+  });
+});
+
+// ─── Il pannello di chiamata (M17 §4) ────────────────────────────────────────
+
+describe("turnKey — con che chiave si ricorda «l'ho chiuso»", () => {
+  it("è la scadenza della fase", () => {
+    expect(turnKey(snapshot())).toBe(iso(30_000));
+  });
+
+  it("⚠ e NON la coppia membro+ruolo, perché dentro un ruolo lo stesso posto chiama più volte", () => {
+    // Otto difensori vogliono otto turni dello stesso membro sullo stesso ruolo.
+    // Con `currentMemberId + currentRole` come chiave, chi chiude il pannello al
+    // primo dei suoi difensori se lo ritroverebbe chiuso per tutti gli altri —
+    // cioè per la serata. Queste due chiamate hanno membro e ruolo identici:
+    const primo = snapshot({
+      auction: {
+        ...snapshot().auction,
+        phase: "WAITING_PICK",
+        currentMemberId: ME,
+        currentRole: "D",
+        phaseDeadline: iso(60_000),
+      },
+      currentLot: null,
+    });
+    const secondo = snapshot({
+      auction: { ...primo.auction, phaseDeadline: iso(180_000) },
+      currentLot: null,
+    });
+    expect(primo.auction.currentMemberId).toBe(secondo.auction.currentMemberId);
+    expect(primo.auction.currentRole).toBe(secondo.auction.currentRole);
+    // …e chiavi diverse, che è l'unica cosa che salva il secondo turno.
+    expect(turnKey(primo)).not.toBe(turnKey(secondo));
+  });
+});
+
+describe("shouldOpenPickSheet — il secondo modale che si apre da sé", () => {
+  const mioTurno = (patch: Partial<Snapshot["auction"]> = {}) =>
+    snapshot({
+      auction: {
+        ...snapshot().auction,
+        phase: "WAITING_PICK",
+        currentMemberId: ME,
+        currentRole: "D",
+        ...patch,
+      },
+      currentLot: null,
+    });
+
+  it("si apre quando tocca a me e non l'ho chiuso", () => {
+    expect(shouldOpenPickSheet(mioTurno(), ME, null)).toBe(true);
+  });
+
+  it("resta chiuso se l'ho chiuso io, per questo turno", () => {
+    const s = mioTurno();
+    expect(shouldOpenPickSheet(s, ME, turnKey(s))).toBe(false);
+  });
+
+  it("⚠ si riapre al turno successivo dello stesso ruolo: la chiave è cambiata", () => {
+    const primo = mioTurno({ phaseDeadline: iso(60_000) });
+    const chiuso = turnKey(primo);
+    const secondo = mioTurno({ phaseDeadline: iso(180_000) });
+    expect(shouldOpenPickSheet(secondo, ME, chiuso)).toBe(true);
+  });
+
+  it("non si apre se tocca a un altro", () => {
+    expect(shouldOpenPickSheet(mioTurno({ currentMemberId: OTHER }), ME, null)).toBe(
+      false,
+    );
+  });
+
+  it("non si apre fuori da WAITING_PICK: durante un lotto la chiamata è passata", () => {
+    // È ciò che fa chiudere il pannello **da sé** quando ho scelto: non è il
+    // pannello a chiudersi, è questa condizione a diventare falsa quando arriva
+    // lo snapshot successivo.
+    expect(shouldOpenPickSheet(snapshot(), ME, null)).toBe(false);
+  });
+
+  it("non si apre in pausa: il server rifiuterebbe la chiamata", () => {
+    const s = mioTurno({ status: "PAUSED", pausedAt: iso(-1_000) });
+    expect(shouldOpenPickSheet(s, ME, null)).toBe(false);
+  });
+
+  it("⚠ ma dopo il resume si riapre, ed è il comportamento voluto", () => {
+    // Al resume le scadenze sono traslate, quindi la chiave di chi l'aveva chiuso
+    // prima della pausa non combacia più. L'owner l'ha accettato sapendolo
+    // (2026-08-22): la pausa finisce e la domanda ti viene rifatta. Se guardandolo
+    // non convincesse, è la chiave da cambiare — e questa riga è dove si vede.
+    const primaDellaPausa = mioTurno({ phaseDeadline: iso(60_000) });
+    const chiuso = turnKey(primaDellaPausa);
+    const dopoIlResume = mioTurno({ phaseDeadline: iso(72_000) });
+    expect(shouldOpenPickSheet(dopoIlResume, ME, chiuso)).toBe(true);
+  });
+
+  it("senza un membro non si apre niente: chi guarda da fuori non chiama", () => {
+    expect(shouldOpenPickSheet(mioTurno(), null, null)).toBe(false);
+  });
+
+  it("ha la stessa forma della gemella d'offerta: due condizioni, mai una sequenza", () => {
+    // Quando scelgo, lo snapshot successivo porta `LOT_OPEN`: una diventa falsa e
+    // l'altra vera nello stesso istante, senza che nessuno le coordini.
+    const chiamata = mioTurno();
+    expect(shouldOpenPickSheet(chiamata, ME, null)).toBe(true);
+    expect(shouldOpenBidDialog(chiamata, ME, null)).toBe(false);
+    const lottoAperto = snapshot();
+    expect(shouldOpenPickSheet(lottoAperto, ME, null)).toBe(false);
+    expect(shouldOpenBidDialog(lottoAperto, ME, null)).toBe(true);
   });
 });

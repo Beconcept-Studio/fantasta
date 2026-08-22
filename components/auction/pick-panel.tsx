@@ -1,9 +1,11 @@
 "use client";
 
+import { Dialog } from "radix-ui";
 import { useMemo, useState } from "react";
 
 import { Countdown, CountdownBar } from "@/components/auction/countdown";
 import { InsightsLine } from "@/components/auction/insights";
+import { Button } from "@/components/ui/button";
 import {
   CARMY_FASCE,
   CARMY_SCALA_MAX,
@@ -72,13 +74,60 @@ export type ModoAutoPick = (typeof MODI_AUTOPICK)[number];
  */
 export const MODO_AUTOPICK: ModoAutoPick = "riga";
 
-export function PickPanel({
+/**
+ * **Il pannello di chiamata** (M17 §4): tocca a te, e arriva dal basso come
+ * l'offerta.
+ *
+ * ## Perché è uno sheet e non una sezione di pagina
+ *
+ * Fino a v1.16.0 la chiamata era una sezione in mezzo al portale, e con il
+ * layout a tre colonne quella sezione sarebbe finita in una colonna da 350px —
+ * una ricerca, quattro pastiglie e quaranta righe di giocatori in una striscia
+ * stretta, mentre le altre due colonne raccontano altro. Quando tocca a me la
+ * cosa da fare deve arrivare **davanti**, non stare in mezzo a una pagina che nel
+ * frattempo parla d'altro.
+ *
+ * ## La stessa cornice del `BidModal`, non una simile
+ *
+ * Le classi del `Dialog.Content` sono **le stesse**, copiate e non
+ * reinterpretate: dal basso sul telefono, in basso a destra da `sm`. Due pannelli
+ * che si alternano nello stesso punto della serata — scegli il giocatore, poi
+ * offri — devono essere lo stesso oggetto con dentro cose diverse, o si impara
+ * due volte la stessa cosa.
+ *
+ * ⚠ **L'unica differenza è `max-h-[85dvh]` invece di `max-h-dvh`**, e non è
+ * estetica: questo pannello ha dentro una lista lunga, e lasciare visibile una
+ * striscia di pagina sotto di lui è ciò che dice che è un pannello e non una
+ * schermata nuova.
+ *
+ * ## Il rischio vero non è il countdown, è l'altezza
+ *
+ * Il modale d'offerta è corto; questo contiene una ricerca, le pastiglie dei
+ * filtri, la riga dell'auto-pick e fino a quaranta righe. Su un telefono con la
+ * tastiera aperta è costruito come quello insegna: **intestazione fissa** — chi
+ * chiama cosa, countdown, barra — e **solo la lista che scorre**, dentro il suo
+ * `overflow-y-auto`. Se scorresse tutto, il countdown uscirebbe dallo schermo
+ * appena si digita, e quello è il difetto che renderebbe il pannello peggiore
+ * della pagina che sostituisce.
+ *
+ * ⚠ **Il campo di ricerca NON prende il focus all'apertura**, ed è una differenza
+ * deliberata dal `BidModal`, che invece lo fa (M7, su richiesta dell'owner). I due
+ * pannelli esistono per due gesti diversi: quello d'offerta si apre per **scrivere
+ * un numero**, quindi la tastiera è la prima cosa che serve; questo si apre per
+ * **scegliere da un elenco**, e far salire la tastiera coprirebbe l'elenco che è
+ * la ragione per cui il pannello è lì. Chi vuole cercare tocca il campo.
+ */
+export function PickSheet({
+  open,
+  onOpenChange,
   snapshot,
   pool,
   offset,
   frozen,
   onPick,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   snapshot: Snapshot;
   pool: PoolPlayer[];
   offset: number;
@@ -144,202 +193,269 @@ export function PickPanel({
   };
 
   return (
-    <section className="space-y-3">
-      <header className="bg-card space-y-2 rounded-xl border p-4 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-muted-foreground text-xs tracking-wide uppercase">
-              Tocca a te
-            </p>
-            <h2 className="text-xl font-semibold">
-              Chiama un {role === null ? "giocatore" : ROLE_LABELS_ONE[role]}
-            </h2>
-          </div>
-          <p className="text-right text-3xl leading-none font-semibold">
-            <Countdown
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/60" />
+        <Dialog.Content
+          // ⚠ Nessun focus automatico, al contrario del `BidModal`: il perché sta
+          // in testa a questo componente, ed è che i due pannelli servono a due
+          // gesti diversi. `preventDefault` senza un `focus()` dopo lascia il
+          // fuoco sul contenitore, quindi la tastiera resta giù e l'elenco si
+          // vede tutto.
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          className="bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col gap-3 rounded-t-2xl border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl outline-none sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-96 sm:rounded-2xl sm:border"
+        >
+          {/*
+            ── L'intestazione fissa: `shrink-0`, e sopra la tastiera ──
+            Countdown e barra restano visibili anche con la tastiera aperta e una
+            ricerca in corso. È il requisito che decide se questo pannello è
+            meglio o peggio della pagina che sostituisce.
+          */}
+          <div className="flex shrink-0 flex-col gap-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-muted-foreground text-[0.6875rem] tracking-wide uppercase">
+                  Tocca a te
+                </p>
+                <Dialog.Title className="text-xl leading-tight font-semibold">
+                  Chiama un {role === null ? "giocatore" : ROLE_LABELS_ONE[role]}
+                </Dialog.Title>
+              </div>
+              <p className="shrink-0 text-right text-3xl leading-none font-semibold">
+                <Countdown
+                  deadline={snapshot.auction.phaseDeadline}
+                  offset={offset}
+                  pausedAt={frozen ? snapshot.auction.pausedAt : null}
+                />
+              </p>
+            </div>
+            <CountdownBar
               deadline={snapshot.auction.phaseDeadline}
               offset={offset}
+              totalSeconds={snapshot.auction.timers.pickSeconds}
               pausedAt={frozen ? snapshot.auction.pausedAt : null}
             />
-          </p>
-        </div>
-        <CountdownBar
-          deadline={snapshot.auction.phaseDeadline}
-          offset={offset}
-          totalSeconds={snapshot.auction.timers.pickSeconds}
-          pausedAt={frozen ? snapshot.auction.pausedAt : null}
-        />
-        <p className="text-muted-foreground text-xs">
-          Se scade, parte l&apos;auto-pick sul primo della lista e la tua offerta
-          d&apos;apertura è 1.
-        </p>
-      </header>
+            {/*
+              Una riga e non due: il nome di chi il timer comprerebbe lo dice la
+              riga dell'auto-pick più sotto, con il nome vero. Qui resta la regola,
+              là c'è il caso concreto — dirle entrambe per esteso vorrebbe dire
+              quattro righe di testo sopra la tastiera.
+            */}
+            <Dialog.Description className="text-muted-foreground text-xs">
+              Se scade, il timer chiama al posto tuo e apre a 1.
+            </Dialog.Description>
 
-      <input
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Cerca per nome o squadra"
-        type="search"
-        autoComplete="off"
-        aria-label="Cerca un giocatore"
-        // 16px minimi: sotto quella soglia iOS zooma da solo appena si tocca il
-        // campo, e la pagina resta zoomata per il resto dell'asta.
-        className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-12 w-full rounded-lg border bg-transparent px-3 text-base outline-none focus-visible:ring-3"
-      />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Cerca per nome o squadra"
+              type="search"
+              autoComplete="off"
+              aria-label="Cerca un giocatore"
+              // 16px minimi: sotto quella soglia iOS zooma da solo appena si
+              // tocca il campo, e la pagina resta zoomata per il resto dell'asta.
+              className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-12 w-full rounded-lg border bg-transparent px-3 text-base outline-none focus-visible:ring-3"
+            />
 
-      {/*
-        ⚠ **I filtri di Carmy** (M10B §6). È l'unica UI di questa macro che si usa
-        **sotto un countdown di trenta secondi, con un pollice**: per questo sono
-        pastiglie da toccare e non tre menù a tendina, e per questo la titolarità
-        minima ha due valori e non cinque — «da 4» è la soglia del verde, «da 5» è
-        il solo titolarissimo, e i gradi in mezzo non sono una domanda che qualcuno
-        si fa mentre offre.
-      */}
-      {conCarmy && (
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap gap-1" role="group" aria-label="Filtra per titolarità">
-            {[SOGLIA_TITOLARE_CARMY, CARMY_SCALA_MAX].map((min) => (
-              <FilterChip
-                key={min}
-                active={carmyFilters.titolaritaMin === min}
-                onClick={() =>
-                  setCarmyFilters((f) => ({
-                    ...f,
-                    titolaritaMin: f.titolaritaMin === min ? null : min,
-                  }))
-                }
+            {/*
+              Errore e pausa stanno nella parte **fissa** e non in quella che
+              scorre: un messaggio che si può perdere scorrendo è un messaggio che
+              non è stato dato. Sono le due sole cose brevi che meritano lo spazio
+              sopra la tastiera insieme al countdown.
+            */}
+            {error !== null && (
+              <p
+                role="alert"
+                className="border-destructive/40 bg-destructive/5 text-destructive rounded-md border px-3 py-2 text-sm"
               >
-                Titolari da {min}
-              </FilterChip>
-            ))}
-            {fasce.map((fascia) => (
-              <FilterChip
-                key={fascia}
-                active={carmyFilters.fascia === fascia}
-                onClick={() =>
-                  setCarmyFilters((f) => ({
-                    ...f,
-                    fascia: f.fascia === fascia ? null : fascia,
-                  }))
-                }
-              >
-                {fascia}
-              </FilterChip>
-            ))}
-            {hasCarmyFilters(carmyFilters) && (
-              <FilterChip
-                active={false}
-                onClick={() => setCarmyFilters(NO_CARMY_FILTERS)}
-              >
-                Togli i filtri
-              </FilterChip>
+                {error}
+              </p>
+            )}
+
+            {/*
+              ⚠ **Questo ramo oggi non si raggiunge, e resta di proposito.**
+              `shouldOpenPickSheet` vuole `status === "LIVE"`, quindi una pausa
+              chiude il pannello invece di lasciarlo aperto e spento — chi era a
+              metà scelta si ritrova la card «Tocca a te» col pulsante disabilitato
+              e la banda del tempo spenta, che è dove la pausa è spiegata.
+              Cancellarlo insieme al `frozen` qui sotto vorrebbe dire che il giorno
+              in cui quella condizione cambia — e le condizioni di apertura sono
+              cambiate due volte da v1.0.0 — il pannello resterebbe aperto senza
+              dire perché non funziona. Costa tre righe e una domanda in meno.
+            */}
+            {frozen && (
+              <p role="status" className="bg-muted/50 rounded-md px-3 py-2 text-sm">
+                Asta in pausa: la chiamata riprende al resume.
+              </p>
             )}
           </div>
-        </div>
-      )}
 
-      {/*
-        ⚠ **Il vincolo di §6, risolto in pagina e non con un commento nel codice.**
-        La riga si scrive **sempre** quando c'è un auto-pick, filtro o no: se
-        comparisse solo a filtro acceso, chi non filtra continuerebbe a fidarsi
-        dell'ordinamento — e chi filtra imparerebbe che quella riga è un avviso
-        d'errore invece di un'informazione. Quando il primo della lista **non** è
-        più quello che il timer prenderebbe, la riga lo dice a voce più alta.
-      */}
-      {autoPick !== null && (
-        <p
-          className={cn(
-            "rounded-md px-3 py-2 text-xs",
-            autoPickAltrove
-              ? "border border-amber-600/40 bg-amber-600/10 text-amber-800"
-              : "text-muted-foreground bg-muted/50",
-          )}
-          role={autoPickAltrove ? "status" : undefined}
-        >
-          {autoPickAltrove ? (
-            <>
-              Allo scadere il timer comprerebbe{" "}
-              <strong>{autoPick.name}</strong> ({autoPick.team}), che con questi
-              filtri {MODO_AUTOPICK === "fissa" ? "è tenuto in cima" : "non è il primo della lista"}:
-              l&apos;auto-pick guarda tutti i {ROLE_LABELS[autoPick.role].toLowerCase()} liberi,
-              non quelli filtrati.
-            </>
-          ) : (
-            <>
-              Allo scadere il timer comprerebbe{" "}
-              <strong>{autoPick.name}</strong> ({autoPick.team}), a 1.
-            </>
-          )}
-        </p>
-      )}
+          {/*
+            ── Da qui scorre, e **solo** da qui ──
+            `min-h-0` sul figlio flex non è cosmetico: senza, un contenitore flex
+            si dimensiona sul contenuto invece che sullo spazio disponibile, il
+            pannello cresce oltre `max-h-[85dvh]` e l'intestazione fissa esce dallo
+            schermo — cioè esattamente il difetto che tutta questa struttura esiste
+            per evitare.
+          */}
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+            {/*
+              ⚠ **I filtri di Carmy** (M10B §6). È l'unica UI che si usa **sotto un
+              countdown, con un pollice**: per questo sono pastiglie da toccare e non
+              tre menù a tendina, e per questo la titolarità minima ha due valori e
+              non cinque — «da 4» è la soglia del verde, «da 5» è il solo
+              titolarissimo, e i gradi in mezzo non sono una domanda che qualcuno si
+              fa mentre il tempo scorre.
+            */}
+            {conCarmy && (
+              <div
+                className="flex flex-wrap gap-1"
+                role="group"
+                aria-label="Filtra per titolarità"
+              >
+                {[SOGLIA_TITOLARE_CARMY, CARMY_SCALA_MAX].map((min) => (
+                  <FilterChip
+                    key={min}
+                    active={carmyFilters.titolaritaMin === min}
+                    onClick={() =>
+                      setCarmyFilters((f) => ({
+                        ...f,
+                        titolaritaMin: f.titolaritaMin === min ? null : min,
+                      }))
+                    }
+                  >
+                    Titolari da {min}
+                  </FilterChip>
+                ))}
+                {fasce.map((fascia) => (
+                  <FilterChip
+                    key={fascia}
+                    active={carmyFilters.fascia === fascia}
+                    onClick={() =>
+                      setCarmyFilters((f) => ({
+                        ...f,
+                        fascia: f.fascia === fascia ? null : fascia,
+                      }))
+                    }
+                  >
+                    {fascia}
+                  </FilterChip>
+                ))}
+                {hasCarmyFilters(carmyFilters) && (
+                  <FilterChip
+                    active={false}
+                    onClick={() => setCarmyFilters(NO_CARMY_FILTERS)}
+                  >
+                    Togli i filtri
+                  </FilterChip>
+                )}
+              </div>
+            )}
 
-      {error !== null && (
-        <p
-          role="alert"
-          className="border-destructive/40 bg-destructive/5 text-destructive rounded-md border px-3 py-2 text-sm"
-        >
-          {error}
-        </p>
-      )}
+            {/*
+              ⚠ **Il vincolo di M10B §6, risolto in pagina e non con un commento nel
+              codice.** La riga si scrive **sempre** quando c'è un auto-pick, filtro
+              o no: se comparisse solo a filtro acceso, chi non filtra continuerebbe
+              a fidarsi dell'ordinamento — e chi filtra imparerebbe che quella riga è
+              un avviso d'errore invece di un'informazione. Quando il primo della
+              lista **non** è più quello che il timer prenderebbe, lo dice a voce più
+              alta.
+            */}
+            {autoPick !== null && (
+              <p
+                className={cn(
+                  "shrink-0 rounded-md px-3 py-2 text-xs",
+                  autoPickAltrove
+                    ? "border border-amber-600/40 bg-amber-600/10 text-amber-800"
+                    : "text-muted-foreground bg-muted/50",
+                )}
+                role={autoPickAltrove ? "status" : undefined}
+              >
+                {autoPickAltrove ? (
+                  <>
+                    Allo scadere il timer comprerebbe{" "}
+                    <strong>{autoPick.name}</strong> ({autoPick.team}), che con questi
+                    filtri {MODO_AUTOPICK === "fissa" ? "è tenuto in cima" : "non è il primo della lista"}:
+                    l&apos;auto-pick guarda tutti i {ROLE_LABELS[autoPick.role].toLowerCase()} liberi,
+                    non quelli filtrati.
+                  </>
+                ) : (
+                  <>
+                    Allo scadere il timer comprerebbe{" "}
+                    <strong>{autoPick.name}</strong> ({autoPick.team}), a 1.
+                  </>
+                )}
+              </p>
+            )}
 
-      {frozen && (
-        <p role="status" className="bg-muted/50 rounded-md px-3 py-2 text-sm">
-          Asta in pausa: la chiamata riprende al resume.
-        </p>
-      )}
+            <ul className="space-y-1.5">
+              {shown.map((player) => (
+                <li key={player.id}>
+                  <button
+                    type="button"
+                    disabled={frozen || pending !== null}
+                    onClick={() => void pick(player.id)}
+                    className={cn(
+                      "hover:bg-accent flex min-h-12 w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition disabled:opacity-50",
+                      // Il giocatore tenuto in cima contro il filtro va marcato: una
+                      // riga che il filtro dice di aver tolto e che invece c\'è, senza
+                      // un segno, è un elenco che mente su sé stesso in un altro modo.
+                      MODO_AUTOPICK === "fissa" &&
+                        autoPickAltrove &&
+                        player.id === autoPick.id &&
+                        "border-amber-600/40 bg-amber-600/5",
+                    )}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{player.name}</span>
+                      <span className="text-muted-foreground block truncate text-xs">
+                        {player.team}
+                      </span>
+                      {/* ⚠ Sotto la squadra e non accanto a `fvm`: la riga è già larga
+                          quanto un telefono, e i numeri che si confrontano fra loro
+                          stanno incolonnati a destra. Chi non ha il permesso, o chi ha
+                          solo la stagione precedente, non vede niente — e la riga non
+                          cambia altezza, perché era già su due righe. */}
+                      <InsightsLine insights={player.insights} carmy={player.carmy} />
+                    </span>
+                    <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                      fvm {player.fvm}
+                    </span>
+                    <span className="shrink-0 text-sm font-medium">
+                      {pending === player.id ? "…" : "Chiama"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
 
-      <ul className="space-y-1.5">
-        {shown.map((player) => (
-          <li key={player.id}>
-            <button
-              type="button"
-              disabled={frozen || pending !== null}
-              onClick={() => void pick(player.id)}
-              className={cn(
-                "hover:bg-accent flex min-h-12 w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition disabled:opacity-50",
-                // Il giocatore tenuto in cima contro il filtro va marcato: una riga
-                // che il filtro dice di aver tolto e che invece c'è, senza un segno,
-                // è un elenco che mente su sé stesso in un altro modo.
-                MODO_AUTOPICK === "fissa" &&
-                  autoPickAltrove &&
-                  player.id === autoPick.id &&
-                  "border-amber-600/40 bg-amber-600/5",
-              )}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{player.name}</span>
-                <span className="text-muted-foreground block truncate text-xs">
-                  {player.team}
-                </span>
-                {/* ⚠ Sotto la squadra e non accanto a `fvm`: la riga è già larga
-                    quanto un telefono, e i numeri che si confrontano fra loro
-                    stanno incolonnati a destra. Chi non ha il permesso, o chi ha
-                    solo la stagione precedente, non vede niente — e la riga non
-                    cambia altezza, perché era già su due righe. */}
-                <InsightsLine insights={player.insights} carmy={player.carmy} />
-              </span>
-              <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                fvm {player.fvm}
-              </span>
-              <span className="shrink-0 text-sm font-medium">
-                {pending === player.id ? "…" : "Chiama"}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+            {available.length === 0 && (
+              <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
+                Nessun giocatore libero con questa ricerca.
+              </p>
+            )}
+            {available.length > MAX_ROWS && (
+              <p className="text-muted-foreground shrink-0 text-center text-xs">
+                Altri {available.length - MAX_ROWS} liberi: affina la ricerca.
+              </p>
+            )}
+          </div>
 
-      {available.length === 0 && (
-        <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-          Nessun giocatore libero con questa ricerca.
-        </p>
-      )}
-      {available.length > MAX_ROWS && (
-        <p className="text-muted-foreground text-center text-xs">
-          Altri {available.length - MAX_ROWS} liberi: affina la ricerca.
-        </p>
-      )}
-    </section>
+          {/*
+            ⚠ «Chiudi» c'è, e chiudere non nasconde niente: la card «Tocca a te»
+            nella colonna 3 porta il tempo che resta e il pulsante che riapre il
+            pannello. È la stessa promessa che la card del lotto fa al modale
+            d'offerta (§8bis punto 3), e senza di lei un pannello che si apre da sé
+            sarebbe una trappola.
+          */}
+          <Dialog.Close asChild>
+            <Button type="button" variant="ghost" className="h-11 w-full shrink-0">
+              Chiudi
+            </Button>
+          </Dialog.Close>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

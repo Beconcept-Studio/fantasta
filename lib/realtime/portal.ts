@@ -512,6 +512,66 @@ export function shouldOpenBidDialog(
   return dismissedLotId !== lot.id;
 }
 
+// ─── Il pannello di chiamata (M17 §4) ────────────────────────────────────────
+
+/**
+ * **La chiave con cui «ho chiuso il pannello» viene ricordata**: la scadenza
+ * della fase.
+ *
+ * ⚠ **Non `currentMemberId` e non `currentRole`**, ed è l'errore che questa
+ * funzione esiste per non far fare: dentro un ruolo lo stesso posto chiama più
+ * volte — otto difensori vogliono otto turni dello stesso membro sullo stesso
+ * ruolo — quindi quella coppia si ripete e il pannello resterebbe chiuso per
+ * **tutte** le chiamate successive di quella persona. Chi lo chiude una volta lo
+ * chiuderebbe per la serata.
+ *
+ * `phaseDeadline` invece è nuova a ogni turno, perché ogni `WAITING_PICK` apre la
+ * sua finestra. Ed è il gemello di `dismissedLotId` per il modale d'offerta: là
+ * l'id del lotto cambia al lotto successivo, qui la scadenza cambia al turno
+ * successivo, e in entrambi i casi lo stato locale diventa irrilevante da sé
+ * senza che nessuno lo ripulisca.
+ *
+ * ⚠ **La conseguenza da conoscere è che una pausa riapre il pannello**: al resume
+ * le scadenze sono traslate, quindi la chiave non combacia più. Sembra giusto —
+ * la pausa finisce e la domanda ti viene rifatta — e l'owner l'ha accettata
+ * sapendolo (2026-08-22), ma è nella lista di verifica: se guardandola non
+ * convince, si cambia la chiave, non si accetta il comportamento.
+ */
+export function turnKey(snapshot: Snapshot): string | null {
+  return snapshot.auction.phaseDeadline;
+}
+
+/**
+ * **Gemella di `shouldOpenBidDialog`**, e volutamente della stessa forma: il
+ * pannello di chiamata è il secondo modale dell'app che si apre da sé, e vale per
+ * lui §8bis alla lettera.
+ *
+ * Si apre in funzione dello snapshot, chiuderlo non nasconde niente — la card
+ * «Tocca a te» porta il tempo che resta e il pulsante che lo riapre — e chi
+ * ricarica la pagina a metà turno ritrova esattamente la stessa schermata di chi
+ * non si è mai mosso (I10).
+ *
+ * **Si chiude da sé quando non tocca più a me**, perché ho scelto o perché è
+ * scaduto e ha scelto l'auto-pick. E non è il pannello a chiudersi: è questa
+ * condizione a diventare falsa quando arriva lo snapshot successivo — regola 1 e
+ * regola 7 nello stesso punto. È anche ciò che fa apparire il modale d'offerta
+ * subito dopo senza che nessuno coordini le due cose.
+ *
+ * In pausa non si apre: il server rifiuterebbe la chiamata, e un pannello con
+ * quaranta pulsanti che non possono funzionare è peggio di nessun pannello.
+ */
+export function shouldOpenPickSheet(
+  snapshot: Snapshot,
+  myMemberId: string | null,
+  dismissedTurnKey: string | null,
+): boolean {
+  const { status, phase, currentMemberId } = snapshot.auction;
+  if (status !== "LIVE") return false;
+  if (phase !== "WAITING_PICK") return false;
+  if (myMemberId === null || currentMemberId !== myMemberId) return false;
+  return dismissedTurnKey !== turnKey(snapshot);
+}
+
 // ─── Quanto posso offrire ────────────────────────────────────────────────────
 
 export type BidBounds = {
