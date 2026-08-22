@@ -2959,3 +2959,269 @@ proprio nello stato in cui la voce è nascosta, e al posto di «Lobby» si legge
 chi non è owner) continua a portare in lobby anche ad asta `LIVE`, quindi rimbalza al portale
 esattamente come faceva la voce di menù. È lo stesso difetto un click prima, non è stato toccato
 perché fuori dalla richiesta, ed è annotato qui perché è il posto in cui lo si ritroverà.
+
+---
+
+## 2026-08-22 — Il portale a tre colonne: le cinque decisioni di M17, più le cinque prese lavorando
+
+Le prime cinque sono dell'owner, prese **prima di scrivere una riga** e già registrate in
+`docs/features/17-portale-tre-colonne.md`. Stanno qui perché quel file è la spec di una macro e
+questo è il posto in cui si cercano le scelte:
+
+1. **Le tre colonne partono da `lg` (1024px).** Sotto, il portale resta identico: colonna unica,
+   intestazione incollata in cima. Nessun ridisegno del telefono.
+2. **Su desktop l'intestazione incollata sparisce** e i suoi numeri diventano la prima cosa della
+   colonna 1.
+3. **Il pannello di chiamata vale ovunque, telefono compreso, ed è richiudibile** come quello
+   d'offerta: stessa cornice, stesso comportamento, una forma sola da imparare.
+4. **La colonna 3 è due card**: una di stato che non sparisce mai, e una di scena che cambia con la
+   fase.
+5. **La fase si vede da una fascia colorata di 4px in testa alla card**, non da un bordo o da un
+   fondo tinto: il colore sta tutto in una striscia, il contenuto resta su fondo neutro.
+
+Le cinque che seguono sono state prese **lavorando**, dopo aver guardato un provino statico dei
+colori e delle tre colonne prima di scrivere React. Quella precauzione è la lezione di **M15**, che
+era una macro tutta visiva lavorata per intero, guardata una volta e buttata: tredici commit
+scartati. Qui il provino è costato una sessione e ha cambiato quattro cose su cinque.
+
+### L'identità è inglobata nella card della rosa, e è grigia
+
+Il provino la mostrava come card a sé sopra «La tua rosa», che è ciò che la richiesta chiedeva
+letteralmente. Guardandolo, l'owner ha chiesto di inglobarla: **una colonna che comincia con due
+cornici bianche una sopra l'altra chiede a chi guarda di capire perché sono due.** Il fondo grigio
+(`bg-muted`) dice in un colpo che quello è un altro genere di cosa — i miei numeri, non i miei
+giocatori — senza spendere una seconda cornice.
+
+Nella stessa occasione **l'ordine di chiamata dei ruoli è stato tolto** dalla riga del titolo, che
+adesso porta solo «La tua rosa».
+
+⚠ **Va saputo che quell'informazione adesso non si legge da nessuna parte.** Il portale era l'unico
+posto dell'app che scriveva `roleOrder`, e `RosterGrid` elenca i ruoli nel suo ordine fisso
+(P → D → C → A) e non in quello dell'asta: in un'asta che chiama i portieri per ultimi, dopo questa
+modifica nessuna schermata lo dice. Quale ruolo è in gioco *adesso* resta, nella card di stato. Se un
+giorno servisse, il posto naturale è una riga in più in quella card e non il titolo.
+
+### Il badge «riconnessione…» sta nell'identità, non nella card di stato
+
+Non è una scelta di layout ma di significato, e nasce da un buco che la decisione 2 apriva: la barra
+incollata diventa `lg:hidden`, quindi quel badge — che stava solo lì — **da 1024px in su sarebbe
+diventato invisibile**. Una riconnessione in corso è precisamente la cosa che non si può non dire.
+
+Il posto ovvio sarebbe stato la card di stato, ed è stato scartato: quella dice come sta **l'asta** —
+una cosa sola, uguale per tutti, che arriva dallo snapshot — mentre questo dice come sta **il mio
+browser**, ed è l'unica informazione del portale che non viene dallo snapshot ma dalla connessione
+che lo trasporta. Mescolarli fa sembrare un problema di rete un problema della partita. Sta dentro
+`<Identity>`, quindi si vede in tutti e due i contenitori senza che nessuno lo duplichi.
+
+### Il timer è una banda in fondo alla card, con un anello e non una barra
+
+Il provino aveva il countdown come numero grande nel corpo della card, com'era prima. Guardandolo,
+l'owner l'ha bocciato: «è un elemento con font-size molto grande in uno spazio limitato».
+Diagnosticandolo si è visto **perché** stonava, e la ragione non era la dimensione: quel numero era
+**identico in tutte le scene**, ma solo in tre la risposta è «devi fare qualcosa adesso». In «sta
+chiamando un altro» — la scena che dura undici turni su dodici — chiedeva attenzione senza chiedere
+niente, e in una colonna da 350px la chiedeva anche sopra il resto della card.
+
+Sono state provate cinque forme guardandole affiancate alla larghezza vera di una colonna. La scelta
+è **la banda in fondo**: etichetta a sinistra, cifra e misura stretti a destra, staccata da un bordo,
+nell'ultimo pixel della card in tutte e sette le scene che hanno una scadenza. Poi, su proposta
+dell'owner, la misura è diventata **un anello** invece di una barra.
+
+⚠ **La controindicazione dell'anello è stata misurata e accettata, non ignorata.** Una barra a piena
+larghezza è un segnale **periferico** — duecentocinquanta pixel che si vedono con la coda dell'occhio
+mentre si guarda il campo dell'offerta; un anello da 22px è un segnale **centrale**, che va guardato.
+È stato messo a confronto sfocato, per approssimare ciò che la visione periferica risolve, e la barra
+regge meglio. L'anello è stato scelto comunque, e la ragione tiene: a un tempo che **scade**
+corrisponde un quadrante, mentre una barra che si riempie è la metafora di un lavoro che avanza — e i
+22 pixel sono ciò che permette a etichetta, cifra e misura di stare su una riga sola in una colonna
+da 350.
+
+⚠ **Una proposta intermedia è stata scartata e vale la pena che resti scritta**: anello nelle scene
+in cui non si agisce, barra nelle tre in cui sì. Risolveva due problemi con una regola sola, ma
+chiedeva di imparare **due forme** per una card che deve essere leggibile senza impararla. Se un
+giorno l'anello non convincesse guardandolo, quella è la strada già istruita.
+
+### Il rosso solo dove c'è una scadenza mia da mancare
+
+Conseguenza della decisione precedente, e la cosa su cui i numeri hanno deciso più del gusto. Le tre
+soglie del colore esistevano già dentro `CountdownBar` da v1.0.0 — sopra il 50% verde, sopra il 20%
+ambra, sotto rosso — e applicandole alla banda in tutte le scene la banda diventerebbe rossa **a ogni
+lotto**: in una serata a otto persone con venticinque slot, circa duecento volte, e tre volte su
+sette in scene dove non è chiesto niente (l'esito, le buste da aprire, la chiamata di qualcun altro).
+
+Un rosso che non chiede mai niente si impara a ignorare, e poi non funziona più nelle tre volte in cui
+vuol dire «muoviti». Quindi il colore dipende da `sceneTime().pressing` e non solo dal tempo: acceso
+in «tocca a te», «offerte aperte» e «spareggio», grigio altrove per tutta la corsa. Il rosso passa da
+~200 comparse a ~25.
+
+⚠ **Le soglie sono state spostate in `timeTone` e `CountdownBar` adesso le legge da lì.** Non è
+rifattorizzazione per pulizia: la banda della card e la barra dentro i due pannelli devono dire la
+stessa cosa sullo stesso countdown, e due copie di «sotto il 20% è rosso» sono due copie che un
+giorno divergono.
+
+### La fase nella card di stato ignora la pausa
+
+`phaseLabel` fa vincere la pausa su tutto, per una ragione che vale ancora: in proiezione «in pausa»
+è la prima cosa che chi guarda deve poter leggere. Nella card di stato quella precedenza produceva una
+card che si ripeteva — badge «in pausa», fase «in pausa», a due centimetri di distanza.
+
+La spec vietava di scrivere una seconda frase («la stessa che usano la TV e la regia. Non se ne scrive
+una seconda»), e il divieto è stato rispettato **fattorizzando invece di duplicando**: lo `switch`
+delle frasi è diventato `phaseLabelIgnoringPause`, e `phaseLabel` gli delega dopo aver applicato le
+sue precedenze. «Offerte», «spareggio» e «buste da aprire» esistono in un posto solo, e chi ne cambia
+una le cambia per tutti i chiamanti. C'è un test che asserisce la **relazione** fra le due funzioni —
+ad asta in corso dicono la stessa cosa in tutte e cinque le fasi — così se un giorno lo `switch`
+venisse duplicato per comodità sarebbe un rosso a dirlo.
+
+Il guadagno è che in pausa la card dice **entrambe** le cose: in pausa, *durante un round di
+offerte*, che è precisamente ciò che significa «la pausa congela la fase, non la azzera».
+
+### Due cose di copia che il layout ha reso false
+
+Non sono decisioni di design ma vanno annotate, perché sono il tipo di errore che sopravvive a un
+rilascio: «Le rose sono chiuse. **Qui sotto** la tua, con i prezzi pagati» era vero con una colonna
+sola e diventa falso metà delle volte con tre — su desktop la rosa sta *accanto*. Il rimando è stato
+tolto e **non sostituito** con «qui accanto»: la rosa è la cosa più grande della pagina e non ha
+bisogno di essere additata. Allo stesso modo sono sparite le intestazioni «L'asta non è iniziata» e
+«Asta conclusa» dalle card di scena, perché la card di stato dice la stessa cosa dieci pixel più su.
+
+⚠ **La regola generale che se ne ricava**, e che vale per la prossima macro che tocca un layout: una
+copia che nomina una **direzione** è una copia che un cambio di layout può rendere falsa senza che
+nessun test se ne accorga. Vale la pena cercarle con un grep — «qui sotto», «qui sopra», «qui
+accanto» — ogni volta che si sposta qualcosa.
+
+### Nell'esito il pulsante segue la notizia, non la card
+
+Chiesto dall'owner il 2026-08-22 **dopo aver guardato una simulazione girare**, che è esattamente il
+momento in cui M17-09 doveva produrre correzioni: «quando viene mostrato l'esito del lotto sposta il
+pulsante per proseguire l'asta sotto il div dove mostri chi si è aggiudicato il calciatore, non in
+fondo. Rendi inoltre il pulsante nero, seguendo lo styling dell'app».
+
+**Perché non indebolisce l'anatomia di §6.** In otto scene su nove il corpo è corto, quindi «in fondo
+alla card» e «subito sotto la notizia» sono lo stesso pixel e la distinzione non si pone. Nell'esito
+no: sotto la riga del vincitore c'è l'elenco di tutte le buste di tutti i round, che con dodici
+partecipanti sono dodici righe — un'**appendice**, non la notizia. Con il pulsante in fondo bisogna
+scorrere oltre l'appendice per far ripartire l'asta, e lo si preme dal telefono con dodici persone che
+aspettano. La regola che regge, riscritta, è **«l'azione segue la notizia»**, e nelle altre otto scene
+le due formulazioni coincidono.
+
+⚠ **Il cancello resta con il pulsante nello slot in fondo**, e non è un'incoerenza: lì il corpo è un
+paragrafo di due righe, quindi il pulsante è già subito sotto la notizia. Spostarlo dentro il corpo
+avrebbe prodotto lo stesso pixel con una riga di codice in più.
+
+**E il nero è il pulsante primario dell'app.** Era `variant="outline"`, cioè contornato, mentre
+«Mostra risultati» nel cancello era già pieno. Sono lo stesso gesto in due momenti — anticipare una
+scadenza che scadrebbe da sé — e averne uno pieno e uno contornato faceva sembrare che uno dei due
+fosse meno definitivo dell'altro. Adesso hanno la stessa forma.
+
+### La riga del giocatore nella lista di chiamata: il taglio passa da «fonte» a «domanda»
+
+Chiesto dall'owner il 2026-08-22, dopo aver provato il pannello: due righe per ogni card, con
+**FMA, titolarità e PMA** sulla prima e **rigori, piazzati e note** sulla seconda. Il `PMA` con
+accanto il suo valore assoluto rispetto ai crediti dell'asta.
+
+**Cosa cambia davvero.** La riga era già su due righe da M10B, ma divise per **fonte**: sopra i
+numeri di stagione di fantacalcio.it, sotto il giudizio del foglio di Carmy. Adesso sono divise per
+**domanda**: sopra *quanto vale* — le tre cose che si confrontano fra due giocatori — sotto *cosa
+porta in più*, che è qualitativo e si nota invece di confrontarsi.
+
+⚠ Il taglio per fonte era comodo per chi scrive il codice e non serviva a chi guarda: chi ha
+ventidue secondi per scegliere non sa, né gliene importa, da dove arriva un numero. È lo stesso tipo
+di errore della copia che nomina una direzione — una struttura che descrive l'implementazione invece
+dell'uso.
+
+**Il `PMA` in crediti**, che è la parte nuova: una percentuale non si può offrire, e sotto un
+countdown nessuno converte `10,5%` di `500` a mente. La conversione è `pmaCrediti` in
+`lib/domain.ts`, funzione pura con il suo test.
+
+⚠ **E non è il «prezzo consigliato», anche se sembra la stessa cosa.** Il foglio ha due colonne
+indipendenti — `prezzo`, un assoluto, e `pma`, una percentuale — e la misura sui byte lo dice: solo
+132 righe su 385 rispettano `prezzo / 5`. Quindi **nella stessa serata i due numeri possono
+divergere**: la lista di chiamata mostra `PMA 2,5% (13)` e il modale d'offerta, sullo stesso
+giocatore, «consigliato 41». Non è un bug ed è annotato qui perché è precisamente il tipo di
+differenza che sembra un bug: sono due giudizi diversi di chi compila il foglio, e ricalcolare l'uno
+dall'altro vorrebbe dire sostituire il suo dato con una nostra stima.
+
+⚠ **Il minimo è 1 credito.** Con un budget basso il `pma` più piccolo che il foglio scrive (0,2%)
+arrotonderebbe a zero, e «zero crediti» è un'offerta che il motore rifiuta — un suggerimento
+impossibile da seguire. È la stessa ragione per cui il parser traduce in assente il `prezzo` scritto
+`0` (M10B-02).
+
+⚠ **«FMA» è una sigla da tenere d'occhio, e il rischio era già scritto nel codice prima di questa
+richiesta.** In questo progetto `fvm` è il **Fantavalore di Mercato**, che sta sulla **stessa riga
+della card**, all'estremità destra, come `fvm 300`; `FMA` è la **fantamedia attesa**. Sono due sigle
+di tre lettere con le stesse due consonanti a otto centimetri l'una dall'altra, ed è la ragione per
+cui prima quel numero si chiamava «attesa» e non con una sigla. La richiesta è stata seguita perché
+l'etichetta esplicita è più utile di una parola generica, ma se un giorno qualcuno le confonde **il
+rimedio non è cambiare `FMA`**: è dare un nome anche al numero a destra, che oggi è l'unico dei due
+a non averne uno.
+
+**I crediti dell'asta arrivano come prop dalla pagina server**, non dallo snapshot: `budget` è la
+terza prop di quel genere dopo il listone e `viewerIsOwner`, e per la stessa ragione — non è stato di
+gioco e non cambia durante la serata. M17 §8 dice che un dato mancante nello snapshot è il segnale di
+fermarsi e chiedere; qui non è servito, perché quella strada esisteva già e `serializeSnapshot` non è
+stato toccato (I8 intatto).
+
+**Cosa è stato tolto, e cosa è rimasto.** Il rapporto grezzo `31/38` era stato tenuto in un primo
+giro perché non era nell'elenco della richiesta, e l'owner ha chiesto di **toglierlo** guardandolo.
+
+⚠ **Va saputo cosa se ne va con lui**: era la *prova* del giudizio di Carmy, che è un voto da 1 a 5 e
+non una percentuale, e la **divergenza** fra i due era l'informazione — un «titolarità 5» su un
+giocatore con dodici presenze da titolare si vedeva solo lì. Non è però sparito dall'applicazione:
+`InsightsMacro` lo scrive per esteso («31/38 da titolare») nel **modale d'offerta**, cioè nel momento
+in cui ci sono i secondi per leggerlo. La lista di chiamata è il posto in cui si scorre, e lì restano
+la titolarità e i minuti medi.
+
+I minuti medi restano sulla riga 1 accanto alla titolarità. La fascia sta sulla riga 2 con le note,
+che è dove un giudizio qualitativo appartiene. Affidabilità e integrità restano fuori da entrambe,
+come da M10B: vivono nel modale d'offerta.
+
+### La card di chiamata in quattro righe, e `fvm` che sparisce
+
+Chiesto dall'owner il 2026-08-22, dopo aver caricato i due file e visto la riga piena per la prima
+volta. La card di ogni giocatore passa da «un nome con dei numeri a destra» a **quattro righe**:
+
+0. la **squadra** in un badge grigio a sinistra, la **titolarità** a destra — solo il badge;
+1. il **nome** a sinistra, un po' più piccolo, e **FMA + PMA** a destra;
+2. **bonus e note** — rigori, piazzati, fascia, i tag del foglio;
+3. il **pulsante «Chiama»** a piena larghezza.
+
+**I minuti medi sono stati tolti.** Erano il secondo numero della titolarità, e il badge porta già la
+sua misura dentro: la percentuale quando viene dalle presenze, il voto su 5 quando viene dal foglio.
+
+⚠ **`InsightsLine` non esiste più.** Era la composizione che disegnava tutto il blocco insight della
+lista, e i suoi tre pezzi sono finiti in tre posti diversi della card: si è sciolta in `ValoriCarmy`
+e `BonusENote`, che sono pezzi come `TitolaritaAnyBadge` e `SetPieceBadges`. Non è una perdita di
+astrazione — quel file esporta pezzi e non composizioni pronte da M10, e una composizione con un solo
+chiamante che va spezzata in tre non è un'astrazione ma un ostacolo.
+
+⚠ **Il pulsante «Chiama» è uno `<span>` e non un `<button>`.** Un `button` dentro un `button` è HTML
+non valido, e la card intera è già il bersaglio. Tenerla cliccabile per tutta la sua area vale più di
+un bersaglio preciso: si preme in piedi, sotto un countdown, e un tocco a lato costa un giocatore
+sbagliato. Il pulsante è l'**affordance** di ciò che la card fa, non un secondo comando.
+
+### ⚠ `fvm` toglie l'ordine da sotto gli occhi, e va saputo
+
+«C'è un valore FMV che non capisco cosa sia, toglilo» — era **`fvm`, il Fantavalore di Mercato**, e
+la richiesta è la conferma di un rischio che il codice aveva messo per iscritto **due ore prima**,
+introducendo l'etichetta `FMA`: due sigle di tre lettere con le stesse due consonanti, a pochi
+centimetri l'una dall'altra, per due cose che non si somigliano. Il rimedio previsto era «dare un nome
+anche al numero a destra»; l'owner ha scelto il rimedio più corto, cioè non mostrarlo.
+
+**La conseguenza non è cosmetica e non è nel dato**: `availablePlayers` **non è stato toccato** e
+ordina ancora `fvm DESC, quot DESC`, che è l'ordine esatto dell'auto-pick. Ma quel numero era anche
+**la spiegazione visibile dell'ordinamento**, e adesso la card mostra `FMA` e `PMA`, che non sono
+monotoni: scorrendo, la lista sembrerà ordinata per niente.
+
+Ciò che tiene in piedi la promessa «il primo della lista è quello che il timer prenderebbe» è la
+**riga dell'auto-pick** sopra l'elenco, che lo dice **per nome** invece di lasciarlo dedurre da una
+colonna di numeri. È la strada che M10B §6 aveva già scelto per un'altra ragione — un filtro acceso
+rompeva la deduzione — e che qui si ritrova a reggere da sola. Se un giorno quella riga venisse
+togliesse, l'ordinamento diventerebbe muto: è annotato qui perché è il collegamento che nessuno
+troverebbe partendo dal codice.
+
+⚠ **`fvm` resta scritto in due posti che questa richiesta non ha toccato**: la card del lotto («fvm
+118» sotto il nome del giocatore a lotto) e l'intestazione del modale d'offerta. Il secondo è fuori
+perimetro per M17 §8, che dice esplicitamente che il modale d'offerta resta com'è. Il primo è in
+perimetro e **non è stato cambiato di iniziativa**: se la sigla è incomprensibile lì com'era nella
+lista, va tolta o rinominata in tutti e due, e quella è una decisione da prendere guardandoli.

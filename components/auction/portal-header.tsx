@@ -1,18 +1,34 @@
-import { SlotsSummary } from "@/components/auction/roster-grid";
-import { Badge } from "@/components/ui/badge";
-import { phaseLabel } from "@/lib/realtime/portal";
+import { Identity } from "@/components/auction/identity";
 import type { Snapshot, SnapshotMember } from "@/lib/realtime/types";
-import { cn } from "@/lib/utils";
 
 /**
- * L'intestazione fissa del portale: **crediti e offerta massima non escono mai
- * dallo schermo**.
+ * L'intestazione fissa del portale, **sul telefono e solo lì**: crediti e
+ * offerta massima non escono mai dallo schermo.
  *
  * È il requisito mobile-first di PLAN §15 preso alla lettera. `max_bid` è il
  * numero che decide ogni offerta — è il tetto che il server applica (I5) — e
  * cercarlo con uno scroll mentre restano otto secondi è esattamente il tipo di
  * attrito che fa perdere un lotto. Insieme ci sono i crediti (da cui il tetto
  * discende) e gli slot riempiti (che spiegano la differenza fra i due).
+ *
+ * ## Perché da `lg` sparisce (M17 §3)
+ *
+ * Su uno schermo grande non c'è niente da inseguire: le tre colonne stanno tutte
+ * dentro l'altezza della finestra, e gli stessi numeri sono la fascia in testa
+ * alla card della rosa in colonna 1. Una barra incollata che ripete due
+ * centimetri più su ciò che si vede già è una riga di schermo spesa per niente.
+ *
+ * ⚠ **`lg:hidden` sta su questo `<header>` e la barra resta dov'è nell'albero —
+ * fuori dal `<main>`**. È deliberato e non è intercambiabile con lo spostarla
+ * dentro la griglia e nasconderla lì: uno `sticky` figlio di un contenitore di
+ * griglia si aggancia al contenitore, non al viewport, e il comportamento
+ * cambia. Il modo sicuro è tenerla dov'era e spegnerla da `lg`.
+ *
+ * ⚠ **Il badge dello stato dell'asta non è qui**, e il blocco commentato che lo
+ * disegnava è stato **tolto** insieme al commento (M17 §5): quello stato ha
+ * trovato il suo posto nella card di stato della colonna 3, dove ha accanto la
+ * fase, il ruolo in gioco e di chi è il turno. Un blocco commentato che
+ * riappare altrove è la cosa che fa dubitare di entrambi.
  */
 export function PortalHeader({
   snapshot,
@@ -23,64 +39,17 @@ export function PortalHeader({
   me: SnapshotMember | null;
   connected: boolean;
 }) {
-  const { auction } = snapshot;
   return (
-    <header className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-40 border-b backdrop-blur">
+    <header className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-40 border-b backdrop-blur lg:hidden">
       <div className="mx-auto w-full max-w-6xl px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
-        <div className="flex items-center gap-2">
-          {!connected && (
-            <Badge variant="outline" className="border-amber-500/50">
-              riconnessione…
-            </Badge>
-          )}
-          {/* <Badge variant={auction.status === "PAUSED" ? "destructive" : "secondary"}>
-            {phaseLabel(snapshot)}
-          </Badge> */}
-        </div>
-
         {me !== null && (
-          <div className="mt-1.5 flex items-end justify-between gap-3">
-            <div>
-              <p className="truncate text-sm font-medium">{me.teamName}</p>
-              <SlotsSummary
-                slotsFilled={me.slotsFilled}
-                slots={auction.slots}
-                className="text-muted-foreground"
-              />
-            </div>
-            <div className="flex shrink-0 items-end gap-4 text-right">
-              <Figure label="crediti" value={me.credits} />
-              <Figure label="max" value={me.maxBid} />
-            </div>
-          </div>
+          <Identity
+            me={me}
+            slots={snapshot.auction.slots}
+            connected={connected}
+          />
         )}
       </div>
     </header>
-  );
-}
-
-function Figure({
-  label,
-  value,
-  strong = false,
-}: {
-  label: string;
-  value: number;
-  strong?: boolean;
-}) {
-  return (
-    <div>
-      <p className="text-muted-foreground text-[0.65rem] tracking-wide uppercase">
-        {label}
-      </p>
-      <p
-        className={cn(
-          "leading-none tabular-nums",
-          strong ? "text-2xl font-semibold" : "text-xl font-medium",
-        )}
-      >
-        {value}
-      </p>
-    </div>
   );
 }

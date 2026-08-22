@@ -45,6 +45,14 @@ export default async function PlayPage({
   const pool = await listPickPool(id, canSeeInsights(user));
 
   return (
-    <Portal auctionId={id} pool={pool} viewerIsOwner={overview.viewerIsOwner} />
+    <Portal
+      auctionId={id}
+      pool={pool}
+      viewerIsOwner={overview.viewerIsOwner}
+      // I crediti di partenza di questa asta, per tradurre il `PMA` del foglio da
+      // percentuale a cifra offribile nella lista di chiamata (M17). Prop e non
+      // snapshot, per la stessa ragione delle altre due: non è stato di gioco.
+      budget={overview.auction.budgetDefault}
+    />
   );
 }

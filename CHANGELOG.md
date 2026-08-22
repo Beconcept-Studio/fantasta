@@ -4,6 +4,70 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.17.0] — 2026-08-22
+
+**M17 — Il portale su tre colonne, e la chiamata che arriva dal basso.** Sul telefono non cambia
+niente di come si gioca; su un portatile il portale smette di essere una colonna stretta in mezzo a
+uno schermo vuoto.
+
+**Da 1024 pixel in su ci sono tre colonne.** A sinistra la tua rosa, in mezzo gli altri, a destra
+cosa sta succedendo: tre domande diverse in tre posti fissi, senza scorrere. La barra incollata in
+cima sparisce — su uno schermo grande non c'è niente da inseguire — e i suoi numeri diventano una
+fascia grigia in testa alla card della rosa. Sono gli stessi crediti e lo stesso `max` di prima,
+scritti una volta sola: se dicessero due numeri diversi sarebbe un guasto, non un dettaglio.
+
+**Sul telefono il portale resta quello di ieri**: colonna unica, barra incollata in cima, e il lotto
+come prima cosa dopo l'intestazione. Quest'ultima non è una coincidenza — è la ragione per cui le
+colonne sono scritte in un ordine che sullo schermo grande viene poi rimesso a posto.
+
+**Quando tocca a te chiamare, la lista dei giocatori arriva dal basso** come il modale
+dell'offerta, invece di stare in mezzo alla pagina. È lo stesso pannello, con la stessa cornice e
+lo stesso «Chiudi»: chiuderlo non nasconde niente, perché la card «Tocca a te» tiene il tempo che
+resta e il pulsante che lo riapre. E si chiude da sé quando hai scelto — o quando il tempo scade e
+sceglie il timer — lasciando il posto al pannello dell'offerta senza che tocchi niente.
+
+⚠ **Se l'asta va in pausa mentre stai scegliendo, il pannello si chiude**, e alla ripresa si riapre
+da sé. Il tempo che restava è quello di prima: la pausa lo congela, non lo azzera.
+
+**La colonna dello stato si legge senza leggere.** Non con caratteri più grandi: con la stessa
+anatomia in tutte le fasi. In cima una card che non sparisce mai e dice a che punto siamo — stato
+dell'asta, fase, ruolo in gioco, di chi è il turno. Sotto, **una sola card** che cambia con la fase,
+sempre con l'etichetta nello stesso angolo, il badge nell'altro, e il tempo in fondo. Prima quelle
+schermate erano sei riquadri diversi e a ogni cambio di fase si spostava tutto; adesso cambia solo
+quello che è cambiato.
+
+**Una striscia colorata di quattro pixel in testa alla card dice la fase.** Grigia quando non c'è
+niente da fare, nera quando tocca a te, verde quando si offre, ambra nello spareggio, ambra scura
+quando le buste sono chiuse, verde piena all'esito. Ad asta in pausa è a righe, e **vince su tutte**.
+È la cosa che si vede con la coda dell'occhio senza spostare lo sguardo dal campo dell'offerta.
+
+**Il tempo che resta ha smesso di urlare.** Era un numero grande al centro di ogni card, identico
+in tutte — anche in quelle in cui non ti è chiesto niente, come «sta chiamando un altro», che è la
+schermata che dura più di tutta la serata. Adesso è una fascia in fondo alla card, con un anello
+che si consuma. **Si colora solo dove c'è una scadenza tua da mancare**: verde, poi ambra, poi rosso
+negli ultimi secondi. Altrove resta grigio — un rosso che non chiede mai niente è un rosso che si
+impara a ignorare, e serve che funzioni nei tre momenti in cui vuol dire «muoviti».
+
+**Nell'apertura delle buste il pulsante per proseguire sta sotto il vincitore**, non in fondo alla
+card: sotto di lui c'è l'elenco di tutte le offerte, che con dodici partecipanti sono dodici righe da
+scorrere prima di poter far ripartire l'asta.
+
+**La lista dei giocatori da chiamare mostra il giudizio del foglio in quattro righe.** Squadra e
+titolarità in alto, il nome col suo `FMA` e `PMA` accanto, i rigori, i piazzati e le note sotto. La
+novità è che il **`PMA` porta con sé la cifra in crediti**: una percentuale non si può offrire, e
+sotto un countdown nessuno la converte a mente.
+
+⚠ **Quel numero può non coincidere col «prezzo consigliato»** che il modale dell'offerta mostra sullo
+stesso giocatore, e non è un errore: nel foglio sono due colonne diverse, compilate a mano e
+indipendenti, e ricalcolare l'una dall'altra vorrebbe dire sostituire un giudizio con una stima.
+
+**È sparito il numero `fvm`** dalla lista di chiamata — il «fantavalore di mercato», che accanto a
+`FMA` si leggeva per un'altra cosa. ⚠ Ordina ancora la lista, come ha sempre fatto: chi il timer
+comprerebbe allo scadere continua a dirlo per nome la riga sopra l'elenco.
+
+**Nessun passo a mano sul server**: nessuna colonna nuova, nessun dato da correggere, nessun file da
+caricare. Il deploy basta, e quando dice «completato» ha finito davvero.
+
 ## [1.16.0] — 2026-08-22
 
 **M16 — Chi offre tiene, e al massimo rilancia.** Due regole del gioco cambiano, e cambiano nella

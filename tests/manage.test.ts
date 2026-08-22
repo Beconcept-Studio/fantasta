@@ -8,7 +8,11 @@ import {
   presenceAlert,
   spentCredits,
 } from "@/lib/realtime/manage";
-import { phaseLabel } from "@/lib/realtime/portal";
+import {
+  phaseLabel,
+  phaseLabelIgnoringPause,
+  statusLabel,
+} from "@/lib/realtime/portal";
 
 import { ME, OTHER, THIRD, iso, lot, member, snapshot } from "./snapshot-factory";
 
@@ -247,6 +251,95 @@ describe("etichetta della fase", () => {
       currentLot: null,
     });
     expect(phaseLabel(finita)).toBe("finita");
+  });
+});
+
+// ─── La stessa frase senza la pausa (M17 §5) ─────────────────────────────────
+
+/**
+ * `phaseLabelIgnoringPause` sta provata **qui accanto a `phaseLabel`** e non in
+ * `portal.test.ts` con il resto del portale del partecipante, perché ciò che va
+ * difeso non è il comportamento di una delle due: è la **relazione** fra loro.
+ * Le frasi sono scritte una volta sola e la seconda funzione delega alla prima;
+ * il giorno in cui qualcuno le duplica per comodità, è un'asserzione su entrambe
+ * che se ne accorge, non due asserzioni separate in due file.
+ */
+describe("etichetta della fase, senza la precedenza della pausa", () => {
+  const inPausa = (patch: Record<string, unknown> = {}) =>
+    snapshot({
+      auction: {
+        ...snapshot().auction,
+        status: "PAUSED",
+        pausedAt: iso(-1_000),
+        ...patch,
+      },
+    });
+
+  it("⚠ in pausa dice ancora a che punto del lotto siamo: la pausa congela la fase, non la azzera", () => {
+    const s = inPausa();
+    expect(phaseLabel(s)).toBe("in pausa");
+    expect(phaseLabelIgnoringPause(s)).toBe("offerte");
+  });
+
+  it("in pausa durante lo spareggio dice «spareggio», non «offerte»", () => {
+    const s = snapshot({
+      auction: {
+        ...snapshot().auction,
+        status: "PAUSED",
+        pausedAt: iso(-1_000),
+        phase: "LOT_TIE_PREP",
+      },
+    });
+    expect(phaseLabelIgnoringPause(s)).toBe("spareggio");
+  });
+
+  it("in pausa durante il cancello dice che le buste sono da aprire", () => {
+    const s = inPausa({ phase: "LOT_SEALED" });
+    expect(phaseLabelIgnoringPause(s)).toBe("buste da aprire");
+  });
+
+  it("ad asta in corso le due funzioni dicono la stessa cosa in tutte le fasi", () => {
+    // ⚠ È l'asserzione che impedisce la seconda copia delle frasi: se un giorno
+    // lo `switch` viene duplicato invece che delegato, una delle cinque fasi
+    // divergerà qui e non a colpo d'occhio in una card.
+    for (const phase of [
+      "WAITING_PICK",
+      "LOT_OPEN",
+      "LOT_SEALED",
+      "LOT_TIE_PREP",
+      "LOT_REVEAL",
+    ] as const) {
+      const s = snapshot({ auction: { ...snapshot().auction, phase } });
+      expect(phaseLabelIgnoringPause(s)).toBe(phaseLabel(s));
+    }
+  });
+});
+
+// ─── Lo stato dell'asta, per il badge (M17 §5) ───────────────────────────────
+
+describe("statusLabel", () => {
+  it("DRAFT e READY dicono la stessa cosa a chi gioca", () => {
+    expect(statusLabel("DRAFT")).toBe("non iniziata");
+    expect(statusLabel("READY")).toBe("non iniziata");
+  });
+
+  it("gli altri tre hanno una parola ciascuno", () => {
+    expect(statusLabel("LIVE")).toBe("in corso");
+    expect(statusLabel("PAUSED")).toBe("in pausa");
+    expect(statusLabel("COMPLETED")).toBe("conclusa");
+  });
+
+  it("⚠ non dice «finita» come phaseLabel: il badge sta accanto alla fase, non al posto suo", () => {
+    // `phaseLabel` scrive «finita» perché è la sola frase che la TV proietta; qui
+    // la parola è «conclusa» perché convive con un titolo e quattro righe, e le
+    // due non sono lo stesso registro. Se un giorno una delle due cambia, questa
+    // riga dice che l'altra non deve seguirla per simmetria.
+    const finita = snapshot({
+      auction: { ...readyAuction(), status: "COMPLETED" },
+      currentLot: null,
+    });
+    expect(phaseLabel(finita)).toBe("finita");
+    expect(statusLabel("COMPLETED")).toBe("conclusa");
   });
 });
 
