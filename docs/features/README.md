@@ -153,12 +153,43 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-Nessuna. **Il quaderno è vuoto e non c'è niente in attesa**: le due macro pianificate il **2026-08-18**
-dalle richieste dell'owner sono state entrambe aperte — M13 rilasciata in `v1.14.0` lo stesso giorno,
-**M14 è quella in corso** qui sopra. **`docs/REQUESTS.md` resta vuoto.**
+**Due, pianificate il 2026-08-22** dalle tre richieste che l'owner aveva scritto nel quaderno dopo
+`v1.15.1`. Nessuna delle due è ancora aperta, e **`docs/REQUESTS.md` torna vuoto**.
 
-Quello che segue è il ragionamento con cui le due erano state tagliate, e resta come archivio: dice il
-vero su perché sono due macro e non una.
+| Macro | Tema | Ordine |
+|---|---|---|
+| [M16](16-regole-offerta.md) | Le regole dell'offerta: via i valori suggeriti, via il ritiro (motore compreso), e i pallini di presence in TV | **prima** |
+| [M17](17-portale-tre-colonne.md) | Il portale a tre colonne: la chiamata a pannello, e una colonna di stato che si legge a colpo d'occhio | dopo |
+
+**Perché due e non una.** Le tre richieste sembrano un tema solo — «sistemiamo il portale» — e hanno
+due profili di rischio molto diversi, che è il criterio con cui sono state tagliate M5/M6, M9–M12 e
+M13/M14. **M16 tocca il motore**: `machine.ts`, `actions.ts`, la rotta `/action`. Un suo errore non si
+vede in una pagina, si vede la sera dell'asta — ma è **sottrattiva**, non apre nessun percorso nuovo,
+e il suo gate sta quasi tutto in `pnpm test`. **M17 non tocca né motore né schema**, ma è una
+scommessa visiva grande: tre colonne, un pannello nuovo, una tavolozza.
+
+⚠ **Ed è il precedente di M15 a decidere il taglio, non la simmetria.** Quella macro — tutta visiva —
+è stata lavorata per intero, guardata una volta e buttata: tredici commit scartati. Se il layout a tre
+colonne facesse la stessa fine, tornare indietro **non deve rimettere in piedi il pulsante «Ritira»**.
+Due tag, due punti di rollback.
+
+**La dipendenza è una sola e va in una direzione**: M16 toglie da `lot-card.tsx` il ramo «ti sei
+ritirato», e M17 ridisegna quella card. M16 prima vuol dire ridisegnare una card che ha già la forma
+finale; l'ordine inverso vuol dire toccare due volte lo stesso file. Nessuna delle due tocca lo
+schema: **nessun `pnpm db:push`, nessun backfill, nessun file da caricare** — e la cosa è stata
+verificata leggendo, non dedotta.
+
+⚠ **Le due cose da non riscoprire da capo, una per macro.** M16: `"WITHDRAW_BID"` in
+`ROUTINE_EVENT_TYPES` (`lib/auction-log.ts`) **non va tolto** insieme al resto — quel file ha scritto
+che «un tipo sconosciuto è notevole», quindi toglierlo dall'elenco della routine non fa sparire i
+ritiri storici, li **promuove** nel blocco delle correzioni dove non sono mai stati. M17: la colonna 3
+va scritta **prima** delle altre nel DOM e riordinata con `lg:order-*`, altrimenti chi gioca dal
+telefono deve scorrere oltre la propria rosa per arrivare all'offerta.
+
+---
+
+Quello che segue è il ragionamento con cui M13 e M14 erano state tagliate il 2026-08-18, e resta come
+archivio: dice il vero su perché sono due macro e non una.
 
 **Perché due e non una.** Non hanno niente in comune: la prima è tutta UI dentro il pannello di
 amministrazione, la seconda apre la **macchina a stati dell'asta** e aggiunge la prima fase nuova dopo
