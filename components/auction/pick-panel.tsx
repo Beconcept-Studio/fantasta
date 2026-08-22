@@ -430,20 +430,6 @@ export function PickSheet({
                       riga dell'auto-pick sopra l'elenco, che lo dice per nome.
                     */}
                     <BonusENote insights={player.insights} carmy={player.carmy} />
-
-                    {/*
-                      ── Riga 3: il pulsante ──
-                      ⚠ **È uno `<span>` e non un `<button>`**, e non è una svista: un
-                      `button` dentro un `button` è HTML non valido, e la card intera è
-                      già il bersaglio. Tenerla cliccabile per tutta la sua area vale
-                      più di un bersaglio preciso — si preme in piedi, sotto un
-                      countdown, e qui un tocco a lato costa un giocatore sbagliato. Il
-                      pulsante è quindi l'**affordance** di ciò che la card fa, non un
-                      secondo comando.
-                    */}
-                    <span className="bg-primary text-primary-foreground flex h-9 items-center justify-center rounded-md text-sm font-medium">
-                      {pending === player.id ? "Chiamo…" : "Chiama"}
-                    </span>
                   </button>
                 </li>
               ))}
