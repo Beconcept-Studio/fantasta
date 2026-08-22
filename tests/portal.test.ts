@@ -15,7 +15,12 @@ import {
   portalScreen,
   secondsLeft,
   shouldOpenBidDialog,
+  sceneLabel,
+  sceneOf,
+  sceneTime,
   takenPlayerIds,
+  timeTone,
+  toneOf,
   tvConnected,
 } from "@/lib/realtime/portal";
 import type { PoolPlayer, Presence, Snapshot } from "@/lib/realtime/types";
@@ -551,5 +556,197 @@ describe("autoPickCandidate — chi comprerebbe il timer", () => {
   it("è `null` quando non c'è niente da comprare di quel ruolo", () => {
     expect(autoPickCandidate(pool, snapshot(), "P")).toBeNull();
     expect(autoPickCandidate(pool, snapshot(), null)).toBeNull();
+  });
+});
+
+// ─── Le nove scene, il tono, la banda del tempo (M17 §6 e §7) ────────────────
+
+/**
+ * ⚠ **Sono l'unica rete di questa macro.** In questo progetto la UI non ha test
+ * di rendering — non c'è `@testing-library`, non c'è jsdom, e i test stanno su
+ * funzioni pure e sul database. La conseguenza vincolante di M17 §1 è che tutto
+ * ciò che si può rendere una funzione pura **deve** esserlo e **deve** avere il
+ * suo test: quale scena, quale tono, quale scadenza. Ciò che resta è markup, e si
+ * verifica guardandolo.
+ */
+describe("sceneOf — la scena non è la fase", () => {
+  const live = (patch: Partial<Snapshot["auction"]>, rest: Partial<Snapshot> = {}) =>
+    snapshot({ auction: { ...snapshot().auction, ...patch }, ...rest });
+
+  it("⚠ LOT_OPEN al round 2 è lo spareggio, non le offerte: è la sola voce che non è uno a uno", () => {
+    expect(sceneOf(snapshot(), ME)).toBe("OFFERS");
+    const spareggio = snapshot({ currentLot: lot({ roundNo: 2, minAmount: 40 }) });
+    expect(sceneOf(spareggio, ME)).toBe("TIE_OPEN");
+    // La fase è la stessa in tutti e due: se un giorno qualcuno decide la scena
+    // sulla fase, questa riga è quella che se ne accorge.
+    expect(spareggio.auction.phase).toBe(snapshot().auction.phase);
+  });
+
+  it("le altre tre fasi di lotto hanno una scena ciascuna", () => {
+    expect(sceneOf(live({ phase: "LOT_TIE_PREP" }), ME)).toBe("TIE_PREP");
+    expect(sceneOf(live({ phase: "LOT_SEALED" }), ME)).toBe("SEALED");
+    expect(sceneOf(live({ phase: "LOT_REVEAL" }), ME)).toBe("REVEAL");
+  });
+
+  it("in chiamata distingue il mio turno da quello di un altro", () => {
+    const mio = live(
+      { phase: "WAITING_PICK", currentMemberId: ME },
+      { currentLot: null },
+    );
+    expect(sceneOf(mio, ME)).toBe("PICK_MINE");
+    const altrui = live(
+      { phase: "WAITING_PICK", currentMemberId: OTHER },
+      { currentLot: null },
+    );
+    expect(sceneOf(altrui, ME)).toBe("PICK_WAIT");
+  });
+
+  it("fuori da LIVE/PAUSED dice non iniziata o conclusa", () => {
+    expect(sceneOf(live({ status: "DRAFT", phase: null }, { currentLot: null }), ME)).toBe(
+      "NOT_STARTED",
+    );
+    expect(sceneOf(live({ status: "READY", phase: null }, { currentLot: null }), ME)).toBe(
+      "NOT_STARTED",
+    );
+    expect(
+      sceneOf(live({ status: "COMPLETED", phase: null }, { currentLot: null }), ME),
+    ).toBe("COMPLETED");
+  });
+
+  it("la pausa non cambia la scena: congela la fase, non la azzera", () => {
+    const inPausa = live({ status: "PAUSED", pausedAt: iso(-1_000) });
+    expect(sceneOf(inPausa, ME)).toBe(sceneOf(snapshot(), ME));
+  });
+});
+
+describe("toneOf — la fascia da 4px", () => {
+  const SCENE_ALL = [
+    "NOT_STARTED",
+    "COMPLETED",
+    "PICK_WAIT",
+    "PICK_MINE",
+    "OFFERS",
+    "TIE_PREP",
+    "TIE_OPEN",
+    "SEALED",
+    "REVEAL",
+  ] as const;
+
+  it("⚠ in pausa il tono è quello della pausa QUALUNQUE sia la scena", () => {
+    // È il test che conta di §7, e vale la pena che sia esaustivo invece di
+    // esemplificativo: una fascia che dicesse «round di offerte» mentre le
+    // offerte sono sospese direbbe una cosa falsa nel momento in cui qualcuno
+    // sta cercando di capire perché il suo pulsante non funziona.
+    for (const scene of SCENE_ALL) {
+      expect(toneOf(scene, "PAUSED")).toBe("PAUSED");
+    }
+  });
+
+  it("le tre scene in cui non c'è niente da fare sono grigie", () => {
+    expect(toneOf("NOT_STARTED", "READY")).toBe("NEUTRAL");
+    expect(toneOf("COMPLETED", "COMPLETED")).toBe("NEUTRAL");
+    expect(toneOf("PICK_WAIT", "LIVE")).toBe("NEUTRAL");
+  });
+
+  it("il mio turno ha un tono suo, e i due spareggi ne condividono uno", () => {
+    expect(toneOf("PICK_MINE", "LIVE")).toBe("MINE");
+    expect(toneOf("TIE_PREP", "LIVE")).toBe("TIE");
+    expect(toneOf("TIE_OPEN", "LIVE")).toBe("TIE");
+  });
+
+  it("⚠ offerte, buste da aprire ed esito sono tre toni diversi", () => {
+    // Fuori dalla pausa nessuna delle scene «qualcosa sta succedendo» condivide
+    // il tono con un'altra: se un giorno due si sovrappongono, il cambio di fase
+    // in mezzo diventa invisibile.
+    const toni = new Set([
+      toneOf("OFFERS", "LIVE"),
+      toneOf("SEALED", "LIVE"),
+      toneOf("REVEAL", "LIVE"),
+    ]);
+    expect(toni.size).toBe(3);
+  });
+
+  it("ogni scena ha un tono: nessun buco nella tabella", () => {
+    for (const scene of SCENE_ALL) {
+      expect(toneOf(scene, "LIVE")).toBeTruthy();
+      expect(sceneLabel(scene)).toBeTruthy();
+    }
+  });
+});
+
+describe("sceneTime — cosa scade, su quanto, e se la scadenza è mia", () => {
+  const live = (patch: Partial<Snapshot["auction"]>) =>
+    snapshot({ auction: { ...snapshot().auction, ...patch } });
+
+  it("le due scene senza scadenza non hanno banda", () => {
+    // Un anello vuoto con un «—» al posto della cifra fa sembrare la card rotta:
+    // meglio due card più corte delle altre sette.
+    expect(sceneTime("NOT_STARTED", snapshot())).toBeNull();
+    expect(sceneTime("COMPLETED", snapshot())).toBeNull();
+  });
+
+  it("⚠ le offerte leggono la scadenza del round e non quella della fase", () => {
+    const s = snapshot({
+      auction: { ...snapshot().auction, phaseDeadline: iso(99_000) },
+      currentLot: lot({ endsAt: iso(30_000) }),
+    });
+    expect(sceneTime("OFFERS", s)?.deadline).toBe(iso(30_000));
+    expect(sceneTime("TIE_OPEN", s)?.deadline).toBe(iso(30_000));
+    // Tutte le altre stanno sulla fase.
+    expect(sceneTime("SEALED", s)?.deadline).toBe(iso(99_000));
+    expect(sceneTime("REVEAL", s)?.deadline).toBe(iso(99_000));
+    expect(sceneTime("PICK_MINE", s)?.deadline).toBe(iso(99_000));
+  });
+
+  it("ogni scena prende il totale dal suo timer", () => {
+    const s = live({
+      timers: {
+        bidSeconds: 30,
+        pickSeconds: 60,
+        tiePrepSeconds: 5,
+        revealSeconds: 10,
+        resultGateSeconds: 7,
+      },
+    });
+    expect(sceneTime("OFFERS", s)?.totalSeconds).toBe(30);
+    expect(sceneTime("PICK_MINE", s)?.totalSeconds).toBe(60);
+    expect(sceneTime("PICK_WAIT", s)?.totalSeconds).toBe(60);
+    expect(sceneTime("TIE_PREP", s)?.totalSeconds).toBe(5);
+    expect(sceneTime("REVEAL", s)?.totalSeconds).toBe(10);
+    expect(sceneTime("SEALED", s)?.totalSeconds).toBe(7);
+  });
+
+  it("⚠ `pressing` è vero solo dove c'è una scadenza MIA da mancare", () => {
+    // È la risposta a «dove il rosso ha senso» (decisione dell'owner del
+    // 2026-08-22): con il colore acceso in tutte le scene la banda diventerebbe
+    // rossa a ogni lotto, duecento volte in una serata, anche dove non è chiesto
+    // niente — e un rosso che non chiede mai niente si impara a ignorare.
+    for (const scene of ["PICK_MINE", "OFFERS", "TIE_OPEN"] as const) {
+      expect(sceneTime(scene, snapshot())?.pressing).toBe(true);
+    }
+    for (const scene of ["PICK_WAIT", "TIE_PREP", "SEALED", "REVEAL"] as const) {
+      expect(sceneTime(scene, snapshot())?.pressing).toBe(false);
+    }
+  });
+});
+
+describe("timeTone — le tre soglie, in un posto solo", () => {
+  it("sono quelle che CountdownBar aveva già: 50% e 20%", () => {
+    expect(timeTone(1, true)).toBe("OK");
+    expect(timeTone(0.51, true)).toBe("OK");
+    expect(timeTone(0.5, true)).toBe("WARN");
+    expect(timeTone(0.21, true)).toBe("WARN");
+    expect(timeTone(0.2, true)).toBe("HOT");
+    expect(timeTone(0, true)).toBe("HOT");
+  });
+
+  it("senza una scadenza mia il tempo non grida mai, per quanto poco ne resti", () => {
+    expect(timeTone(0.9, false)).toBe("CALM");
+    expect(timeTone(0.01, false)).toBe("CALM");
+  });
+
+  it("senza scadenza è calmo e non rosso: un `null` non è un tempo scaduto", () => {
+    expect(timeTone(null, true)).toBe("CALM");
+    expect(timeTone(null, false)).toBe("CALM");
   });
 });

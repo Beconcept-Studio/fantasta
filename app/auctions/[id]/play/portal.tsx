@@ -13,18 +13,26 @@ import { MembersPanel } from "@/components/auction/members-panel";
 import { PickPanel, PickWaiting } from "@/components/auction/pick-panel";
 import { PortalHeader } from "@/components/auction/portal-header";
 import { RosterGrid } from "@/components/auction/roster-grid";
+import { SceneCard } from "@/components/auction/scene-card";
 import { StatusCard } from "@/components/auction/status-card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { sendAction } from "@/lib/realtime/action";
 import { managerControls } from "@/lib/realtime/manage";
 import {
+  amEligible,
   memberById,
   memberLabel,
   myMember,
   portalScreen,
+  sceneLabel,
+  sceneOf,
+  sceneTime,
   shouldOpenBidDialog,
+  toneOf,
+  type Scene,
 } from "@/lib/realtime/portal";
-import type { PoolPlayer } from "@/lib/realtime/types";
+import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
 import { useAuctionStream, useHeartbeat } from "@/lib/realtime/use-auction-stream";
 
 /**
@@ -122,6 +130,10 @@ export function Portal({
   const screen = portalScreen(snapshot, myMemberId);
   const lot = snapshot.currentLot;
   const bidOpen = shouldOpenBidDialog(snapshot, myMemberId, dismissedLotId);
+  // La scena e il suo tono: due funzioni pure, e l'unico posto in cui la tabella
+  // di M17 §6/§7 esiste (`lib/realtime/portal.ts`, con i test).
+  const scene = sceneOf(snapshot, myMemberId);
+  const tone = toneOf(scene, snapshot.auction.status);
 
   return (
     <>
@@ -154,79 +166,53 @@ export function Portal({
             <StatusCard snapshot={snapshot} />
 
             {/*
-              ⚠ **Senza intestazione, e non è una dimenticanza**: «L'asta non è
-              iniziata» era il titolo di questa card fino a v1.16.0, e da M17 lo
-              dice la card di stato dieci pixel più su. Qui resta ciò che quella
-              non dice: cosa fare mentre si aspetta, e la strada per la lobby.
-            */}
-            {screen.kind === "NOT_STARTED" && (
-              <section className="bg-card space-y-3 rounded-xl border p-6 text-center shadow-sm">
-                <p className="text-muted-foreground text-sm">
-                  Tieni questa pagina aperta: si parte quando chi gestisce
-                  l&apos;asta la avvia, e serve che siate tutti collegati.
-                </p>
-                <Button asChild variant="outline">
-                  <Link href={`/auctions/${auctionId}/lobby`}>Vai alla lobby</Link>
-                </Button>
-              </section>
-            )}
+              ⚠ **Una cornice, nove scene** (M17 §6). Fino a v1.16.0 qui c'era una
+              catena di sei `&&` che sceglievano fra sei contenitori, ognuno con la
+              sua cornice e il suo countdown; adesso la scelta è di `sceneOf`, che
+              è una funzione pura con i suoi test, e quello che cambia è il **corpo**
+              dentro `SceneCard`.
 
-            {/*
-              ⚠ «Qui sotto la tua» non si può più scrivere: da M17 la propria rosa
-              è **accanto** su desktop e sotto sul telefono, quindi qualunque
-              indicazione di direzione sarebbe falsa metà delle volte. Il rimando
-              se ne va e non viene sostituito da un «qui accanto»: la rosa è la
-              cosa più grande della pagina e non ha bisogno di essere additata.
+              Il guadagno non è meno JSX: è che la decisione «quale scena» non vive
+              più in una condizione JSX che nessun test può leggere. In un progetto
+              senza test di rendering — non c'è `@testing-library`, non c'è jsdom —
+              è l'unica rete che una macro tutta visiva può avere.
             */}
-            {screen.kind === "COMPLETED" && (
-              <section className="bg-card/40 space-y-2 rounded-xl border p-6 text-center shadow-sm">
-                <p className="text-muted-foreground text-sm">
-                  Le rose sono chiuse, con i prezzi pagati.
-                </p>
-              </section>
-            )}
-
-            {/*
-              Due card per lo stesso posto: il lotto vivo e il lotto chiuso sono due
-              momenti diversi e devono avere due facce diverse (M1). La scelta è
-              della fase, quindi dello snapshot: chi rientra a metà reveal trova la
-              card chiusa come chi non si è mai disconnesso (I10).
-
-              ⚠ **Da M14 le fasi chiuse sono due, ma le card restano due** — il cancello
-              dei risultati (`LOT_SEALED`) porta la card chiusa nel suo stato sigillato,
-              non una terza cornice. Il perché sta su `LotClosedCard`: per chi guarda il
-              telefono la cosa già accaduta — «non si offre più» — è la stessa, e ciò che
-              cambia è solo se il risultato si conosce.
-            */}
-            {screen.kind === "LOT" &&
-              lot !== null &&
-              (snapshot.auction.phase === "LOT_REVEAL" ||
-              snapshot.auction.phase === "LOT_SEALED" ? (
-                <LotClosedCard
+            <SceneCard
+              tone={tone}
+              label={sceneLabel(scene)}
+              badge={<SceneBadge scene={scene} snapshot={snapshot} />}
+              time={sceneTime(scene, snapshot)}
+              offset={offset}
+              pausedAt={screen.frozen ? snapshot.auction.pausedAt : null}
+              action={
+                <SceneAction
+                  scene={scene}
                   snapshot={snapshot}
                   myMemberId={myMemberId}
-                  offset={offset}
-                  onSkip={
-                    viewerIsOwner && managerControls(snapshot).canSkipReveal
-                      ? skipReveal
-                      : null
-                  }
-                  onShowResults={
-                    viewerIsOwner && managerControls(snapshot).canShowResults
-                      ? showResults
-                      : null
-                  }
+                  auctionId={auctionId}
+                  viewerIsOwner={viewerIsOwner}
+                  frozen={screen.frozen}
                   skipPending={skipping}
-                />
-              ) : (
-                <LotCard
-                  snapshot={snapshot}
-                  myMemberId={myMemberId}
-                  offset={offset}
                   onOpenBid={() => setDismissedLotId(null)}
+                  onSkip={skipReveal}
+                  onShowResults={showResults}
                 />
-              ))}
+              }
+            >
+              <SceneBody
+                scene={scene}
+                snapshot={snapshot}
+                myMemberId={myMemberId}
+              />
+            </SceneCard>
 
+            {/*
+              ⚠ **La chiamata è ancora una sezione di pagina e non un pannello**:
+              in una colonna da 350px, con la ricerca, le pastiglie dei filtri e
+              quaranta righe, è strettissima. È M17-07 che la sposta nello sheet
+              con la cornice del `BidModal`; fino a lì questa è la parte che sembra
+              rotta e non lo è.
+            */}
             {screen.kind === "PICK_MINE" && (
               <PickPanel
                 snapshot={snapshot}
@@ -234,17 +220,6 @@ export function Portal({
                 offset={offset}
                 frozen={screen.frozen}
                 onPick={(playerId) => sendAction(auctionId, { type: "PICK", playerId })}
-              />
-            )}
-
-            {screen.kind === "PICK_WAIT" && (
-              <PickWaiting
-                snapshot={snapshot}
-                offset={offset}
-                frozen={screen.frozen}
-                callerName={memberLabel(
-                  memberById(snapshot, snapshot.auction.currentMemberId),
-                )}
               />
             )}
           </div>
@@ -316,4 +291,215 @@ export function Portal({
       )}
     </>
   );
+}
+
+/**
+ * ─── I tre riempimenti della cornice ────────────────────────────────────────
+ *
+ * Corpo, badge e azione stanno **qui e non dentro `SceneCard`**, e la divisione
+ * non è arbitraria: la cornice non sa niente di aste — prende una fascia, due
+ * angoli, un corpo e una banda — mentre questi tre sanno tutto di aste e niente
+ * di layout. È ciò che permette di guardare l'anatomia in un file e la mappa
+ * delle scene in un altro.
+ *
+ * Stanno in fondo a `portal.tsx` e non in `components/` perché hanno **un solo
+ * chiamante** e leggono tutti lo stesso `scene` (regola 8: niente astrazione
+ * prima del secondo chiamante). Il giorno in cui la regia volesse la stessa
+ * colonna, si spostano.
+ */
+
+/** Il corpo: l'unica cosa che cambia da una scena all'altra. */
+function SceneBody({
+  scene,
+  snapshot,
+  myMemberId,
+}: {
+  scene: Scene;
+  snapshot: Snapshot;
+  myMemberId: string | null;
+}) {
+  switch (scene) {
+    case "NOT_STARTED":
+      return (
+        <p className="text-muted-foreground text-sm">
+          Tieni questa pagina aperta: si parte quando chi gestisce l&apos;asta la
+          avvia, e serve che siate tutti collegati.
+        </p>
+      );
+    case "COMPLETED":
+      return (
+        <p className="text-muted-foreground text-sm">
+          Le rose sono chiuse, con i prezzi pagati.
+        </p>
+      );
+    case "PICK_WAIT":
+      return (
+        <PickWaiting
+          snapshot={snapshot}
+          callerName={memberLabel(
+            memberById(snapshot, snapshot.auction.currentMemberId),
+          )}
+        />
+      );
+    case "PICK_MINE":
+      // ⚠ Provvisorio: M17-08 mette qui il corpo vero — chi comprerebbe il timer
+      // e il pulsante che riapre il pannello. Finché la chiamata è una sezione di
+      // pagina, quel pulsante non avrebbe niente da riaprire.
+      return (
+        <p className="text-sm">
+          Scegli il giocatore da chiamare qui sotto.
+        </p>
+      );
+    case "OFFERS":
+    case "TIE_PREP":
+    case "TIE_OPEN":
+      return <LotCard snapshot={snapshot} myMemberId={myMemberId} />;
+    case "SEALED":
+    case "REVEAL":
+      return <LotClosedCard snapshot={snapshot} myMemberId={myMemberId} />;
+  }
+}
+
+/**
+ * Il badge nell'angolo in alto a destra: **qualifica la scena**, non ripete lo
+ * stato dell'asta.
+ *
+ * ⚠ §5 fissa la *posizione* del badge («in alto a destra, che è il posto in cui
+ * si guarderà anche in tutte le altre card»), non il suo contenuto qui: lo stato
+ * dell'asta lo dice il badge della card di stato dieci pixel più su, e ripeterlo
+ * nove volte sotto di lui sarebbe un badge che nessuno legge.
+ *
+ * ⚠ **La pausa non lo tocca**, di proposito. La pausa è già detta tre volte —
+ * dalla fascia a righe, dal badge della card di stato e dal suo paragrafo — e una
+ * quarta la trasformerebbe in rumore. Qui il badge continua a dire *che scena è*,
+ * che è precisamente l'informazione che la pausa congela senza azzerare.
+ *
+ * `null` dove non c'è niente da qualificare: l'angolo resta vuoto e la label a
+ * sinistra dice già tutto.
+ */
+function SceneBadge({
+  scene,
+  snapshot,
+}: {
+  scene: Scene;
+  snapshot: Snapshot;
+}) {
+  switch (scene) {
+    case "PICK_MINE":
+      return <Badge>tuo turno</Badge>;
+    case "OFFERS":
+      return <Badge variant="secondary">round 1</Badge>;
+    case "TIE_PREP":
+    case "TIE_OPEN":
+      return (
+        <Badge variant="outline" className="border-amber-600/40 text-amber-800">
+          {scene === "TIE_OPEN" ? "round 2" : "spareggio"}
+        </Badge>
+      );
+    case "SEALED":
+      return (
+        <Badge variant="outline" className="border-amber-600/40 text-amber-800">
+          da aprire
+        </Badge>
+      );
+    case "REVEAL":
+      // Solo a chi l'ha vinto: per gli altri il vincitore è già nel corpo, e un
+      // badge «assegnato» accanto all'etichetta «Lotto assegnato» è la stessa
+      // parola due volte a tre centimetri.
+      return snapshot.currentLot?.reveal?.winnerMemberId ===
+        snapshot.viewerMemberId ? (
+        <Badge className="bg-emerald-600 text-white">a te</Badge>
+      ) : null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * L'azione, a piena larghezza in fondo al corpo: **un posto solo per scena**.
+ *
+ * Prima di M17 ogni card metteva il suo pulsante dove capitava — «Apri offerta»
+ * in mezzo al corpo, «Prosegui asta» in un piè di pagina, «Vai alla lobby» sotto
+ * un paragrafo centrato. Si preme dal telefono, spesso senza guardare: che stia
+ * sempre nello stesso posto vale più di dove quel posto sia.
+ *
+ * ⚠ I due pulsanti dell'owner **non autorizzano niente** e non è un promemoria
+ * inutile: `skipReveal` e `showResults` ricontrollano lato server (regola 6), e
+ * `viewerIsOwner` arriva come prop perché nasce col link e non è stato di gioco.
+ */
+function SceneAction({
+  scene,
+  snapshot,
+  myMemberId,
+  auctionId,
+  viewerIsOwner,
+  frozen,
+  skipPending,
+  onOpenBid,
+  onSkip,
+  onShowResults,
+}: {
+  scene: Scene;
+  snapshot: Snapshot;
+  myMemberId: string | null;
+  auctionId: string;
+  viewerIsOwner: boolean;
+  frozen: boolean;
+  skipPending: boolean;
+  onOpenBid: () => void;
+  onSkip: () => void;
+  onShowResults: () => void;
+}) {
+  const controls = managerControls(snapshot);
+
+  if (scene === "NOT_STARTED") {
+    return (
+      <Button asChild variant="outline" className="w-full">
+        <Link href={`/auctions/${auctionId}/lobby`}>Vai alla lobby</Link>
+      </Button>
+    );
+  }
+
+  if (scene === "OFFERS" || scene === "TIE_OPEN") {
+    if (!amEligible(snapshot.currentLot, myMemberId)) return null;
+    return (
+      <Button
+        type="button"
+        className="h-12 w-full text-base"
+        onClick={onOpenBid}
+        disabled={frozen}
+      >
+        {snapshot.myBid === null ? "Apri offerta" : "Modifica offerta"}
+      </Button>
+    );
+  }
+
+  if (scene === "SEALED" && viewerIsOwner && controls.canShowResults) {
+    return (
+      <Button
+        type="button"
+        className="w-full"
+        onClick={onShowResults}
+        disabled={skipPending}
+      >
+        {skipPending ? "Apro…" : "Mostra risultati"}
+      </Button>
+    );
+  }
+
+  if (scene === "REVEAL" && viewerIsOwner && controls.canSkipReveal) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={onSkip}
+        disabled={skipPending}
+      >
+        {skipPending ? "Proseguo…" : "Prosegui asta"}
+      </Button>
+    );
+  }
+
+  return null;
 }

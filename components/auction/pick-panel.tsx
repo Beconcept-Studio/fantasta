@@ -376,43 +376,37 @@ function FilterChip({
   );
 }
 
-/** L'attesa mentre chiama qualcun altro: chi, e quanto tempo ha. */
+/**
+ * Il **corpo** dell'attesa mentre chiama qualcun altro: chi, e cosa si sta
+ * comprando.
+ *
+ * ⚠ **Era la card più rumorosa della serata senza chiedere niente**, e da M17 è
+ * la più quieta. Fino a v1.16.0 aveva un countdown da 36px al centro e una barra
+ * sotto — lo stesso peso visivo della card su cui si sta offrendo — in una scena
+ * in cui l'unica cosa da fare è aspettare. Ed è la scena che **dura più di tutte**:
+ * undici turni su dodici sta chiamando qualcun altro. Il tempo adesso sta nella
+ * banda in fondo alla cornice come in tutte le altre scene, e lì resta grigio
+ * perché la scadenza non è mia (`sceneTime().pressing === false`).
+ *
+ * Chi chiama arriva come `callerName` già risolto e non come id: la risoluzione
+ * da `currentMemberId` a nome è del portale, che ce l'ha già fatta per la card di
+ * stato — farla due volte vorrebbe dire due `memberById` da tenere d'accordo.
+ */
 export function PickWaiting({
   snapshot,
-  offset,
-  frozen,
   callerName,
 }: {
   snapshot: Snapshot;
-  offset: number;
-  frozen: boolean;
   callerName: string;
 }) {
   const role = snapshot.auction.currentRole;
   return (
-    <section className="bg-muted/40 space-y-2 rounded-xl border p-6 text-center shadow-sm">
-      <p className="text-muted-foreground text-xs tracking-wide uppercase">
-        Sta chiamando
-      </p>
-      <h2 className="text-xl font-semibold">{callerName}</h2>
-      <p className="text-4xl leading-none font-semibold">
-        <Countdown
-          deadline={snapshot.auction.phaseDeadline}
-          offset={offset}
-          pausedAt={frozen ? snapshot.auction.pausedAt : null}
-        />
-      </p>
-      <CountdownBar
-        deadline={snapshot.auction.phaseDeadline}
-        offset={offset}
-        totalSeconds={snapshot.auction.timers.pickSeconds}
-        pausedAt={frozen ? snapshot.auction.pausedAt : null}
-        className="mx-auto max-w-xs"
-      />
+    <div className="space-y-1">
+      <h3 className="text-xl leading-tight font-semibold">{callerName}</h3>
       <p className="text-muted-foreground text-sm">
         Si stanno comprando i{" "}
         {role === null ? "giocatori" : ROLE_LABELS[role].toLowerCase()}.
       </p>
-    </section>
+    </div>
   );
 }
