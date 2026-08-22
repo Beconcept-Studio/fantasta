@@ -45,9 +45,28 @@ import { cn } from "@/lib/utils";
 export function LotClosedCard({
   snapshot,
   myMemberId,
+  action = null,
 }: {
   snapshot: Snapshot;
   myMemberId: string | null;
+  /**
+   * «Prosegui asta», e **solo nell'esito**: sta qui invece che nello slot in
+   * fondo alla cornice (richiesta dell'owner del 2026-08-22, dopo aver guardato
+   * una simulazione).
+   *
+   * ⚠ **È la sola scena in cui l'azione non è l'ultima cosa della card**, quindi
+   * vale la pena dire perché non rompe l'anatomia di §6 ma la rispetta. In tutte
+   * le altre otto scene il corpo è corto e «in fondo alla card» e «subito sotto
+   * la notizia» sono lo stesso pixel. Nell'esito no: sotto il vincitore c'è
+   * l'elenco di tutte le buste di tutti i round, che può essere dodici righe —
+   * un'appendice, non la notizia. Con il pulsante in fondo bisognerebbe scorrere
+   * oltre l'appendice per proseguire l'asta, e lo si preme dal telefono con
+   * dodici persone che aspettano.
+   *
+   * La regola che regge, quindi, non è «l'azione sta in fondo» ma **«l'azione
+   * segue la notizia»** — e nelle altre otto scene le due coincidono.
+   */
+  action?: React.ReactNode;
 }) {
   const lot = snapshot.currentLot;
   if (lot === null) return null;
@@ -103,6 +122,9 @@ export function LotClosedCard({
           </p>
         </div>
       )}
+
+      {/* ── «Prosegui asta», subito sotto chi si è aggiudicato il giocatore ── */}
+      {!sealed && action}
 
       {/* ── Tutte le buste, di tutti i round ── */}
       {!sealed && (

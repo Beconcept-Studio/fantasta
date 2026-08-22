@@ -3089,3 +3089,27 @@ bisogno di essere additata. Allo stesso modo sono sparite le intestazioni «L'as
 copia che nomina una **direzione** è una copia che un cambio di layout può rendere falsa senza che
 nessun test se ne accorga. Vale la pena cercarle con un grep — «qui sotto», «qui sopra», «qui
 accanto» — ogni volta che si sposta qualcosa.
+
+### Nell'esito il pulsante segue la notizia, non la card
+
+Chiesto dall'owner il 2026-08-22 **dopo aver guardato una simulazione girare**, che è esattamente il
+momento in cui M17-09 doveva produrre correzioni: «quando viene mostrato l'esito del lotto sposta il
+pulsante per proseguire l'asta sotto il div dove mostri chi si è aggiudicato il calciatore, non in
+fondo. Rendi inoltre il pulsante nero, seguendo lo styling dell'app».
+
+**Perché non indebolisce l'anatomia di §6.** In otto scene su nove il corpo è corto, quindi «in fondo
+alla card» e «subito sotto la notizia» sono lo stesso pixel e la distinzione non si pone. Nell'esito
+no: sotto la riga del vincitore c'è l'elenco di tutte le buste di tutti i round, che con dodici
+partecipanti sono dodici righe — un'**appendice**, non la notizia. Con il pulsante in fondo bisogna
+scorrere oltre l'appendice per far ripartire l'asta, e lo si preme dal telefono con dodici persone che
+aspettano. La regola che regge, riscritta, è **«l'azione segue la notizia»**, e nelle altre otto scene
+le due formulazioni coincidono.
+
+⚠ **Il cancello resta con il pulsante nello slot in fondo**, e non è un'incoerenza: lì il corpo è un
+paragrafo di due righe, quindi il pulsante è già subito sotto la notizia. Spostarlo dentro il corpo
+avrebbe prodotto lo stesso pixel con una riga di codice in più.
+
+**E il nero è il pulsante primario dell'app.** Era `variant="outline"`, cioè contornato, mentre
+«Mostra risultati» nel cancello era già pieno. Sono lo stesso gesto in due momenti — anticipare una
+scadenza che scadrebbe da sé — e averne uno pieno e uno contornato faceva sembrare che uno dei due
+fosse meno definitivo dell'altro. Adesso hanno la stessa forma.

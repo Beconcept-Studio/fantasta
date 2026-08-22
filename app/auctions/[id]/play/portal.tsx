@@ -151,6 +151,35 @@ export function Portal({
   const tone = toneOf(scene, snapshot.auction.status);
   const pickOpen = shouldOpenPickSheet(snapshot, myMemberId, dismissedTurnKey);
 
+  const action = (
+    <SceneAction
+      scene={scene}
+      snapshot={snapshot}
+      myMemberId={myMemberId}
+      auctionId={auctionId}
+      viewerIsOwner={viewerIsOwner}
+      frozen={screen.frozen}
+      skipPending={skipping}
+      onOpenBid={() => setDismissedLotId(null)}
+      onOpenPick={() => setDismissedTurnKey(null)}
+      onSkip={skipReveal}
+      onShowResults={showResults}
+    />
+  );
+  /**
+   * ⚠ **L'esito è la sola scena in cui l'azione non è l'ultima cosa della card**
+   * (richiesta dell'owner del 2026-08-22, dopo aver guardato una simulazione): sta
+   * dentro il corpo, subito sotto la riga di chi si è aggiudicato il giocatore.
+   *
+   * Non è una deroga all'anatomia di §6 ma la sua lettura giusta. Nelle altre otto
+   * scene il corpo è corto, quindi «in fondo alla card» e «subito sotto la notizia»
+   * sono lo stesso pixel; nell'esito sotto il vincitore c'è l'elenco di tutte le
+   * buste di tutti i round — fino a dodici righe di appendice — e col pulsante in
+   * fondo bisognerebbe scorrere oltre l'appendice per proseguire l'asta. La regola
+   * che regge non è «l'azione sta in fondo» ma **«l'azione segue la notizia»**.
+   */
+  const actionInBody = scene === "REVEAL";
+
   return (
     <>
       <PortalHeader snapshot={snapshot} me={me} connected={connected} />
@@ -200,27 +229,14 @@ export function Portal({
               time={sceneTime(scene, snapshot)}
               offset={offset}
               pausedAt={screen.frozen ? snapshot.auction.pausedAt : null}
-              action={
-                <SceneAction
-                  scene={scene}
-                  snapshot={snapshot}
-                  myMemberId={myMemberId}
-                  auctionId={auctionId}
-                  viewerIsOwner={viewerIsOwner}
-                  frozen={screen.frozen}
-                  skipPending={skipping}
-                  onOpenBid={() => setDismissedLotId(null)}
-                  onOpenPick={() => setDismissedTurnKey(null)}
-                  onSkip={skipReveal}
-                  onShowResults={showResults}
-                />
-              }
+              action={actionInBody ? null : action}
             >
               <SceneBody
                 scene={scene}
                 snapshot={snapshot}
                 myMemberId={myMemberId}
                 pool={pool}
+                action={actionInBody ? action : null}
               />
             </SceneCard>
           </div>
@@ -338,11 +354,14 @@ function SceneBody({
   snapshot,
   myMemberId,
   pool,
+  action,
 }: {
   scene: Scene;
   snapshot: Snapshot;
   myMemberId: string | null;
   pool: PoolPlayer[];
+  /** Valorizzata solo nell'esito: il perché sta su `actionInBody`. */
+  action: React.ReactNode;
 }) {
   switch (scene) {
     case "NOT_STARTED":
@@ -375,7 +394,13 @@ function SceneBody({
       return <LotCard snapshot={snapshot} myMemberId={myMemberId} />;
     case "SEALED":
     case "REVEAL":
-      return <LotClosedCard snapshot={snapshot} myMemberId={myMemberId} />;
+      return (
+        <LotClosedCard
+          snapshot={snapshot}
+          myMemberId={myMemberId}
+          action={action}
+        />
+      );
   }
 }
 
@@ -565,8 +590,12 @@ function SceneAction({
   if (scene === "REVEAL" && viewerIsOwner && controls.canSkipReveal) {
     return (
       <Button
+        // ⚠ Nero e non `outline` (richiesta dell'owner del 2026-08-22): è il
+        // pulsante primario dell'app, ed è la stessa forma di «Mostra risultati»
+        // nel cancello. I due sono lo stesso gesto in due momenti — anticipare una
+        // scadenza che scadrebbe da sé — e avere l'uno pieno e l'altro contornato
+        // faceva sembrare che uno dei due fosse meno definitivo dell'altro.
         type="button"
-        variant="outline"
         className="w-full"
         onClick={onSkip}
         disabled={skipPending}

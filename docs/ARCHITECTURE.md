@@ -1474,7 +1474,7 @@ volte c'era e a volte no. Capire *cosa* era cambiato voleva dire rileggere la ca
 
 La cornice unica è `SceneCard`, e la sua anatomia è la risposta: una fascia da 4px in testa, la
 label della scena sempre nell'angolo in alto a sinistra, il badge sempre in quello a destra, il corpo
-in mezzo, l'azione a piena larghezza in fondo al corpo, e la banda del tempo nell'ultimo pixel della
+in mezzo, l'azione a piena larghezza sotto il corpo, e la banda del tempo nell'ultimo pixel della
 card. Passando da una fase all'altra **non si sposta niente tranne il corpo**, quindi l'occhio
 controlla badge e countdown senza cercarli e un cambiamento si nota perché qualcosa è cambiato *lì*.
 La distinzione fra i momenti che M1 chiedeva non è tornata a essere una cornice diversa: è diventata
@@ -1494,6 +1494,15 @@ ma arriva come prop dalla pagina server, per la stessa ragione del listone: non 
 cambia per tutta la serata, e nello snapshot verrebbe spedito a tutti a ogni transizione. Il pulsante
 nascosto agli altri non autorizza niente — `skipReveal` e `showResults` ricontrollano lato server,
 come sempre.
+
+C'è **un'eccezione, e chiarisce la regola invece di indebolirla**: nell'esito «Prosegui asta» non sta
+nello slot in fondo ma dentro il corpo, subito sotto la riga di chi si è aggiudicato il giocatore. In
+otto scene su nove il corpo è corto, quindi «in fondo alla card» e «subito sotto la notizia» sono lo
+stesso pixel e la distinzione non si pone; nell'esito no, perché sotto il vincitore c'è l'elenco di
+tutte le buste di tutti i round — fino a dodici righe che sono un'appendice, non la notizia. Con il
+pulsante in fondo bisognerebbe scorrere oltre l'appendice per far ripartire l'asta, e lo si preme dal
+telefono con dodici persone che aspettano. La regola che regge davvero, quindi, non è «l'azione sta in
+fondo» ma **«l'azione segue la notizia»**.
 
 C'è una cosa che la cornice unica ha **risolto** invece di spostare, e si vede solo confrontando con
 com'era. `LotClosedCard` aveva due countdown in due momenti diversi — nel cancello un numero grande
