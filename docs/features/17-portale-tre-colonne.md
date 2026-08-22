@@ -1,6 +1,9 @@
 # M17 — Il portale a tre colonne: la chiamata a pannello, e una colonna che si legge a colpo d'occhio
 
-> **Stato:** **pianificata** il 2026-08-22, non ancora aperta. Nasce dalla terza richiesta del
+> **Stato:** **aperta** il 2026-08-22 su `feature/17-portale-tre-colonne`, da `dev` a `0bba393`.
+> Baseline `pnpm test`: **858 test in 52 file**, cioè quella di `v1.16.0`. Task M17-01→08 e M17-11
+> fatti; restano **M17-09** (la tavolozza guardata con una simulazione), **M17-10** (il gate finale) e
+> **M17-12** (la chiusura). Pianificata lo stesso giorno. Nasce dalla terza richiesta del
 > quaderno, insieme a **M16** — il taglio in due è spiegato in `16-regole-offerta.md` §0 e va letto
 > prima di questa riga. **Esce dopo M16**, che toglie da `lot-card.tsx` un ramo che qui verrebbe
 > ridisegnato per niente.
@@ -284,34 +287,34 @@ in un posto solo è precisamente ciò che rende il cambio d'idea gratuito.
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M17-01** — Aprire `feature/17-portale-tre-colonne` da `dev`, **dopo che M16 è su `dev`**.
+- [x] **M17-01** — Aprire `feature/17-portale-tre-colonne` da `dev`, **dopo che M16 è su `dev`**.
       Rileggere questo file, `PLAN §8bis` e `PLAN §15`. `pnpm test` verde come baseline. Aprire una
       simulazione con i bot e **guardare il portale com'è oggi su un portatile**, prima di cambiarlo:
       è il termine di paragone e dopo non esisterà più
-- [ ] **M17-02** — `<Identity>` estratta e usata dai due contenitori (§3), con la barra `lg:hidden`
+- [x] **M17-02** — `<Identity>` estratta e usata dai due contenitori (§3), con la barra `lg:hidden`
       lasciata dov'è nell'albero. Nessun cambiamento visibile sotto `lg`: è il primo task e serve a
       verificare che il telefono non si muova
-- [ ] **M17-03** — La griglia a tre colonne, con l'ordine del DOM del telefono e `lg:order-*` (§2), e
+- [x] **M17-03** — La griglia a tre colonne, con l'ordine del DOM del telefono e `lg:order-*` (§2), e
       il commento che spiega perché l'ordine è quello. Guardare a 1024, 1280 e 1440
-- [ ] **M17-04** — La card di stato (§5), col badge riacceso e il blocco commentato di
+- [x] **M17-04** — La card di stato (§5), col badge riacceso e il blocco commentato di
       `portal-header.tsx` tolto
-- [ ] **M17-05** — La cornice della card di scena e la mappa scena → tono come funzioni pure accanto a
+- [x] **M17-05** — La cornice della card di scena e la mappa scena → tono come funzioni pure accanto a
       `phaseLabel`, **con i test** (§6, §7). ⚠ Il test che conta è quello sulla precedenza: in pausa
       il tono è quello della pausa **qualunque** sia la fase
-- [ ] **M17-06** — I corpi dentro la cornice: `LotCard`, `LotClosedCard`, `PickWaiting` e i due
+- [x] **M17-06** — I corpi dentro la cornice: `LotCard`, `LotClosedCard`, `PickWaiting` e i due
       cartelli perdono la propria cornice, il proprio countdown e la propria intestazione (§6). È il
       task più lungo e va fatto una scena per volta, guardando
-- [ ] **M17-07** — Il pannello di chiamata (§4): la cornice del `BidModal` riusata, `shouldOpenPickSheet`
+- [x] **M17-07** — Il pannello di chiamata (§4): la cornice del `BidModal` riusata, `shouldOpenPickSheet`
       e `turnKey` puri e testati, l'intestazione fissa con la sola lista che scorre. ⚠ Provare **sul
       telefono con la tastiera aperta**: se il countdown esce dallo schermo mentre si cerca un nome,
       il pannello è peggio della pagina che sostituisce e va rifatto, non accettato
-- [ ] **M17-08** — La card «Tocca a te» nella colonna 3, col countdown e il pulsante che riapre il
+- [x] **M17-08** — La card «Tocca a te» nella colonna 3, col countdown e il pulsante che riapre il
       pannello. Provare il giro completo: pannello → scelgo → si chiude → si apre l'offerta
 - [ ] **M17-09** — La tavolozza, **guardata** con una simulazione che gira: le otto scene una dopo
       l'altra, e la pausa dentro ciascuna. Correggere qui, non «più avanti» (§7)
 - [ ] **M17-10** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con dev server
       spento; la prima dopo una sessione di `pnpm dev` può morire da sola e passare al secondo giro)
-- [ ] **M17-11** — Documentazione: `docs/DECISIONS.md` con le cinque decisioni del 2026-08-22 e
+- [x] **M17-11** — Documentazione: `docs/DECISIONS.md` con le cinque decisioni del 2026-08-22 e
       l'esito della tavolozza guardata; `docs/ARCHITECTURE.md`, il capitolo del portale, che oggi
       descrive una colonna sola
 - [ ] **M17-12** — Chiusura: merge `--no-ff` su `dev`, prova a due dispositivi (portatile + telefono

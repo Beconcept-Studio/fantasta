@@ -12,7 +12,41 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M16 è in produzione da `v1.16.0`** (2026-08-22): aperta, lavorata, provata
+**M17 — il portale a tre colonne**, aperta il 2026-08-22 su `feature/17-portale-tre-colonne`.
+Task M17-01→08 e M17-11 fatti, gate verde con **893 test in 52 file** (da 858). Restano la tavolozza
+**guardata** con una simulazione (M17-09, che è un criterio di chiusura), il gate finale e la chiusura.
+Nessun `pnpm db:push`, nessun backfill: verificato, non dedotto — il `git diff` della macro non tocca
+`lib/db/schema.ts`.
+
+⚠ **Il provino statico prima del React è ciò che ha salvato questa macro dal finire come M15**, e
+vale come metodo più che come aneddoto. Le tre colonne, le nove scene e la tavolozza sono state
+guardate come HTML statico con i token copiati da `app/globals.css` **prima** che esistesse un
+componente: quel giro ha cambiato **quattro decisioni su cinque** — l'identità inglobata e grigia
+invece di una card a sé, l'ordine di chiamata tolto dal titolo, il timer da numero grande a banda in
+fondo, e la misura da barra ad anello. Ognuna di quelle scoperte, fatta a React scritto, sarebbe stata
+un rifacimento.
+
+⚠ **Le due cose che il provino ha fatto emergere e che la spec non prevedeva.** La prima:
+`CountdownBar` **cambiava già colore col tempo** (verde/ambra/rosso), quindi la fascia della scena e
+la barra del countdown avrebbero avuto due verdi e due ambra nella stessa card con significati
+diversi — a tre secondi dalla chiusura la fascia verde sopra una barra rossa. La banda in fondo lo
+scioglie per posizione (fascia in testa, misura in coda, un bordo in mezzo), e le tre soglie stanno
+adesso in `timeTone`, da cui `CountdownBar` le rilegge. La seconda: il badge «riconnessione…» viveva
+**solo** nella barra incollata, che da `lg` sparisce — sarebbe diventato invisibile su desktop senza
+che niente lo segnalasse.
+
+⚠ **Il rosso è stato limitato alle tre scene in cui si agisce**, ed è una decisione presa contando:
+con una regola sola la banda diventerebbe rossa ~200 volte in una serata a 8 con 25 slot, e tre volte
+su sette dove non è chiesto niente. Un rosso che non chiede mai niente si impara a ignorare.
+
+⚠ **Una cosa è stata tolta e non sostituita, e va saputo**: l'ordine di chiamata dei ruoli
+(`roleOrder`) non si legge più da nessuna parte nell'app. Il portale era l'unico posto che lo
+scriveva, e `RosterGrid` elenca i ruoli nel suo ordine fisso (P → D → C → A). Il perché sta in
+`docs/DECISIONS.md` alla data.
+
+---
+
+**M16 è in produzione da `v1.16.0`** (2026-08-22): aperta, lavorata, provata
 dall'owner e rilasciata **nella stessa giornata**, il terzo caso di fila dopo M13 e M14. Gate verde
 con **858 test in 52 file** (da 860 in 51 — 13 tolti insieme al ritiro, 11 aggiunti), typecheck e
 build puliti. Un'offerta è una decisione che si prende una volta: via i quattro valori suggeriti dal
@@ -196,12 +230,11 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-**Una**, la seconda delle due pianificate il 2026-08-22 dalle tre richieste che l'owner aveva scritto
-nel quaderno dopo `v1.15.1`. **M16 è chiusa e in produzione**; **`docs/REQUESTS.md` resta vuoto**.
+**Nessuna.** Le due pianificate il 2026-08-22 dalle tre richieste che l'owner aveva scritto nel
+quaderno dopo `v1.15.1` sono entrambe partite: **M16 è chiusa e in produzione**, **M17 è aperta** (qui
+sopra). **`docs/REQUESTS.md` resta vuoto.**
 
-| Macro | Tema | Ordine |
-|---|---|---|
-| [M17](17-portale-tre-colonne.md) | Il portale a tre colonne: la chiamata a pannello, e una colonna di stato che si legge a colpo d'occhio | dopo M16 |
+Quello che segue è il ragionamento con cui le due sono state tagliate, e resta come archivio.
 
 **Perché due e non una.** Le tre richieste sembrano un tema solo — «sistemiamo il portale» — e hanno
 due profili di rischio molto diversi, che è il criterio con cui sono state tagliate M5/M6, M9–M12 e

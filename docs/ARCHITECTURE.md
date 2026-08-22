@@ -1387,12 +1387,44 @@ Qui l'applicazione incontra la persona: un telefono tenuto con una mano, in una 
 qualcuno legge i nomi ad alta voce, con trenta secondi per decidere quanto vale un attaccante. Il
 portale sta su `/auctions/[id]/play` ed è una pagina sola.
 
+Da M17 quella pagina sola ha **due forme**: sul telefono resta la colonna unica che è sempre stata,
+e da 1024px in su diventa tre colonne. Non è responsive design applicato per abitudine — è
+l'osservazione che metà della serata la si passa davanti a un portatile, e che lì il portale era una
+colonna stretta in mezzo a uno schermo vuoto con tutto in fila da scorrere. Le tre colonne sono tre
+domande diverse a cui si guarda in tre momenti diversi: **chi ho** (la mia rosa), **chi hanno gli
+altri**, **cosa sta succedendo**.
+
 La parte server di quella pagina fa tre cose e nessuna di queste è preparare la schermata: verifica
 che chi entra sia un membro (l'owner che non ha joinato non ha un portale — il suo è `/manage`),
 carica il listone, e passa la palla al client. **Lo stato dell'asta non viene renderizzato lato
 server**, ed è una scelta: una schermata calcolata a build-time della richiesta sarebbe giusta per
 un istante e sbagliata per i trenta secondi successivi, e avere due fonti di verità sulla fase
 corrente è esattamente il modo in cui si desincronizza un'asta.
+
+### Tre colonne, e un ordine del DOM che sembra un errore
+
+La griglia sta dentro `max-w-6xl`, che a 1024px fa colonne da circa 350px. Fino a v1.16.0 quella
+larghezza larga stava nell'**intestazione** e il corpo era `max-w-xl`: cioè al contrario di come si
+legge una pagina, ed è il tipo di cosa che nessuno nota finché non serve mettere tre cose una accanto
+all'altra.
+
+La sola trappola di questa griglia è **l'ordine in cui le colonne sono scritte**, e va raccontata
+perché il codice, letto senza spiegazione, sembra sbagliato: nel DOM l'ordine è *scena → rosa →
+altri*, e le colonne si rimettono in fila con tre classi `lg:order-*`. Il motivo è che sotto `lg` non
+esiste nessuna griglia — c'è una colonna sola, e conta solo l'ordine sorgente. Scrivendo le colonne
+nell'ordine visivo del desktop, chi gioca dal telefono avrebbe dovuto scorrere oltre la propria rosa
+e oltre gli otto avversari per arrivare all'offerta, cioè il contrario esatto di quello che il
+portale ha sempre fatto. Tre classi sono il prezzo per non peggiorare il dispositivo con cui si gioca
+davvero.
+
+L'intestazione incollata in cima — quella che tiene crediti e `max_bid` sempre a schermo, il
+requisito mobile-first di `PLAN.md` §15 — da `lg` **sparisce**, perché su uno schermo grande non c'è
+niente da inseguire. Gli stessi numeri diventano una fascia grigia in testa alla card della rosa, in
+colonna 1. Sono lo stesso componente, `<Identity>`, e non due copie: due blocchi che dicono i due
+numeri che decidono ogni offerta divergerebbero, e il giorno in cui divergono nessuno sa quale dei
+due credere. Il `lg:hidden` sta sull'`<header>` e la barra resta dov'era nell'albero, fuori dal
+`<main>`: uno `sticky` figlio di un contenitore di griglia si aggancia al contenitore e non al
+viewport, quindi spostarla dentro la griglia e nasconderla lì non è la stessa cosa.
 
 ### Tre livelli, e nessuna notifica
 
@@ -1427,40 +1459,190 @@ giocatore, ruolo, squadra, countdown, la propria offerta e il pulsante che riapr
 altri non dice niente, e lo dichiara: una riga spiega che le buste sono segrete fino all'apertura,
 perché senza quella spiegazione la card sembra semplicemente rotta.
 
-Le card sono **due**, e si danno il cambio con la fase. Finché il lotto è vivo — le offerte, e
-l'annuncio dello spareggio — comanda `LotCard`: cornice accesa, barra che scorre, countdown grande,
-un pulsante da premere. Quando le buste si aprono subentra `LotClosedCard`, che ha una faccia
-diversa perché è un momento diverso: superficie spenta, nessuna barra, nessun pulsante, e il numero
-grande in alto non è più il tempo che scappa ma il prezzo già pagato. Sotto, tutte le offerte di
-tutti i round con la vincente in evidenza; in fondo, staccato, quanto manca alla ripresa. Prima di
-M1 il reveal viveva dentro la card viva, con la stessa cornice e la stessa barra, e chi guardava il
-telefono per tre secondi non aveva modo di capire che il lotto era finito se non leggendo.
+Fino a M17 quella card era **due** card che si davano il cambio con la fase — `LotCard` per il lotto
+vivo, `LotClosedCard` per le buste aperte — e prima di M1 era una sola, con il reveal dentro la
+cornice viva. Da M17 la storia si chiude nell'altro verso: **una cornice sola per tutte le nove
+scene**, e sono i corpi a cambiare. Vale la pena raccontare perché, perché letta di fretta sembra
+il ritorno a prima di M1 e non lo è.
 
-Che siano due componenti invece di uno non intacca la permanenza: quella chiede che l'area del
-lotto ci sia sempre e sia funzione pura dello snapshot, non che sia sempre lo stesso nodo React.
-La scelta fra le due la fa la fase, che è nello snapshot, quindi chi rientra a metà reveal trova la
-card chiusa con il countdown giusto esattamente come chi non si è mai disconnesso.
+Il problema che M1 aveva risolto era che il lotto vivo e il lotto finito **si assomigliavano troppo**:
+stessa cornice, stessa barra che scorre, stesso countdown grande, e l'unico modo di capire quale dei
+due si stava guardando era leggere. Il problema che M17 ha risolto è l'opposto e nasce dal rimedio:
+nove scene disegnate da sei contenitori diversi vogliono dire che a ogni cambio di fase **si sposta
+tutto** — il badge era in tre posti a seconda della card, il countdown in quattro, l'intestazione a
+volte c'era e a volte no. Capire *cosa* era cambiato voleva dire rileggere la card da capo.
 
-Nella card chiusa, e solo per l'owner, sotto il countdown compare «Prosegui asta». Che chi guarda
-possieda l'asta non viaggia nello snapshot ma arriva come prop dalla pagina server, per la stessa
-ragione del listone: non è stato di gioco, non cambia per tutta la serata, e nello snapshot
-verrebbe spedito a tutti a ogni transizione. Il pulsante nascosto agli altri non autorizza niente
-— `skipReveal` ricontrolla la proprietà dell'asta lato server, come sempre.
+La cornice unica è `SceneCard`, e la sua anatomia è la risposta: una fascia da 4px in testa, la
+label della scena sempre nell'angolo in alto a sinistra, il badge sempre in quello a destra, il corpo
+in mezzo, l'azione a piena larghezza in fondo al corpo, e la banda del tempo nell'ultimo pixel della
+card. Passando da una fase all'altra **non si sposta niente tranne il corpo**, quindi l'occhio
+controlla badge e countdown senza cercarli e un cambiamento si nota perché qualcosa è cambiato *lì*.
+La distinzione fra i momenti che M1 chiedeva non è tornata a essere una cornice diversa: è diventata
+la **fascia**, cioè quattro pixel di colore che si percepiscono in periferia dell'occhio senza
+leggere niente.
+
+Che sia un contenitore invece di sei non intacca la permanenza dell'area del lotto: quella chiede che
+ci sia sempre e sia funzione pura dello snapshot, non che sia sempre lo stesso nodo React — la stessa
+cosa che valeva quando i componenti erano due.
+
+Anche l'azione è finita in un posto solo. Prima ogni card metteva il suo pulsante dove capitava:
+«Apri offerta» in mezzo al corpo, «Prosegui asta» in un piè di pagina, «Vai alla lobby» sotto un
+paragrafo centrato. Si preme dal telefono, spesso senza guardare, e che stia sempre nello stesso
+posto vale più di dove quel posto sia. Nel cancello e nel reveal, e solo per l'owner, quello slot
+porta «Mostra risultati» e «Prosegui asta». Che chi guarda possieda l'asta non viaggia nello snapshot
+ma arriva come prop dalla pagina server, per la stessa ragione del listone: non è stato di gioco, non
+cambia per tutta la serata, e nello snapshot verrebbe spedito a tutti a ogni transizione. Il pulsante
+nascosto agli altri non autorizza niente — `skipReveal` e `showResults` ricontrollano lato server,
+come sempre.
+
+C'è una cosa che la cornice unica ha **risolto** invece di spostare, e si vede solo confrontando con
+com'era. `LotClosedCard` aveva due countdown in due momenti diversi — nel cancello un numero grande
+al centro, nel reveal un secondo numero in fondo — e il prezzo pagato compariva *nello stesso punto in
+cui un attimo prima scorreva il tempo*, di proposito, perché chi stava guardando non avesse niente da
+ritrovare. Era una buona soluzione a un problema che la cornice fa sparire: adesso il tempo ha un
+posto suo in fondo alla card, quindi il prezzo può stare dove sta il prezzo.
+
+### La scena non è la fase, e la mappa sta in un posto solo
+
+Le scene sono nove: non iniziata, conclusa, sta chiamando un altro, tocca a te, offerte aperte,
+spareggio in preparazione, spareggio, buste da aprire, esito. Le fasi della macchina a stati sono
+cinque. Il conto non torna, e il punto in cui non torna è uno: **`LOT_OPEN` con `roundNo = 2` è lo
+spareggio**, cioè una scena diversa dalla stessa fase con `roundNo = 1`.
+
+Per questo la mappa è una funzione pura — `sceneOf` in `lib/realtime/portal.ts` — e non uno `switch`
+dentro un componente. Accanto a lei ci sono `toneOf` (quale fascia), `sceneLabel` (quale etichetta) e
+`sceneTime` (quale scadenza, su quale totale, e se è una scadenza mia). Sono quattro tabelle e
+vivono in un posto solo, con i loro test.
+
+Che siano funzioni pure non è organizzazione del codice, è **l'unica rete che questa parte
+dell'applicazione può avere**: in questo progetto la UI non ha test di rendering — niente
+`@testing-library`, niente jsdom — quindi tutto ciò che si può rendere una funzione pura deve
+esserlo, e ciò che resta è markup che si verifica guardandolo. Il test che conta è quello sulla
+precedenza della pausa: per **tutte e nove** le scene, ad asta in pausa il tono è quello della pausa.
+È la stessa precedenza che `phaseLabel` applica da v1.0.0, per la stessa ragione — una fascia che
+dicesse «round di offerte» mentre le offerte sono sospese direbbe una cosa falsa proprio a chi sta
+cercando di capire perché il suo pulsante non funziona.
+
+`sceneOf` è costruita **sopra** `portalScreen` e non accanto: chi decide «siamo in un lotto?» resta
+uno solo. Due funzioni che rispondessero entrambe a quella domanda divergerebbero il giorno in cui
+una fase nuova entra nella macchina — che è successo con `LOT_SEALED` e succederà ancora.
+
+### Il tempo, che ha smesso di urlare
+
+La banda in fondo alla card è etichetta a sinistra, cifra e anello stretti a destra. Sostituisce il
+countdown da 30px che ogni card si disegnava per conto proprio, e la ragione non è di stile: quel
+numero era **identico in tutte le scene**, ma solo in tre la risposta è «devi fare qualcosa adesso».
+In «sta chiamando un altro» — che è la scena che dura più di tutte, undici turni su dodici — un
+numero grande e una barra che scorre chiedevano attenzione senza chiedere niente.
+
+L'anello e non una barra, e la distinzione conta più di quanto sembri: una barra che si riempie è la
+metafora di un lavoro che avanza, mentre qui non avanza niente, **scade** qualcosa — e a un tempo che
+scade corrisponde un quadrante. In pratica costa 22 pixel invece dei 250 di una barra a piena
+larghezza, che in una colonna da 350 è la ragione per cui etichetta, cifra e misura stanno su una
+riga sola.
+
+Il colore della banda ha tre soglie — sopra il 50% verde, sopra il 20% ambra, sotto rosso — e non
+sono nuove: erano dentro `CountdownBar` da v1.0.0, e da M17 stanno in `timeTone`, da cui le legge
+anche quella. Due copie della regola «sotto il 20% è rosso» sono due copie che un giorno divergono, e
+il giorno in cui divergono la card e il pannello dicono due cose diverse sullo stesso countdown.
+
+Ma il colore **non dipende solo dal tempo**: dipende anche da `sceneTime().pressing`, che è vero solo
+dove c'è una scadenza *mia* da mancare. È una decisione presa guardando i numeri: con il colore
+acceso in tutte le scene, in una serata a otto persone e venticinque slot la banda diventerebbe rossa
+duecento volte, e tre volte su sette in scene dove non è chiesto niente — l'esito di un lotto, le
+buste da aprire, la chiamata di qualcun altro. Un rosso che non chiede mai niente si impara a
+ignorare, e poi non funziona più nelle tre volte in cui vuol dire «muoviti». Dove `pressing` è falso
+la banda resta grigia per tutta la sua corsa: il tempo si legge, non grida.
+
+In pausa la banda si **spegne** invece di restare del colore che aveva. Un tempo fermo colorato come
+un tempo che scorre è la cosa che si guarda per due secondi prima di capire; che l'asta sia ferma lo
+dicono già la fascia a righe, il badge della card di stato e il suo paragrafo.
+
+### La card che non sparisce mai
+
+Sopra la card di scena, prima cosa della colonna 3, c'è `StatusCard`: lo stato dell'asta nel badge,
+la fase, il ruolo in gioco, di chi è il turno. C'è **in ogni fase e in ogni stato**, ed è il punto
+fisso che rende leggibile il fatto che la card sotto cambi forma — senza qualcosa di stabile sopra,
+un cambio di scena si legge come «la pagina è diventata un'altra».
+
+Due dettagli che sembrano minori e non lo sono. Il primo: il badge dello stato dell'asta **era
+commentato via** in `portal-header.tsx`, e M17 l'ha riaccesso qui invece di scommentarlo là. In una
+barra che dice crediti e `max_bid` quello stato era un'informazione di un altro genere appoggiata
+dove capitava; qui ha accanto le tre cose che lo qualificano. Il blocco commentato è stato **tolto**,
+non spostato: un blocco commentato che riappare altrove è la cosa che fa dubitare di entrambi.
+
+Il secondo: la fase in questa card usa `phaseLabelIgnoringPause` e non `phaseLabel`. In pausa
+`phaseLabel` restituisce «in pausa», che è già quello che dice il badge due centimetri a destra — la
+card si ripeteva. Le due funzioni non sono due copie delle frasi: `phaseLabel` **delega** alla
+seconda, quindi «offerte», «spareggio» e «buste da aprire» esistono in un posto solo e chi ne cambia
+una le cambia per TV, regia e portale insieme. Il risultato è che in pausa la card dice *entrambe* le
+cose — in pausa, durante un round di offerte — che è precisamente ciò che significa «la pausa congela
+la fase, non la azzera».
+
+La card di stato ha anche **assorbito il banner della pausa** che stava in cima al `<main>`. Due
+avvisi di pausa uno sopra l'altro sono un avviso che si ignora.
 
 Il **modale** è un overlay sopra la card, e la frase da tenere a mente è che *non è una notifica*:
 è una vista sullo stato corrente. Si apre da sé quando c'è un round aperto e sono fra gli idonei;
 chiuderlo non nasconde niente perché l'offerta è a database, non nello state del componente.
 
-### Un solo pezzo di stato locale
+### Due pannelli che si alternano senza coordinarsi
 
-`dismissedLotId` è l'unica variabile del portale che non viene dallo snapshot: l'id del lotto per
-cui ho chiuso il modale. Non è persistito, non è sincronizzato, e al lotto successivo diventa
-irrilevante da sé perché l'id cambia — il modale si riapre da solo senza che nessuno lo resetti.
+Da M17 il modale d'offerta ha un gemello: quando tocca a me chiamare, la lista dei giocatori arriva
+dal basso invece di stare in mezzo a una pagina che nel frattempo racconta altro. La cornice è
+**la stessa** — le classi del `Dialog.Content` sono copiate, non reinterpretate — perché due pannelli
+che si alternano nello stesso punto della serata devono essere lo stesso oggetto con dentro cose
+diverse, o si impara due volte la stessa cosa.
 
-Che sia l'unica non è un aneddoto: è la forma che prende la settima regola. Non esiste da nessuna
-parte una variabile "ho ricevuto l'evento X", quindi non esiste una schermata raggiungibile solo da
-chi era connesso al momento giusto. Chiudere il tab e riaprirlo produce la stessa pagina — non
-perché ci sia un recupero, ma perché non c'era niente da recuperare.
+La parte da capire è che **nessuno dei due chiude l'altro**. Quando scelgo il giocatore, lo snapshot
+successivo porta `phase = LOT_OPEN`: `shouldOpenPickSheet` diventa falsa e `shouldOpenBidDialog`
+diventa vera, nello stesso istante, senza che una riga di codice dica «adesso chiudi quello e apri
+questo». Sono due condizioni sullo stesso stato, non una sequenza — ed è per questo che il giro
+funziona identico per chi si è appena ricollegato, e per questo un pannello aperto quando il turno
+scade si chiude da sé mentre l'auto-pick fa il suo lavoro.
+
+Il pannello di chiamata ha un problema che quello d'offerta non ha: **l'altezza**. Il modale
+d'offerta è corto; questo contiene una ricerca, le pastiglie dei filtri di Carmy, la riga
+dell'auto-pick e fino a quaranta righe di giocatori. Su un telefono con la tastiera aperta è
+costruito come quello insegna — intestazione fissa con titolo, countdown e barra, e **solo la lista
+che scorre** dentro il suo `overflow-y-auto` — perché se scorresse tutto il countdown uscirebbe dallo
+schermo appena si digita, e quello è il difetto che renderebbe il pannello peggiore della pagina che
+sostituisce. Errore e avviso di pausa stanno nella parte fissa: un messaggio che si può perdere
+scorrendo è un messaggio che non è stato dato.
+
+Una differenza deliberata fra i due: **il campo di ricerca non prende il focus all'apertura**, mentre
+quello dell'offerta lo prende da M7. Servono a due gesti diversi — quello d'offerta si apre per
+scrivere un numero, quindi la tastiera è la prima cosa che serve; questo si apre per scegliere da un
+elenco, e far salire la tastiera coprirebbe l'elenco che è la ragione per cui il pannello è lì.
+
+### Due pezzi di stato locale, dello stesso tipo
+
+`dismissedLotId` è l'id del lotto per cui ho chiuso il modale d'offerta; da M17 c'è
+`dismissedTurnKey`, il suo gemello per il pannello di chiamata. Sono le sole due variabili del
+portale che non vengono dallo snapshot. Nessuna delle due è persistita o sincronizzata, e entrambe
+diventano irrilevanti da sé al momento successivo — l'una perché l'id del lotto cambia, l'altra
+perché cambia la chiave del turno.
+
+Che siano due e non una non allenta la settima regola, perché sono due **dello stesso tipo**: «questa
+cosa che si apre da sé l'ho chiusa io». Non esiste da nessuna parte una variabile "ho ricevuto
+l'evento X", quindi non esiste una schermata raggiungibile solo da chi era connesso al momento giusto.
+Chiudere il tab e riaprirlo produce la stessa pagina — non perché ci sia un recupero, ma perché non
+c'era niente da recuperare.
+
+La chiave del turno è **la scadenza della fase**, e la scelta merita una riga perché l'alternativa
+ovvia è sbagliata in un modo che si scopre tardi. Ricordare «l'ho chiuso» con la coppia membro +
+ruolo sembra naturale, ma dentro un ruolo lo stesso posto chiama più volte — otto difensori sono otto
+turni della stessa persona sullo stesso ruolo — quindi quella coppia si ripete e chi chiudesse il
+pannello al primo dei suoi difensori se lo ritroverebbe chiuso per tutti gli altri. `phaseDeadline`
+invece è nuova a ogni turno. La conseguenza da conoscere è che **una pausa riapre il pannello**: al
+resume le scadenze sono traslate e la chiave non combacia più. È il comportamento voluto — la pausa
+finisce e la domanda ti viene rifatta — e c'è un test che lo dice esplicitamente, così se un giorno
+non convincesse si sa dov'è la riga da cambiare.
+
+Chiudere il pannello di chiamata non nasconde niente, ed è la stessa promessa che la card del lotto
+fa al modale d'offerta: la card «Tocca a te» nella colonna 3 porta il tempo che resta e il pulsante
+che riapre. Senza di lei un pannello che si apre da sé sarebbe una trappola per chi lo chiude per
+sbaglio.
 
 La conseguenza pratica è che la domanda «quale schermata devo mostrare?» è una funzione pura, e sta
 in `lib/realtime/portal.ts` insieme a «quanto posso offrire?», «chi è ancora libero?» e — da M16 —
