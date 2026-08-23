@@ -3419,3 +3419,42 @@ conferma è lo snapshot che cambia il badge, e una riga di feedback costerebbe l
 sta togliendo. Il pending è **separato** da quello delle altre due azioni owner e non è un'astrazione
 condivisa (regola 8): «Prosegui asta» e «Pausa» possono stare a schermo insieme, e disabilitarsi a
 vicenda sarebbe un bug.
+
+## 2026-08-23 — Il deploy partiva a ogni push, e compilava sempre `main`
+
+Due rilasci di fila — `v1.19.0` e `v1.19.1` — sono stati **deployati con successo alla versione
+precedente**: Ploi segnalava «completato», il server era coerente con sé stesso, e in produzione
+rispondeva il codice di prima. La causa non era il webhook «che non parte», che è stata la prima
+diagnosi e era sbagliata.
+
+**Il meccanismo.** Sul repository c'era un webhook aggiunto **a mano** il 2026-08-09, che puntava
+all'endpoint di deploy generico di Ploi (`/deploy?token=…&direct=true`) con `events: ["push"]`. GitHub
+non offre filtri per branch sui webhook, e quell'endpoint non guarda il `ref`: **ogni push, su
+qualunque branch, faceva partire un deploy** — e `deploy/deploy.sh` compila sempre `main`
+(`BRANCH="${DEPLOY_BRANCH:-main}"`). Il rito del progetto pusha `dev` pochi istanti prima di `main`,
+quindi il deploy faceva `git fetch origin main` quando `main` era ancora quello vecchio.
+
+⚠ **La finestra è di 4-6 secondi**, misurata tre volte: è il tempo fra il push e il `git fetch` sul
+server. Nelle release precedenti i due push distavano **mezzo secondo** e il fetch pescava per caso il
+`main` giusto; il 2026-08-23 fra i due sono passati 16 e 17 secondi — merge, controllo di ancestry e
+tag in mezzo — e la finestra si è aperta. **Non era un guasto nuovo: era una protezione accidentale,
+persa cambiando il ritmo dei comandi.** E il push su `main` arrivava mentre il deploy stava girando,
+senza produrne un secondo.
+
+**Le prove che lo dimostrano**, e che valgono come metodo la prossima volta: il `mtime` di
+`.git/FETCH_HEAD` sul server (l'ora esatta dell'ultimo fetch), il reflog locale di `origin/dev` e
+`origin/main` (`git reflog show --date=iso refs/remotes/origin/main`, l'ora esatta dei push) e le
+*Recent Deliveries* del webhook su GitHub. Incrociati, datano ogni evento al secondo.
+
+⚠ **`direct=true` non era la spiegazione.** Togliendolo il deploy partiva ancora da un push su `dev`:
+verificato con un test da novanta secondi. La spiegazione vera è che il webhook era manuale, e Ploi non
+poteva crearne uno proprio — il suo token OAuth non aveva accesso ai repository
+dell'organizzazione, e GitHub rispondeva `Not Found` alla creazione dell'hook (risponde `404` e non
+`403` su ciò che non puoi amministrare). Ricollegato GitHub in Ploi con il grant sull'organizzazione, e
+cancellato l'hook manuale — che con la sua sola presenza faceva fallire Quick deploy per
+`Hook already exists` — Ploi ha creato il proprio.
+
+**La regola che resta, indipendente da tutto il resto**: `git push origin main --tags` **prima** di
+`git push origin dev`. È in CLAUDE.md insieme al comando che legge la versione servita, perché la
+seconda lezione della giornata è che **un `HTTP 200` non è una verifica di deploy**: l'app vecchia
+risponde 200 identica, e su quel 200 è stato detto «è andata» quando non era andata.
