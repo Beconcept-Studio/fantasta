@@ -3458,3 +3458,17 @@ cancellato l'hook manuale — che con la sua sola presenza faceva fallire Quick 
 `git push origin dev`. È in CLAUDE.md insieme al comando che legge la versione servita, perché la
 seconda lezione della giornata è che **un `HTTP 200` non è una verifica di deploy**: l'app vecchia
 risponde 200 identica, e su quel 200 è stato detto «è andata» quando non era andata.
+
+**Verificato in entrambe le direzioni**, e non solo nella metà comoda: con l'hook creato da Ploi, un
+push su `dev` riceve **`422`** e il server non fa nemmeno il `fetch` (`FETCH_HEAD` e
+`pm2 created at` invariati al secondo); un push su `main` riceve **`200`** e il deploy parte, con il
+`fetch` 5 secondi dopo e `HEAD` sul commit giusto. La seconda metà non è una formalità: un hook che
+avesse rifiutato *anche* `main` avrebbe ucciso il deploy automatico in silenzio, che è esattamente il
+genere di guasto di cui parla tutta questa nota.
+
+⚠ **Quello che distingue i due hook è il token, non il parametro `direct=true`.** Togliere quel
+parametro dall'hook manuale non cambiava niente — provato — perché il token era già quello del deploy
+diretto. Il token che Ploi si crea da sé è di tipo quick deploy e ispeziona il payload. Chi in futuro
+dovesse ricreare un webhook a mano da Ploi reintrodurrebbe il guasto senza accorgersene: **il webhook
+di questo repository lo deve creare Ploi**, e per farlo il suo token OAuth ha bisogno del grant
+sull'organizzazione.
