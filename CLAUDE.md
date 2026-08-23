@@ -167,6 +167,13 @@ come si rilegge un dump).
 
 **Deployare a mano**, se il webhook non parte: `cd /home/ploi/fantasta.rggndr.it && ./deploy/deploy.sh`.
 
+⚠ **Se non c'è niente di nuovo, quel comando esce in un secondo** e non ricompila: da agosto 2026 lo
+script confronta `HEAD` con `origin/main` e la data di `.next/BUILD_ID`. Per rideployare **la stessa
+versione** — un recupero a mano, l'ecosystem file toccato, una build sospetta — serve
+`DEPLOY_FORCE=1 ./deploy/deploy.sh`. Se invece il commit è già quello giusto ma la build è più vecchia
+del commit, lo script ricompila da sé e lo dice: quel caso è una build morta a metà, e saltarla
+lascerebbe la produzione indietro con un messaggio di successo.
+
 ⚠ **Il 2026-08-23 due rilasci di fila sono andati in produzione alla versione precedente**, e la
 ragione va conosciuta perché il guasto era invisibile: Ploi segnalava «completato», il server era
 coerente con sé stesso, e rispondeva il codice di prima. Sul repository c'era un webhook aggiunto **a

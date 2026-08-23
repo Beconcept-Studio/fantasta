@@ -3472,3 +3472,28 @@ diretto. Il token che Ploi si crea da sé è di tipo quick deploy e ispeziona il
 dovesse ricreare un webhook a mano da Ploi reintrodurrebbe il guasto senza accorgersene: **il webhook
 di questo repository lo deve creare Ploi**, e per farlo il suo token OAuth ha bisogno del grant
 sull'organizzazione.
+
+### Il deploy esce subito quando non c'è niente da fare
+
+Aggiunta in coda al `git fetch` di `deploy/deploy.sh`: se `HEAD` è già uguale a `origin/main`, il
+deploy **esce in un secondo** senza compilare né ricaricare.
+
+Sembra un'ottimizzazione e invece è **la seconda difesa** contro il guasto qui sopra. Un deploy inutile
+durava due minuti e mezzo, e in quei due minuti e mezzo il push su `main` che arrivava pochi secondi
+dopo non produceva un secondo deploy: la finestra era occupata. Un deploy che esce subito non la occupa,
+e il push su `main` trova la strada libera. Il webhook è stato corretto e oggi filtra il branch, quindi
+questa riga non serve *adesso*: serve il giorno che qualcuno rimette un hook manuale — cosa già accaduta
+una volta, il 2026-08-09, e passata inosservata per due settimane.
+
+⚠ **Confrontare i commit non basta, e la seconda condizione è la parte che conta.** Se una build
+precedente muore a metà, `HEAD` è già quello giusto e il codice in esecuzione no: un'uscita anticipata
+lascerebbe la produzione indietro stampando «tutto a posto», che è esattamente il guasto silenzioso da
+cui nasce tutta questa nota. Quindi si esce solo se `.next/BUILD_ID` è **più recente del commit**; se
+manca o è più vecchio si ricompila, dicendolo. **Nel dubbio si lavora, non si salta** — ed è anche il
+motivo per cui uno scarto di orologio fra chi committa e il server è innocuo: sposta la decisione verso
+il ricompilare.
+
+Il prezzo è una scomodità, ed è documentata in CLAUDE.md accanto al comando: per rideployare la stessa
+versione serve `DEPLOY_FORCE=1 ./deploy/deploy.sh`. Senza quella variabile il recupero a mano — quello
+usato il 2026-08-23 per rimettere in produzione la `v1.19.1` — direbbe «niente di nuovo» e non farebbe
+niente.

@@ -73,6 +73,47 @@ fi
 # `.env` no, perché è ignorato. Se hai toccato del codice sul server, committalo
 # o copialo via **prima** di lanciare il deploy.
 git fetch --quiet origin "$BRANCH"
+
+# ─── Niente di nuovo? Si esce subito ────────────────────────────────────────
+# ⚠ **Non è un'ottimizzazione: è la seconda difesa** contro ciò che è successo il
+# 2026-08-23 (DECISIONS alla data). Un webhook aggiunto a mano deployava a ogni
+# push su qualunque branch, e questo script compila sempre `main`: il deploy che
+# partiva da un push su `dev` occupava per due minuti e mezzo la finestra in cui
+# doveva entrare il push su `main`, che arrivava pochi secondi dopo e non
+# produceva un secondo deploy. Due rilasci sono finiti in produzione alla
+# versione precedente, con Ploi che segnalava successo.
+#
+# Un deploy che esce in un secondo quando non c'è niente da fare non occupa più
+# niente, e il push su `main` trova la strada libera. L'hook è stato corretto e
+# oggi filtra il branch — questa riga serve il giorno che qualcuno ne rimette uno
+# a mano, che è già accaduto una volta.
+#
+# ⚠ **Confrontare i commit non basta.** Se una build precedente è morta a metà,
+# `HEAD` è già quello giusto e il codice in esecuzione no: uscire qui lascerebbe
+# la produzione indietro dicendo «tutto a posto», cioè lo stesso guasto silenzioso
+# da cui nasce questo blocco. Quindi si guarda anche che `.next/BUILD_ID` sia più
+# recente del commit; se manca o è più vecchio, si ricompila. **Nel dubbio si
+# lavora, non si salta** — ed è anche la ragione per cui uno scarto di orologio fra
+# la macchina di chi committa e il server è innocuo: sposta la decisione verso il
+# ricompilare.
+#
+# Per rideployare **la stessa versione** — recupero a mano, ecosystem file
+# toccato, build sospetta:
+#
+#   DEPLOY_FORCE=1 ./deploy/deploy.sh
+#
+if [ "${DEPLOY_FORCE:-0}" != "1" ] && [ "$(git rev-parse HEAD)" = "$(git rev-parse "origin/$BRANCH")" ]; then
+  HEAD_TS="$(git log -1 --format=%ct HEAD)"
+  BUILD_TS="$(stat -c %Y .next/BUILD_ID 2>/dev/null || echo 0)"
+  if [ "$BUILD_TS" -gt "$HEAD_TS" ]; then
+    echo "▸ niente di nuovo su origin/$BRANCH: in produzione c'è già $(git log --oneline -1)"
+    echo "  build del $(stat -c %y .next/BUILD_ID) — nessuna ricompilazione, nessun riavvio."
+    echo "  Per rideployare comunque: DEPLOY_FORCE=1 ./deploy/deploy.sh"
+    exit 0
+  fi
+  echo "▸ il commit è già quello giusto ma la build è più vecchia: ricompilo."
+fi
+
 git reset --hard "origin/$BRANCH"
 
 # `--prod=false` è obbligatorio, non un dettaglio: `next build` ha bisogno di
