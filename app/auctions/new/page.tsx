@@ -30,7 +30,7 @@ export default async function NewAuctionPage() {
         >
           ← Le tue aste
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Nuova asta</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Nuova asta</h1>
         <p className="text-muted-foreground text-sm">
           Puoi cambiare tutto finché l&apos;asta non parte.
         </p>

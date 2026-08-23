@@ -24,7 +24,7 @@ export default async function VerifyPage() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-8 p-6">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="text-xl font-semibold tracking-tight">
           Conferma il tuo indirizzo
         </h1>
         {user.email ? (

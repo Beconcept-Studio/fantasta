@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { SimulationBadge } from "@/components/auction/simulation-badge";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   type AuctionSection,
   activeSection,
@@ -56,46 +57,51 @@ export function AuctionNav({
     <div className="bg-muted/40 border-b">
       <div className="mx-auto w-full max-w-6xl space-y-2 px-4 py-4">
         <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-xl font-semibold tracking-tight">
+            {active?.title ?? auctionName}
+          </h1>
           <Badge variant="secondary" className="max-w-full truncate">
             {auctionName}
           </Badge>
           {isSimulated && <SimulationBadge />}
+
         </div>
 
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {active?.title ?? auctionName}
-        </h1>
+
 
         {(sections.length > 0 || tvHref !== null) && (
           <nav className="flex flex-wrap items-center gap-x-1 gap-y-1 pt-1">
             {sections.map((section) => {
               const current = section.key === active?.key;
               return (
-                <Link
+                <Button
                   key={section.key}
-                  href={sectionHref(auctionId, section)}
-                  aria-current={current ? "page" : undefined}
+                  asChild
+                  variant="outline"
+                  size="sm"
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-sm transition",
+                    "shrink-0",
                     current
-                      ? "bg-background font-medium shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-background/60",
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground",
                   )}
                 >
-                  {section.label}
-                </Link>
+                  <Link
+                    href={sectionHref(auctionId, section)}
+                    aria-current={current ? "page" : undefined}
+                  >
+                    {section.label}
+                  </Link>
+                </Button>
               );
             })}
 
             {tvHref !== null && (
-              <a
-                href={tvHref}
-                target="_blank"
-                rel="noreferrer"
-                className="text-muted-foreground hover:text-foreground hover:bg-background/60 rounded-md px-3 py-1.5 text-sm transition"
-              >
-                TV ↗
-              </a>
+              <Button asChild size="sm" className="shrink-0">
+                <a href={tvHref} target="_blank" rel="noreferrer">
+                  TV ↗
+                </a>
+              </Button>
             )}
           </nav>
         )}
