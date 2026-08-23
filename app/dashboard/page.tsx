@@ -27,7 +27,7 @@ export default async function DashboardPage({
       {/* Il nome e l'uscita stanno nella navbar da M2: qui resterebbero due
           volte sulla stessa schermata. */}
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Le tue aste</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Le tue aste</h1>
       </header>
 
       {deletedName !== null && (

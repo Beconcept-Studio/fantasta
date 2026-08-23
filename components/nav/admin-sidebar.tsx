@@ -79,7 +79,7 @@ export function AdminSidebar({
       </nav>
 
       <div className="min-w-0 flex-1 space-y-6">
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="text-xl font-semibold tracking-tight">
           {active?.title ?? "Amministrazione"}
         </h1>
         {children}
