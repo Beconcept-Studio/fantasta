@@ -4,6 +4,18 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.19.1] — 2026-08-23
+
+**Nell'app non cambia niente.** È una patch di sola documentazione, e serve a una cosa sola: verificare
+che il deploy automatico riparta da sé. Il rilascio della `1.19.0` non è mai arrivato sul server — il
+webhook non è partito e il deploy è stato dato a mano — quindi questa versione esiste per vedere il
+numero in navbar cambiare senza che nessuno tocchi il server.
+
+**Il progetto ha un nome anche nel README.** Il titolo era «Asta Fantacalcio a busta chiusa» e il link
+alla produzione era il dominio nudo; adesso il README si apre con **Fantasta** e il link porta quel
+nome. Utile a chi arriva dal repository: prima da nessuna parte era scritto come si chiama la cosa che
+sta guardando.
+
 ## [1.19.0] — 2026-08-23
 
 **La card di stato del portale si stringe a due righe, e chi conduce l'asta la può fermare senza

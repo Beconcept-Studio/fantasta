@@ -1,4 +1,4 @@
-# Asta Fantacalcio a busta chiusa
+# Fantasta — Asta Fantacalcio a busta chiusa
 
 Web app per condurre l'asta del Fantacalcio **a busta chiusa**, in tempo reale, con tutti nella
 stessa stanza.
@@ -9,7 +9,7 @@ offerta **senza vedere quelle degli altri** — né gli importi, né chi si è g
 buste si aprono tutte insieme, il giocatore va a chi ha offerto di più, e in caso di parità c'è uno
 spareggio. Rose, crediti residui e storico si aggiornano da soli su ogni schermo.
 
-**In produzione su [fantasta.rggndr.it](https://fantasta.rggndr.it).** È un progetto personale,
+**In produzione su [Fantasta](https://fantasta.rggndr.it).** È un progetto personale,
 costruito per una lega vera che gioca una sera all'anno — il che spiega diverse scelte: nessuna
 scalabilità orizzontale, nessun servizio esterno, e una diffidenza sistematica verso tutto ciò che
 la sera dell'asta potrebbe non funzionare.
