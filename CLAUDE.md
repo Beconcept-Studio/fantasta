@@ -167,6 +167,32 @@ come si rilegge un dump).
 
 **Deployare a mano**, se il webhook non parte: `cd /home/ploi/fantasta.rggndr.it && ./deploy/deploy.sh`.
 
+⚠ **Pusha `main` prima di `dev`, non dopo — e verifica sempre quale versione risponde.** Il deploy di
+Ploi parte a **ogni** push, anche su `dev`, e `deploy/deploy.sh` compila **sempre `main`**: se `dev`
+viene pushato pochi secondi prima, il deploy fa `git fetch origin main` quando `main` è ancora quello
+vecchio, ricompila **la versione precedente** e la ricarica. Poi il push su `main` arriva mentre quel
+deploy sta girando e **non ne produce un secondo**. Il risultato è la cosa peggiore possibile: Ploi
+segnala successo, il server è coerente con sé stesso, e la produzione è indietro di una versione.
+È successo **due volte di fila** il 2026-08-23, con `v1.19.0` e `v1.19.1` — quattro secondi fra il
+push su `dev` e il `fetch` del server, misurati sul `mtime` di `.git/FETCH_HEAD` e sul reflog di
+`origin/dev`. (Il campo Branch del sito su Ploi **è** `main`: non è quello. Perché il trigger non
+filtri è ancora da chiarire, e si legge dalle *Recent Deliveries* del webhook `ploi.io` su GitHub.)
+
+**Un `HTTP 200` non è una verifica di deploy**: l'app vecchia risponde 200 identica, con lo stesso
+tempo di risposta e nessun errore. La versione servita si legge dalla navbar, che la prende da
+`package.json` (`app/layout.tsx`), e la `/signin` è pubblica:
+
+```bash
+curl -s https://fantasta.rggndr.it/signin | grep -oE '1\.[0-9]+\.[0-9]+'
+```
+
+⚠ Non cercare la `v` attaccata al numero: React in SSR emette `v<!-- -->1.19.1`. Se il numero è
+indietro, il rimedio è il deploy a mano qui sopra — fuori dalla corsa il `fetch` vede il `main` giusto.
+E le tre prove che sul server chiudono la diagnosi in trenta secondi:
+`stat -c "%y" .git/FETCH_HEAD` (l'ora dell'ultimo fetch: se precede il push su `main`, è questa corsa),
+`grep version .next/standalone/package.json` (la versione del bundle **in esecuzione**) e
+`pm2 describe asta | grep -i "created at"` (l'ora del reload).
+
 ---
 
 ## Stack
