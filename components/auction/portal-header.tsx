@@ -40,7 +40,7 @@ export function PortalHeader({
   connected: boolean;
 }) {
   return (
-    <header className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-40 border-b backdrop-blur lg:hidden">
+    <header className="bg-background/95 supports-backdrop-filter:bg-background/80 sticky top-0 z-40 border-b backdrop-blur lg:hidden">
       <div className="mx-auto w-full max-w-6xl px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
         {me !== null && (
           <Identity

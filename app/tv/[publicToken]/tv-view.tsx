@@ -3,17 +3,20 @@
 import { Campioncino } from "@/components/auction/campioncino";
 import { Countdown } from "@/components/auction/countdown";
 import { statusLabel } from "@/components/setup/status-badge";
+import { Badge } from "@/components/ui/badge";
 import {
+  type AuctionStatus,
   ROLES,
   ROLE_LABELS_ONE,
   type Role,
-  SIMULATION_BADGE,
 } from "@/lib/domain";
 import {
+  bidOffsetLabel,
+  compareRevealBids,
   memberById,
   memberLabel,
-  phaseLabel,
   portalScreen,
+  revealBaseMs,
   tvConnected,
 } from "@/lib/realtime/portal";
 import type { Presence, Snapshot, SnapshotMember } from "@/lib/realtime/types";
@@ -39,7 +42,12 @@ import { cn } from "@/lib/utils";
  *   d'occhio. È questa la cosa che nessuno può tenere a mente da solo, ed è per
  *   questo che sta sullo schermo grande.
  * - **Un quarto è il lotto in corso**: giocatore, countdown, buste aperte. Resta
- *   il più leggibile della colonna ma non della pagina.
+ *   il più leggibile della colonna ma non della pagina. In cima a quella stessa
+ *   colonna sta l'**intestazione**, nome dell'asta e stato: prima era una
+ *   striscia a tutta larghezza sopra entrambi, e da lì si prendeva una riga di
+ *   rosa in ognuna delle card del tabellone — l'altezza è la risorsa scarsa di
+ *   questa pagina, e la colonna del lotto ne ha da spendere mentre il tabellone
+ *   no.
  * - **La forma non cambia mai.** Nemmeno al reveal: le buste si aprono nella
  *   colonna mentre la card del vincitore si accende nel tabellone, e i due lati
  *   raccontano insieme chi ha vinto, a quanto, e com'è adesso la sua rosa.
@@ -59,22 +67,22 @@ import { cn } from "@/lib/utils";
  * Sulle buste non c'è niente da nascondere: lo snapshot della TV non le contiene
  * (I8, e da M1 nemmeno chi ha consegnato). I prezzi che si leggono nel tabellone
  * sono assegnazioni chiuse, non offerte in corso.
+ *
+ * ⚠ **Non riceve `isSimulated`, e non è una dimenticanza.** Fino a poco fa la TV
+ * proiettava il marchio dell'asta di prova, con un componente suo perché il badge
+ * condiviso prende i colori dal tema e qui il fondo è nero fisso. È stato tolto
+ * su richiesta: chi guarda quello schermo sa già se la serata è una prova, e
+ * l'intestazione della TV vale solo se dice le due cose che nessuno ha in testa —
+ * *quale* asta è, e se sta correndo o è ferma.
  */
 export function TvView({
   auctionId,
   publicToken,
   auctionName,
-  isSimulated,
 }: {
   auctionId: string;
   publicToken: string;
   auctionName: string;
-  /**
-   * Un'asta di prova (M4). Qui il badge non è il componente condiviso: su uno
-   * schermo nero a tutta pagina i colori del tema non si leggono, e questa
-   * scritta deve essere visibile dall'altra parte della stanza.
-   */
-  isSimulated: boolean;
 }) {
   const { snapshot, connected, offset, deleted } = useAuctionStream(
     auctionId,
@@ -99,7 +107,6 @@ export function TvView({
           <h1 className="truncate text-base font-semibold">
             {deleted.auctionName}
           </h1>
-          {isSimulated && <SimulationTag />}
         </header>
         <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center">
           <p className="text-5xl font-semibold tracking-tight">
@@ -119,7 +126,6 @@ export function TvView({
       <Screen>
         <div className="flex flex-1 flex-col items-center justify-center gap-3">
           <h1 className="text-3xl font-semibold">{auctionName}</h1>
-          {isSimulated && <SimulationTag />}
           <p className="text-lg text-white/60">
             {connected ? "Carico l'asta…" : "Mi collego all'asta…"}
           </p>
@@ -134,30 +140,6 @@ export function TvView({
 
   return (
     <Screen>
-      <header className="flex shrink-0 items-baseline gap-4 border-b border-white/15 px-4 py-2">
-        <h1 className="truncate text-base font-semibold">{auction.name}</h1>
-        {isSimulated && <SimulationTag />}
-        <p className="text-sm tracking-wide text-white/70 uppercase">
-          {phaseLabel(snapshot)}
-        </p>
-        {!connected && <p className="text-sm text-amber-300">riconnessione…</p>}
-        {/* Lo stato dell'asta, non la fase: la fase è a sinistra e cambia ogni
-            pochi secondi, lo stato dice se la serata sta correndo o è ferma —
-            che è la domanda di chi alza gli occhi e trova i numeri immobili. */}
-        <p
-          className={cn(
-            "ml-auto text-sm font-semibold tracking-wide uppercase",
-            auction.status === "PAUSED"
-              ? "text-amber-300"
-              : auction.status === "LIVE"
-                ? "text-emerald-300"
-                : "text-white/55",
-          )}
-        >
-          {statusLabel(auction.status)}
-        </p>
-      </header>
-
       <div className="flex min-h-0 flex-1">
         <section className="min-w-0 flex-3 p-2">
           <Board
@@ -169,36 +151,67 @@ export function TvView({
           />
         </section>
 
-        <aside className="flex w-0 min-w-0 flex-1 shrink-0 flex-col justify-center gap-4 border-l border-white/15 px-4 py-4">
-          {screen.kind === "NOT_STARTED" && (
-            <Headline
-              kicker="In attesa"
-              title="L'asta non è ancora iniziata"
-              sub="Aspettiamo che siano tutti collegati."
-            />
-          )}
+        <aside className="flex w-0 min-w-0 flex-1 shrink-0 flex-col gap-4 border-l border-white/15 px-4 py-4">
+          {/**
+           * L'intestazione **sta qui dentro** e non sopra le due colonne: a tutta
+           * larghezza si portava via una riga di rosa da ogni card del tabellone,
+           * che è la cosa per cui questa pagina esiste. In cima alla colonna del
+           * lotto lo stesso testo non toglie niente a nessuno.
+           *
+           * Ci sono due cose sole. Il **nome dell'asta**, perché su uno schermo
+           * proiettato serve sapere *quale* serata si sta guardando; e lo **stato**,
+           * che risponde alla domanda di chi alza gli occhi e trova tutti i numeri
+           * immobili — sta correndo o è in pausa? La **fase** («offerte»,
+           * «spareggio») era qui e non c'è più: la colonna sotto la racconta in
+           * grande, e ripeterla in piccolo a due centimetri di distanza era due
+           * volte la stessa informazione nello stesso sguardo.
+           */}
+          <header className="flex shrink-0 flex-col gap-0.5 border-b border-white/15 pb-2">
+            <div className="flex items-center gap-3">
+              <h1 className="min-w-0 truncate text-base font-semibold">
+                {auction.name}
+              </h1>
+              <TvStatusBadge status={auction.status} />
+            </div>
+            {/* Su una riga sua, e solo quando serve: se lo stream cade il
+                tabellone resta pieno di numeri che sembrano validi, e questa è
+                l'unica cosa in pagina che dica il contrario. */}
+            {!connected && (
+              <p className="text-sm text-amber-300">riconnessione…</p>
+            )}
+          </header>
 
-          {screen.kind === "COMPLETED" && (
-            <Headline
-              kicker="Fine"
-              title="Asta conclusa"
-              sub="Le rose qui accanto sono definitive."
-            />
-          )}
+          <div className="flex min-h-0 flex-1 flex-col justify-center gap-4">
+            {screen.kind === "NOT_STARTED" && (
+              <Headline
+                kicker="In attesa"
+                title="L'asta non è ancora iniziata"
+                sub="Aspettiamo che siano tutti collegati."
+              />
+            )}
 
-          {screen.kind === "PICK_WAIT" && (
-            <PickStage snapshot={snapshot} offset={offset} />
-          )}
+            {screen.kind === "COMPLETED" && (
+              <Headline
+                kicker="Fine"
+                title="Asta conclusa"
+                sub="Le rose qui accanto sono definitive."
+              />
+            )}
 
-          {screen.kind === "LOT" && snapshot.currentLot !== null && (
-            <LotStage snapshot={snapshot} offset={offset} />
-          )}
+            {screen.kind === "PICK_WAIT" && (
+              <PickStage snapshot={snapshot} offset={offset} />
+            )}
 
-          {screen.frozen && (
-            <p className="rounded-xl border-2 border-amber-400 px-3 py-2 text-center text-sm font-semibold text-amber-300">
-              Asta in pausa — i countdown sono fermi
-            </p>
-          )}
+            {screen.kind === "LOT" && snapshot.currentLot !== null && (
+              <LotStage snapshot={snapshot} offset={offset} />
+            )}
+
+            {screen.frozen && (
+              <p className="rounded-xl border-2 border-amber-400 px-3 py-2 text-center text-sm font-semibold text-amber-300">
+                Asta in pausa — i countdown sono fermi
+              </p>
+            )}
+          </div>
         </aside>
       </div>
     </Screen>
@@ -322,11 +335,11 @@ function boardRows(
 /**
  * Chi è collegato, prima del nome squadra: **verde sì, rosso no** (M16).
  *
- * ⚠ **Non riusa `PresenceDot`**, ed è la stessa ragione per cui `SimulationTag`
- * non riusa `SimulationBadge`: questa pagina è bianco su nero fisso, e
- * `PresenceDot` disegna l'`OFFLINE` con `bg-muted-foreground/40`, che su fondo
- * nero diventa un grigio chiaro — cioè il contrario di ciò che deve comunicare.
- * Qui i due colori sono scritti a mano e non passano dal tema.
+ * ⚠ **Non riusa `PresenceDot`**, ed è la ragione per cui questa pagina non riusa
+ * nessuno dei componenti condivisi che hanno un colore dentro: è bianco su nero
+ * fisso, e `PresenceDot` disegna l'`OFFLINE` con `bg-muted-foreground/40`, che su
+ * fondo nero diventa un grigio chiaro — cioè il contrario di ciò che deve
+ * comunicare. Qui i due colori sono scritti a mano e non passano dal tema.
  *
  * La mappa da tre stati a due sta altrove e in un posto solo, `tvConnected`:
  * qui c'è solo il colore. `aria-label` c'è per disciplina, ma nessuno legge
@@ -344,6 +357,49 @@ function TvPresenceDot({ presence }: { presence: Presence }) {
       aria-label={connected ? "collegato" : "non collegato"}
       title={connected ? "collegato" : "non collegato"}
     />
+  );
+}
+
+/**
+ * Lo stato dell'asta nell'intestazione della TV: **in corso**, **in pausa**, o
+ * quello che è.
+ *
+ * Usa la primitiva `Badge` — la forma, il raggio, il passo del testo sono quelli
+ * di tutti gli altri badge dell'applicazione — ma **non riusa `StatusBadge`**, e
+ * la ragione non è il solito discorso sul tema: è che quella mappa qui perde
+ * proprio l'informazione che serve. `StatusBadge` manda `LIVE` e `READY` sulla
+ * stessa variante `default`, e `PAUSED` e `COMPLETED` sulla stessa `secondary`:
+ * su questo schermo «in corso» e «in pausa» si distinguerebbero **soltanto
+ * leggendo la parola**, mentre la domanda a cui questo badge risponde — sta
+ * correndo o è ferma? — è quella che si fa alzando gli occhi da tre metri, senza
+ * leggere.
+ *
+ * Quindi tre famiglie di colore, scritte a mano come tutto il resto della pagina
+ * perché il fondo è nero fisso: **verde** corre, **ambra** è ferma, **bianco
+ * smorto** è tutto ciò che non è ancora cominciato o è già finito. Le *parole*
+ * invece restano condivise, `statusLabel`: qui non c'è niente da dire in modo
+ * diverso, e due elenchi di etichette divergerebbero.
+ *
+ * ⚠ `variant="outline"` e non un badge pieno, anche per la pausa. Il richiamo
+ * forte per l'asta ferma esiste già ed è il cartello ambra in fondo alla colonna,
+ * che dice la cosa in più — i countdown sono fermi. Due allarmi ambra nella stessa
+ * colonna, uno sopra l'altro, si annullano.
+ */
+function TvStatusBadge({ status }: { status: AuctionStatus }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "ml-auto text-sm font-semibold tracking-wide uppercase",
+        status === "PAUSED"
+          ? "border-amber-300/60 text-amber-300"
+          : status === "LIVE"
+            ? "border-emerald-400/60 text-emerald-300"
+            : "border-white/25 text-white/60",
+      )}
+    >
+      {statusLabel(status)}
+    </Badge>
   );
 }
 
@@ -446,7 +502,9 @@ function PickStage({
 
   return (
     <div className="space-y-3 text-center">
-      <p className="text-xs tracking-[0.2em] text-white/50 uppercase">Tocca a</p>
+      <p className="text-xs tracking-[0.2em] text-white/50 uppercase">
+        Tocca a
+      </p>
       <p className="text-3xl leading-tight font-semibold">
         {memberLabel(turnOf)}
       </p>
@@ -611,6 +669,15 @@ function SealedStage({
  * il round finale significherebbe nascondere proprio le buste che lo spareggio
  * l'avevano causato.
  *
+ * Accanto a ogni cifra c'è **quando quella busta è stata fissata** — `+0s`, `+3s`
+ * — che è lo stesso dato del pannello sul telefono perché è la stessa funzione
+ * (`bidOffsetLabel`, e il conto parte dalla prima busta del round: il perché è
+ * scritto là). In uno spareggio è il numero che *decide*, quindi è la risposta
+ * alla domanda che in quella stanza si fa a voce alta quando due hanno offerto lo
+ * stesso: «e chi c'era arrivato prima?». Le buste sono ordinate con lo stesso
+ * criterio del portale, importo e poi tempo, perché due `40` in ordine arbitrario
+ * con i secondi scritti accanto si leggono come una classifica sbagliata.
+ *
  * Resta in questa colonna e non prende mai tutto lo schermo. Il tabellone
  * accanto sta già raccontando l'altra metà della stessa cosa — la card del
  * vincitore accesa, con dentro il giocatore appena entrato — e toglierlo di
@@ -639,22 +706,24 @@ function RevealStage({
         </p>
       </div>
 
-      {reveal.rounds.map((round) => (
-        <div key={round.roundNo} className="space-y-1">
-          {reveal.rounds.length > 1 && (
-            <p className="text-center text-xs tracking-[0.2em] text-white/45 uppercase">
-              {round.roundNo === 1 ? "Buste" : `Spareggio · da ${round.minAmount}`}
-            </p>
-          )}
-          <ul className="space-y-0.5">
-            {[...round.bids]
-              .sort((a, b) => b.amount - a.amount)
-              .map((bid) => (
+      {reveal.rounds.map((round) => {
+        const base = revealBaseMs(round.bids);
+        return (
+          <div key={round.roundNo} className="space-y-1">
+            {reveal.rounds.length > 1 && (
+              <p className="text-center text-xs tracking-[0.2em] text-white/45 uppercase">
+                {round.roundNo === 1
+                  ? "Buste"
+                  : `Spareggio · da ${round.minAmount}`}
+              </p>
+            )}
+            <ul className="space-y-0.5">
+              {[...round.bids].sort(compareRevealBids).map((bid) => (
                 <li
                   key={bid.memberId}
                   className={cn(
                     "flex items-baseline gap-2 text-sm",
-                    bid.withdrawnAt !== null && "text-white/45 line-through",
+                    bid.withdrawnAt !== null && "text-white/45",
                     bid.memberId === reveal.winnerMemberId &&
                       round.roundNo === reveal.rounds.length &&
                       "font-semibold text-emerald-300",
@@ -663,12 +732,30 @@ function RevealStage({
                   <span className="min-w-0 flex-1 truncate">
                     {memberLabel(memberById(snapshot, bid.memberId))}
                   </span>
-                  <span className="shrink-0 tabular-nums">{bid.amount}</span>
+                  {/* Il «+3s»: lo stesso dato e lo stesso testo del portale,
+                      perché è la stessa funzione. Smorto e più piccolo della
+                      cifra di proposito — l'importo è ciò che la stanza legge da
+                      lontano, il secondo è ciò che si cerca quando l'esito viene
+                      contestato. */}
+                  <span className="shrink-0 text-xs text-white/50 tabular-nums">
+                    {bid.withdrawnAt !== null
+                      ? "ritirata"
+                      : bidOffsetLabel(bid.amountSetAt, base)}
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 tabular-nums",
+                      bid.withdrawnAt !== null && "line-through",
+                    )}
+                  >
+                    {bid.amount}
+                  </span>
                 </li>
               ))}
-          </ul>
-        </div>
-      ))}
+            </ul>
+          </div>
+        );
+      })}
 
       <p className="text-center text-sm text-white/55">
         Prossimo turno ·{" "}
@@ -704,20 +791,5 @@ function BigCountdown({
       pausedAt={pausedAt}
       className="block text-center text-[clamp(2rem,4vw,3.5rem)] leading-none font-semibold"
     />
-  );
-}
-
-/**
- * Il marchio dell'asta di prova, in versione da proiettore (M4).
- *
- * Non riusa `SimulationBadge` di proposito: quello prende i colori dal tema, e
- * qui il fondo è nero fisso. Chi guarda è dall'altra parte della stanza — se
- * questa scritta non si legge non serve a niente.
- */
-function SimulationTag() {
-  return (
-    <span className="rounded border border-amber-300/60 px-2 py-0.5 text-sm font-semibold tracking-wide text-amber-300 uppercase">
-      {SIMULATION_BADGE}
-    </span>
   );
 }

@@ -4,6 +4,33 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.19.3] — 2026-08-23
+
+**Tutto quello che cambia sta nella vista proiettata in TV.** Nel resto dell'app non si nota niente.
+
+**Il tabellone guadagna altezza.** L'intestazione era una striscia a tutta larghezza sopra le due
+colonne, e da lassù si prendeva una riga di rosa in **ognuna** delle card delle squadre — su una
+schermata il cui unico limite è l'altezza. Adesso sta in cima alla colonna del lotto, che di spazio
+verticale ne aveva da spendere. Nessuna informazione persa, una riga in più per squadra.
+
+**L'intestazione dice due cose invece di cinque**: il nome dell'asta e lo stato, con lo stato adesso
+scritto in un **badge** — verde se l'asta corre, ambra se è in pausa. Sono spariti la fase («offerte»,
+«spareggio»), che la colonna sotto racconta già in grande, e il marchio dell'asta simulata, che su uno
+schermo proiettato in mezzo alla stanza non serviva a nessuno. L'avviso di riconnessione resta, e resta
+per un motivo: se lo stream cade, il tabellone si riempie di numeri fermi che sembrano validi.
+
+**All'apertura delle buste, in TV, ogni offerta dice anche quando è stata fatta** — `+0s`, `+3s`, come
+già sul telefono. Serve al momento in cui serve davvero: quando due hanno offerto la stessa cifra e
+parte la domanda «chi c'era arrivato prima?», la risposta ora è sullo schermo che tutti stanno
+guardando invece che su dieci telefoni. ⚠ Quel numero si conta **dalla prima busta consegnata nel
+round**, non dall'apertura del round: a parità di importo vince chi è arrivato prima, quindi ciò che
+conta è l'ordine fra le buste.
+
+Nello stesso punto le buste della TV hanno preso l'ordinamento che il telefono aveva già: importo, e a
+pari importo chi ci è arrivato prima. Prima erano ordinate per solo importo — invisibile finché i
+secondi non si vedevano, ma con i secondi scritti accanto due offerte identiche in ordine arbitrario si
+leggono come una classifica sbagliata.
+
 ## [1.19.2] — 2026-08-23
 
 **Nell'app non cambia niente.** Nessuna riga di codice dell'applicazione è toccata: cambia il **deploy**,

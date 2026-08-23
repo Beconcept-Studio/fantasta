@@ -3497,3 +3497,113 @@ Il prezzo è una scomodità, ed è documentata in CLAUDE.md accanto al comando: 
 versione serve `DEPLOY_FORCE=1 ./deploy/deploy.sh`. Senza quella variabile il recupero a mano — quello
 usato il 2026-08-23 per rimettere in produzione la `v1.19.1` — direbbe «niente di nuovo» e non farebbe
 niente.
+
+---
+
+## 2026-08-23 — L'intestazione della TV entra nella colonna del lotto, e perde due terzi del testo
+
+La vista TV aveva una **striscia a tutta larghezza** sopra le due colonne — nome dell'asta, marchio
+dell'asta simulata, fase, avviso di riconnessione, stato — e adesso quel contenuto sta **in cima
+all'`<aside>`**, la colonna del lotto in corso, ridotto a **nome e stato**.
+
+**Il motivo del trasloco è aritmetico, non estetico.** Il tabellone è a due righe. Trentasette pixel
+di striscia a tutta larghezza sono diciotto pixel in meno per card, cioè **una riga di rosa in meno in
+ognuna** — su una pagina il cui unico limite dichiarato è l'altezza, e che sotto gli ottocento pixel
+smette di essere leggibile. La colonna del lotto, invece, ha spazio verticale da spendere: il suo
+contenuto è centrato verticalmente e sopra il giocatore c'era vuoto. La stessa intestazione, nello
+stesso schermo, in un posto dove non costa niente.
+
+⚠ **Sta qui la regola da ricordare, perché è più generale della pagina:** in un layout dove una zona è
+satura e l'altra no, un elemento che serve a entrambe va nella zona che non è satura — anche quando la
+convenzione dice il contrario. «È un'intestazione, le intestazioni vanno in cima» è vero e irrilevante:
+l'intestazione non pagava il proprio costo, lo pagava il tabellone.
+
+**Il taglio del testo è una richiesta dell'owner, con una ragione sua per ciascuna delle due cose che
+spariscono.** Il **marchio dell'asta di prova** compare in tutta l'app perché chi ci lavora tiene
+aperte due schede identiche e non deve confondersi (M4) — ma la TV non è la scheda di nessuno: è
+proiettata in mezzo alla stanza, e chi la guarda sa già se la serata è una prova. Quindi `TvView` non
+riceve più `isSimulated` affatto, e `SimulationTag` — la copia da proiettore di `SimulationBadge`, che
+esisteva perché il badge condiviso prende i colori dal tema — è stata cancellata.
+
+La **fase** («offerte», «spareggio», «buste aperte») è uscita per ridondanza: la colonna sotto
+l'intestazione la racconta in grande, con il countdown e il nome del giocatore, e ripeterla in piccolo
+a due centimetri di distanza era due volte la stessa informazione dentro lo stesso sguardo. La
+conseguenza da conoscere è altrove: `phaseLabel` in `lib/realtime/portal.ts` **ha adesso un solo
+chiamante**, l'intestazione della regia. Non si fonde con `phaseLabelIgnoringPause` per questo — la
+precedenza della pausa è la differenza fra le due funzioni, non un dettaglio di chi le chiama — ma i
+commenti che dicevano «tre posti» e «TV, regia e portale» erano diventati falsi e sono stati corretti,
+insieme a quello in `tests/manage.test.ts` che spiegava «finita» come «la sola frase che la TV
+proietta».
+
+**Cosa è rimasto, e perché.** Lo **stato** (in corso / in pausa / conclusa) non è ridondante con
+niente: risponde alla domanda di chi alza gli occhi e trova tutti i numeri immobili. E l'**avviso di
+riconnessione** è sopravvissuto a un taglio che, preso alla lettera, l'avrebbe portato via: è l'unica
+cosa in pagina che sappia dire che lo stream è caduto, e senza di lui il tabellone resta pieno di
+numeri fermi che sembrano validi. Sta su una riga sua e compare solo quando serve, quindi ad asta
+collegata l'intestazione è davvero di due elementi.
+
+### Lo stato diventa un badge, ma non `StatusBadge`
+
+Richiesta successiva dell'owner, nella stessa sessione: lo stato nell'intestazione della TV era testo
+maiuscolo colorato, e va reso con un **badge** come nel resto dell'applicazione. Fatto usando la
+primitiva `Badge` — forma, raggio, passo del testo sono quelli condivisi.
+
+⚠ **Non `StatusBadge`, e la ragione va conosciuta perché il riuso qui sembra ovvio ed è sbagliato.**
+`StatusBadge` manda `LIVE` e `READY` sulla variante `default` e `PAUSED` e `COMPLETED` sulla
+`secondary`. In una lista di aste è giusto: si legge la riga. Su uno schermo proiettato «in corso» e
+«in pausa» diventerebbero **dello stesso colore**, e la differenza starebbe solo nella parola — mentre
+la domanda a cui quel badge risponde, *sta correndo o è ferma*, è quella che si fa alzando gli occhi
+da tre metri senza leggere. Quindi tre famiglie di colore scritte a mano, come ogni altro colore di
+questa pagina: verde corre, ambra è ferma, bianco smorto non è cominciata o è finita.
+
+Le **parole** invece restano condivise, `statusLabel` di `components/setup/status-badge`: lì non c'è
+niente da dire in modo diverso, e due elenchi di etichette divergerebbero. Il file importa quindi
+`statusLabel` da `StatusBadge` senza usare `StatusBadge` — sembra una svista e non lo è: le parole
+sono le stesse, i colori no.
+
+`variant="outline"` anche per la pausa, non pieno: il richiamo forte per l'asta ferma esiste già ed è
+il cartello ambra in fondo alla stessa colonna, che aggiunge l'informazione che il badge non ha — i
+countdown sono fermi. Due allarmi ambra impilati si annullano.
+
+### Il «+3s» arriva anche in TV, e il dato smette di avere due copie
+
+Terza richiesta della sessione: nell'apertura delle buste, in TV, accanto a ogni offerta va **quando è
+stata fatta** — «esattamente lo stesso dato che mostriamo in asta live (ES: +3s)». Il portale
+(`RevealBids`) lo aveva da F5-09, il proiettore no.
+
+**Mancava nel posto dove serve più che altrove.** Quando due hanno offerto la stessa cifra, la domanda
+che parte a voce in quella stanza è «e chi c'era arrivato prima?», e la risposta stava su dieci
+telefoni invece che sullo schermo che tutti stavano guardando.
+
+⚠ **Il numero è relativo alla prima busta del round, non all'apertura del round**, e va detto perché la
+richiesta diceva «rispetto al timer» — che è una cosa diversa, e sarebbe pure calcolabile (`endsAt`
+meno `bidSeconds`). Ha vinto «lo stesso dato del portale», che era l'altra metà della richiesta e la
+più vincolante: due schermi che dello stesso istante dicono numeri diversi sono peggio di un numero
+contato da un'origine sorprendente. E l'origine ha comunque due ragioni sue: a parità di importo vince
+`MIN(amount_set_at)`, quindi ciò che conta è l'ordine *fra* le buste; e l'apertura del round non è un
+istante affidabile a posteriori, perché una pausa in mezzo al round **trasla `endsAt`** — un «+3s»
+contato da lì cambierebbe da sé dopo una pausa, cioè mentirebbe proprio nelle sere in cui qualcosa è
+andato storto.
+
+**Il dato è stato spostato in `lib/realtime/portal.ts`** — `revealBaseMs`, `bidOffsetLabel`,
+`compareRevealBids` — invece di essere copiato nella TV. Prima viveva dentro `RevealBids` come
+`relativeLabel`, e stava bene lì finché il lettore era uno (regola 8); il secondo chiamante è
+precisamente la condizione che la regola 8 chiede per estrarre. Con una copia per schermo, una sera la
+stessa busta sarebbe `+3s` sul telefono e `+4s` sul proiettore: in quella stanza non è un dettaglio, è
+una discussione. Cinque test nuovi in `tests/portal.test.ts`, uno dei quali esiste solo per scrivere la
+promessa: il numero è lo stesso sui due schermi perché è la stessa funzione.
+
+**Una conseguenza non richiesta, ma obbligatoria.** La TV ordinava le buste per solo importo
+(`b.amount - a.amount`), il portale per importo **e poi tempo**. Finché i secondi non si vedevano era
+invisibile; con i secondi scritti accanto, due `40` in ordine arbitrario si leggono come una classifica
+sbagliata — e nello spareggio quella è la classifica che ha deciso. Ora entrambe usano
+`compareRevealBids`. Allineato anche il `line-through` delle buste ritirate: era su tutta la riga e
+avrebbe barrato la parola «ritirata» appena comparsa, ora è sull'importo come nel portale.
+
+⚠ **`prettier --write` non va dato su questo repository, e questa sessione l'ha imparato sul campo.**
+Non esiste un file di configurazione e **venti file non toccati** non passano `prettier --check`: il
+gate è `pnpm lint` (ESLint) e la formattazione non ne fa parte. Un `--write` su quattro file ha
+prodotto un centinaio di righe di riformattazione estranea — literal di test spezzati su più righe,
+import ricompattati — dentro una modifica di poche righe, ed è stato annullato a mano. Se un giorno si
+volesse prettier davvero, si aggiunge la configurazione e si formatta **tutto in un commit suo**, non
+un file per volta di passaggio.

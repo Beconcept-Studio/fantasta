@@ -1,6 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import type { Snapshot, SnapshotReveal } from "@/lib/realtime/types";
-import { memberLabel, memberById } from "@/lib/realtime/portal";
+import {
+  bidOffsetLabel,
+  compareRevealBids,
+  memberById,
+  memberLabel,
+  revealBaseMs,
+} from "@/lib/realtime/portal";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,15 +29,15 @@ import { cn } from "@/lib/utils";
  *   ereditato dal round 1), quindi è l'unico modo di leggere il risultato senza
  *   fidarsi sulla parola.
  *
+ * ⚠ Quel numero e quell'ordine **non si calcolano più qui**: stanno in
+ * `revealBaseMs`, `bidOffsetLabel` e `compareRevealBids`, perché da questa
+ * sessione li mostra anche la TV e due copie divergono. Se serve capire *perché*
+ * il conto parte dalla prima busta e non dall'apertura del round, la spiegazione
+ * è su quelle funzioni.
+ *
  * Qui c'è solo l'elenco: il vincitore, il prezzo e la cornice sono di
  * `LotClosedCard`, che è la schermata di cui questo è il corpo.
  */
-
-function relativeLabel(amountSetAt: string, baseMs: number): string {
-  const delta = Math.round((Date.parse(amountSetAt) - baseMs) / 1000);
-  if (delta <= 0) return "+0s";
-  return `+${delta}s`;
-}
 
 export function RevealBids({
   reveal,
@@ -47,14 +53,8 @@ export function RevealBids({
   return (
     <div className={cn("space-y-4", className)}>
       {reveal.rounds.map((round) => {
-        const base = Math.min(
-          ...round.bids.map((bid) => Date.parse(bid.amountSetAt)),
-        );
-        const ordered = [...round.bids].sort(
-          (a, b) =>
-            b.amount - a.amount ||
-            Date.parse(a.amountSetAt) - Date.parse(b.amountSetAt),
-        );
+        const base = revealBaseMs(round.bids);
+        const ordered = [...round.bids].sort(compareRevealBids);
         return (
           <div key={round.roundNo} className="space-y-1.5">
             <div className="flex items-baseline justify-between gap-2">
@@ -96,7 +96,9 @@ export function RevealBids({
                       )}
                     </span>
                     <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                      {withdrawn ? "ritirata" : relativeLabel(bid.amountSetAt, base)}
+                      {withdrawn
+                        ? "ritirata"
+                        : bidOffsetLabel(bid.amountSetAt, base)}
                     </span>
                     <span
                       className={cn(

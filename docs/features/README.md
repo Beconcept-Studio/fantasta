@@ -10,12 +10,30 @@ di `docs/REQUESTS.md` ci confluiscono, se tocca lo schema del database, quali in
 Quando una macro viene pianificata, le richieste che ci confluiscono **spariscono da
 `docs/REQUESTS.md`**: il quaderno contiene solo ciò che non è ancora stato pianificato.
 
+## Pianificata, non aperta
+
+**[M19 — Il deploy senza finestra cieca](19-deploy-senza-finestra-cieca.md)**, scritta il 2026-08-23.
+Non nasce dal quaderno: nasce da un episodio. Ogni deploy rende l'applicazione **inservibile per circa
+due minuti** — `pnpm build` cancella gli asset statici sotto i piedi del processo che sta ancora
+servendo — e finché i deploy erano rari e a mano non si vedeva. Da quando partono da soli a ogni push
+su `main` si incontra spesso, e la guardia non protegge la fase di setup, che è quando si creano le
+aste. La specifica confronta tre strade con i loro costi e ne raccomanda una.
+
+⚠ **Nessun branch, nessun codice.** E il primo task, M19-01, è **la prova che decide se la strada
+raccomandata è praticabile**: prima di quella non si scrive nient'altro. È il percorso con il raggio
+d'azione più grande del progetto — un errore lì non rompe una schermata, rende la produzione non
+aggiornabile.
+
 ## In corso
 
-**[M18 — La rosa a fisarmonica](18-rosa-a-fisarmonica.md)**, aperta il 2026-08-22 su
-`feature/18-rosa-a-fisarmonica`. Baseline 897 test, ora **909**: dieci per `quotaPerRuolo`, due per
-l'ordine di estrazione. Codice fatto (M18-01 → M18-04), **manca la verifica guardata** — M18-05 e
-M18-06 — poi il gate e la chiusura.
+Nessuna.
+
+---
+
+**M18 è in produzione da `v1.18.0`** (2026-08-23): pianificata, aperta, lavorata, provata dall'owner e
+rilasciata **nella stessa sessione**, il quinto caso di fila dopo M13, M14, M16 e M17. Baseline 897
+test, chiusa a **909**: dieci per `quotaPerRuolo`, due per l'ordine di estrazione. Gate verde al primo
+giro, nessun passo a mano sul server.
 
 ⚠ **Il paragone visivo del «prima» non c'è**: l'owner ha scelto di procedere senza (2026-08-22), quindi
 il termine di paragone è quello misurato dal database e sta nel task M18-01. Se una misura o una
