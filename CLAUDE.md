@@ -118,6 +118,28 @@ che ci fosse modo di chiuderla, e l'unico rimedio era ricordarsi ogni volta
 `git reset`**, quindi una modifica a quella riga entra in vigore dal deploy *successivo* a quello che
 la installa.
 
+⚠ **Durante il deploy l'app è inservibile per circa due minuti, e si presenta come un bug
+dell'applicazione.** `deploy/deploy.sh` ricompila **in place**: `pnpm build` rigenera `.next/` mentre il
+processo vecchio è ancora vivo e sta servendo, e gli asset statici che quel processo serve stanno in
+`.next/standalone/.next/static/` — la build glieli cancella sotto i piedi. Misurato durante il rilascio
+della `v1.19.2`: `.next/standalone/` **non esiste più** venti secondi dopo l'avvio del deploy, e
+ricompare completo circa due minuti dopo, poco prima del `pm2 reload`. In quella finestra l'app
+risponde, ma una pagina caricata **non si idrata** e ogni `/_next/static/chunks/*` dà 404.
+
+È lo stesso sintomo del chunk stantio in dev, con una causa diversa e in produzione: la pagina si
+carica e resta muta. Il 2026-08-23 è stato preso per un bug dell'applicazione per un minuto, in un
+rilascio che **non conteneva una riga** di codice applicativo. Quindi: se subito dopo un push su `main`
+qualcosa sembra rotto, guarda l'orologio prima del codice.
+
+⚠ **Non c'è nessun rimedio in piedi, ed è una decisione, non una dimenticanza** (2026-08-23): la
+finestra si gestisce **scegliendo quando deployare**. Esisteva una specifica per chiuderla — M19, tre
+strade a confronto — ed è stata cancellata su richiesta dell'owner; se un giorno tornasse in gioco si
+rilegge con `git show e381389:docs/features/19-deploy-senza-finestra-cieca.md` invece di rifare
+l'analisi. E c'è una seconda finestra che nessuna di quelle
+strade chiudeva: chi ha in mano una pagina **vecchia** ne conserva i riferimenti a chunk con hash che
+non esistono più, quindi gli si rompe alla prima navigazione anche dopo che il deploy è finito. Si
+risolve con un ricarico, e in una serata d'asta va detto a voce.
+
 **La macchina, in breve.** Hetzner CX22 (`46.225.231.138`), Ubuntu 26.04, Ploi; Postgres 16 sulla
 stessa macchina; un solo processo Node sotto pm2 (`asta`) su `127.0.0.1:3000`, nginx davanti con
 Let's Encrypt; deploy automatico a ogni push su `main` (~2 minuti); `pg_dump` alle 04:15 UTC con

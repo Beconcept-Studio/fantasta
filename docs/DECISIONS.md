@@ -3607,3 +3607,44 @@ prodotto un centinaio di righe di riformattazione estranea — literal di test s
 import ricompattati — dentro una modifica di poche righe, ed è stato annullato a mano. Se un giorno si
 volesse prettier davvero, si aggiunge la configurazione e si formatta **tutto in un commit suo**, non
 un file per volta di passaggio.
+
+## 2026-08-23 — M19 cancellata: la finestra cieca del deploy si gestisce, non si chiude
+
+La specifica di M19 — «Il deploy senza finestra cieca», scritta poche ore prima e mai aperta — è stata
+**cancellata su decisione dell'owner**: «visto che non svilupperò la feature 19 cancella pure tutto il
+contenuto collegato. Starò attento a quando farò deploy».
+
+**È una scelta legittima e vale la pena scrivere perché.** La macro proponeva di compilare in una
+`distDir` parallela e scambiare (più due alternative), e portava la finestra da ~130 secondi a ~2. Ma
+toccava `deploy/deploy.sh` e `next.config.ts`, cioè **il percorso con il raggio d'azione più grande del
+progetto**: un errore lì non rompe una schermata, rende la produzione non aggiornabile. Contro un
+rischio così, «scelgo io quando deployare» è una mitigazione che costa zero e non può fallire — e i
+deploy di questo progetto li fa una persona sola, che sa quando c'è un'asta. La cura era proporzionata
+al problema solo se il problema fosse capitato a qualcuno che non decide l'orario.
+
+**Cosa è stato cancellato**: `docs/features/19-deploy-senza-finestra-cieca.md` e la sezione
+«Pianificata, non aperta» di `docs/features/README.md`. Nessuna richiesta del quaderno è tornata
+indietro perché **nessuna era confluita**: M19 nasceva da un episodio, non da `REQUESTS.md`, che era e
+resta vuoto. La specifica resta leggibile — come `docs/RUNBOOK.md` dopo v1.1.0 — con:
+
+```bash
+git show e381389:docs/features/19-deploy-senza-finestra-cieca.md
+```
+
+Cancellare un documento in un repository non distrugge niente, e dirlo evita che l'analisi venga
+rifatta da zero. Il comando è stato provato, non dedotto.
+
+⚠ **Cosa NON è stato cancellato, e la regola generale che c'è dietro.** Il fatto misurato è
+sopravvissuto alla macro, e sta in `CLAUDE.md` accanto alle regole di produzione: durante il deploy
+l'app è inservibile per circa due minuti, perché `pnpm build` rigenera `.next/` mentre il processo
+vecchio serve dal suo, e `.next/standalone/` sparisce per il tempo della build. **Il piano era la cura,
+quella nota è il sintomo, e il sintomo si incontra comunque** — anzi, da adesso si incontra *per
+scelta*. Cancellare anche la descrizione avrebbe garantito che la prossima volta quei 404 su un chunk
+venissero diagnosticati come un bug dell'applicazione, cosa già successa una volta il 2026-08-23, in un
+rilascio che non conteneva una riga di codice applicativo. Vale come criterio quando si abbandona un
+piano: **si butta la soluzione, non la diagnosi.**
+
+Con la diagnosi è rimasta la sua parte peggiore, che nessuna delle tre strade chiudeva: chi ha in mano
+una pagina **vecchia** conserva riferimenti a chunk con hash che non esistono più, e gli si rompe alla
+prima navigazione anche dopo che il deploy è finito. Si risolve con un ricarico, e in una serata d'asta
+va detto a voce.

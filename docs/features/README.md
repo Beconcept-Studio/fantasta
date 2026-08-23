@@ -12,17 +12,22 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## Pianificata, non aperta
 
-**[M19 — Il deploy senza finestra cieca](19-deploy-senza-finestra-cieca.md)**, scritta il 2026-08-23.
-Non nasce dal quaderno: nasce da un episodio. Ogni deploy rende l'applicazione **inservibile per circa
-due minuti** — `pnpm build` cancella gli asset statici sotto i piedi del processo che sta ancora
-servendo — e finché i deploy erano rari e a mano non si vedeva. Da quando partono da soli a ogni push
-su `main` si incontra spesso, e la guardia non protegge la fase di setup, che è quando si creano le
-aste. La specifica confronta tre strade con i loro costi e ne raccomanda una.
+Nessuna.
 
-⚠ **Nessun branch, nessun codice.** E il primo task, M19-01, è **la prova che decide se la strada
-raccomandata è praticabile**: prima di quella non si scrive nient'altro. È il percorso con il raggio
-d'azione più grande del progetto — un errore lì non rompe una schermata, rende la produzione non
-aggiornabile.
+⚠ **M19 — «Il deploy senza finestra cieca» è stata cancellata**, il 2026-08-23, per decisione
+dell'owner e senza che una riga fosse scritta: la finestra si gestisce **scegliendo quando
+deployare**, non cambiando il deploy. La specifica confrontava tre strade (build in una `distDir`
+parallela con scambio, cartella di rilasci alla Capistrano, pagina di manutenzione) e ne raccomandava
+una; se un giorno tornasse in gioco si rilegge con
+`git show e381389:docs/features/19-deploy-senza-finestra-cieca.md` invece di rifare l'analisi — è lo
+stesso trattamento di `docs/RUNBOOK.md`.
+
+⚠ **Il fatto misurato che stava lì dentro resta, e sta in `CLAUDE.md`**, accanto alle regole di
+produzione: ogni deploy rende l'app inservibile per circa due minuti, perché `pnpm build` cancella gli
+asset statici sotto i piedi del processo che sta ancora servendo. Non è un bug da diagnosticare la
+prossima volta che si vedono dei 404 su un chunk durante un rilascio, ed è per questo che la nota è
+sopravvissuta alla macro: la macro era la cura, quella riga è il sintomo, e il sintomo si incontra
+comunque.
 
 ## In corso
 
