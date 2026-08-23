@@ -371,21 +371,43 @@ solo da quei due. Nessun componente server perde niente.
       `animate-accordion-down/up`, che `tw-animate-css` ha già con la variabile
       `--radix-accordion-content-height`: nessun keyframe da scrivere in `globals.css`. Nessun `dark:`,
       nessun file nuovo in `components/ui/`, nessuna dipendenza aggiunta. Typecheck e lint verdi
-- [ ] **M18-05** — La chiave sul ruolo in gioco (§4), e provarla per davvero con la simulazione che
+- [x] **M18-05** — La chiave sul ruolo in gioco (§4), e provarla per davvero con la simulazione che
       gira: apro un reparto a mano e **resta aperto** al passare degli snapshot; al cambio di ruolo
       l'apertura si sposta; a `currentRole = null` è tutto chiuso; F5 a metà asta ritrova il reparto
       in gioco aperto
-- [ ] **M18-06** — Guardare, e correggere qui invece che «più avanti»: portale sul telefono (quante
+      → Provata dall'owner sulla simulazione (2026-08-23), con i 7 bot che giravano e l'asta ripartita
+      da `LOT_REVEAL` con `currentRole = C`. Tutte e quattro le proprietà confermate, la verifica 7
+      compresa — il reparto aperto a mano **non si richiude** stando fermi a guardare, che è l'unica
+      prova che distingue la chiave da un `useEffect` sbagliato
+- [x] **M18-06** — Guardare, e correggere qui invece che «più avanti»: portale sul telefono (quante
       righe si vedono senza scorrere, ora, fra lotto e rosa), portale su portatile, **regia intatta**,
       TV sul proiettore o a schermo pieno. È il task in cui M17 ha trovato cinque cose che la spec non
       prevedeva
-- [ ] **M18-07** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con dev server
+      → Guardato dall'owner e **confermato senza correzioni**: le quindici verifiche passano tutte come
+      scritte. ⚠ **Ed è il punto in cui questa macro si è comportata diversamente da M17**, che qui
+      aveva trovato cinque cose fuori spec: la differenza non è che M18 fosse scritta meglio, è che è
+      **molto più piccola** — una colonna con quattro righe, contro tre colonne e nove scene. Non è un
+      precedente per saltare questo task
+- [x] **M18-07** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con dev server
       spento; la prima dopo una sessione di `pnpm dev` può morire da sola e passare identica al
       secondo giro). Documentazione: `docs/DECISIONS.md` con le quattro decisioni del 2026-08-22 e
       l'esito di M18-06; `docs/ARCHITECTURE.md`, il capitolo del portale
-- [ ] **M18-08** — Chiusura: merge `--no-ff` su `dev`, prova a due dispositivi con i bot,
+      → Gate verde: **909 test in 52 file** (da 897), typecheck, lint e build, con la porta 3000
+      verificata libera prima della build — il dev server avviato per la prova era ancora acceso e
+      andava spento, ⚠ e non è bastato che l'owner avesse spento il suo. La build è passata **al primo
+      giro**. Documentazione fatta: `DECISIONS.md` con le quattro decisioni più il flake e la nota sul
+      paragone visivo mancato, `ARCHITECTURE.md` con due capitoli nuovi nel portale e la sezione sullo
+      stato locale che ammette il terzo pezzo
+      → ⚠ **Fuori spec, dentro la macro: un flake preesistente chiuso** (`delete-auction.test.ts`), con
+      la stessa disciplina dei tre di M14 — riprodotto e misurato prima di toccarlo, 2 rossi su 6 giri
+      con M18 addosso contro 0 su 5 sulla baseline in un worktree. L'asserzione è passata **dai dati
+      allo schema**. Il racconto per esteso è in `docs/DECISIONS.md`
+- [x] **M18-08** — Chiusura: merge `--no-ff` su `dev`, prova a due dispositivi con i bot,
       `CHANGELOG.md` e `package.json` a `v1.18.0`, merge su `main`, tag. **Nessun passo a mano sul
       server**, e va scritto nel changelog che non ce n'è
+      → Rilasciata in `v1.18.0` il 2026-08-23. **Nessun passo a mano**, e verificato invece che dedotto:
+      il diff `origin/main..dev` non tocca `lib/db/schema.ts` e `package.json` ha le stesse dipendenze
+      di `v1.17.0` — `radix-ui` c'era già. Il rilascio finisce col deploy
 
 ## Verifica
 
