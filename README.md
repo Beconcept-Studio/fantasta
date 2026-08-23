@@ -98,9 +98,11 @@ fatto così?»* prima di cambiare qualcosa.
 ciascuna ha qui il suo file con spec e task insieme. L'[indice](docs/features/README.md) dice quali
 sono chiuse e in quale versione.
 
-**[CHANGELOG.md](CHANGELOG.md)** — cosa è cambiato per chi usa l'app, versione per versione. Ogni
-sezione ha in fondo un **«Per chi aggiorna il server»** con i passi a mano eventualmente necessari:
-è lì che si guarda prima e dopo un rilascio.
+**[CHANGELOG.md](CHANGELOG.md)** — cosa è cambiato per chi usa l'app, versione per versione. Dove un
+rilascio richiede **passi a mano sul server** — uno schema da applicare, un backfill da dare — la sua
+sezione ha in fondo un **«Per chi aggiorna il server»**: è lì che si guarda prima e dopo un rilascio.
+Non c'è in tutte, e la sua assenza è essa stessa un'informazione: vuol dire che il deploy basta.
+L'ultima volta che è servito è stata la `1.10.0`.
 
 **[docs/PLAN.md](docs/PLAN.md)** — la specifica con cui è stata costruita la v1.0.0. È **archivio** e
 non si estende più, ma i suoi **invarianti I1–I10 restano vincolanti**: il più importante è **I8**,
