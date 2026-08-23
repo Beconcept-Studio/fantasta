@@ -167,16 +167,31 @@ come si rilegge un dump).
 
 **Deployare a mano**, se il webhook non parte: `cd /home/ploi/fantasta.rggndr.it && ./deploy/deploy.sh`.
 
-⚠ **Pusha `main` prima di `dev`, non dopo — e verifica sempre quale versione risponde.** Il deploy di
-Ploi parte a **ogni** push, anche su `dev`, e `deploy/deploy.sh` compila **sempre `main`**: se `dev`
-viene pushato pochi secondi prima, il deploy fa `git fetch origin main` quando `main` è ancora quello
-vecchio, ricompila **la versione precedente** e la ricarica. Poi il push su `main` arriva mentre quel
-deploy sta girando e **non ne produce un secondo**. Il risultato è la cosa peggiore possibile: Ploi
-segnala successo, il server è coerente con sé stesso, e la produzione è indietro di una versione.
-È successo **due volte di fila** il 2026-08-23, con `v1.19.0` e `v1.19.1` — quattro secondi fra il
-push su `dev` e il `fetch` del server, misurati sul `mtime` di `.git/FETCH_HEAD` e sul reflog di
-`origin/dev`. (Il campo Branch del sito su Ploi **è** `main`: non è quello. Perché il trigger non
-filtri è ancora da chiarire, e si legge dalle *Recent Deliveries* del webhook `ploi.io` su GitHub.)
+⚠ **Se non c'è niente di nuovo, quel comando esce in un secondo** e non ricompila: da agosto 2026 lo
+script confronta `HEAD` con `origin/main` e la data di `.next/BUILD_ID`. Per rideployare **la stessa
+versione** — un recupero a mano, l'ecosystem file toccato, una build sospetta — serve
+`DEPLOY_FORCE=1 ./deploy/deploy.sh`. Se invece il commit è già quello giusto ma la build è più vecchia
+del commit, lo script ricompila da sé e lo dice: quel caso è una build morta a metà, e saltarla
+lascerebbe la produzione indietro con un messaggio di successo.
+
+⚠ **Il 2026-08-23 due rilasci di fila sono andati in produzione alla versione precedente**, e la
+ragione va conosciuta perché il guasto era invisibile: Ploi segnalava «completato», il server era
+coerente con sé stesso, e rispondeva il codice di prima. Sul repository c'era un webhook aggiunto **a
+mano** il 2026-08-09 che puntava all'endpoint di deploy **diretto** di Ploi: quel token deploya e basta,
+senza guardare il `ref`, e GitHub non offre filtri per branch. Quindi **ogni push, su qualunque branch,
+faceva partire un deploy** — e `deploy/deploy.sh` compila sempre `main`. Il rito pusha `dev` poco prima
+di `main`, e la finestra fra il push e il `git fetch` sul server è di **4-6 secondi**: fino ad allora i
+due push distavano mezzo secondo e il fetch pescava per caso il `main` giusto, poi in mezzo sono
+comparsi merge, controllo di ancestry e tag, sono diventati sedici secondi, e il deploy ha cominciato a
+fotografare il `main` vecchio.
+
+**Adesso non può più succedere, ed è verificato**: l'hook manuale è stato cancellato e Ploi ha creato il
+proprio (Quick deploy), che **valida il branch** — un push su `dev` riceve `422` e non fa partire
+niente, un push su `main` riceve `200` e deploya. ⚠ Se un giorno il deploy tornasse a partire da un push
+su `dev`, è quello: qualcuno ha rimesso un hook manuale, e si guarda in
+`repos/<org>/<repo>/hooks`. Il racconto completo, con le prove, è in `docs/DECISIONS.md` alla data.
+Per lo stesso motivo **`git push origin main --tags` prima di `git push origin dev`** resta l'ordine
+giusto: non protegge più da niente, ma non costa niente.
 
 **Un `HTTP 200` non è una verifica di deploy**: l'app vecchia risponde 200 identica, con lo stesso
 tempo di risposta e nessun errore. La versione servita si legge dalla navbar, che la prende da
