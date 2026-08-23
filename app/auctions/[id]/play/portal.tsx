@@ -142,6 +142,34 @@ export function Portal({
     setSkipping(false);
   }
 
+  /**
+   * Pausa e ripresa **dal portale** (richiesta dell'owner del 2026-08-23): chi
+   * conduce l'asta e ci gioca dentro non deve più uscire dal proprio portale per
+   * fermarla. La Regia resta la casa dei comandi — è lì che vivono l'avvio, gli
+   * override, «Annulla lotto» — e qui arrivano le due sole leve che servono
+   * *mentre* si sta offrendo, cioè mentre si sta guardando questa pagina.
+   *
+   * ⚠ **Terza azione da owner del portale, e la terza volta con lo stesso stampo**
+   * di `skipReveal` e `showResults`: un booleano di pending, nessun messaggio di
+   * conferma, nessun messaggio di rifiuto. La conferma è lo snapshot che arriva e
+   * cambia il badge della card di stato; e il rifiuto qui è quasi solo «l'asta è
+   * appena finita», che il badge dice da sé meglio di una riga di testo. Una riga
+   * di feedback costerebbe l'altezza che M17 e la richiesta del 2026-08-23 stanno
+   * togliendo a questa card.
+   *
+   * Non è un'astrazione condivisa con le altre due (regola 8): tre chiamanti con
+   * la stessa forma non fanno un helper finché non hanno anche lo stesso pending —
+   * e questo è separato di proposito, perché «Prosegui asta» e «Pausa» possono
+   * stare a schermo insieme e disabilitarsi a vicenda sarebbe un bug.
+   */
+  const [pausing, setPausing] = useState(false);
+
+  async function togglePause(type: "PAUSE" | "RESUME") {
+    setPausing(true);
+    await sendAction(auctionId, { type });
+    setPausing(false);
+  }
+
   // Prima dello snapshot, perché l'ultimo snapshot ricevuto è di un'asta che non
   // c'è più: mostrarlo vorrebbe dire un countdown che scorre sul nulla.
   if (deleted !== null) {
@@ -226,7 +254,13 @@ export function Portal({
         */}
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
           <div className="flex min-w-0 flex-col gap-4 lg:order-3">
-            <StatusCard snapshot={snapshot} />
+            <StatusCard
+              snapshot={snapshot}
+              viewerIsOwner={viewerIsOwner}
+              pausePending={pausing}
+              onPause={() => void togglePause("PAUSE")}
+              onResume={() => void togglePause("RESUME")}
+            />
 
             {/*
               ⚠ **Una cornice, nove scene** (M17 §6). Fino a v1.16.0 qui c'era una

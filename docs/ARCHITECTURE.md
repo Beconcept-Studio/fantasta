@@ -1574,6 +1574,18 @@ la fase, il ruolo in gioco, di chi è il turno. C'è **in ogni fase e in ogni st
 fisso che rende leggibile il fatto che la card sotto cambi forma — senza qualcosa di stabile sopra,
 un cambio di scena si legge come «la pagina è diventata un'altra».
 
+Da agosto 2026 è alta **due righe**, e l'altezza è il requisito e non una conseguenza. Il punto fisso
+serve, ma sotto c'è la card delle offerte — la ragione per cui si tiene il telefono in mano — e ogni
+pixel speso qui è un pixel che quella non ha. Le quattro informazioni sono ancora tutte presenti in
+metà spazio: fase e stato sulla prima riga, ruolo e turno sulla seconda come due badge in linea. Tre
+cose sono cadute nel giro, e ognuna per una ragione sua. L'**occhiello «Asta»** era l'unica scritta
+identica in tutti gli stati della card, cioè l'unica che non distingueva mai niente da niente: che
+questa card parli dell'asta lo dicono la sua posizione e tutto il resto della pagina. La **lista di
+definizioni** con «Ruolo» e «Turno» costava due righe per etichettare due parole che si distinguono da
+sé — un ruolo e un nome squadra non si confondono — e le etichette sono diventate `sr-only`, perché chi
+ascolta la pagina non ha la posizione né la forma e senza di loro sentirebbe due nomi propri di fila.
+Il **paragrafo della pausa** è passato da tre righe a una, e il perché è nel paragrafo seguente.
+
 Due dettagli che sembrano minori e non lo sono. Il primo: il badge dello stato dell'asta **era
 commentato via** in `portal-header.tsx`, e M17 l'ha riaccesso qui invece di scommentarlo là. In una
 barra che dice crediti e `max_bid` quello stato era un'informazione di un altro genere appoggiata
@@ -1590,6 +1602,33 @@ la fase, non la azzera».
 
 La card di stato ha anche **assorbito il banner della pausa** che stava in cima al `<main>`. Due
 avvisi di pausa uno sopra l'altro sono un avviso che si ignora.
+
+E adesso ha anche **il comando**. Chi conduce l'asta e ci gioca dentro trova qui, sulla seconda riga,
+«Pausa» e «Riprendi»: prima doveva uscire dal portale e andare in Regia, cioè lasciare la pagina delle
+offerte nel momento in cui serviva fermarle. La Regia resta la casa dei comandi — l'avvio, gli
+override, «Annulla lotto», «Mostra risultati» — e nel portale arrivano le due sole leve che servono
+*mentre* si sta guardando questa pagina. Chi conduce **senza giocare** non c'entra e non perde niente:
+non è membro, quindi non ha un portale (⚠ P11), e la Regia è già il suo posto.
+
+Tre cose tengono in piedi quel pulsante e vale la pena vederle insieme, perché sono la stessa idea
+applicata tre volte. Le condizioni vengono da **`managerControls`**, la stessa funzione pura che usa
+la Regia: `canPause` guarda `status = LIVE`, `canResume` guarda `status = PAUSED`, e riusarla invece di
+riscrivere due confronti nel componente è ciò che impedisce al pulsante del portale e a quello della
+Regia di divergere — i test di quella funzione coprono già entrambi. La visibilità viene da
+`viewerIsOwner`, che **arriva come prop e non dallo snapshot**, perché nasce col link e non è stato di
+gioco: è la stessa strada da cui `SceneAction` riceve il diritto di premere «Prosegui asta». E il
+permesso non viene da nessuno dei due: `pauseAuction` e `resumeAuction` ricontrollano da sé la
+proprietà dell'asta, quindi quel booleano decide **cosa si vede, non cosa si può fare** (regola 6).
+
+Il pulsante **condivide la riga dei badge** invece di prendersene una, ed è per questo che la pausa nel
+portale costa zero pixel di altezza: la riga è alta quanto il pulsante e i due badge le stavano dentro
+comunque. Non dice niente né in caso di successo né in caso di rifiuto, ed è la terza azione da owner
+del portale con lo stesso stampo delle altre due: la conferma è lo snapshot che arriva e cambia il
+badge dello stato, e il rifiuto qui è quasi solo «l'asta è appena finita», che il badge dice da sé
+meglio di una riga di testo. Una riga di feedback costerebbe esattamente l'altezza che tutto questo
+giro sta togliendo. È anche il motivo per cui il paragrafo della pausa è tornato a una riga sola: chi
+lo legge ha ora «Riprendi» sotto il pollice, non ha bisogno che gli si spieghi chi ha fermato l'asta, e
+la cosa che serve sapere è una e non è ovvia — alla ripresa il tempo riparte da dov'era, non da capo.
 
 Il **modale** è un overlay sopra la card, e la frase da tenere a mente è che *non è una notifica*:
 è una vista sullo stato corrente. Si apre da sé quando c'è un round aperto e sono fra gli idonei;

@@ -3372,3 +3372,50 @@ procedere senza (2026-08-22). Il paragone che resta è quello **misurato dal dat
 preso — in cima ai difensori, e le quote attese `P 5% · D 13% · C 6% · A 0%`. Non è la stessa cosa di
 uno sguardo, e se una scelta di misura o di spaziatura si rivelasse sbagliata, questa è la ragione per
 cui non se ne è accorto nessuno prima.
+
+## 2026-08-23 — La card di stato si stringe, e si prende il comando della pausa
+
+### L'altezza della card di stato è un requisito, non una conseguenza
+
+`StatusCard` prendeva ~125px ad asta in corso e ~195px in pausa: un occhiello, un titolo da 18px, una
+lista di definizioni a due righe e un paragrafo da tre. Ogni pixel lì è un pixel che la card delle
+offerte non ha — ed è quella la ragione per cui si tiene il telefono in mano. Da qui la card è **alta
+due righe**: fase e stato sulla prima, ruolo e turno sulla seconda come badge in linea. Le quattro
+informazioni di M17 §5 ci sono ancora tutte.
+
+⚠ **Le tre cose tolte non sono tre economie uguali.** L'**occhiello «Asta»** era l'unica scritta
+identica in tutti gli stati della card: l'unica che non distingueva mai niente. La **lista di
+definizioni** etichettava due valori che si distinguono da sé — un ruolo e un nome squadra non si
+confondono — e le sue etichette sono diventate `sr-only` invece di sparire, perché chi ascolta la
+pagina non ha né la posizione né la forma e sentirebbe due nomi propri di fila. Il **paragrafo della
+pausa** è passato da tre righe a una perché accanto è comparso «Riprendi»: chi legge ha il rimedio
+sotto il pollice e non gli serve sapere chi ha fermato l'asta, gli serve sapere che alla ripresa il
+tempo riparte da dov'era.
+
+### Pausa e ripresa anche nel portale, e la Regia resta la casa dei comandi
+
+Chi conduce l'asta e ci gioca dentro doveva uscire dal portale e andare in Regia per fermarla: lasciare
+la pagina delle offerte nell'istante in cui serve sospenderle. Da qui «Pausa» e «Riprendi» stanno anche
+sulla card di stato del portale, per il solo owner.
+
+⚠ **Non è uno spostamento e non è una duplicazione della Regia**: nel portale arrivano le **due sole**
+leve che servono *mentre* si sta guardando quella pagina. Avvio, override, «Annulla lotto» e «Mostra
+risultati» restano dove sono — sono la risposta a «un attimo, c'è un problema», e quella si dà davanti
+al pannello, non col telefono in mano. Chi conduce senza giocare non è toccato: non è membro, non ha un
+portale (⚠ P11), la Regia è già il suo posto.
+
+Le condizioni sono quelle di **`managerControls`**, la stessa funzione pura della Regia, e non due
+confronti riscritti nel componente: è ciò che impedisce ai due pulsanti di divergere, e i test di quella
+funzione li coprono già entrambi. `viewerIsOwner` arriva come prop e non dallo snapshot — nasce col link
+e non è stato di gioco, come per «Prosegui asta». **Il permesso non viene da nessuno dei due**:
+`pauseAuction` e `resumeAuction` verificano da sé la proprietà dell'asta, quindi quel booleano decide
+cosa si vede, non cosa si può fare (regola 6).
+
+⚠ **Un tocco solo, nessuna conferma**, scelto dall'owner contro la proposta di una conferma in due
+tocchi: il pulsante finisce a un centimetro da «Offri», sotto un countdown di trenta secondi, ma una
+pausa messa per sbaglio si annulla con «Riprendi» — e quando serve fermare l'asta davvero, serve subito.
+Nessun messaggio né in caso di successo né in caso di rifiuto, come per `skipReveal` e `showResults`: la
+conferma è lo snapshot che cambia il badge, e una riga di feedback costerebbe l'altezza che questo giro
+sta togliendo. Il pending è **separato** da quello delle altre due azioni owner e non è un'astrazione
+condivisa (regola 8): «Prosegui asta» e «Pausa» possono stare a schermo insieme, e disabilitarsi a
+vicenda sarebbe un bug.
