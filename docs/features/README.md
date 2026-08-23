@@ -12,7 +12,28 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## In corso
 
-Nessuna aperta. **M17 è in produzione da `v1.17.0`** (2026-08-22): pianificata, aperta, lavorata,
+**[M18 — La rosa a fisarmonica](18-rosa-a-fisarmonica.md)**, aperta il 2026-08-22 su
+`feature/18-rosa-a-fisarmonica`. Baseline 897 test, ora **909**: dieci per `quotaPerRuolo`, due per
+l'ordine di estrazione. Codice fatto (M18-01 → M18-04), **manca la verifica guardata** — M18-05 e
+M18-06 — poi il gate e la chiusura.
+
+⚠ **Il paragone visivo del «prima» non c'è**: l'owner ha scelto di procedere senza (2026-08-22), quindi
+il termine di paragone è quello misurato dal database e sta nel task M18-01. Se una misura o una
+spaziatura si rivelasse sbagliata, quella è la ragione per cui nessuno se ne è accorto prima.
+
+⚠ **Un flake preesistente è stato chiuso dentro la macro**, come i tre di M14 e con la stessa
+disciplina — riprodotto e misurato prima di toccarlo: **due rossi su sei giri** con M18 addosso, **zero
+su cinque sulla baseline** girata in un worktree. `delete-auction.test.ts` asseriva sul **contenuto** di
+`listone_players`, che è posseduta da `listone.test.ts` e da lei svuotata senza `WHERE`. M14 aveva già
+corretto quella misura una volta (da `toBe(length)` a contenimento) e non bastava: il contenimento
+regge le righe aggiunte in parallelo, non quelle togliesse. **Non era aggiustabile una terza volta come
+misura** — nessuna riga-sentinella sopravvive a quel `DELETE` — quindi l'asserzione è passata **dai dati
+allo schema**: una cascata viaggia sulle foreign key, e quelle tabelle non ne hanno nessuna. Otto giri
+di suite verdi.
+
+---
+
+**M17 è in produzione da `v1.17.0`** (2026-08-22): pianificata, aperta, lavorata,
 provata dall'owner e rilasciata **nella stessa giornata**, il quarto caso di fila dopo M13, M14 e M16.
 Gate verde con **897 test in 52 file** (da 858), typecheck, lint e build. Su desktop il portale è tre
 colonne, la chiamata arriva dal basso come l'offerta, e la colonna dello stato ha la stessa anatomia
@@ -203,11 +224,44 @@ caricamenti conta**: listone → Carmy → caricature. La procedura per tutte st
 
 ## Da pianificare
 
-**Nessuna.** Le due pianificate il 2026-08-22 dalle tre richieste che l'owner aveva scritto nel
-quaderno dopo `v1.15.1` sono **entrambe chiuse e in produzione** — M16 in `v1.16.0`, M17 in
-`v1.17.0`, nella stessa giornata. **`docs/REQUESTS.md` resta vuoto.**
+Nessuna. Il quaderno `docs/REQUESTS.md` è vuoto: le due richieste che c'erano sono confluite in M18,
+qui sopra.
 
-Quello che segue è il ragionamento con cui le due sono state tagliate, e resta come archivio.
+Quello che segue è il ragionamento con cui **M18** è stata tagliata il 2026-08-22, e resta come
+archivio: dice il vero su perché è una macro sola.
+
+I ruoli della propria rosa diventano una fisarmonica con la **quota di budget del reparto** accanto
+al nome, e i giocatori si ordinano per **data di estrazione** invece che per prezzo — nel portale,
+in regia e in TV.
+
+⚠ **È una macro sola perché il rischio è uno solo**: zero motore, zero schema, zero passi a mano,
+tutto in `components/auction/roster-grid.tsx`, `app/tv/[publicToken]/tv-view.tsx` e
+`lib/realtime/portal.ts`. Il criterio del progetto taglia per profilo di rischio, non per tema, e qui
+non ci sono due profili.
+
+⚠ **Le tre cose da non riscoprire da capo**, tutte verificate leggendo il codice e non dedotte. La
+prima: **il dato per l'ordine cronologico c'è già** — `loadAuctionState` legge le assegnazioni per
+`created_at, id` e `serializeMembers` non riordina, quindi `member.roster` **è già** in ordine di
+estrazione e i due `.sort((a,b) => b.price - a.price)` del client lo stanno disfacendo. La modifica è
+**sottrattiva** e non tocca `serializeSnapshot`: la strada ovvia — «serve un `assignedAt` nello
+snapshot» — apre il punto più delicato dell'app per niente. La seconda: quel `created_at` è **del
+motore**, non un `defaultNow()` (`persistAuctionState` scrive `toDate(a.createdAt)`), ed è ciò che
+rende l'ordine giusto anche nei dati del seed — con un `now()` di transazione le assegnazioni
+seminate insieme avrebbero condiviso il timestamp e in locale l'ordine dentro un reparto sarebbe
+sembrato casuale, cioè un finto bug. La terza: **il ruolo in gioco che si apre da sé non vuole un
+`useEffect`** ma una `key` su `auction.currentRole` — così la scelta a mano vale finché il ruolo non
+cambia, invece di essere sovrascritta a ogni snapshot.
+
+⚠ **E `RosterGrid` ha due chiamanti diversissimi**: il portale ne mostra **una** rosa, la regia
+**8–12**. La fisarmonica vale solo nel portale (decisione dell'owner), quindi il file serve due forme
+— due componenti e un corpo privato condiviso, **non** una prop booleana che accende insieme la
+fisarmonica e le percentuali.
+
+---
+
+Quello che segue è il ragionamento con cui M16 e M17 sono state tagliate il 2026-08-22, e resta come
+archivio. Sono **entrambe chiuse e in produzione** — M16 in `v1.16.0`, M17 in `v1.17.0`, nella stessa
+giornata.
 
 **Perché due e non una.** Le tre richieste sembrano un tema solo — «sistemiamo il portale» — e hanno
 due profili di rischio molto diversi, che è il criterio con cui sono state tagliate M5/M6, M9–M12 e

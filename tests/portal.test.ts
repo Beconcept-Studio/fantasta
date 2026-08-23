@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { CarmyJudgement } from "@/lib/domain";
+import type { CarmyJudgement, Role } from "@/lib/domain";
 import {
   NO_CARMY_FILTERS,
   amInTie,
@@ -13,6 +13,7 @@ import {
   parseAmount,
   pausedRemaining,
   portalScreen,
+  quotaPerRuolo,
   sceneLabel,
   sceneOf,
   sceneTime,
@@ -857,5 +858,105 @@ describe("shouldOpenPickSheet — il secondo modale che si apre da sé", () => {
     const lottoAperto = snapshot();
     expect(shouldOpenPickSheet(lottoAperto, ME, null)).toBe(false);
     expect(shouldOpenBidDialog(lottoAperto, ME, null)).toBe(true);
+  });
+});
+
+// ─── La quota di budget per reparto (M18-03) ─────────────────────────────────
+
+describe("quotaPerRuolo — quanto budget è finito in ogni reparto", () => {
+  /** Una rosa con i prezzi che servono, senza scrivere sei campi per riga. */
+  function rosa(...presi: [Role, number][]) {
+    return presi.map(([role, price], i) => ({
+      assignmentId: `a${i}`,
+      playerId: `p${i}`,
+      name: `Giocatore ${i}`,
+      role,
+      team: "Inter",
+      price,
+    }));
+  }
+
+  it("l'esempio dell'owner: 250 sui portieri su un budget da 500 fa 50%", () => {
+    // Il denominatore è il budget, non la spesa fatta — «se spendo 250 su 500
+    // sui portieri, ho investito il 50%» (decisione 1 del 2026-08-22).
+    const me = member(ME, 0, {
+      credits: 250,
+      roster: rosa(["P", 250]),
+    });
+    expect(quotaPerRuolo(me).P).toBe(50);
+  });
+
+  it("è sul budget e non sulla spesa: al primo acquisto il reparto non è al 100%", () => {
+    // È il motivo della decisione: la quota sulla spesa direbbe 100% qui, cioè
+    // niente. Quella sul budget dice quanto budget è impegnato.
+    const me = member(ME, 0, { credits: 490, roster: rosa(["A", 10]) });
+    expect(quotaPerRuolo(me).A).toBe(2);
+  });
+
+  it("le quattro quote non fanno 100, e ciò che manca sono i crediti in cassa", () => {
+    const me = member(ME, 0, {
+      credits: 350,
+      roster: rosa(["P", 50], ["D", 50], ["C", 25], ["A", 25]),
+    });
+    const q = quotaPerRuolo(me);
+    expect(q).toEqual({ P: 10, D: 10, C: 5, A: 5 });
+    // 30% impegnato, 350 su 500 ancora in cassa: la somma è 30, non 100, ed è
+    // voluta (§3).
+    expect(q.P! + q.D! + q.C! + q.A!).toBe(30);
+  });
+
+  it("un reparto vuoto fa 0, non `null`: a schermo si legge `(0%)`", () => {
+    // È la lezione di M17 sull'anatomia fissa: un numero che compare solo a
+    // volte costringe a chiedersi perché non c'è.
+    const me = member(ME, 0, { credits: 480, roster: rosa(["P", 20]) });
+    expect(quotaPerRuolo(me)).toEqual({ P: 4, D: 0, C: 0, A: 0 });
+  });
+
+  it("una rosa vuota è quattro zeri, non quattro `null`", () => {
+    expect(quotaPerRuolo(member(ME, 0))).toEqual({ P: 0, D: 0, C: 0, A: 0 });
+  });
+
+  it("arrotonda all'intero, per eccesso e per difetto", () => {
+    // 33 su 500 = 6,6% → 7; 32 su 500 = 6,4% → 6.
+    expect(quotaPerRuolo(member(ME, 0, { credits: 467, roster: rosa(["D", 33]) })).D).toBe(7);
+    expect(quotaPerRuolo(member(ME, 0, { credits: 468, roster: rosa(["D", 32]) })).D).toBe(6);
+  });
+
+  it("somma i giocatori dello stesso reparto, non li conta", () => {
+    const me = member(ME, 0, {
+      credits: 400,
+      roster: rosa(["D", 45], ["D", 28], ["D", 12], ["C", 15]),
+    });
+    expect(quotaPerRuolo(me).D).toBe(17);
+  });
+
+  it("a budget 0 dice `null` per tutti e quattro: non si scrive `NaN%` in faccia a nessuno", () => {
+    // Impossibile in pratica (`budgetInitial` è positivo e I3 tiene i crediti
+    // ≥ slot residui): la guardia è contro il `NaN%` di un test o di un'asta
+    // manipolata a mano dalla regia.
+    const me = member(ME, 0, { credits: 0, roster: [] });
+    expect(quotaPerRuolo(me)).toEqual({ P: null, D: null, C: null, A: null });
+  });
+
+  it("⚠ una rettifica di budget (I3) sposta tutte e quattro le quote", () => {
+    // `credits` include già `Σ ledger.delta`, quindi il denominatore è il budget
+    // **corrente**. Stessa rosa, +100 di rettifica: il totale su cui si sta
+    // ragionando è cambiato, e le quattro percentuali scendono tutte. È la
+    // lettura giusta di «crediti a disposizione», ed è l'unica onesta.
+    const presi = rosa(["P", 50], ["D", 50], ["C", 50], ["A", 50]);
+    const prima = member(ME, 0, { credits: 300, roster: presi });
+    const dopo = member(ME, 0, { credits: 400, roster: presi });
+    expect(quotaPerRuolo(prima)).toEqual({ P: 10, D: 10, C: 10, A: 10 });
+    expect(quotaPerRuolo(dopo)).toEqual({ P: 8, D: 8, C: 8, A: 8 });
+  });
+
+  it("non dipende dall'ordine della rosa, che da M18 è cronologico", () => {
+    const crescente = rosa(["D", 12], ["D", 28], ["D", 45]);
+    const me = member(ME, 0, { credits: 415, roster: crescente });
+    const rimescolata = member(ME, 0, {
+      credits: 415,
+      roster: [...crescente].reverse(),
+    });
+    expect(quotaPerRuolo(me)).toEqual(quotaPerRuolo(rimescolata));
   });
 });

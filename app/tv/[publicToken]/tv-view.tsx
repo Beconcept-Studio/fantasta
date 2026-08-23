@@ -286,9 +286,15 @@ function boardRows(
 ): BoardRow[] {
   const rows: BoardRow[] = [];
   for (const role of ROLES) {
-    const owned = member.roster
-      .filter((entry) => entry.role === role)
-      .sort((a, b) => b.price - a.price);
+    // ⚠ **Nessun riordino** (M18 §2): `member.roster` è già in ordine di
+    // estrazione. Fino a M18 qui c'era un `.sort((a, b) => b.price - a.price)`.
+    //
+    // In TV ha un secondo effetto che conviene sapere: **il giocatore appena
+    // vinto è sempre l'ultima riga piena del suo gruppo**, cioè un posto fisso,
+    // mentre col riordino per prezzo l'evidenziazione compariva dove il prezzo
+    // la mandava. Il resto di `boardRows` non cambia: sono sempre `slot totali`
+    // righe, ed è ciò che tiene le card alte uguali.
+    const owned = member.roster.filter((entry) => entry.role === role);
     const empty = Math.max(0, slots[role] - owned.length);
 
     owned.forEach((entry, i) => {

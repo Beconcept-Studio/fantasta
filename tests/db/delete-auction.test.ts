@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "@/lib/db";
@@ -9,11 +9,9 @@ import {
   events,
   invites,
   ledger,
-  listonePlayers,
   lotRounds,
   lots,
   members,
-  playerInsights,
   players,
   users,
 } from "@/lib/db/schema";
@@ -422,44 +420,56 @@ suite("la cascata porta via l'asta e nient'altro", () => {
     expect(await missingAmong(everyone)).toEqual([]);
   });
 
-  it("le tabelle globali non le tocca: listone e insight sopravvivono alle aste", async () => {
+  /**
+   * ⚠ **Questa asserzione è passata dai dati allo schema, e è la seconda volta
+   * che viene rifatta** (M18). Vale la pena scrivere per esteso perché, così la
+   * terza non ricomincia da capo.
+   *
+   * Fino a M14 confrontava due `length`, con un commento che diceva che il
+   * conteggio globale *era* la domanda giusta. M14 l'ha corretta in un
+   * **contenimento** — «ogni riga che c'era prima c'è anche dopo» — che regge le
+   * righe *aggiunte* da un altro worker ma **non quelle togliesse**: e
+   * `tests/db/listone.test.ts` svuota `listone_players` nel suo `beforeEach`,
+   * senza `WHERE`, perché è ciò che fa `uploadListone` in produzione. Il rosso
+   * che ne esce è `expected [] to deeply equal ArrayContaining{…}`, e compare a
+   * caso: due volte su sei lavorando a M18, che non tocca queste tabelle — è
+   * bastato che due db-test in più cambiassero l'ordine dei lavori. Esattamente
+   * come era comparso lavorando a M14.
+   *
+   * ⚠ **Non è una misura da aggiustare una terza volta: è impossibile da qui.**
+   * `listone.test.ts` scrive la regola del progetto — «una tabella globale, un
+   * file che la possiede» — e quel file possiede `listone_players` e
+   * `carmy_players`, come `insights.test.ts` possiede `player_insights`. Nessuna
+   * riga-sentinella scritta *qui* sopravvive a un `DELETE` senza `WHERE` fatto
+   * *lì*, quindi qualunque asserzione sul **contenuto** di quelle tabelle, in
+   * questo file, è una corsa. Serializzare i file è già stato scartato (costa
+   * secondi a ogni `pnpm test` e lascia la trappola aperta al terzo file).
+   *
+   * La domanda vera — «la cancellazione di un'asta può portarsi via il listone o
+   * gli insight?» — non è una domanda sui dati: **è una domanda sullo schema**.
+   * Una cascata viaggia sulle foreign key, e quelle tre tabelle non ne hanno
+   * **nessuna**: niente le raggiunge, da nessun punto di partenza, né oggi né il
+   * giorno in cui l'albero sotto `auctions` prenderà un ramo in più. È una
+   * risposta più forte di quella empirica e non ha corse dentro.
+   */
+  it("le tabelle globali non le tocca, e lo dice lo schema: nessuna cascata le raggiunge", async () => {
     const admin = await user("admin", { isAdmin: true });
     const game = await liveGame("PAUSED");
 
-    const listoneExtIds = async (): Promise<number[]> =>
-      (
-        await db.select({ extId: listonePlayers.extId }).from(listonePlayers)
-      ).map((r) => r.extId);
-    const insightExtIds = async (): Promise<number[]> =>
-      (
-        await db.select({ extId: playerInsights.extId }).from(playerInsights)
-      ).map((r) => r.extId);
-
-    const listoneBefore = await listoneExtIds();
-    const insightsBefore = await insightExtIds();
-
     await silently(() => deleteAuction(admin, game.auctionId, { force: true }));
+    // La parte empirica che resta: la cancellazione è avvenuta per davvero.
+    expect(
+      await db.select().from(auctions).where(eq(auctions.id, game.auctionId)),
+    ).toEqual([]);
 
-    // ⚠ **Le righe di prima ci sono ancora**, e non «il conteggio non è cambiato».
-    //
-    // Fino a M14 questa asserzione confrontava due `length`, con un commento che
-    // diceva che qui il conteggio globale *è* la domanda giusta. La proprietà era
-    // quella giusta, la misura no: `listone_players` e `player_insights` sono
-    // tabelle **globali**, e `tests/db/listone.test.ts` e `tests/db/insights.test.ts`
-    // ci scrivono dentro — girando in parallelo a questo file. Un `toBe(length)`
-    // fallisce quando uno di quei due committa una riga nel mezzo, cioè a caso: il
-    // rosso è comparso lavorando a M14 (che non tocca affatto queste tabelle) solo
-    // perché un file di test in più ha cambiato l'ordine dei lavori.
-    //
-    // La domanda vera è «la cascata ha portato via qualcosa?», e a quella risponde
-    // il **contenimento**: ogni riga che c'era prima c'è anche dopo. Righe in più
-    // sono un altro test che lavora, righe in meno sono il bug.
-    expect(await listoneExtIds()).toEqual(
-      expect.arrayContaining(listoneBefore),
-    );
-    expect(await insightExtIds()).toEqual(
-      expect.arrayContaining(insightsBefore),
-    );
+    const raggiungibili = await db.execute(sql`
+      select tc.table_name
+      from information_schema.table_constraints tc
+      where tc.constraint_type = 'FOREIGN KEY'
+        and tc.table_schema = 'public'
+        and tc.table_name in ('listone_players', 'carmy_players', 'player_insights')
+    `);
+    expect(raggiungibili.rows).toEqual([]);
   });
 });
 

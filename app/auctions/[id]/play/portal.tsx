@@ -12,7 +12,7 @@ import { LotClosedCard } from "@/components/auction/lot-closed-card";
 import { MembersPanel } from "@/components/auction/members-panel";
 import { PickSheet, PickWaiting } from "@/components/auction/pick-panel";
 import { PortalHeader } from "@/components/auction/portal-header";
-import { RosterGrid } from "@/components/auction/roster-grid";
+import { RosterAccordion } from "@/components/auction/roster-grid";
 import { SceneCard } from "@/components/auction/scene-card";
 import { StatusCard } from "@/components/auction/status-card";
 import { Badge } from "@/components/ui/badge";
@@ -295,8 +295,19 @@ export function Portal({
                   quell'informazione adesso non si legge da nessuna parte. Quale
                   ruolo è in gioco *adesso* lo dice la card di stato.
                 */}
-                <h2 className="mb-3 font-semibold">La tua rosa</h2>
-                <RosterGrid member={me} slots={snapshot.auction.slots} />
+                <h2 className="mb-2 font-semibold">La tua rosa</h2>
+                {/*
+                  ⚠ **`RosterAccordion` e non `RosterGrid`** (M18 §5): la
+                  fisarmonica vale **solo** qui, dove la rosa è una. In regia
+                  resta piatta, perché là servono 8–12 rose a colpo d'occhio.
+                  `currentRole` è quello che apre il reparto in gioco, e lo fa
+                  con una chiave — il perché è nel componente.
+                */}
+                <RosterAccordion
+                  member={me}
+                  slots={snapshot.auction.slots}
+                  currentRole={snapshot.auction.currentRole}
+                />
               </div>
             </section>
           )}
