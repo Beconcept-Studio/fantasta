@@ -6,6 +6,7 @@ import type {
   Snapshot,
   SnapshotLot,
   SnapshotMember,
+  SnapshotRevealBid,
 } from "./types";
 
 /**
@@ -146,11 +147,16 @@ export function portalScreen(
  * Dove siamo, in due o tre parole: «chiamata portieri», «offerte»,
  * «spareggio», «buste aperte», «in pausa».
  *
- * La stessa frase serve in tre posti — l'intestazione del portale, quella del
- * manager e il cartello grande della TV — ed è per questo che sta qui e non
- * dentro un componente. La pausa vince su tutto: in proiezione è la prima cosa
- * che chi guarda deve poter leggere, prima ancora di sapere quale ruolo è in
+ * La frase serve fuori da un componente perché la vogliono in più posti, e la
+ * pausa vince su tutto: dove questa riga è **l'unica** che parla della fase, «in
+ * pausa» è la prima cosa da leggere, prima ancora di sapere quale ruolo è in
  * gioco.
+ *
+ * ⚠ Oggi il chiamante è uno solo, l'intestazione della regia: la TV l'aveva e ha
+ * smesso — la sua intestazione dice nome e stato e niente altro — e la card di
+ * stato del portale usa `phaseLabelIgnoringPause` per la ragione scritta lì
+ * sotto. Resta separata da quella e non ci si fonde: la precedenza della pausa è
+ * la differenza fra le due, non un dettaglio del suo unico chiamante.
  */
 export function phaseLabel(snapshot: Snapshot): string {
   const { status } = snapshot.auction;
@@ -167,7 +173,7 @@ export function phaseLabel(snapshot: Snapshot): string {
  * ⚠ **Non è una seconda copia delle frasi, ed è per questo che `phaseLabel` la
  * chiama** invece di ripetere lo `switch`: «offerte», «spareggio», «buste da
  * aprire» esistono in un posto solo, e chi ne cambia una le cambia per tutti i
- * chiamanti — TV, regia e portale.
+ * chiamanti — la regia e il portale.
  *
  * Serve alla **card di stato** del portale (M17 §5), che ha il badge dello stato
  * dell'asta e la riga della fase uno accanto all'altro. Con `phaseLabel` in
@@ -665,6 +671,60 @@ export function parseAmount(raw: string): number | null {
  */
 export function tvConnected(presence: Presence): boolean {
   return presence !== "OFFLINE";
+}
+
+// ─── Le buste aperte: il «+3s» accanto a ogni cifra ──────────────────────────
+
+/**
+ * Queste tre funzioni sono **il dato del reveal**, e stanno qui perché lo
+ * leggono in due posti: il pannello del portale (`RevealBids`) e la colonna della
+ * TV. Prima vivevano dentro il pannello, che era giusto finché il chiamante era
+ * uno (regola 8); adesso che gli schermi sono due, una copia per schermo
+ * significherebbe che una sera la stessa busta è `+3s` sul telefono e `+4s` sul
+ * proiettore, e in quella stanza sarebbe una discussione, non un dettaglio.
+ *
+ * ⚠ **Il conto parte dalla prima busta del round, non dall'apertura del round.**
+ * È il punto che sorprende chi legge «+3s» come «tre secondi dopo il via», e la
+ * scelta ha due ragioni. La prima è che questo numero serve a **leggere uno
+ * spareggio**: a parità di importo vince `MIN(amount_set_at)`, quindi ciò che
+ * conta è l'ordine fra le buste, e prendere la prima come zero lo rende leggibile
+ * senza sottrazioni a mente. La seconda è che l'apertura del round non è un
+ * istante affidabile a posteriori: nello snapshot c'è `endsAt`, e una pausa in
+ * mezzo al round lo **trasla** — un «+3s» contato da lì cambierebbe da solo dopo
+ * una pausa, cioè il numero mentirebbe proprio nelle sere in cui qualcosa è
+ * andato storto.
+ */
+export function revealBaseMs(bids: readonly SnapshotRevealBid[]): number {
+  // `Math.min()` di un elenco vuoto è `Infinity`, e va bene così: un round senza
+  // buste non arriva al reveal, e se ci arrivasse ogni etichetta direbbe «+0s»
+  // invece di far esplodere la colonna che la stanza sta guardando.
+  return Math.min(...bids.map((bid) => Date.parse(bid.amountSetAt)));
+}
+
+/** Quanto dopo la prima busta è stata fissata questa, in secondi: `+0s`, `+3s`. */
+export function bidOffsetLabel(amountSetAt: string, baseMs: number): string {
+  const delta = Math.round((Date.parse(amountSetAt) - baseMs) / 1000);
+  return delta <= 0 ? "+0s" : `+${delta}s`;
+}
+
+/**
+ * L'ordine in cui si leggono le buste di un round: **importo più alto in cima**,
+ * e a pari importo **chi c'è arrivato prima**.
+ *
+ * ⚠ Il secondo criterio non è un vezzo, ed è diventato obbligatorio nel momento
+ * in cui i secondi sono comparsi anche in TV: due buste da 40 mostrate in ordine
+ * arbitrario, con accanto scritto `+2s` e `+5s`, si leggono come una classifica
+ * sbagliata — e nello spareggio quella è esattamente la classifica che ha
+ * deciso. È la stessa regola del motore (`MIN(amount_set_at)`), riscritta qui per
+ * l'occhio invece che per il verdetto.
+ */
+export function compareRevealBids(
+  a: SnapshotRevealBid,
+  b: SnapshotRevealBid,
+): number {
+  return (
+    b.amount - a.amount || Date.parse(a.amountSetAt) - Date.parse(b.amountSetAt)
+  );
 }
 
 // ─── Lo spareggio ────────────────────────────────────────────────────────────

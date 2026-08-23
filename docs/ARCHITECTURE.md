@@ -2074,10 +2074,46 @@ verdi. Non si risolve, ed è una scelta: la cura sarebbe un timer nuovo nel proc
 caso in cui non c'è più nessuno da mostrare.
 
 Il quarto rimanente è il lotto in corso — giocatore, countdown, buste aperte — che resta il più
-leggibile della colonna ma non più della pagina. Sopra, una striscia dice nome dell'asta, fase e —
-a destra — lo **stato**: in corso o in pausa. Stato e fase non sono la stessa cosa, e la distinzione
-qui è pratica: la fase cambia ogni pochi secondi, lo stato risponde alla domanda di chi alza gli
-occhi e trova tutti i numeri immobili.
+leggibile della colonna ma non più della pagina. **In cima a quella stessa colonna** sta
+l'intestazione: nome dell'asta a sinistra, **stato** a destra — in corso, in pausa, conclusa — e
+sotto, solo quando serve, l'avviso ambra di riconnessione.
+
+Lo stato è un **badge**, con la forma della primitiva condivisa: è la stessa pastiglia che si legge in
+tutta l'applicazione, e uno stato dell'asta è precisamente la cosa per cui quella forma esiste. Non è
+però `StatusBadge`, e la ragione è più interessante del solito discorso sul tema nero. Quella
+mappa manda `LIVE` e `READY` sulla stessa variante, e `PAUSED` e `COMPLETED` su un'altra stessa
+variante: perfetto in una lista di aste dove si legge la riga, inutile qui, perché su uno schermo
+proiettato «in corso» e «in pausa» finirebbero **dello stesso colore** e la differenza starebbe solo
+nella parola. Ma la domanda a cui quel badge risponde — sta correndo, o è ferma? — è quella che si fa
+alzando gli occhi da tre metri, *senza* leggere. Quindi tre famiglie di colore scritte a mano come
+tutto il resto della pagina: verde corre, ambra è ferma, bianco smorto non è ancora cominciata o è
+già finita. Le parole invece restano condivise (`statusLabel`), perché lì non c'è niente da dire in
+modo diverso e due elenchi di etichette divergerebbero.
+
+⚠ Il badge è `outline` e non pieno, **anche per la pausa**, e non è timidezza: il richiamo forte per
+l'asta ferma esiste già ed è il cartello ambra in fondo alla stessa colonna, che dice la cosa in più —
+i countdown sono fermi. Due allarmi ambra impilati nella stessa colonna si annullano a vicenda.
+
+Quell'intestazione era una striscia a tutta larghezza sopra le due colonne, e stava per un motivo che
+suona ragionevole: è un'intestazione, le intestazioni vanno in cima. Solo che il costo non lo pagava
+lei. Trentasette pixel a tutta larghezza, su un tabellone di due righe, sono diciotto pixel in meno
+per card, cioè **una riga di rosa in meno in ognuna** — su una pagina il cui unico vincolo dichiarato
+è l'altezza, e che a ottocento pixel smette di essere leggibile. Dentro la colonna del lotto lo stesso
+testo non toglie niente a nessuno: quella colonna ha spazio verticale da spendere, il tabellone no.
+La lezione è generale e vale oltre questa pagina: in un layout dove una zona è satura e l'altra non lo
+è, un elemento condiviso da entrambe va messo in quella che non lo è, anche quando la convenzione
+dice altro.
+
+Nella stessa passata l'intestazione ha perso due cose. Il **marchio dell'asta di prova**: il badge
+compare ovunque nell'app perché chi lavora tiene aperte due schede identiche e non deve confondersi,
+ma la TV non è la scheda di nessuno — è proiettata in mezzo alla stanza, e chi la guarda sa già se la
+serata è una prova. E la **fase** («offerte», «spareggio»): la colonna sotto la racconta in grande,
+quindi ripeterla in piccolo a due centimetri era due volte la stessa informazione nello stesso
+sguardo. Resta lo stato, che invece non è ridondante con niente: risponde alla domanda di chi alza gli
+occhi e trova tutti i numeri immobili — sta correndo, o è ferma?
+
+L'avviso di riconnessione è sopravvissuto al taglio di proposito, ed è l'unica cosa in pagina che
+sappia dirlo: se lo stream cade, il tabellone resta pieno di numeri che sembrano validi.
 
 **La forma non cambia mai**, nemmeno nel momento più teatrale. Al reveal le buste si aprono nella
 colonna mentre nel tabellone la card del vincitore si accende, col giocatore appena aggiudicato in
@@ -2085,6 +2121,29 @@ evidenza dentro la sua nuova rosa: l'assegnazione è già scritta quando le bust
 quel nome comparirebbe lì comunque. I due lati raccontano insieme la stessa cosa — chi ha vinto, a
 quanto, e com'è adesso la sua rosa — e il recap non sparisce proprio nell'istante in cui uno vuole
 confrontare i crediti residui.
+
+In quell'elenco, accanto a ogni cifra, c'è **quando quella busta è stata fissata**: `+0s`, `+3s`. Il
+telefono lo mostrava da sempre e il proiettore no, e mancava nel posto dove serve più che altrove:
+quando due hanno offerto lo stesso numero, la domanda che parte a voce in quella stanza è «e chi c'era
+arrivato prima?», e la risposta era su dieci telefoni invece che sullo schermo che tutti stavano
+guardando.
+
+⚠ **Il conto parte dalla prima busta del round, non dall'apertura del round**, e chi legge «+3s» come
+«tre secondi dopo il via» lo legge male. Le ragioni sono due. La prima è a cosa serve il numero: a
+parità di importo vince `MIN(amount_set_at)`, quindi ciò che conta è l'ordine *fra* le buste, e
+prendere la prima come zero lo rende leggibile senza sottrazioni a mente. La seconda è che l'apertura
+del round non è un istante affidabile a posteriori — nello snapshot c'è `endsAt`, e una pausa in mezzo
+al round lo trasla: un «+3s» contato da lì cambierebbe da sé dopo una pausa, cioè mentirebbe
+precisamente nelle sere in cui qualcosa è andato storto.
+
+Il dato e l'ordine stanno in `lib/realtime/portal.ts` (`revealBaseMs`, `bidOffsetLabel`,
+`compareRevealBids`) e non nei due componenti che li disegnano. Prima vivevano dentro il pannello del
+telefono, che era giusto finché il lettore era uno; con due schermi una copia per schermo
+significherebbe che una sera la stessa busta è `+3s` sul telefono e `+4s` sul proiettore — in quella
+stanza non è un dettaglio, è una discussione. Nello spostarli è emersa una conseguenza che il pannello
+del telefono aveva già risolto e la TV no: le buste vanno ordinate per importo **e poi per tempo**,
+perché due `40` in ordine arbitrario con i secondi scritti accanto si leggono come una classifica
+sbagliata, e nello spareggio quella è esattamente la classifica che ha deciso.
 
 Due cose sopravvivono dalla versione precedente, ed è perché non dipendevano dalla distanza. Niente
 hover, niente scroll, niente click: nessuna informazione può stare dietro a un'interazione, perché

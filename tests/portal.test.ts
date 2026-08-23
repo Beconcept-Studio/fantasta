@@ -7,13 +7,16 @@ import {
   autoPickCandidate,
   availablePlayers,
   bidBounds,
+  bidOffsetLabel,
   checkAmount,
+  compareRevealBids,
   countdownLabel,
   hasCarmyFilters,
   parseAmount,
   pausedRemaining,
   portalScreen,
   quotaPerRuolo,
+  revealBaseMs,
   sceneLabel,
   sceneOf,
   sceneTime,
@@ -26,7 +29,12 @@ import {
   turnKey,
   tvConnected,
 } from "@/lib/realtime/portal";
-import type { PoolPlayer, Presence, Snapshot } from "@/lib/realtime/types";
+import type {
+  PoolPlayer,
+  Presence,
+  Snapshot,
+  SnapshotRevealBid,
+} from "@/lib/realtime/types";
 
 import {
   ME,
@@ -327,6 +335,68 @@ describe("tvConnected", () => {
 // lo snapshot non porta più niente, quindi non esiste una funzione che le legga.
 // La guardia sta in `tests/db/i8.test.ts`, dove ha senso — sull'insieme esatto
 // delle chiavi che escono davvero dalla route SSE.
+
+// ─── Le buste aperte: il «+3s» ───────────────────────────────────────────────
+
+describe("il «+3s» del reveal", () => {
+  const T0 = Date.parse("2026-08-23T20:00:00.000Z");
+
+  /** Una busta: solo i campi che queste tre funzioni guardano. */
+  const bid = (memberId: string, amount: number, ms: number): SnapshotRevealBid => ({
+    memberId,
+    amount,
+    amountSetAt: new Date(T0 + ms).toISOString(),
+    withdrawnAt: null,
+  });
+
+  it("lo zero è la prima busta del round, non l'apertura del round", () => {
+    // ⚠ È **la** cosa da sapere di questo numero, e per questo un test la fissa:
+    // chi legge «+3s» pensa «tre secondi dopo il via». Non è quello. La prima
+    // busta consegnata è lo zero, per quanto tardi sia arrivata.
+    const bids = [bid(OTHER, 30, 9_000), bid(ME, 40, 12_000)];
+    const base = revealBaseMs(bids);
+    expect(bidOffsetLabel(bids[0].amountSetAt, base)).toBe("+0s");
+    expect(bidOffsetLabel(bids[1].amountSetAt, base)).toBe("+3s");
+  });
+
+  it("arrotonda al secondo, e non scrive mai un numero negativo", () => {
+    expect(bidOffsetLabel(new Date(T0 + 2_400).toISOString(), T0)).toBe("+2s");
+    expect(bidOffsetLabel(new Date(T0 + 2_600).toISOString(), T0)).toBe("+3s");
+    // Sotto lo zero non si va: se un giorno arrivasse un timestamp prima della
+    // base, l'etichetta resta «+0s» invece di scrivere «+-1s» sul proiettore.
+    expect(bidOffsetLabel(new Date(T0 - 5_000).toISOString(), T0)).toBe("+0s");
+  });
+
+  it("un round senza buste non fa esplodere la colonna", () => {
+    // `Math.min()` di un elenco vuoto è `Infinity`: il caso non arriva al reveal,
+    // ma se ci arrivasse deve produrre un'etichetta, non un errore in mezzo alla
+    // stanza.
+    expect(revealBaseMs([])).toBe(Number.POSITIVE_INFINITY);
+    expect(bidOffsetLabel(new Date(T0).toISOString(), revealBaseMs([]))).toBe("+0s");
+  });
+
+  it("l'ordine è l'importo, e a pari importo chi c'è arrivato prima", () => {
+    // ⚠ Il secondo criterio è quello che ha deciso lo spareggio: con i secondi
+    // scritti accanto, due `40` in ordine arbitrario si leggono come una
+    // classifica sbagliata.
+    const tardi = bid(OTHER, 40, 5_000);
+    const presto = bid(ME, 40, 2_000);
+    const basso = bid(THIRD, 30, 0);
+    expect([tardi, basso, presto].sort(compareRevealBids)).toEqual([presto, tardi, basso]);
+  });
+
+  it("è lo stesso dato sui due schermi, perché è la stessa funzione", () => {
+    // Il portale e la TV chiamano queste tre e non ne tengono una copia: qui
+    // quella promessa è scritta. Se una delle due ricominciasse a calcolarsi i
+    // secondi da sé, il numero potrebbe divergere senza che niente lo segnali.
+    const bids = [bid(ME, 40, 3_000), bid(OTHER, 40, 0)];
+    const base = revealBaseMs(bids);
+    const letto = [...bids]
+      .sort(compareRevealBids)
+      .map((b) => `${b.amount} ${bidOffsetLabel(b.amountSetAt, base)}`);
+    expect(letto).toEqual(["40 +0s", "40 +3s"]);
+  });
+});
 
 // ─── La chiamata (F5-10) ─────────────────────────────────────────────────────
 

@@ -330,10 +330,11 @@ describe("statusLabel", () => {
   });
 
   it("⚠ non dice «finita» come phaseLabel: il badge sta accanto alla fase, non al posto suo", () => {
-    // `phaseLabel` scrive «finita» perché è la sola frase che la TV proietta; qui
-    // la parola è «conclusa» perché convive con un titolo e quattro righe, e le
-    // due non sono lo stesso registro. Se un giorno una delle due cambia, questa
-    // riga dice che l'altra non deve seguirla per simmetria.
+    // `phaseLabel` scrive «finita» perché è la sola frase dove sta — la riga
+    // della fase, nell'intestazione della regia; qui la parola è «conclusa»
+    // perché convive con un titolo e quattro righe, e le due non sono lo stesso
+    // registro. Se un giorno una delle due cambia, questa riga dice che l'altra
+    // non deve seguirla per simmetria.
     const finita = snapshot({
       auction: { ...readyAuction(), status: "COMPLETED" },
       currentLot: null,
