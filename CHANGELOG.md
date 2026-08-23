@@ -4,6 +4,44 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.19.0] — 2026-08-23
+
+**La card di stato del portale si stringe a due righe, e chi conduce l'asta la può fermare senza
+uscirne.** Cambia la prima card della terza colonna, cioè quella che c'è sempre.
+
+**La card è alta la metà.** Prendeva circa 125px ad asta in corso e 195px in pausa; adesso sono ~80 e
+~105. Il motivo non è l'eleganza: subito sotto c'è la card delle offerte — quella per cui si tiene il
+telefono in mano — e ogni pixel in cima è un pixel che quella non ha. Le informazioni sono le stesse
+di prima, tutte e quattro.
+
+**Fase e stato sulla prima riga, ruolo e turno sulla seconda** come due etichette in linea, al posto
+della listina con «Ruolo» e «Turno» scritti a fianco. Un ruolo e un nome squadra non si confondono,
+e le due parole costavano due righe. Chi usa un lettore di schermo le sente ancora: sono nascoste
+alla vista, non tolte.
+
+**Via la scritta «Asta» in cima alla card.** Era l'unica identica in ogni stato dell'asta, cioè
+l'unica che non distingueva mai niente da niente.
+
+**In pausa l'avviso è una riga sola** invece di tre, e dice la cosa che non è ovvia: alla ripresa il
+tempo riparte da dov'era, non da capo.
+
+**«Pausa» e «Riprendi» sono adesso anche nel portale**, sulla riga delle etichette, e li vede **solo
+chi possiede l'asta**. Prima chi conduce e gioca insieme doveva uscire dal portale e passare dalla
+Regia per fermare l'asta: cioè lasciare la pagina delle offerte nell'istante in cui serviva
+sospenderle.
+
+⚠ **Un tocco, senza conferma.** Il pulsante sta a un centimetro da «Offri» sotto un countdown di
+trenta secondi, quindi una pausa per sbaglio è possibile — si annulla con «Riprendi», e quando serve
+fermare l'asta davvero serve subito.
+
+La **Regia resta la casa dei comandi**: avvio, override, «Annulla lotto» e «Mostra risultati» sono
+ancora solo lì. Nel portale arrivano le due sole leve che servono *mentre* si sta guardando quella
+pagina. Per chi conduce senza giocare non cambia niente: non ha un portale, e la Regia è già il suo
+posto.
+
+**I titoli delle pagine di accesso e delle intestazioni d'asta sono più piccoli e uniformi**, così
+che una pagina non abbia il titolo grande e quella dopo il titolo piccolo.
+
 ## [1.18.0] — 2026-08-23
 
 **M18 — La tua rosa: i reparti che si aprono, quanto budget c'è dentro, e i giocatori nell'ordine in
