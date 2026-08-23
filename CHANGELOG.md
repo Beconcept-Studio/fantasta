@@ -4,6 +4,60 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.18.0] — 2026-08-23
+
+**M18 — La tua rosa: i reparti che si aprono, quanto budget c'è dentro, e i giocatori nell'ordine in
+cui li hai presi.** Cambia una colonna sola del portale, e risponde a due domande che prima si
+facevano a mente sotto un countdown.
+
+**Accanto al nome di ogni reparto c'è quanto budget ci è finito dentro.** Prima la colonna diceva
+`4/8` per i difensori: quanti te ne mancano, non quanto ti sono costati. Adesso dice anche `(13%)`, e
+il conto è sul **budget a disposizione**, non su quello che hai già speso: 250 sui portieri con 500 di
+budget si legge `50%`.
+
+⚠ **Le quattro percentuali non fanno 100, ed è voluto.** Quello che manca sono i crediti che hai
+ancora in cassa — cioè un'informazione anche quella. Non è una somma da far quadrare.
+
+⚠ **E se la regia ti rettifica il budget, tutte e quattro le percentuali si spostano**: il conto è sui
+crediti a disposizione *adesso*, non su quelli di partenza. È cambiato il totale su cui stai
+ragionando.
+
+**A reparto vuoto si legge `(0%)`**, non uno spazio bianco: il posto in cui guardare è sempre lo
+stesso.
+
+**I quattro reparti sono diventati quattro righe che si aprono**, una per volta. A rosa piena erano
+ventotto righe tutte aperte insieme: su un telefono era metà dello scroll fra il lotto e gli altri
+partecipanti. La riga chiusa dice già tutto quello che serve a colpo d'occhio — nome del reparto,
+quota, `n/tot` — e i nomi si aprono quando li vuoi.
+
+**Il reparto che l'asta sta chiamando adesso è già aperto**, e quando l'asta passa al ruolo successivo
+l'apertura si sposta da sé. Se ne apri un altro a mano, **resta aperto**: non si richiude sotto le
+dita. Ricaricando la pagina ritrovi il reparto in gioco aperto e gli altri chiusi, cioè esattamente
+quello che vede chi non si è mai mosso.
+
+⚠ **Ad asta conclusa sono quattro righe chiuse**, con le quattro quote e i quattro `n/tot`. È il
+riepilogo giusto per quel momento, e i nomi si aprono. Vale anche prima che l'asta cominci.
+
+**In regia la rosa resta piatta come prima**, e senza percentuali: là servono otto o dodici rose
+leggibili tutte insieme, e dei reparti chiusi le nasconderebbero tutte.
+
+**I giocatori sono nell'ordine in cui li hai presi** — nel portale, in regia e in TV. Erano ordinati
+per prezzo, quindi un acquisto da 45 crediti non si aggiungeva in fondo al reparto: si metteva in cima
+e spingeva giù quello che avevi appena finito di leggere. Una rosa non è una classifica.
+
+⚠ **In TV il giocatore appena vinto è ora l'ultima riga piena del suo gruppo**, cioè sempre nello
+stesso posto, invece di comparire dove lo mandava il prezzo. Le card restano alte uguali come prima.
+
+⚠ **Una riassegnazione fatta dalla regia va in fondo al reparto**, non al posto del giocatore che
+sostituisce. Non è un difetto: la rosa dice quando le cose sono state decise, e una correzione è stata
+decisa in quel momento.
+
+**Il verbale delle rose non è cambiato**: era già in ordine cronologico. Adesso sono le tre viste a
+dire la stessa cosa che dice lui.
+
+**Nessun passo a mano sul server**: il rilascio finisce col deploy. Niente `pnpm db:push`, nessun
+backfill, nessun file da caricare, nessuna dipendenza nuova — verificato, non dedotto.
+
 ## [1.17.0] — 2026-08-22
 
 **M17 — Il portale su tre colonne, e la chiamata che arriva dal basso.** Sul telefono non cambia
