@@ -1632,8 +1632,14 @@ portale che non vengono dallo snapshot. Nessuna delle due è persistita o sincro
 diventano irrilevanti da sé al momento successivo — l'una perché l'id del lotto cambia, l'altra
 perché cambia la chiave del turno.
 
-Che siano due e non una non allenta la settima regola, perché sono due **dello stesso tipo**: «questa
-cosa che si apre da sé l'ho chiusa io». Non esiste da nessuna parte una variabile "ho ricevuto
+Da M18 ce n'è un terzo pezzo, di forma diversa: **quale reparto della propria rosa è aperto**. Non è
+una variabile del portale — vive dentro l'accordion di radix — ma è stato locale a tutti gli effetti,
+ed è governato dallo stesso principio per una strada un po' più elegante, raccontata due sezioni più
+avanti.
+
+Che siano dello stesso tipo — e non una collezione di stati che cresce — è ciò che non allenta la
+settima regola: sono tutti «questa cosa che si apre da sé l'ho chiusa io», oppure «questa che si è
+aperta da sé l'ho spostata io». Non esiste da nessuna parte una variabile "ho ricevuto
 l'evento X", quindi non esiste una schermata raggiungibile solo da chi era connesso al momento giusto.
 Chiudere il tab e riaprirlo produce la stessa pagina — non perché ci sia un recupero, ma perché non
 c'era niente da recuperare.
@@ -1660,6 +1666,86 @@ durante le offerte, durante lo spareggio, durante il reveal, a turno di chiamata
 asta in pausa — sono **test automatici** che costruiscono lo snapshot di quell'istante e chiedono
 alla funzione cosa mostrerebbe. Il collaudo a mano sui browser veri resta, ed è il cancello di fase;
 ma non è più l'unico posto in cui questa logica viene esercitata.
+
+### La colonna della rosa: quattro righe che si aprono, e quanto budget c'è dentro
+
+La prima colonna del portale è la propria rosa, e da M18 risponde a due domande che prima faceva
+rispondere a mente.
+
+La prima è **«quanto ho messo dove»**. Prima diceva `4/8` per i difensori: quanti me ne mancano, non
+quanto mi sono costati. Il conto di quanto budget è finito in un reparto — l'unico numero su cui in
+un'asta si decide se si sta esagerando — andava fatto sommando i prezzi riga per riga mentre scorre un
+countdown. Adesso accanto al nome del reparto c'è una percentuale, e il denominatore è **il budget a
+disposizione**, non la spesa già fatta: 250 sui portieri su un budget da 500 fa `50%`. La quota sulla
+spesa sarebbe stata volatile e avrebbe insegnato poco — al primo acquisto un reparto starebbe al 100%
+— mentre questa è confrontabile con la ripartizione che uno si è prefissato prima di sedersi. Le
+quattro percentuali quindi **non fanno 100**, e ciò che manca sono i crediti ancora in cassa: non è una
+somma da far quadrare, è a sua volta un'informazione.
+
+Il budget iniziale non viaggia nello snapshot e non serve: `crediti + speso` lo ricostruisce, ed è la
+stessa identità con cui si controlla a vista che i conti tornino (I3). Ne segue una cosa che vale la
+pena sapere prima di trovarsi a spiegarla: **una rettifica di budget sposta tutte e quattro le quote**,
+perché `credits` include già le rettifiche e il denominatore è il budget *corrente*. È la lettura
+giusta di «crediti a disposizione» — è cambiato il totale su cui si sta ragionando.
+
+La seconda domanda è **«chi ho preso»**, e la risposta era una lista lunga: ventotto righe a rosa
+piena, tutte aperte, tutte insieme, su un telefono. Adesso i quattro reparti sono una fisarmonica —
+uno aperto per volta, e si può chiudere anche quello — e **il reparto che l'asta sta chiamando adesso è
+quello aperto**.
+
+Come si ottiene quell'apertura è la parte che merita il paragrafo, perché la strada ovvia è sbagliata
+in un modo che si vede solo in diretta. Un `useEffect` che copiasse `currentRole` in uno stato locale
+darebbe due sorgenti di verità, e in un portale che riceve uno snapshot ogni pochi istanti significa un
+accordion che si richiude sotto le dita. La strada giusta è una **chiave** sul ruolo in gioco: lo stato
+locale non è mai *contro* lo snapshot, è **azzerato** da lui. La proprietà che ne esce è quella che si
+vuole davvero — la scelta a mano vale finché il ruolo in gioco non cambia. Aperti i difensori mentre
+l'asta chiama i centrocampisti, restano aperti; quando l'asta passa agli attaccanti, la fisarmonica si
+rimonta con gli attaccanti aperti.
+
+Sta dentro I10 per la stessa ragione dei due `dismissed*`: **niente è raggiungibile solo perché eri qui
+prima**. Chi ricarica ritrova il reparto in gioco aperto e gli altri chiusi, cioè lo stato di chi non
+si è mai mosso, e nessuna informazione vive solo dentro un pannello aperto — la riga chiusa dice già
+nome, quota e `n/tot`. È ciò che rende accettabile perdere l'apertura con un F5. Ad asta conclusa
+`currentRole` è nullo e la rosa completa si presenta come quattro righe chiuse con le quattro quote:
+è il riepilogo giusto per quel momento, e chi vuole i nomi apre.
+
+**La fisarmonica vale solo qui.** In regia la rosa resta piatta, perché là servono 8–12 rose a colpo
+d'occhio e un accordion le nasconderebbe tutte; e là non ci sono percentuali, perché accanto c'è già la
+cifra dello speso e dodici card con quattro percentuali sono quarantotto numeri che nessuno legge. Un
+file che deve servire due forme così diverse le serve con **due componenti e un corpo privato
+condiviso**, non con una prop booleana che accenda insieme la fisarmonica e le percentuali: sono due
+cose, e un flag che ne comanda due è un flag che al terzo chiamante non si sa più cosa significhi.
+
+### La rosa è un diario, non una classifica
+
+C'è una terza cosa che nessuno aveva chiesto e che tutti avevano visto: la lista **si rimescolava**.
+Era ordinata per prezzo, quindi un acquisto da 45 crediti non si aggiungeva in fondo al reparto — si
+metteva in cima e spingeva giù quello che si era appena finito di leggere. L'ordine in cui le cose sono
+accadute è l'unico che non cambia sotto gli occhi, e da M18 è quello che si legge nel portale, in regia
+e in TV.
+
+La cosa notevole è che **non è stato aggiunto niente**. La strada che sembra ovvia — «serve un
+`assignedAt` nello snapshot» — avrebbe aperto `serializeSnapshot`, il punto più delicato dell'app, per
+un dato che c'era già: le assegnazioni si leggono dal database ordinate per data di creazione, e chi
+costruisce lo snapshot le filtra per membro senza riordinarle. `member.roster` **era già** in ordine di
+estrazione, ed erano le due viste a disfarlo riordinando per prezzo nel client. La modifica è
+sottrattiva: due `.sort()` in meno.
+
+Perché quell'ordine sia affidabile dipende da un dettaglio che val la pena conoscere: la data di
+creazione di un'assegnazione è **quella del motore**, non un `now()` del database. Se fosse stata del
+database sarebbe stata per transazione e non per statement, quindi tutte le assegnazioni scritte in una
+transazione sola — quelle di un seed, per esempio — avrebbero condiviso il timestamp, e in locale
+l'ordine dentro un reparto sarebbe sembrato casuale: un finto bug, del tipo peggiore, perché si
+manifesta solo sui dati di prova. Il perché sta scritto una volta sola e nel punto in cui la garanzia
+viene prodotta, non nei due consumatori — con l'avviso che ora un riordino aggiunto lì cambia **tre**
+schermate.
+
+Tre conseguenze da conoscere. In TV **il giocatore appena vinto è sempre l'ultima riga piena del suo
+gruppo**, cioè un posto fisso, mentre prima l'evidenziazione compariva dove il prezzo la mandava. Una
+**riassegnazione va in fondo**, perché annullare e riassegnare crea una riga nuova col momento della
+correzione: non è un difetto, la rosa dice quando le cose sono state decise. E il **verbale delle rose**
+non è stato toccato: non ordinava per prezzo, quindi era già cronologico — dopo M18 sono le tre viste ad
+allinearsi a lui, non il contrario.
 
 ### Il sesto caso: l'asta non esiste più
 

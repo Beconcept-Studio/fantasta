@@ -96,6 +96,27 @@ function serializeMembers(
           info?.isVisible ?? false,
           now,
         ),
+        /**
+         * ⚠ **In ordine di estrazione, e non per caso** (M18 §2): si filtra e si
+         * mappa **senza riordinare**, perché `loadAuctionState` legge le
+         * assegnazioni con `.orderBy(asc(assignments.createdAt), asc(assignments.id))`.
+         * Da M18 quest'ordine è ciò che si legge a schermo nel portale, in regia
+         * e in TV — prima le tre viste lo disfacevano riordinando per prezzo —
+         * quindi **un `.sort()` aggiunto qui cambia tre schermate**.
+         *
+         * E l'ordine è affidabile perché quel `createdAt` è **quello del motore**:
+         * `persistAuctionState` scrive `createdAt: toDate(a.createdAt)`, non un
+         * `defaultNow()`. Con un `now()` del database sarebbe stato per
+         * transazione e non per statement, quindi tutte le assegnazioni scritte
+         * nella stessa transazione — quelle del seed, per esempio — avrebbero
+         * condiviso il timestamp e l'ordine dentro un reparto sarebbe stato
+         * arbitrario: un finto bug da inseguire in locale.
+         *
+         * Il tie-break è `id`, un uuid casuale, e si applica solo a due
+         * assegnazioni con lo stesso millisecondo di motore — in pratica mai. Se
+         * un giorno l'ordine sembrasse arbitrario **su due righe sole**, il
+         * sospetto è quello e non il resto.
+         */
         roster: state.assignments
           .filter((a) => a.memberId === m.id && a.voidedAt === null)
           .map((a) => {
