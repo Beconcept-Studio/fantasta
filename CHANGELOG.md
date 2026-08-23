@@ -4,6 +4,38 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.19.2] — 2026-08-23
+
+**Nell'app non cambia niente.** Nessuna riga di codice dell'applicazione è toccata: cambia il **deploy**,
+e cambia la documentazione. È qui perché il rilascio precedente ha reso evidente un problema che c'era
+da due settimane e che nessuno aveva visto — perché si presentava come un successo.
+
+**Il deploy automatico funziona.** Le versioni `1.19.0` e `1.19.1` **non sono mai arrivate in produzione
+da sole**: il deploy partiva, riusciva, e ricompilava la versione *precedente*. Sul repository c'era un
+webhook aggiunto a mano il 9 agosto che faceva partire un deploy a **ogni** push, su qualunque branch —
+e lo script di deploy compila sempre `main`. Con `dev` pushato pochi secondi prima, il deploy fotografava
+`main` come era *prima* del rilascio. Ploi diceva «completato» ed era vero.
+
+⚠ **Perché non era mai emerso**: la finestra fra il push e il `git fetch` del server è di 4-6 secondi, e
+fino a quel giorno i due push distavano mezzo secondo. Poi fra i due sono comparsi merge, controllo e
+tag, sono diventati sedici secondi, e la finestra si è aperta. Non un guasto nuovo: una protezione
+accidentale, persa cambiando il ritmo dei comandi.
+
+Il webhook manuale è stato sostituito da quello che Ploi crea da sé, che **valida il branch** — un push
+su `dev` viene rifiutato, uno su `main` deploya. Verificato nelle due direzioni.
+
+**E il deploy esce subito quando non c'è niente da fare**, in 0,8 secondi invece di due minuti e mezzo.
+Non è una comodità: un deploy inutile occupava la finestra in cui doveva entrare il push su `main`, e uno
+che esce subito non la occupa più. È la seconda difesa, per il giorno che qualcuno rimettesse un webhook a
+mano. ⚠ Se la build è più vecchia del commit — una build morta a metà — lo script ricompila comunque:
+saltarla lascerebbe la produzione indietro con un messaggio di successo, che è il guasto da cui nasce
+tutto questo.
+
+**Il README non promette più una cosa che non c'era.** Diceva che ogni sezione di questo changelog ha in
+fondo un «Per chi aggiorna il server»; c'è in sette su ventiquattro, cioè dove servono passi a mano.
+Adesso lo dice così, e l'assenza di quella sezione diventa essa stessa un'informazione: vuol dire che il
+deploy basta. Come in questa versione.
+
 ## [1.19.1] — 2026-08-23
 
 **Nell'app non cambia niente.** È una patch di sola documentazione, e serve a una cosa sola: verificare
