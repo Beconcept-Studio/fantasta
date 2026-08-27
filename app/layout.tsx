@@ -43,12 +43,44 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/**
+ * ⚠ **`appleWebApp` è deliberatamente ridondante col manifest** (M20 §5), come
+ * `proxy_buffering off` e `X-Accel-Buffering` sulla rotta dello stream: Safari
+ * legge ancora questi tre `<meta>` — `apple-mobile-web-app-capable`, `-title`,
+ * `-status-bar-style` — oltre a `/manifest.webmanifest`, e le due dichiarazioni
+ * insieme sono ciò che fa aprire l'app aggiunta alla schermata home **senza barra
+ * degli indirizzi**.
+ *
+ * `title` è «Fantasta» e non il `title` della pagina qui sotto: è il nome che
+ * finisce **sotto l'icona** sul telefono, dove «Asta Fantacalcio» verrebbe
+ * troncato.
+ *
+ * `statusBarStyle: "default"` e **non** `black-translucent`: `default` lascia la
+ * barra di stato **fuori** dalla pagina, cioè non apre il capitolo delle safe
+ * area. È la stessa ragione per cui in `viewport` qui sotto non c'è
+ * `viewport-fit=cover`, e quella riga vale la pena di leggerla prima di
+ * aggiungerlo.
+ */
 export const metadata: Metadata = {
   title: "Asta Fantacalcio",
   description: "Asta di Fantacalcio a busta chiusa, in diretta.",
+  appleWebApp: {
+    capable: true,
+    title: "Fantasta",
+    statusBarStyle: "default",
+  },
 };
 
 /**
+ * ⚠ **Nessun `viewport-fit: "cover"`, e con l'app installabile è una riga che
+ * verrà proposta** (M20 §5, punto 1). L'applicazione ha già quattro
+ * `env(safe-area-inset-*)` **con fallback** — nel portale, nel modale d'offerta,
+ * nel pannello di chiamata e nell'intestazione del portale — e senza
+ * `viewport-fit=cover` quegli `env()` valgono **0**, quindi oggi vincono i
+ * fallback e i layout sono quelli che l'owner ha guardato e approvato.
+ * Accenderlo cambierebbe quattro layout, di cui due sono il modale d'offerta e la
+ * barra incollata del portale, per un guadagno che nessuno ha chiesto.
+ *
  * `interactiveWidget: "resizes-content"` è per la tastiera del telefono: senza,
  * su Android la tastiera *copre* la pagina invece di rimpicciolirla, e
  * `100dvh` continua a valere lo schermo intero — il modale d'offerta finirebbe
