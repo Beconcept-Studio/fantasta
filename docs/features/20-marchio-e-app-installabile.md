@@ -1,0 +1,388 @@
+# M20 — Il marchio nel nav, e l'app che si installa sul telefono
+
+> **Stato:** **pianificata**, non aperta. Nasce dall'unica richiesta che l'owner ha scritto nel
+> quaderno dopo `v1.19.2`, ed è una macro sola perché le due metà — il marchio e l'installabilità —
+> vengono **dallo stesso disegno** e si generano dallo stesso file sorgente (§0).
+>
+> ⚠ **Tocca lo schema del database? No. Tocca il motore? No. Backfill? No.** Nessun `pnpm db:push`,
+> nessun passo a mano sul server, nessuna dipendenza nuova in `package.json`. Non si aggiunge un
+> campo a `serializeSnapshot`, non nasce una Server Action, non si scrive niente su nessuna tabella.
+> **Il rilascio finisce col deploy** — con una verifica in più subito dopo, che §7 spiega e che non è
+> una formalità.
+>
+> **Invarianti coinvolti: nessuno, e va detto invece di darlo per scontato.**
+> **I8** non è in gioco: questa macro non tocca lo snapshot, non aggiunge un campo, non legge
+> un'offerta. **I10 / `PLAN §8bis`** non è in gioco: non introduce stato locale in nessuna schermata
+> e non aggiunge una vista raggiungibile solo da chi era connesso — il manifest è una risorsa statica
+> e il marchio è un `path`.
+> **Regole coinvolte:** **8** (il marchio è un componente con **un solo chiamante**: sta nel file di
+> chi lo usa, non in un file suo — §1); **la regola del `dark:`** (niente varianti scure nel codice
+> nuovo, e la TV non si tocca: la navbar lì restituisce già `null`).
+> **Decisione ribaltata:** `DECISIONS.md` 2026-08-18 — «nessun manifest, nessuna PWA, nessun service
+> worker» (§0).
+
+## §0 — Perché una macro sola, e cosa ribalta
+
+Le due metà della richiesta sembrano due cose e sono una: **`fixtures/logo.png` è la sorgente di
+tutte le icone** — linguetta, iOS, manifest — e `fixtures/logo.svg` è lo stesso marchio in vettore
+per il nav. Un tag solo, un rollback solo: tornare indietro sul manifest senza tornare indietro sul
+marchio non è uno scenario che qualcuno vorrà mai.
+
+⚠ **E questa macro ribalta una decisione scritta.** `docs/DECISIONS.md` del 2026-08-18, la voce
+sull'icona fuori macro, dice per iscritto:
+
+> nessun manifest, nessuna PWA, nessun service worker
+
+con la motivazione — «un manifest la renderebbe installabile, cioè aggiungerebbe una superficie da
+mantenere che nessuno ha chiesto» — e chiude con «per non ritrovarselo proposto come idea nuova».
+Adesso l'installabilità **è** chiesta, dall'owner, in prima persona. La decisione era giusta quando
+è stata presa e resta la ragione per cui allora non si è fatto: cambia il fatto, non il
+ragionamento. Va scritta in `DECISIONS.md` come **ribaltamento datato**, altrimenti fra sei mesi le
+due voci si contraddicono senza spiegarsi.
+
+⚠ **Il ribaltamento ha una conseguenza concreta, non solo retorica.** Quella voce spiega perché la
+misura **192** era stata saltata *di proposito*: «il 192 serve a un manifest, e questa applicazione
+non ne ha uno». Adesso ce l'ha, quindi il 192 serve, e serve anche il posto da cui servirlo (§3).
+
+## Obiettivo
+
+Due cose, e la seconda è quella che si vede la sera dell'asta.
+
+La prima: **il marchio non è da nessuna parte nell'applicazione**. Sta nella linguetta del browser da
+`v1.15.1` — ma quello era il cerchio blu, che adesso non è più il marchio — e dentro le pagine il nome
+dell'app è una parola in grassetto. Chi apre il portale non vede niente che dica «questa app è
+questa».
+
+La seconda: **oggi si arriva all'app dal browser, ogni volta.** Chi la usa dal telefono la tiene in
+una linguetta di Safari fra le altre, o si ricorda l'indirizzo. La sera dell'asta, con dodici persone
+nella stessa stanza che devono aprire lo stesso portale in fretta, «l'icona sulla schermata home» non
+è una comodità estetica: è la differenza fra un tocco e un giro nella cronologia.
+
+Il tema, in una riga: *il marchio si vede dentro l'app, e l'app si mette sulla schermata home come
+un'app.*
+
+## Richieste che ci confluiscono
+
+Tolta da `docs/REQUESTS.md` il 2026-08-27.
+
+- **Nuovo logo e Manifest per web app.** «Ho caricato un nuovo logo per l'app. In /fixtures trovi
+  logo.svg, da inserire nel nav vicino al titolo "Fantasta". logo.png invece è un'immagine square da
+  usare per favicon, e come immagine dell'app che si scarica quando si installa la web app su uno
+  smartphone. A tal proposito voglio che l'app diventi scaricabile (quindi una PWA), in modo che da
+  iPhone (e se possibile anche da altri dispositivi) mi possa salvare il segnalibro (come se fosse
+  un'app) sullo smartphone.»
+
+**Quattro decisioni dell'owner, prese il 2026-08-27**, tutte prima di scrivere una riga:
+
+1. **Nessun service worker.** iOS non lo richiede per installare in standalone; Chrome sì, per il
+   banner «Installa app». Si accetta di perdere quel banner (su Android resta la scorciatoia) per non
+   mettere una cache sopra un'applicazione che a ogni deploy ha già due minuti di chunk 404 (§5).
+2. **Logo *e* scritta nel nav**, non il logo al posto della scritta. Il marchio è una «F», non un
+   lettering: la parola accanto non è una ripetizione (§1).
+3. **Macro M20, non un intervento fuori macro** come fu l'icona il 2026-08-18: qui nasce una cartella
+   nuova, nasce un manifest, e si ribalta una decisione scritta.
+4. **Il numero 19 resta bruciato.** `CLAUDE.md` e l'indice delle macro rimandano a
+   `git show e381389:docs/features/19-deploy-senza-finestra-cieca.md` per la M19 cancellata: riusare
+   il numero renderebbe illeggibile quel rimando.
+
+## Cosa dicono i due file, misurato
+
+Non «guardato»: misurato, perché tre scelte della spec dipendono da questi numeri.
+
+**`fixtures/logo.svg`** — 602×800, **un solo `path` nero**, monocromatico. Porta anche un
+`clipPath` che è un rettangolo a tela piena, cioè **inerte**: rumore dell'export da Figma.
+
+**`fixtures/logo.png`** — 1080×1080, RGBA con **alpha interamente opaco** (min e max entrambi 255).
+Il marchio è bianco, il fondo è un gradiente verde → giallo → blu notte con grana. Riquadro del
+bianco: dal 33% al 67% in orizzontale, dal 27% al 73% in verticale — cioè **34% × 46%, centrato
+esatto** (50%, 50%).
+
+Da qui, tre conseguenze:
+
+1. **Niente da appiattire.** Il problema per cui `apple-icon.png` esisteva in quella forma — iOS
+   riempie la trasparenza di nero e mette gli angoli neri attorno al disegno — **non esiste più**:
+   l'immagine è già opaca a tela piena. L'icona di iOS diventa un ridimensionamento e una conversione
+   a RGB.
+2. **Un solo file fa anche da `maskable`.** La zona sicura di Android è il cerchio interno all'80%,
+   cioè un raggio del 40% dal centro. L'angolo del marchio più lontano dal centro sta a
+   √(0,17² + 0,23²) = **28,6%**. Nessun margine da aggiungere, nessun secondo file.
+3. **A 16 pixel il marchio non si legge come forma**, e si è deciso di accettarlo: largo il 34% di
+   16px fa 5,4 pixel. Le rese sono state guardate ingrandite, tela piena contro un ritaglio stretto,
+   e ha vinto la tela piena — a **32 e 48** il marchio è già netto, e il ritaglio a misura grande
+   **perde il blu notte**, cioè darebbe due icone visibilmente diverse per la stessa app. A 16px il
+   riconoscimento lo fa il campo di colore, che è quello che fa la maggior parte delle favicon.
+
+---
+
+## Spec
+
+### §1 — Il marchio nel nav
+
+Il `path` va **inline in `components/nav/navbar.tsx`**, come funzione `Logo()` in fondo al file, e
+**non** in `components/nav/logo.tsx`: ha **un solo chiamante** e la regola 8 vale anche per un
+componente di sei righe. Il giorno che un secondo posto lo vuole — la pagina di accesso, la TV — si
+sposta in un file suo, e quel giorno ci sarà un secondo chiamante che lo giustifica.
+
+Tre dettagli che non sono gusto:
+
+- **`fill="currentColor"`, non `fill="black"`.** Così segue il colore del testo accanto invece di
+  congelarsi. Non serve oggi — la navbar è chiara e il testo è quasi nero — ma è ciò che evita un
+  marchio nero su fondo nero il giorno che qualcosa cambia, e costa una parola.
+- **Il `clipPath` si butta**, con il suo `<defs>` e il suo `id`. È inerte, e ⚠ un SVG inline
+  condivide lo spazio dei nomi degli `id` con tutta la pagina: gli identificativi generati da Figma
+  (`clip0_262_27`) in una pagina sono un rischio piccolo e gratuito da evitare.
+- **`aria-hidden="true"`.** Il nome dell'app è scritto accanto in testo: un `<title>` nell'SVG
+  farebbe leggere «Fantasta Fantasta».
+
+Il `<Link href="/dashboard">` che c'è già diventa `flex items-center gap-2` e contiene marchio e
+parola. Misura di partenza `h-5 w-auto` (20px di altezza → ~15px di larghezza, il marchio è
+verticale): **è una misura da guardare, non da dedurre**, e il task M20-02 la guarda sul telefono
+prima di fissarla. Il resto della navbar non si tocca: a 375px a sinistra c'era solo il titolo, e
+quindici pixel ci stanno.
+
+Su `/tv/` non cambia niente — la navbar lì restituisce già `null` (`pathname.startsWith("/tv/")`).
+
+### §2 — Le icone, da `logo.png`
+
+`scripts/genera-icone.py` si **riscrive**, e resta com'è nella sua natura: **non chiamato da niente**
+— né build, né `tsc`, né ESLint — con i file che produce **committati**. Un'icona cambia una volta
+all'anno; un passo di build sarebbe un costo permanente per un lavoro che si fa una volta. E `sharp`
+continua a non essere utilizzabile: c'è sotto `node_modules/.pnpm` perché lo porta Next, ma con
+`pnpm` non è issato e un `require("sharp")` dalla radice risponde `MODULE_NOT_FOUND`.
+
+Cosa cambia nella ricetta:
+
+| nella ricetta | prima (`v1.15.1`) | adesso |
+| --- | --- | --- |
+| sorgente | `fixtures/favicon-512.png` | `fixtures/logo.png` |
+| appiattimento iOS | sul blu del disegno | **nessuno**: l'alpha è già opaco, basta `convert("RGB")` |
+| maschera di contrasto | no | **no**, e per la stessa ragione: nessun dettaglio fine da recuperare |
+| ritaglio | non c'era la domanda | **no**, tela piena (le rese sono state guardate) |
+| misure | 16/32/48 · 180 · 512 | 16/32/48 · 180 · **192** · 512 |
+
+Cinque file in uscita: `app/favicon.ico` (16/32/48 dentro, scritto byte per byte come oggi — Pillow
+ridimensionerebbe da sé, buttando via le rese preparate a mano, che sono l'unica ragione per cui un
+ICO multi-misura esiste), `app/icon.png` (512), `app/apple-icon.png` (180, RGB senza alpha),
+`public/icon-192.png` e `public/icon-512.png`.
+
+⚠ **`fixtures/favicon-512.png` si cancella.** Non è più la sorgente di niente, e tenerlo accanto a
+`logo.png` lascia in piedi il dubbio su quale dei due comandi. Git lo conserva.
+
+⚠ **Due note della voce 2026-08-18 vanno riportate qui, perché resteranno vere e sembreranno errori.**
+La prima: sul `.ico` Next dichiara `sizes="16x16"` perché legge la prima voce dell'indice e non tutte
+e tre — le tre misure ci sono, e correggerlo vorrebbe dire scrivere `metadata.icons` a mano. La
+seconda: in produzione **`/favicon.ico` non arriva a Node**, lo intercetta un `location = /favicon.ico`
+del boilerplate di Ploi, ed è preesistente e deciso di lasciarlo. Nessuna delle due è roba che questa
+macro rompe o aggiusta.
+
+### §3 — `public/` nasce, e ha una trappola
+
+**Oggi non esiste.** Nasce qui, e per un motivo preciso: il manifest deve dichiarare le sue icone con
+un **URL stabile**, e le rotte che Next genera dai file dentro `app/` portano un hash che cambia col
+contenuto.
+
+- **Piatta, senza sottocartella `icons/`.** Due file non sono una cartella.
+- ⚠ **I nomi non possono essere `icon.png`**: collide con la rotta `/icon.png` che Next genera da
+  `app/icon.png`. Da qui `icon-192.png` e `icon-512.png`, e il motivo va scritto accanto ai file
+  perché un rinomino «per pulizia» romperebbe l'installazione.
+- **Il 512 esiste due volte** — `app/icon.png` e `public/icon-512.png` — stessi byte, due consumatori
+  diversi (il `<link>` che Next genera da sé, e il manifest), **una sola sorgente**: lo stesso
+  script, dallo stesso PNG. È il prezzo per non ribaltare *anche* la decisione «niente
+  `metadata.icons` scritto a mano», che tenerebbe allineate due verità per la stessa cosa. Sono byte
+  duplicati, non una decisione duplicata.
+- ⚠ **`public/` non è in `.gitignore`, ed è nominata lì solo in un commento**: la riga che ignora
+  `/storage` spiega che l'archivio delle figurine sta fuori da `public/` *di proposito* (M7, vedi
+  `lib/campioncini.ts`). Le due icone qui dentro **vanno committate**, e quella scelta non si tocca:
+  nessuna figurina finisce in `public/`.
+
+### §4 — Il manifest
+
+`app/manifest.ts`, che Next serve su `/manifest.webmanifest` e per cui emette il `<link>` da sé.
+Nessun `middleware.ts` in questo progetto — l'autenticazione è per pagina, con `requireUser()` —
+quindi la rotta è pubblica, come deve essere: il browser scarica il manifest **senza credenziali**.
+
+```ts
+{
+  name: "Fantasta — Asta Fantacalcio",
+  short_name: "Fantasta",
+  description: "Asta di Fantacalcio a busta chiusa, in diretta.",
+  lang: "it",
+  start_url: "/",
+  display: "standalone",
+  background_color: "#ffffff",
+  theme_color: "#ffffff",
+  icons: [ /* quattro voci, due file: vedi sotto */ ],
+}
+```
+
+Le scelte che non sono ovvie:
+
+- **`start_url: "/"`** e non `/dashboard`: la radice smista già da sé per stato di sessione
+  (`signin` → `verify` → `onboarding` → `dashboard`, `app/page.tsx`). Puntare alla dashboard vorrebbe
+  dire che l'app installata si apre su un redirect per chi non è entrato.
+- **Nessun `orientation`.** Il portale è verticale e la TV è orizzontale, e sono la stessa
+  applicazione: fissare un orientamento nel manifest sarebbe una scelta di una vista imposta
+  all'altra.
+- **`theme_color` e `background_color` bianchi.** Il bianco è `--background` (`oklch(1 0 0)`), e la
+  navbar è `bg-background`: una barra di stato colorata sopra una navbar bianca si legge come un
+  difetto di allineamento, non come un tocco di marchio. Il `background_color` è anche il colore
+  dello splash su Android, e l'app apre bianca — così non c'è un lampo di colore.
+- ⚠ **Quattro voci di icona per due file, e non due voci con `purpose: "any maskable"`.**
+  Il tipo di Next è `purpose?: 'any' | 'maskable' | 'monochrome'`: la stringa doppia, che la
+  specifica del W3C ammette, **sarebbe un errore di typecheck**, cioè una build rossa al gate.
+  Verificato in `node_modules/next/dist/lib/metadata/types/manifest-types.d.ts`, non dedotto. Quindi
+  `icon-192` e `icon-512`, ognuno una volta con `any` e una volta con `maskable`. Funziona perché il
+  disegno è a tela piena col marchio centrato (§0, punto 2): la stessa immagine è giusta ritagliata e
+  non ritagliata.
+
+### §5 — iOS, e le tre cose che *non* si fanno
+
+Nel `metadata` di `app/layout.tsx`:
+
+```ts
+appleWebApp: { capable: true, title: "Fantasta", statusBarStyle: "default" }
+```
+
+Next lo traduce in `apple-mobile-web-app-capable`, `-title` e `-status-bar-style`. Serve perché
+Safari legge ancora questi meta oltre al manifest, e le due dichiarazioni insieme sono deliberatamente
+ridondanti — come `proxy_buffering off` e `X-Accel-Buffering` sulla rotta dello stream.
+`statusBarStyle: "default"` e non `black-translucent`: `default` lascia la barra di stato **fuori**
+dalla pagina, cioè non apre il capitolo delle safe area.
+
+**Le tre cose che non si fanno, e ognuna per una ragione sua:**
+
+1. ⚠ **Nessun `viewport-fit=cover`.** L'applicazione ha già quattro `env(safe-area-inset-*)` con
+   fallback — [portal.tsx:239](../../app/auctions/[id]/play/portal.tsx#L239),
+   [bid-modal.tsx:186](../../components/auction/bid-modal.tsx#L186),
+   [pick-panel.tsx:227](../../components/auction/pick-panel.tsx#L227),
+   [portal-header.tsx:44](../../components/auction/portal-header.tsx#L44) — e **senza
+   `viewport-fit=cover` quegli `env()` valgono 0**, quindi oggi vincono i fallback e i layout sono
+   quelli che l'owner ha guardato e approvato. Accenderlo cambierebbe quattro layout, di cui due sono
+   il modale d'offerta e la barra incollata del portale, per un guadagno che nessuno ha chiesto. È
+   una riga da non aggiungere, e questo è il punto in cui c'è scritto perché.
+2. **Nessun service worker** (decisione 1 dell'owner). Su iPhone non serve: l'installazione in
+   standalone non lo richiede. Su Android costa il banner «Installa app», e resta la scorciatoia. In
+   cambio non si mette una cache davanti a un'applicazione che a ogni deploy ha **due minuti** in cui
+   `/_next/static/chunks/*` risponde 404 (`CLAUDE.md`, regole di produzione): un service worker che
+   serve una pagina vecchia con riferimenti a chunk morti è quel guasto reso permanente, e il rimedio
+   sarebbe una disinstallazione che nessuno sa fare da un telefono.
+3. **Nessuna schermata di avvio iOS** (`apple-touch-startup-image`): vorrebbe un'immagine per ogni
+   misura di iPhone, cioè una decina di file da mantenere perché il primo mezzo secondo sia colorato
+   invece che bianco.
+
+### §6 — Le due cose che cambiano per chi installa, e vanno dette a voce
+
+Non sono difetti da correggere: sono **come funziona**, e stanno qui perché la sera dell'asta nessuno
+le scopra da sé.
+
+1. ⚠ **Chi installa rientra da zero.** Le web app aggiunte alla schermata home su iOS hanno un
+   contenitore cookie **separato** da Safari: la sessione aperta nel browser non passa nell'app
+   installata. E il giro **Google OAuth in standalone** è storicamente il punto fragile delle PWA su
+   iOS — va provato su un iPhone vero, non dedotto (task M20-05). Se non regge, la via c'è già e non
+   va costruita: l'accesso con **email e password** di M5.
+2. **Senza barra degli indirizzi il ricarico è un pull-to-refresh.** La versione si legge ancora — la
+   navbar la mostra, ed è lei il controllo a vista dopo un deploy — ma il rimedio documentato per la
+   finestra cieca del deploy («si risolve con un ricarico») su un'app installata è un gesto diverso.
+   Va scritto nel `CHANGELOG.md`, che è ciò che l'owner rilegge.
+
+### §7 — Perché la verifica *dopo* il deploy non è una formalità
+
+Questa macro introduce **due percorsi nuovi che devono rispondere da fuori** — `/manifest.webmanifest`
+e le due icone di `public/` — e ha una proprietà spiacevole: se uno dei tre dà 404, **l'app non è
+installabile e in locale funziona tutto**. Non c'è nessun sintomo che si veda da qui.
+
+E il precedente esiste, in questo stesso progetto e per questo stesso motivo. Il 2026-08-18, verificando
+dall'esterno che le tre icone di `v1.15.1` rispondessero, si è scoperto che **`/favicon.ico` in
+produzione non arriva a Node**: nel server block generato da Ploi c'è un `location = /favicon.ico` che
+nginx risolve **dal disco**, e con `output: 'standalone'` quel file sul disco non c'è.
+`deploy/nginx-asta.conf` sostituisce il `location /` di Ploi, **non** il resto del suo boilerplate,
+quindi quel blocco non l'avevamo mai visto.
+
+**Cosa questo dice su M20, e cosa non dice.** Il rischio è **basso e per una ragione misurata**: quel
+match è **esatto** sul percorso, non per estensione — `/qualsiasi-cosa.ico` arriva a Node senza
+problemi — e sappiamo che i `.png` ci arrivano perché `app/icon.png` in produzione **risponde 200**.
+Se il boilerplate di Ploi avesse un blocco per estensione sugli asset statici, quella non risponderebbe.
+
+Ma «basso» non è «zero», il controllo costa tre secondi, e ha un modo preciso di essere letto: ⚠ **il
+404 di nginx si distingue dal 404 di Next per l'intestazione `x-powered-by: Next.js`, che nel primo
+non c'è.** È lo stesso ragionamento per cui `CLAUDE.md` dice che un `HTTP 200` non è una verifica di
+deploy: la risposta giusta e la risposta sbagliata si somigliano, e a distinguerle è un'intestazione.
+
+Se un giorno uno di quei percorsi venisse intercettato, il rimedio è già scritto in
+`deploy/nginx-asta.conf` per il caso di `/favicon.ico`: da Ploi → il sito → Manage → Nginx
+configuration si **cancella** il blocco che intercetta, così il percorso ricade nel `location /`. ⚠ E
+non si aggiunge un `location` nostro accanto: due match esatti sullo stesso percorso nello stesso
+server block e nginx **rifiuta di ripartire**.
+
+---
+
+## Task
+
+> Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
+> sessione in cui è stata scritta.
+
+- [ ] **M20-01** — Aprire `feature/20-marchio-e-app-installabile` da `dev`. Rileggere questo file, la
+      voce `DECISIONS.md` del 2026-08-18 sull'icona (**tutta**: metà di questa spec è scritta contro
+      quella) e le regole di produzione di `CLAUDE.md`. `pnpm test` verde come baseline, col numero
+      annotato qui. `git add` dei due file sorgente in `fixtures/` — sono arrivati untracked, e un
+      commit che li dimentica lascia una macro che non si può rigenerare
+- [ ] **M20-02** — Il marchio nel nav (§1): `Logo()` in fondo a `components/nav/navbar.tsx`, il
+      `<Link>` a `flex items-center gap-2`, `currentColor`, `aria-hidden`, `clipPath` buttato.
+      **Guardarlo prima di fissare la misura**: portale sul telefono in LAN a 375px, pagina di accesso
+      (dove la navbar è il solo logo senza sessione), dashboard. `h-5` è un punto di partenza, non un
+      risultato. **Nessun `dark:`**
+- [ ] **M20-03** — Le icone (§2): riscrivere `scripts/genera-icone.py`, dargli a mano, committare i
+      cinque file, cancellare `fixtures/favicon-512.png`. Guardare le rese ingrandite **prima** di
+      committarle, come si fece a `v1.15.1`, e riletto il `.ico` per controllo che le tre misure ci
+      siano davvero
+- [ ] **M20-04** — Il manifest e iOS (§3, §4, §5): `public/` con le due icone e il commento sul
+      perché i nomi sono quelli, `app/manifest.ts` con le quattro voci, `appleWebApp` nel layout. Più
+      `tests/manifest.test.ts`: i campi che contano, le quattro voci di icona, e che i due file
+      dichiarati **esistano su disco** — costa poco e prende un rinomino, che è il modo esatto in cui
+      questa macro può rompersi in silenzio. In locale: `/manifest.webmanifest` risponde JSON valido e
+      il `<link rel="manifest">` è nella pagina
+- [ ] **M20-05** — **Provare l'installazione su un iPhone vero**, con `pnpm dev:lan`. Aggiungi alla
+      schermata home → l'icona è il marchio (non uno screenshot della pagina), il nome è «Fantasta»,
+      si apre **senza barra degli indirizzi**, e **si entra**: prima con email e password, poi con
+      Google (§6, punto 1). ⚠ Se il giro Google non torna dentro l'app, non si inventa un rimedio: si
+      annota qui cosa fa, e la nota di §6 diventa una riga del `CHANGELOG.md`. Guardare anche il
+      modale d'offerta in standalone, che è il posto dove le safe area si vedrebbero (§5, punto 1)
+- [ ] **M20-06** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con dev server
+      spento, e `lsof -nP -iTCP -sTCP:LISTEN | grep node` prima; la prima build dopo una sessione di
+      `pnpm dev` può morire da sola e passare identica al secondo giro). Documentazione:
+      `DECISIONS.md` col **ribaltamento datato** della voce 2026-08-18 e le quattro decisioni del
+      2026-08-27; `ARCHITECTURE.md`; `CHANGELOG.md` con le due cose di §6 scritte per l'owner;
+      `features/README.md`
+- [ ] **M20-07** — **Dopo il deploy**, e non è una formalità (§7): la versione dalla navbar, poi
+      `curl -I` sul manifest e su **entrambe** le icone di `public/`, guardando `x-powered-by:
+      Next.js`. Se un'icona dà 404 l'app non è installabile, e il 404 di nginx si riconosce proprio da
+      quell'intestazione **mancante**
+
+## Verifica
+
+1. `pnpm test`, `pnpm typecheck` e `pnpm build` verdi.
+2. **Il marchio è nella navbar, a sinistra di «Fantasta»**, su dashboard, portale e pagina di
+   accesso — e **non** sulla vista TV.
+3. **A 375px la navbar non va a capo** e non tronca il nome dell'utente più di prima.
+4. **Il marchio è nero come il testo accanto** (è `currentColor`, non un nero scritto a mano).
+5. **La linguetta del browser mostra il gradiente**, non il cerchio blu e non il quadratino di
+   Next.js. ⚠ Le icone sono la cosa che i browser tengono in cache più a lungo: se si vede la
+   vecchia, `Cmd+Shift+R` o chiudere e riaprire la linguetta — e sul telefono rimuovere e
+   riaggiungere il collegamento.
+6. **`/manifest.webmanifest` risponde** JSON valido, con quattro voci di icona e `display:
+   standalone`, **senza sessione** (in una finestra anonima).
+7. **`/icon-192.png` e `/icon-512.png` rispondono 200** con `content-type: image/png`.
+8. **Da iPhone: «Aggiungi alla schermata Home»** mette il marchio, il nome «Fantasta», e l'app si
+   apre **senza barra degli indirizzi**.
+9. **Dentro l'app installata si entra**, con email e password. Il giro Google è provato e il suo
+   esito è **scritto** in M20-05, qualunque sia.
+10. **Il modale d'offerta in standalone non finisce sotto la barra home** dell'iPhone.
+11. **Su Android l'icona è ritagliata dal sistema senza tagliare il marchio** (è la prova del
+    `maskable`). Se un dispositivo Android non c'è, si dichiara non verificato invece di dedurlo.
+12. **`fixtures/logo.svg` e `fixtures/logo.png` sono committati** e `fixtures/favicon-512.png` non
+    c'è più.
+13. **Nessun service worker** in giro: nessun file, nessuna registrazione, e in
+    `chrome://serviceworker-internals` niente per questo dominio.
+14. **Niente `dark:` nel codice nuovo**, e la TV resta bianco su nero com'era.
+15. **Nessun `pnpm db:push`, nessun backfill**: verificato sul diff `origin/main..dev`, non dedotto —
+    `lib/db/schema.ts` non è toccato.

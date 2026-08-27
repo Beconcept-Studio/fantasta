@@ -12,7 +12,23 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## Pianificata, non aperta
 
-Nessuna.
+**M20 — «Il marchio nel nav, e l'app che si installa sul telefono»**
+([20-marchio-e-app-installabile.md](20-marchio-e-app-installabile.md)), pianificata il 2026-08-27
+dall'unica richiesta rimasta nel quaderno dopo `v1.19.2`. Il marchio «F» entra nella navbar accanto a
+«Fantasta», le icone si rifanno dal disegno nuovo, e l'applicazione diventa **installabile sulla
+schermata home** — manifest, meta iOS, e la misura 192 che a `v1.15.1` era stata saltata proprio
+perché serve solo a un manifest. Niente schema, niente backfill, nessuna dipendenza nuova: il rilascio
+finisce col deploy, più una verifica dei tre percorsi nuovi da fuori.
+
+⚠ **Ribalta una decisione scritta**, e il file lo dichiara in testa: la voce `DECISIONS.md` del
+2026-08-18 diceva «nessun manifest, nessuna PWA, nessun service worker», e chiudeva con «per non
+ritrovarselo proposto come idea nuova». Non è arrivato come idea nuova: l'ha chiesto l'owner. Il
+service worker però **resta escluso**, e per la ragione che quella voce non poteva ancora conoscere —
+una cache davanti a un'app che a ogni deploy ha due minuti di chunk 404 è quel guasto reso permanente.
+
+⚠ **Il numero 19 resta bruciato di proposito**, non è un buco per distrazione: `CLAUDE.md` e la nota
+qui sotto rimandano a un `git show` per la M19 cancellata, e riusare il numero renderebbe illeggibili
+quei rimandi.
 
 ⚠ **M19 — «Il deploy senza finestra cieca» è stata cancellata**, il 2026-08-23, per decisione
 dell'owner e senza che una riga fosse scritta: la finestra si gestisce **scegliendo quando
