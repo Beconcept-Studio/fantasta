@@ -3,13 +3,22 @@
 
     python3 scripts/genera-icone.py
 
-Sorgente: `fixtures/favicon-512.png` — 512×512 PNG RGBA, un cerchio blu pieno
-(`#0000FF`) a tela piena, con il fuori-cerchio trasparente.
-Scrive: `app/favicon.ico`, `app/icon.png`, `app/apple-icon.png`.
+Sorgente: `fixtures/logo.png` — 1080×1080 PNG RGBA con **l'alpha interamente
+opaco** (min e max entrambi 255), il marchio bianco al centro su un gradiente
+verde → giallo → blu notte con la grana. Il riquadro del bianco misura il 34% in
+orizzontale e il 46% in verticale, centrato esatto.
+
+Scrive **cinque** file, per **due** consumatori diversi:
+
+    app/favicon.ico        16 + 32 + 48, scritto byte per byte
+    app/icon.png           512  — Next lo trova per convenzione di nome
+    app/apple-icon.png     180  — RGB, senza canale alpha
+    public/icon-192.png    192  ┐ le due icone del manifest, che hanno bisogno
+    public/icon-512.png    512  ┘ di un URL **stabile** (M20 §3)
 
 ⚠ **Non fa parte della build, e non deve entrarci.** Nessuno lo chiama: né la
-build, né `tsc`, né ESLint lo guardano. Le icone cambiano una volta all'anno, e
-i tre file che produce sono **committati** — sono asset, non un passo di
+build, né `tsc`, né ESLint lo guardano. Le icone cambiano una volta all'anno, e i
+cinque file che produce sono **committati** — sono asset, non un passo di
 pipeline. Sta qui perché il giorno che l'icona cambia non si debba ricostruire il
 ragionamento.
 
@@ -18,54 +27,90 @@ progetto**: `pnpm install` non li installa e non gli servono. ⚠ E `sharp`, che
 sarebbe la scelta ovvia in un progetto Node, non è utilizzabile qui: c'è sotto
 `node_modules/.pnpm` perché lo porta Next.js, ma con `pnpm` non è issato, quindi
 un `require("sharp")` dalla radice risponde `MODULE_NOT_FOUND`.
+
+**Cosa è cambiato con M20**, rispetto alla ricetta di `v1.15.1` — che partiva da
+`fixtures/favicon-512.png`, un cerchio blu su fondo trasparente, adesso
+cancellato:
+
+  * l'**appiattimento** dell'icona di iOS non serve più. L'alpha della sorgente è
+    già opaco a tela piena, quindi il difetto che quel codice esisteva per evitare
+    — iOS che riempie la trasparenza di nero e mette gli angoli neri attorno al
+    disegno — non è più possibile. Resta una conversione a RGB;
+  * il **192** compare, e prima era saltato *di proposito*: serviva a un manifest,
+    e l'applicazione non ne aveva uno (`DECISIONS.md` 2026-08-18). Adesso ce l'ha;
+  * **nessun ritaglio**: tela piena. Le rese sono state guardate ingrandite, tela
+    piena contro un ritaglio stretto, e ha vinto la tela piena — a 32 e 48 il
+    marchio è già netto, e il ritaglio a misura grande **perde il blu notte**,
+    cioè darebbe due icone visibilmente diverse per la stessa app;
+  * **niente maschera di contrasto**, come prima e per la stessa ragione: non c'è
+    dettaglio fine da recuperare, e su un bordo antialiasato produce solo un alone.
 """
 
 import struct
 
 from PIL import Image
 
-SORGENTE = "fixtures/favicon-512.png"
-
-# Il blu del disegno. Serve per appiattire l'icona di iOS: vedi `apple_icon()`.
-BLU = (0, 0, 255)
+SORGENTE = "fixtures/logo.png"
 
 
 def giu(src, n):
     """Riduzione con LANCZOS, e **senza** maschera di contrasto.
 
-    Sull'icona precedente — un pallone da calcio coi pentagoni disegnati — una
-    maschera leggera serviva, perché a 16 pixel il dettaglio fine diventa una
-    pappa. Qui il disegno è una campitura piatta con un bordo curvo: non c'è
-    nessun dettaglio da recuperare, e una maschera di contrasto su un bordo
-    antialiasato produce solo un alone. Se un giorno la sorgente torna a essere
-    un disegno con dei dettagli, è questo il punto in cui rimetterla.
+    Sulla sorgente di due icone fa — un pallone da calcio coi pentagoni disegnati
+    — una maschera leggera serviva, perché a 16 pixel il dettaglio fine diventa
+    una pappa. Qui il disegno è un marchio geometrico su una campitura di colore:
+    non c'è nessun dettaglio da recuperare, e una maschera di contrasto su un
+    bordo antialiasato produce solo un alone. Se un giorno la sorgente torna a
+    essere un disegno con dei dettagli, è questo il punto in cui rimetterla.
     """
     return src.resize((n, n), Image.LANCZOS)
+
+
+def salva(im, percorso):
+    """Scrive un PNG **senza canale alpha**, e non è un dettaglio di forma.
+
+    ⚠ La sorgente ha l'alpha a 255 su **tutta** l'immagine (verificato: min e max
+    entrambi 255), cioè un canale che non porta informazione — e che senza un
+    `convert` finirebbe comunque dentro ogni file, compresso ma presente. Misurato
+    su questa sorgente: il 512 passa da **510 a 431 KB** e il 192 da 60 a 48. Sono
+    89 KB in meno per file committato e per file che il telefono scarica quando
+    l'app si installa.
+
+    Il PNG resta grosso comunque, e la ragione va saputa prima di sospettare un
+    errore: la **grana** del gradiente è rumore, e il rumore è esattamente ciò che
+    un compressore senza perdita non può togliere. Un'icona pulita della stessa
+    misura pesa qualche decina di KB.
+    """
+    im.convert("RGB").save(percorso, optimize=True)
 
 
 def apple_icon(src):
     """L'icona di iOS: 180×180 e **senza canale alpha**.
 
-    iOS non rispetta la trasparenza — la riempie di nero da sé — e poi ritaglia
-    con la sua maschera a quadrato stondato. Lasciarla trasparente significa
-    quindi un cerchio blu con gli angoli **neri**, che è il difetto che questo
-    file esiste per evitare.
+    ⚠ **Qui non si appiattisce più niente, ed è la sorgente che è cambiata.** Fino
+    a `v1.15.1` questa funzione dipingeva una tela del colore del disegno e ci
+    incollava sopra l'icona, perché quella sorgente aveva il fuori-cerchio
+    trasparente e iOS riempie la trasparenza di nero da sé, mettendo quattro
+    angoli neri attorno al disegno. `fixtures/logo.png` è **opaco a tela piena**:
+    non c'è nessuna trasparenza che iOS possa riempire, e l'unica cosa che serve è
+    togliere il canale alpha — che a 255 su tutta l'immagine non porta
+    informazione, e che senza `convert` finirebbe comunque nel PNG.
 
-    Si appiattisce sul **blu del disegno** e non sul bianco: così l'unica cosa
-    che cambia rispetto alla sorgente sono i quattro angoli che iOS avrebbe
-    dipinto di nero, e il colore visibile resta esattamente quello scelto. Il
-    bianco sarebbe stato introdurre un colore che nell'originale non c'è, e
-    avrebbe reso l'icona «un pallino blu su un cartoncino bianco».
+    Il giorno che la sorgente tornasse a essere trasparente fuori dal disegno,
+    questa funzione va rifatta come era: la si ritrova con
+    `git show v1.19.2:scripts/genera-icone.py`.
     """
-    tela = Image.new("RGB", (180, 180), BLU)
-    reso = giu(src, 180)
-    tela.paste(reso, (0, 0), reso)
-    return tela
+    return giu(src, 180).convert("RGB")
 
 
 def blocco_bmp(im):
     """Un'icona nella forma che l'ICO si aspetta: intestazione, pixel BGRA dal
-    basso verso l'alto, poi la maschera 1bpp con le righe allineate a 4 byte."""
+    basso verso l'alto, poi la maschera 1bpp con le righe allineate a 4 byte.
+
+    La maschera esce tutta a zero con questa sorgente — l'alpha è opaco — e va
+    scritta comunque: il formato la vuole, e l'altezza dichiarata nell'intestazione
+    conta immagine **più** maschera.
+    """
     w, h = im.size
     px = im.load()
     xor = bytearray()
@@ -115,22 +160,44 @@ def scrivi_ico(misure, percorso):
 
 def main():
     src = Image.open(SORGENTE).convert("RGBA")
-    if src.size != (512, 512):
-        raise SystemExit(f"{SORGENTE} non è 512×512 ma {src.size}")
+    if src.size != (1080, 1080):
+        raise SystemExit(f"{SORGENTE} non è 1080×1080 ma {src.size}")
 
-    # `app/icon.png` è la sorgente a piena misura: Next la trova per convenzione
-    # di nome e la dichiara a 512×512. Non c'è una seconda misura a 192 — vedi
-    # `docs/DECISIONS.md` alla data: senza un manifest nessuno la sceglierebbe
-    # al posto di questa, e si chiamerebbe `icon1.png`.
-    src.save("app/icon.png", optimize=True)
+    # ⚠ **Il 512 esce due volte, dagli stessi byte e da una sola riduzione.**
+    # `app/icon.png` la trova Next per convenzione di nome e ne genera il `<link>`
+    # da sé; `public/icon-512.png` la dichiara il manifest, che ha bisogno di un
+    # URL **stabile** — le rotte generate da `app/` portano un hash che cambia col
+    # contenuto. Due consumatori, una sorgente. Il prezzo è dei byte duplicati, e
+    # l'alternativa era scrivere `metadata.icons` a mano, cioè tenere allineate
+    # due verità per la stessa cosa (M20 §3).
+    grande = giu(src, 512)
+    salva(grande, "app/icon.png")
+    salva(grande, "public/icon-512.png")
+
+    # ⚠ **`public/icon-192.png` e non `public/icon.png`**: quel nome collide con
+    # la rotta `/icon.png` che Next genera da `app/icon.png`. Un rinomino «per
+    # pulizia» romperebbe l'installazione, e il perché è scritto anche accanto ai
+    # file, in `public/README.md`.
+    salva(giu(src, 192), "public/icon-192.png")
+
     apple_icon(src).save("app/apple-icon.png", optimize=True)
     scrivi_ico([giu(src, 16), giu(src, 32), giu(src, 48)], "app/favicon.ico")
 
+    # Il controllo di rilettura: che nell'ICO le tre misure ci siano davvero.
+    # ⚠ Su questo file Next dichiarerà `sizes="16x16"`, perché legge la prima voce
+    # dell'indice e non tutte e tre. È un'indicazione, non un vincolo — i browser
+    # aprono l'ICO e scelgono da sé — e correggerla vorrebbe dire scrivere
+    # `metadata.icons` a mano (`DECISIONS.md` 2026-08-18).
     ico = Image.open("app/favicon.ico")
-    print("app/favicon.ico    ", sorted(ico.ico.sizes()))
-    for nome in ("app/icon.png", "app/apple-icon.png"):
+    print("app/favicon.ico       ", sorted(ico.ico.sizes()))
+    for nome in (
+        "app/icon.png",
+        "app/apple-icon.png",
+        "public/icon-192.png",
+        "public/icon-512.png",
+    ):
         im = Image.open(nome)
-        print(f"{nome:19} {im.size} {im.mode}")
+        print(f"{nome:22} {im.size} {im.mode}")
 
 
 if __name__ == "__main__":

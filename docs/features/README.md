@@ -12,21 +12,63 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## Pianificata, non aperta
 
-**[M19 — Il deploy senza finestra cieca](19-deploy-senza-finestra-cieca.md)**, scritta il 2026-08-23.
-Non nasce dal quaderno: nasce da un episodio. Ogni deploy rende l'applicazione **inservibile per circa
-due minuti** — `pnpm build` cancella gli asset statici sotto i piedi del processo che sta ancora
-servendo — e finché i deploy erano rari e a mano non si vedeva. Da quando partono da soli a ogni push
-su `main` si incontra spesso, e la guardia non protegge la fase di setup, che è quando si creano le
-aste. La specifica confronta tre strade con i loro costi e ne raccomanda una.
-
-⚠ **Nessun branch, nessun codice.** E il primo task, M19-01, è **la prova che decide se la strada
-raccomandata è praticabile**: prima di quella non si scrive nient'altro. È il percorso con il raggio
-d'azione più grande del progetto — un errore lì non rompe una schermata, rende la produzione non
-aggiornabile.
+Nessuna.
 
 ## In corso
 
 Nessuna.
+
+---
+
+**M20 è in produzione da `v1.20.0`** (2026-08-27): pianificata, aperta, lavorata, provata dall'owner sul
+suo iPhone e rilasciata **nella stessa sessione**, il sesto caso di fila dopo M13, M14, M16, M17 e M18.
+Baseline 914 test, chiusa a **917**: tre per il manifest, e il terzo è quello che prende il rinomino
+delle icone — l'unico modo in cui questa macro può rompersi in silenzio. Gate verde al primo giro,
+nessun passo a mano sul server.
+
+Il marchio «F» entra nella navbar accanto a
+«Fantasta», le icone si rifanno dal disegno nuovo, e l'applicazione diventa **installabile sulla
+schermata home** — manifest, meta iOS, e la misura 192 che a `v1.15.1` era stata saltata proprio
+perché serve solo a un manifest. Niente schema, niente backfill, nessuna dipendenza nuova: il rilascio
+finisce col deploy, più una verifica dei tre percorsi nuovi da fuori.
+
+⚠ **Ribalta una decisione scritta**, e il file lo dichiara in testa: la voce `DECISIONS.md` del
+2026-08-18 diceva «nessun manifest, nessuna PWA, nessun service worker», e chiudeva con «per non
+ritrovarselo proposto come idea nuova». Non è arrivato come idea nuova: l'ha chiesto l'owner. Il
+service worker però **resta escluso**, e per la ragione che quella voce non poteva ancora conoscere —
+una cache davanti a un'app che a ogni deploy ha due minuti di chunk 404 è quel guasto reso permanente.
+
+⚠ **Il numero 19 resta bruciato di proposito**, non è un buco per distrazione: `CLAUDE.md` e la nota
+qui sotto rimandano a un `git show` per la M19 cancellata, e riusare il numero renderebbe illeggibili
+quei rimandi.
+
+⚠ **M19 — «Il deploy senza finestra cieca» è stata cancellata**, il 2026-08-23, per decisione
+dell'owner e senza che una riga fosse scritta: la finestra si gestisce **scegliendo quando
+deployare**, non cambiando il deploy. La specifica confrontava tre strade (build in una `distDir`
+parallela con scambio, cartella di rilasci alla Capistrano, pagina di manutenzione) e ne raccomandava
+una; se un giorno tornasse in gioco si rilegge con
+`git show e381389:docs/features/19-deploy-senza-finestra-cieca.md` invece di rifare l'analisi — è lo
+stesso trattamento di `docs/RUNBOOK.md`.
+
+⚠ **Il fatto misurato che stava lì dentro resta, e sta in `CLAUDE.md`**, accanto alle regole di
+produzione: ogni deploy rende l'app inservibile per circa due minuti, perché `pnpm build` cancella gli
+asset statici sotto i piedi del processo che sta ancora servendo. Non è un bug da diagnosticare la
+prossima volta che si vedono dei 404 su un chunk durante un rilascio, ed è per questo che la nota è
+sopravvissuta alla macro: la macro era la cura, quella riga è il sintomo, e il sintomo si incontra
+comunque.
+
+⚠ **Tre cose trovate lavorando smentiscono la spec, e stanno annotate nei task e in `DECISIONS.md`.**
+Next 15.5.23 emette `mobile-web-app-capable` e **non** `apple-mobile-web-app-capable` come §5 dava per
+verificato — e sull'iPhone non ha impedito niente, che era il dubbio vero. Il marchio nel nav **tronca
+il nome dell'utente** di 23–26 pixel, quindi la verifica 3 («non tronca più di prima») è falsa: la riga
+non va a capo perché il nome cede. E l'altezza è `h-6`, non l'`h-5` di partenza, perché 24 pixel sono
+la `line-height` del testo accanto e la barra così non cresce di un pixel.
+
+⚠ **La prova sull'iPhone è passata su HTTP in LAN**, non su HTTPS, e prima di darla all'owner era stato
+detto che uno standalone mancato lì sarebbe stato ambiguo — l'installazione guidata dal manifest chiede
+normalmente un contesto sicuro. Non c'è stato bisogno di distinguere. Se un giorno servisse rifare
+quella prova e non funzionasse in LAN, è quella la prima cosa da escludere prima di sospettare il
+codice.
 
 ---
 
@@ -397,6 +439,8 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M20](20-marchio-e-app-installabile.md) | Il marchio nel nav, e l'app che si installa sul telefono: manifest, icone dal disegno nuovo, niente service worker | v1.20.0 — 2026-08-27 |
+| [M18](18-rosa-a-fisarmonica.md) | La rosa a fisarmonica: i reparti che si aprono, la quota di budget, l'ordine di estrazione | v1.18.0 — 2026-08-23 |
 | [M17](17-portale-tre-colonne.md) | Il portale a tre colonne: la chiamata a pannello, e una colonna di stato che si legge a colpo d'occhio | v1.17.0 — 2026-08-22 |
 | [M16](16-regole-offerta.md) | Le regole dell'offerta: via i valori suggeriti, via il ritiro (motore compreso), i pallini di presence in TV | v1.16.0 — 2026-08-22 |
 | [M14](14-cancello-risultati.md) | Il cancello dei risultati: fra la chiusura di un round e la rivelazione delle buste un istante che appartiene a chi conduce, e un lotto che si può annullare | v1.15.0 — 2026-08-18 |

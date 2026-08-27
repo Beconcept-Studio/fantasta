@@ -3607,3 +3607,130 @@ prodotto un centinaio di righe di riformattazione estranea — literal di test s
 import ricompattati — dentro una modifica di poche righe, ed è stato annullato a mano. Se un giorno si
 volesse prettier davvero, si aggiunge la configurazione e si formatta **tutto in un commit suo**, non
 un file per volta di passaggio.
+
+## 2026-08-23 — M19 cancellata: la finestra cieca del deploy si gestisce, non si chiude
+
+La specifica di M19 — «Il deploy senza finestra cieca», scritta poche ore prima e mai aperta — è stata
+**cancellata su decisione dell'owner**: «visto che non svilupperò la feature 19 cancella pure tutto il
+contenuto collegato. Starò attento a quando farò deploy».
+
+**È una scelta legittima e vale la pena scrivere perché.** La macro proponeva di compilare in una
+`distDir` parallela e scambiare (più due alternative), e portava la finestra da ~130 secondi a ~2. Ma
+toccava `deploy/deploy.sh` e `next.config.ts`, cioè **il percorso con il raggio d'azione più grande del
+progetto**: un errore lì non rompe una schermata, rende la produzione non aggiornabile. Contro un
+rischio così, «scelgo io quando deployare» è una mitigazione che costa zero e non può fallire — e i
+deploy di questo progetto li fa una persona sola, che sa quando c'è un'asta. La cura era proporzionata
+al problema solo se il problema fosse capitato a qualcuno che non decide l'orario.
+
+**Cosa è stato cancellato**: `docs/features/19-deploy-senza-finestra-cieca.md` e la sezione
+«Pianificata, non aperta» di `docs/features/README.md`. Nessuna richiesta del quaderno è tornata
+indietro perché **nessuna era confluita**: M19 nasceva da un episodio, non da `REQUESTS.md`, che era e
+resta vuoto. La specifica resta leggibile — come `docs/RUNBOOK.md` dopo v1.1.0 — con:
+
+```bash
+git show e381389:docs/features/19-deploy-senza-finestra-cieca.md
+```
+
+Cancellare un documento in un repository non distrugge niente, e dirlo evita che l'analisi venga
+rifatta da zero. Il comando è stato provato, non dedotto.
+
+⚠ **Cosa NON è stato cancellato, e la regola generale che c'è dietro.** Il fatto misurato è
+sopravvissuto alla macro, e sta in `CLAUDE.md` accanto alle regole di produzione: durante il deploy
+l'app è inservibile per circa due minuti, perché `pnpm build` rigenera `.next/` mentre il processo
+vecchio serve dal suo, e `.next/standalone/` sparisce per il tempo della build. **Il piano era la cura,
+quella nota è il sintomo, e il sintomo si incontra comunque** — anzi, da adesso si incontra *per
+scelta*. Cancellare anche la descrizione avrebbe garantito che la prossima volta quei 404 su un chunk
+venissero diagnosticati come un bug dell'applicazione, cosa già successa una volta il 2026-08-23, in un
+rilascio che non conteneva una riga di codice applicativo. Vale come criterio quando si abbandona un
+piano: **si butta la soluzione, non la diagnosi.**
+
+Con la diagnosi è rimasta la sua parte peggiore, che nessuna delle tre strade chiudeva: chi ha in mano
+una pagina **vecchia** conserva riferimenti a chunk con hash che non esistono più, e gli si rompe alla
+prima navigazione anche dopo che il deploy è finito. Si risolve con un ricarico, e in una serata d'asta
+va detto a voce.
+
+---
+
+## 2026-08-27 — M20: il manifest si fa, e ribalta una decisione di nove giorni prima
+
+**Il ribaltamento, per primo, perché è la cosa che fra sei mesi sembrerà una contraddizione.** La voce
+del **2026-08-18** sull'icona fuori macro chiude con l'elenco di ciò che quell'intervento non faceva —
+«nessun manifest, nessuna PWA, nessun service worker» — e lo scrive esplicitamente «per non
+ritrovarselo proposto come idea nuova». La motivazione era: «un manifest la renderebbe installabile,
+cioè aggiungerebbe una superficie da mantenere che **nessuno ha chiesto**».
+
+Non è arrivato come idea nuova. **L'ha chiesto l'owner**, in prima persona, nel quaderno: «voglio che
+l'app diventi scaricabile (quindi una PWA), in modo che da iPhone mi possa salvare il segnalibro (come
+se fosse un'app) sullo smartphone». Quella decisione era giusta quando è stata presa e resta la ragione
+per cui allora non si fece: **cambia il fatto, non il ragionamento**. Le due voci non si contraddicono,
+si datano.
+
+⚠ **E il ribaltamento ha una conseguenza concreta, non solo retorica.** La voce del 2026-08-18 spiegava
+perché la misura **192** era stata saltata di proposito: «il 192 serve a un manifest, e questa
+applicazione non ne ha uno». Adesso ce l'ha, quindi il 192 esiste, e con lui il posto da cui servirlo:
+`public/`, che prima non c'era.
+
+**Le quattro decisioni dell'owner, prese aprendo la macro**, tutte prima che una riga fosse scritta:
+
+1. **Nessun service worker.** È la parte del ragionamento del 2026-08-18 che regge ancora, ed è stata
+   confermata per una ragione che quella voce non poteva conoscere: l'app, a **ogni** deploy, ha due
+   minuti in cui `/_next/static/chunks/*` risponde 404. Un service worker che serve una pagina vecchia
+   con riferimenti a chunk morti è quel guasto reso **permanente**, e il rimedio sarebbe una
+   disinstallazione che nessuno sa fare da un telefono. Il prezzo è il banner «Installa app» di Chrome,
+   che lo richiede; su iPhone l'installazione in standalone non lo vuole, e su Android resta la
+   scorciatoia dal menù.
+2. **Logo *e* scritta nel nav**, non il logo al posto della scritta: il marchio è una «F», non un
+   lettering, quindi la parola accanto non è una ripetizione.
+3. **Macro, non intervento fuori macro** come fu l'icona il 2026-08-18: qui nasce una cartella, nasce
+   un manifest, e si ribalta una decisione scritta.
+4. **Il numero 19 resta bruciato.** `CLAUDE.md` e l'indice delle macro rimandano a un `git show` per la
+   M19 cancellata: riusare il numero renderebbe illeggibile quel rimando.
+
+**Quattro cose scoperte lavorando, e tre non erano nella spec.**
+
+⚠ **`appleWebApp.capable` non emette il meta che la spec diceva.** §5 di M20 dava per verificato che
+Next traducesse `capable: true` in `apple-mobile-web-app-capable`. **Non è così**: Next 15.5.23 emette
+**`mobile-web-app-capable`**, il nome standard moderno, e il prefisso `apple-` non compare da nessuna
+parte (letto in `next/dist/lib/metadata/generate/basic.js` riga 263, e visto nella pagina servita). Gli
+altri due meta sono quelli previsti. Su iOS moderno lo standalone lo decide `display: standalone` del
+manifest, quindi dovrebbe bastare — ed è precisamente il genere di «dovrebbe» che la prova su un iPhone
+vero esiste per non dire. **Non è stato aggiunto niente a mano**: se sul telefono l'app non si aprisse
+senza barra degli indirizzi, il primo tentativo è quel meta legacy in `metadata.other`, con la prova
+dietro.
+
+⚠ **Il marchio nel nav lo paga il nome dell'utente, e la verifica 3 della spec era sbagliata.** Diceva
+«non tronca il nome dell'utente più di prima»: lo tronca, di 23–26 pixel. A 375px la riga non va a capo
+in nessuna combinazione — misurato, `nav.scrollWidth` resta 375 — perché l'unico elemento che cede è il
+nome, che ha `min-w-0 truncate`: sulla dashboard di un amministratore passa da 61 a 35 pixel, e nel
+portale un nome lungo passa da **intero a troncato**. È una scelta e non un difetto — il marchio si vede
+su ogni schermata, il nome per esteso lo sa chi lo porta — ma va scritta, perché è la prima cosa che
+qualcuno noterà.
+
+**L'altezza del marchio è `h-6` e non l'`h-5` da cui la spec partiva**, e la ragione che ha deciso non è
+estetica: **24 pixel sono la `line-height` del `text-base` accanto**, quindi la barra non cresce di un
+pixel — sulla pagina di accesso, dove non ci sono pulsanti a dettare l'altezza, resta a 45px come prima.
+A `h-7` sarebbe 49, cioè il marchio si pagherebbe con l'altezza di ogni pagina dell'app. All'occhio,
+guardate le tre misure a 375px: a `h-5` il marchio sta timido accanto a una parola in semibold, a `h-7`
+la domina. E fra `h-5` e `h-6` il nome dell'utente cambia di **tre** pixel: la scelta era fra il marchio
+e il nome intero, non fra due altezze.
+
+**I PNG escono in RGB e non RGBA**, che la spec non chiedeva. L'alpha della sorgente è 255 su tutta
+l'immagine — verificato, min e max entrambi 255 — cioè un canale che non porta informazione e che senza
+un `convert` finirebbe dentro ogni file: portarselo dietro costava **89 KB**, il 512 da 510 a 431 e il
+192 da 60 a 48. ⚠ Restano file grossi (452 KB il 512 su disco) e la ragione va saputa prima di
+sospettare un errore: la **grana** del gradiente è rumore, ed è esattamente ciò che un compressore senza
+perdita non può togliere. Se un giorno fossero troppi per il telefono che li scarica all'installazione,
+la strada è una sorgente meno granulosa, non un'opzione dello script.
+
+**Due scelte di forma, dette per non essere riaperte.** Il marchio è un `path` **inline in
+`navbar.tsx`** e non un file suo: ha un solo chiamante, e la regola dell'astrazione dopo il secondo
+chiamante vale anche per sei righe. E in `public/` c'è un **`README.md`**, che essendo in `public/` è
+**servito** (`/README.md`): è documentazione, non c'è niente da proteggere, e stare accanto ai file è il
+solo modo in cui una nota si fa leggere da chi sta per rinominarli — che è il modo esatto in cui questa
+macro può rompersi in silenzio.
+
+**Come è stata fatta la prova locale senza toccare il lavoro dell'owner.** In locale c'era una
+simulazione in `LIVE/WAITING_PICK`, e accendere l'app avrebbe fatto partire il tick dei bot su quella:
+il dev server è girato su un database **usa-e-getta** (creato, `db:push`, cancellato alla fine) su una
+porta sua. Riletta dopo, la simulazione era ferma dov'era. Vale come procedura ogni volta che serve
+l'app accesa e in locale c'è un'asta di qualcuno.
