@@ -338,7 +338,7 @@ server block e nginx **rifiuta di ripartire**.
       suoi otto utenti. Cioè: un flake di teardown fra file, **causa non identificata**, e fuori dal
       perimetro di M20 — annotato qui e non inseguito, come M18 aveva già annotato di non aggiustare
       una terza volta la stessa misura
-- [ ] **M20-02** — Il marchio nel nav (§1): `Logo()` in fondo a `components/nav/navbar.tsx`, il
+- [x] **M20-02** — Il marchio nel nav (§1): `Logo()` in fondo a `components/nav/navbar.tsx`, il
       `<Link>` a `flex items-center gap-2`, `currentColor`, `aria-hidden`, `clipPath` buttato.
       **Guardarlo prima di fissare la misura**: portale sul telefono in LAN a 375px, pagina di accesso
       (dove la navbar è il solo logo senza sessione), dashboard. `h-5` è un punto di partenza, non un
@@ -360,8 +360,8 @@ server block e nginx **rifiuta di ripartire**.
       115). `h-5` ne restituirebbe tre pixel, cioè non cambierebbe quel caso: la scelta è fra il
       marchio e il nome intero, non fra due altezze. **La verifica 3 della spec va letta così**: non
       va a capo, sì; «non tronca il nome più di prima» **è falso**, e il numero è 23–26px.
-      → **Resta la guardata sul telefono in LAN**, che è la sola cosa che un banco di prova non fa:
-      va nella stessa sessione di M20-05, che vuole l'iPhone dell'owner
+      → **La guardata sul telefono in LAN è stata fatta insieme a M20-05**, dall'owner, e il marchio
+      nel nav va bene com'è: `h-6` resta. Nessuna misura ritoccata dopo il telefono
 - [x] **M20-03** — Le icone (§2): riscrivere `scripts/genera-icone.py`, dargli a mano, committare i
       cinque file, cancellare `fixtures/favicon-512.png`. Guardare le rese ingrandite **prima** di
       committarle, come si fece a `v1.15.1`, e riletto il `.ico` per controllo che le tre misure ci
@@ -419,12 +419,24 @@ server block e nginx **rifiuta di ripartire**.
       ma «dovrebbe» è precisamente ciò che M20-05 esiste per non dire. **Nessun rimedio inventato
       qui**: se sull'iPhone l'app non si apre senza barra degli indirizzi, il primo tentativo è quel
       meta legacy scritto a mano in `metadata.other`, e sarà una riga con una prova dietro
-- [ ] **M20-05** — **Provare l'installazione su un iPhone vero**, con `pnpm dev:lan`. Aggiungi alla
+- [x] **M20-05** — **Provare l'installazione su un iPhone vero**, con `pnpm dev:lan`. Aggiungi alla
       schermata home → l'icona è il marchio (non uno screenshot della pagina), il nome è «Fantasta»,
       si apre **senza barra degli indirizzi**, e **si entra**: prima con email e password, poi con
       Google (§6, punto 1). ⚠ Se il giro Google non torna dentro l'app, non si inventa un rimedio: si
       annota qui cosa fa, e la nota di §6 diventa una riga del `CHANGELOG.md`. Guardare anche il
       modale d'offerta in standalone, che è il posto dove le safe area si vedrebbero (§5, punto 1)
+      → **Provato dall'owner sul suo iPhone, con `pnpm dev:lan` sul database vero, e funziona tutto**
+      — icona, nome, apertura senza barra degli indirizzi, accesso, e il modale d'offerta. ⚠ **Il
+      punto che questo task esisteva per sciogliere si è sciolto: il giro Google torna dentro l'app
+      installata**, quindi la strada alternativa di M5 resta una strada e non un rimedio necessario.
+      L'esito è **riportato dall'owner**, non misurato da qui: la sessione era la sua, sul suo
+      telefono.
+      → Da segnare anche perché è una **buona notizia inattesa**: la prova è passata su **HTTP** in
+      LAN, non su HTTPS. Prima di darla all'owner era stato detto il contrario — che uno standalone
+      mancato sulla LAN sarebbe stato ambiguo, perché l'installazione guidata dal manifest chiede
+      normalmente un contesto sicuro. Non c'è stato bisogno di distinguere: ha funzionato lì. E
+      `mobile-web-app-capable` al posto del nome legacy con prefisso `apple-` (vedi M20-04) **non ha
+      impedito niente**, che era il dubbio vero. Nessun meta aggiunto a mano
 - [ ] **M20-06** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con dev server
       spento, e `lsof -nP -iTCP -sTCP:LISTEN | grep node` prima; la prima build dopo una sessione di
       `pnpm dev` può morire da sola e passare identica al secondo giro). Documentazione:

@@ -16,10 +16,17 @@ Nessuna.
 
 ## In corso
 
-**M20 — «Il marchio nel nav, e l'app che si installa sul telefono»**
-([20-marchio-e-app-installabile.md](20-marchio-e-app-installabile.md)), pianificata **e aperta** il
-2026-08-27, su `feature/20-marchio-e-app-installabile`, dall'unica richiesta rimasta nel quaderno dopo
-`v1.19.2`. Il marchio «F» entra nella navbar accanto a
+Nessuna.
+
+---
+
+**M20 è in produzione da `v1.20.0`** (2026-08-27): pianificata, aperta, lavorata, provata dall'owner sul
+suo iPhone e rilasciata **nella stessa sessione**, il sesto caso di fila dopo M13, M14, M16, M17 e M18.
+Baseline 914 test, chiusa a **917**: tre per il manifest, e il terzo è quello che prende il rinomino
+delle icone — l'unico modo in cui questa macro può rompersi in silenzio. Gate verde al primo giro,
+nessun passo a mano sul server.
+
+Il marchio «F» entra nella navbar accanto a
 «Fantasta», le icone si rifanno dal disegno nuovo, e l'applicazione diventa **installabile sulla
 schermata home** — manifest, meta iOS, e la misura 192 che a `v1.15.1` era stata saltata proprio
 perché serve solo a un manifest. Niente schema, niente backfill, nessuna dipendenza nuova: il rilascio
@@ -50,14 +57,18 @@ prossima volta che si vedono dei 404 su un chunk durante un rilascio, ed è per 
 sopravvissuta alla macro: la macro era la cura, quella riga è il sintomo, e il sintomo si incontra
 comunque.
 
-**Dove è arrivata**, al 2026-08-27: fatti M20-01 → M20-04, gate verde (baseline **914** test, chiusa a
-**917**: tre per il manifest, e il terzo è quello che prende il rinomino delle icone). Restano due task
-e **vogliono l'owner**: M20-05 è l'installazione su un iPhone vero con `pnpm dev:lan`, e con lei la
-guardata al marchio sul telefono che chiude M20-02; M20-07 è la verifica dei tre percorsi nuovi da
-fuori, dopo il deploy. ⚠ Due cose trovate lavorando cambiano quello che c'era scritto nella spec, e
-stanno annotate nei task: Next emette `mobile-web-app-capable` e **non**
-`apple-mobile-web-app-capable`, e il marchio nel nav **tronca il nome dell'utente** di 23–26 pixel,
-contro quello che dice la verifica 3.
+⚠ **Tre cose trovate lavorando smentiscono la spec, e stanno annotate nei task e in `DECISIONS.md`.**
+Next 15.5.23 emette `mobile-web-app-capable` e **non** `apple-mobile-web-app-capable` come §5 dava per
+verificato — e sull'iPhone non ha impedito niente, che era il dubbio vero. Il marchio nel nav **tronca
+il nome dell'utente** di 23–26 pixel, quindi la verifica 3 («non tronca più di prima») è falsa: la riga
+non va a capo perché il nome cede. E l'altezza è `h-6`, non l'`h-5` di partenza, perché 24 pixel sono
+la `line-height` del testo accanto e la barra così non cresce di un pixel.
+
+⚠ **La prova sull'iPhone è passata su HTTP in LAN**, non su HTTPS, e prima di darla all'owner era stato
+detto che uno standalone mancato lì sarebbe stato ambiguo — l'installazione guidata dal manifest chiede
+normalmente un contesto sicuro. Non c'è stato bisogno di distinguere. Se un giorno servisse rifare
+quella prova e non funzionasse in LAN, è quella la prima cosa da escludere prima di sospettare il
+codice.
 
 ---
 
@@ -428,6 +439,8 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M20](20-marchio-e-app-installabile.md) | Il marchio nel nav, e l'app che si installa sul telefono: manifest, icone dal disegno nuovo, niente service worker | v1.20.0 — 2026-08-27 |
+| [M18](18-rosa-a-fisarmonica.md) | La rosa a fisarmonica: i reparti che si aprono, la quota di budget, l'ordine di estrazione | v1.18.0 — 2026-08-23 |
 | [M17](17-portale-tre-colonne.md) | Il portale a tre colonne: la chiamata a pannello, e una colonna di stato che si legge a colpo d'occhio | v1.17.0 — 2026-08-22 |
 | [M16](16-regole-offerta.md) | Le regole dell'offerta: via i valori suggeriti, via il ritiro (motore compreso), i pallini di presence in TV | v1.16.0 — 2026-08-22 |
 | [M14](14-cancello-risultati.md) | Il cancello dei risultati: fra la chiusura di un round e la rivelazione delle buste un istante che appartiene a chi conduce, e un lotto che si può annullare | v1.15.0 — 2026-08-18 |

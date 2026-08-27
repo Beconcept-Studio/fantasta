@@ -4,6 +4,47 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.20.0] — 2026-08-27
+
+**Due cose: il marchio si vede dentro l'app, e l'app si mette sulla schermata home come un'app.**
+
+**Il marchio nella navbar**, a sinistra di «Fantasta», su ogni pagina — dashboard, portale, pagina di
+accesso — e **non** sulla vista proiettata in TV, che resta com'era. È lo stesso disegno che da oggi è
+anche l'icona: nella linguetta del browser non c'è più il cerchio blu, c'è il gradiente. ⚠ Se vedi
+ancora la vecchia icona non è un difetto: le icone sono la cosa che i browser tengono in cache più a
+lungo. `Cmd+Shift+R`, o chiudere e riaprire la linguetta; sul telefono, rimuovere e riaggiungere il
+collegamento.
+
+**Un dettaglio che si nota sul telefono**, ed è una scelta: a 375 pixel il marchio prende diciotto
+pixel a sinistra, e quei pixel li restituisce il **nome dell'utente**, che si tronca prima di prima.
+La riga non va a capo in nessun caso. Il marchio si vede su ogni schermata, il proprio nome per esteso
+lo sa già chi lo porta.
+
+**L'app si installa.** Da iPhone: Condividi → «Aggiungi alla schermata Home». Compare l'icona col
+marchio, il nome «Fantasta», e toccandola l'app si apre **senza la barra degli indirizzi**. Serve a una
+cosa sola e la sera dell'asta è quella che conta: dodici persone nella stessa stanza che devono aprire
+lo stesso portale in fretta, con un tocco invece di un giro nella cronologia. Su Android funziona la
+stessa aggiunta dal menù del browser, e l'icona viene ritagliata dal sistema senza tagliare il marchio.
+
+**Provato su un iPhone vero prima del rilascio**, perché era la sola parte che non si poteva dedurre:
+l'accesso con **Google** torna dentro l'app installata, quindi non serve ripiegare su email e password
+— che restano comunque disponibili come sempre.
+
+**Due cose cambiano per chi installa, e non sono difetti da segnalare:**
+
+1. **Nell'app installata si rientra da zero.** Le web app aggiunte alla schermata home su iOS hanno un
+   contenitore di cookie **separato** da Safari: la sessione già aperta nel browser non passa
+   nell'app, quindi la prima volta si entra di nuovo. Una volta sola.
+2. ⚠ **Senza barra degli indirizzi, ricaricare è un pull-to-refresh** — si tira giù la pagina dall'alto.
+   Vale la pena saperlo perché il ricarico è il rimedio a un problema noto: subito dopo un deploy l'app
+   ha un paio di minuti in cui una pagina può restare muta, e chi ha in mano una pagina vecchia deve
+   ricaricare. La versione in alto a destra si legge come sempre, ed è lei a dire quale codice sta
+   rispondendo.
+
+**Niente service worker, e quindi niente banner «Installa app» su Chrome** (l'aggiunta dal menù resta).
+È una scelta: una cache davanti a un'app che a ogni deploy ha due minuti di file statici mancanti
+trasformerebbe quei due minuti in un guasto permanente, con la disinstallazione come unico rimedio.
+
 ## [1.19.3] — 2026-08-23
 
 **Tutto quello che cambia sta nella vista proiettata in TV.** Nel resto dell'app non si nota niente.
