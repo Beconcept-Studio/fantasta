@@ -437,7 +437,7 @@ server block e nginx **rifiuta di ripartire**.
       normalmente un contesto sicuro. Non c'è stato bisogno di distinguere: ha funzionato lì. E
       `mobile-web-app-capable` al posto del nome legacy con prefisso `apple-` (vedi M20-04) **non ha
       impedito niente**, che era il dubbio vero. Nessun meta aggiunto a mano
-- [ ] **M20-06** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con dev server
+- [x] **M20-06** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ build con dev server
       spento, e `lsof -nP -iTCP -sTCP:LISTEN | grep node` prima; la prima build dopo una sessione di
       `pnpm dev` può morire da sola e passare identica al secondo giro). Documentazione:
       `DECISIONS.md` col **ribaltamento datato** della voce 2026-08-18 e le quattro decisioni del
@@ -455,10 +455,36 @@ server block e nginx **rifiuta di ripartire**.
       punto 1 dice che l'esito del giro Google **diventa una riga del changelog**, e quell'esito lo sa
       solo M20-05. Scriverlo prima vorrebbe dire scrivere una promessa. Il rito lo mette comunque su
       `dev` dopo il merge della feature, quindi l'ordine torna: iPhone → changelog e `1.20.0` → `main`
-- [ ] **M20-07** — **Dopo il deploy**, e non è una formalità (§7): la versione dalla navbar, poi
+- [x] **M20-07** — **Dopo il deploy**, e non è una formalità (§7): la versione dalla navbar, poi
       `curl -I` sul manifest e su **entrambe** le icone di `public/`, guardando `x-powered-by:
       Next.js`. Se un'icona dà 404 l'app non è installabile, e il 404 di nginx si riconosce proprio da
       quell'intestazione **mancante**
+      → **Fatto, e i tre percorsi nuovi rispondono.** Push su `main` alle **16:02:54 UTC**, la navbar
+      è passata a `1.20.0` fra le **16:05:03 e le 16:05:23** — due minuti e mezzo, cioè la finestra
+      solita. Poi: `/manifest.webmanifest` → `200 application/manifest+json`, JSON valido, `display:
+      standalone`, quattro voci di icona, **senza sessione**; `/icon-192.png` e `/icon-512.png` → `200
+      image/png`. Nella pagina servita ci sono il `<link rel="manifest">` e i tre meta.
+      → **E una prova più forte di un `200`**, nello spirito della regola per cui un `HTTP 200` non
+      verifica un deploy: scaricate le due icone e confrontato lo **sha256** con i file locali —
+      **identici** entrambi. Non è solo «qualcuno risponde a quel percorso»: è che risponde con i
+      nostri byte.
+      → ⚠ **§7 sbagliava il metodo, e va corretto qui perché la prossima volta manderebbe fuori
+      strada.** Diceva di distinguere il 404 di nginx dal 404 di Next per l'intestazione `x-powered-by:
+      Next.js`. In produzione quell'intestazione **non c'è su nessuna risposta `200`** — nemmeno su
+      `/icon.png` e `/apple-icon.png`, che sono rotte generate da Next e che nginx non può servire dal
+      disco. Quindi la sua assenza su un `200` non significa niente. Vale invece sui **404**, ed è
+      verificato in entrambe le direzioni: `/non-esiste-m20.png` → `404` **con** `x-powered-by`, cioè i
+      `.png` arrivano a Node; `/favicon.ico` → `404` **senza**, 146 byte, che è esattamente il 404 di
+      nginx descritto nella voce del 2026-08-18. **La regola giusta è: l'intestazione distingue chi
+      risponde a un 404, non chi risponde a un 200** — e a un `200` si chiede il contenuto, non
+      l'intestazione.
+      → `/favicon.ico` è ancora intercettato da nginx, come nel 2026-08-18: **preesistente, deciso di
+      lasciarlo**, e questa macro non lo tocca. Confermato che il match è esatto sul percorso e non per
+      estensione, altrimenti le due icone nuove non sarebbero arrivate.
+      → ⚠ **Una conseguenza da sapere: `public/README.md` è servito** (`/README.md` → `200
+      text/markdown`), come la nota nel file stesso dichiarava. È documentazione, non c'è niente da
+      proteggere; se l'owner preferisce non averlo su un URL pubblico, la nota si sposta dentro
+      `app/manifest.ts` e nello script, e si perde solo il fatto che stia *accanto* ai file
 
 ## Verifica
 

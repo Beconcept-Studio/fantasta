@@ -3734,3 +3734,15 @@ simulazione in `LIVE/WAITING_PICK`, e accendere l'app avrebbe fatto partire il t
 il dev server è girato su un database **usa-e-getta** (creato, `db:push`, cancellato alla fine) su una
 porta sua. Riletta dopo, la simulazione era ferma dov'era. Vale come procedura ogni volta che serve
 l'app accesa e in locale c'è un'asta di qualcuno.
+
+⚠ **Correzione al metodo di verifica, misurata dopo il deploy di `v1.20.0`.** §7 di M20 — e la voce del
+2026-08-18 da cui veniva — dicevano di distinguere il 404 di nginx da quello di Next per l'intestazione
+`x-powered-by: Next.js`. **Vale sui 404, non sui 200.** In produzione quell'intestazione non compare su
+*nessuna* risposta `200`, nemmeno su `/icon.png` e `/apple-icon.png`, che sono rotte generate da Next e
+che nginx non potrebbe servire dal disco: quindi la sua assenza su un `200` non dice niente su chi ha
+risposto. Verificato in entrambe le direzioni: `/non-esiste-m20.png` risponde `404` **con**
+l'intestazione — cioè i `.png` arrivano a Node — e `/favicon.ico` risponde `404` **senza**, 146 byte,
+che è il 404 di nginx di sempre. **A un `200` si chiede il contenuto, non l'intestazione**: le due icone
+nuove sono state scaricate e confrontate con lo `sha256` dei file locali, identiche entrambe. È la stessa
+disciplina del «un `HTTP 200` non è una verifica di deploy», applicata un livello più in là — anche la
+*spia* di una verifica va verificata.
