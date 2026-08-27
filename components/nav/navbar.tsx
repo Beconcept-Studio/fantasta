@@ -65,8 +65,9 @@ export function Navbar({
       <nav className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2.5">
         <Link
           href="/dashboard"
-          className="shrink-0 text-base font-semibold tracking-tight"
+          className="flex shrink-0 items-center gap-2 text-base font-semibold tracking-tight"
         >
+          <Logo />
           Fantasta
         </Link>
 
@@ -98,5 +99,56 @@ export function Navbar({
         </div>
       </nav>
     </header>
+  );
+}
+
+/**
+ * Il marchio, inline e **in questo file**: ha un solo chiamante, ed è il `<Link>`
+ * qui sopra (regola 8). Il giorno che un secondo posto lo vuole — la pagina di
+ * accesso con un marchio grande, la TV — si sposta in `components/nav/logo.tsx`,
+ * e quel giorno ci sarà un secondo chiamante a giustificarlo.
+ *
+ * Tre dettagli che non sono gusto, e il quarto è la misura:
+ *
+ * - **`fill="currentColor"`**, non il `fill="black"` che esce da Figma: così il
+ *   marchio segue il colore del testo accanto invece di congelarsi. Non serve
+ *   oggi — la navbar è chiara e il testo è quasi nero — ed è ciò che evita un
+ *   marchio nero su fondo nero il giorno che qualcosa cambia.
+ * - **Il `clipPath` di Figma è stato buttato**, col suo `<defs>` e il suo `id`.
+ *   Era un rettangolo a tela piena, cioè inerte, e ⚠ un SVG inline condivide lo
+ *   spazio dei nomi degli `id` con tutta la pagina: `clip0_262_27` in una pagina
+ *   è un rischio piccolo e gratuito da evitare.
+ * - **`aria-hidden`**: il nome dell'app è scritto accanto in testo, e un
+ *   `<title>` qui dentro farebbe leggere «Fantasta Fantasta».
+ * - **`h-6`** e non l'`h-5` da cui la spec partiva. La misura è stata guardata a
+ *   375px, tre altezze a confronto, e ha vinto per una ragione misurata prima che
+ *   per gusto: **24px è esattamente la `line-height` del `text-base` accanto**,
+ *   quindi sulla pagina di accesso — dove la navbar è il solo logo e non ci sono
+ *   pulsanti a dettare l'altezza — la barra resta **alta 45px come prima**. A
+ *   `h-7` diventerebbe 49px, cioè il marchio pagherebbe con l'altezza di ogni
+ *   pagina dell'app. All'occhio: a `h-5` (20px → 15 di larghezza, il marchio è
+ *   verticale) sta timido accanto a una parola in semibold, a `h-7` la domina.
+ *   `w-auto` e non una larghezza fissa: il rapporto lo tiene il `viewBox`.
+ *
+ * ⚠ **Chi paga i diciotto pixel è il nome dell'utente**, e va saputo invece di
+ * scoprirlo: a 375px la riga non va a capo in nessun caso — `nav.scrollWidth`
+ * resta 375 — perché il nome ha `min-w-0` e `truncate`, quindi cede lui. Sulla
+ * dashboard di un amministratore era già troncato prima (61px per «Andrea
+ * Ruggeri», che ne vorrebbe un centinaio) e adesso ha 35px. Nel portale, senza il
+ * pulsante Admin, un nome lungo passa da **intero a troncato**: 134px prima, 115
+ * adesso. È il costo del marchio nel nav, non un difetto da aggiustare
+ * allargando la navbar — e `h-5` ne restituirebbe **tre** pixel, cioè non
+ * cambierebbe nulla di quel caso.
+ */
+function Logo() {
+  return (
+    <svg
+      viewBox="0 0 602 800"
+      className="h-6 w-auto"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M201.849 800L200.732 601.083L0.590969 601.017V400.853L200.273 400.066L0 200.492L200.732 0H602L601.934 200.689L201.126 200.623L201.192 400.591L601.409 400.853L201.849 800Z" />
+    </svg>
   );
 }

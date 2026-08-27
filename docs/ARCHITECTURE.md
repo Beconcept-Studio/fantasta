@@ -1308,9 +1308,9 @@ dipendenza — è il gemello di `lib/domain.ts`, e per la stessa ragione: lo leg
 client che evidenzia la voce attiva, e importare l'ORM per quattro stringhe manderebbe Drizzle sul
 telefono.
 
-Sopra tutto c'è una **navbar globale** nel layout radice: la scritta *Fantasta* che riporta alla
-lista delle aste, il nome di chi è entrato, la versione compilata, l'uscita, e — solo per chi è
-amministratore dell'applicazione — il pulsante che porta al pannello. La versione è lì per
+Sopra tutto c'è una **navbar globale** nel layout radice: il marchio e la scritta *Fantasta* che
+riportano alla lista delle aste, il nome di chi è entrato, la versione compilata, l'uscita, e — solo
+per chi è amministratore dell'applicazione — il pulsante che porta al pannello. La versione è lì per
 un controllo a vista — aprire il sito e sapere quale codice sta rispondendo, invece di credere al
 momento in cui il deploy dichiara di aver finito — e viene da `package.json`, letto nel layout e
 passato alla navbar come stringa: il deploy compila sul server dopo il checkout, quindi quel numero
@@ -1324,6 +1324,26 @@ sola vista TV, che è pubblica e proiettata e non è la pagina di chi la guarda.
 Fino a v1.9.1 lì accanto c'era anche una **striscia verde «Asta in corso»**, su ogni pagina, e da
 v1.10.0 non c'è più: il capitolo del portale racconta perché, perché è lì che il suo posto è stato
 preso da qualcos'altro.
+
+Il **marchio** accanto alla scritta è arrivato da M20, ed è un `path` SVG scritto inline dentro
+`navbar.tsx` invece di un file di componente o di un'immagine. Le tre ragioni, in ordine di
+importanza. Non è un file suo perché ha **un solo chiamante**, e la regola dell'astrazione dopo il
+secondo chiamante vale anche per sei righe: il giorno che la pagina di accesso volesse un marchio
+grande, quel giorno esisterà il secondo chiamante che giustifica `components/nav/logo.tsx`. Non è un
+`<img>` perché un SVG inline non è una richiesta di rete in più su ogni pagina, e soprattutto perché
+il suo colore è `currentColor`: il marchio segue il colore del testo accanto, invece di essere un
+nero congelato in un file che un giorno finirebbe su un fondo scuro. E il `clipPath` che l'export di
+Figma si portava dietro è stato buttato — era un rettangolo a tela piena, cioè inerte — perché un SVG
+inline condivide lo spazio dei nomi degli `id` con tutta la pagina, e `clip0_262_27` in una pagina è
+un rischio piccolo e gratuito da evitare.
+
+L'altezza è `h-6`, e non è un gusto: **24 pixel sono la `line-height` del testo accanto**, quindi la
+barra non cresce di un pixel su nessuna pagina — sulla pagina di accesso, dove non ci sono pulsanti a
+dettare l'altezza, resta alta 45px come prima. Il costo c'è e sta da un'altra parte: a 375 pixel la
+riga della navbar non va a capo perché l'unico elemento che cede è il **nome dell'utente**, che ha
+`min-w-0` e tronca. Diciotto pixel di marchio sono diciotto pixel in meno di nome, e nel portale un
+nome lungo che prima entrava intero adesso si tronca. È una scelta, non un difetto: il marchio si
+vede su ogni schermata, il nome per esteso lo sa già chi lo porta.
 
 Dentro un'asta, un layout su `/auctions/[id]` legge una volta chi guarda e che rapporto ha con
 quell'asta, e da due booleani — la possiede, ci gioca — ricava le sezioni. **Dipendono dal ruolo**,
@@ -1378,6 +1398,70 @@ Il costo tecnico di tutto questo è una riga: `getAuctionOverview` è avvolta in
 perché ora la chiamano sia il layout sia la pagina. La memoizzazione dura quanto la richiesta e non
 altro — fuori da un contesto di render React la funzione viene semplicemente eseguita, quindi test e
 script continuano a leggere il database vero a ogni chiamata.
+
+---
+
+## L'app che si installa sul telefono
+
+Da M20 l'applicazione si può **aggiungere alla schermata home** e aprire come un'app, senza barra
+degli indirizzi. Il problema che risolve non è estetico: la sera dell'asta dodici persone nella stessa
+stanza devono aprire lo stesso portale in fretta, e fra un'icona e un giro nella cronologia di Safari
+c'è la differenza fra un tocco e mezzo minuto.
+
+Serve **un file e tre meta**, e niente altro. `app/manifest.ts` è una funzione che restituisce un
+oggetto: Next la serve su `/manifest.webmanifest` e ne emette il `<link>` da sé, per la stessa
+convenzione con cui trova le icone dentro `app/`. La rotta è **pubblica**, e non per distrazione: in
+questo progetto non c'è un `middleware.ts` — l'autenticazione è per pagina, con `requireUser()` —
+quindi non c'è niente che possa metterla dietro una sessione, che è esattamente il modo in cui un
+manifest smette di funzionare senza dare un errore comprensibile. I meta arrivano da `appleWebApp`
+nel `metadata` del layout, e sono deliberatamente ridondanti col manifest: Safari li legge ancora, ed
+è la stessa scelta di tenere insieme `proxy_buffering off` e `X-Accel-Buffering` sulla rotta dello
+stream.
+
+Le icone sono **cinque file committati**, generati a mano una volta da `fixtures/logo.png` con
+`scripts/genera-icone.py`, che non è chiamato da nessuna build. Tre stanno in `app/` e le trova Next
+per convenzione di nome; due stanno in `public/`, e questa cartella è nata per loro. Il motivo è che
+il manifest dichiara le sue icone per URL, e le rotte generate dai file dentro `app/` portano un hash
+che cambia col contenuto: un `<link>` che Next scrive da sé può contenerlo, un manifest scritto a mano
+no. Il 512 quindi esiste **due volte con gli stessi byte**, una per ciascun consumatore, da una sola
+sorgente e da una sola riduzione. È il prezzo per non scrivere `metadata.icons` a mano, cioè per non
+tenere allineate due verità sulla stessa cosa. ⚠ E in `public/` i nomi sono `icon-192.png` e
+`icon-512.png` perché `icon.png` collide con la rotta che Next genera da `app/icon.png`: un rinomino
+per pulizia romperebbe l'installazione, e lo farebbe **in silenzio** — il manifest continuerebbe a
+rispondere, con dentro due URL che danno 404. È l'unico modo in cui questa parte può rompersi senza
+che nulla lo dica, e per questo `tests/manifest.test.ts` controlla che i due file dichiarati esistano
+su disco.
+
+Il manifest dichiara **quattro voci di icona per due file**: ogni misura una volta con `purpose: "any"`
+e una con `"maskable"`. La stringa doppia `"any maskable"`, che la specifica del W3C ammette, non è
+scrivibile qui — il tipo di Next è un'unione di tre stringhe singole, quindi sarebbe una build rossa —
+e non serve: lo stesso file va bene per i due scopi perché il disegno è a tela piena col marchio
+centrato, e il suo angolo più lontano dal centro sta al 28,6% del lato contro il 40% della zona sicura
+di Android.
+
+**Tre cose non ci sono, e ognuna per una ragione sua.** Non c'è un **service worker**: su iPhone
+l'installazione in standalone non lo richiede, su Android costa il banner «Installa app» e resta la
+scorciatoia dal menù. In cambio non si mette una cache davanti a un'applicazione che a ogni deploy ha
+due minuti in cui i suoi chunk statici rispondono 404 — un service worker che serve una pagina vecchia
+con riferimenti a chunk morti è quel guasto reso permanente, e il rimedio sarebbe una disinstallazione
+che nessuno sa fare da un telefono. Non c'è `viewport-fit=cover`: l'applicazione ha quattro
+`env(safe-area-inset-*)` con fallback, e senza quella riga gli `env()` valgono zero, quindi oggi
+vincono i fallback e i layout sono quelli che sono stati guardati e approvati; accenderla cambierebbe
+quattro layout, di cui due sono il modale d'offerta e la barra incollata del portale. E non c'è una
+**schermata di avvio iOS**, che vorrebbe un'immagine per ogni misura di iPhone — una decina di file da
+mantenere perché il primo mezzo secondo sia colorato invece che bianco.
+
+Due cose cambiano per chi installa, e non sono difetti da correggere. La prima: **si rientra da zero**,
+perché le web app aggiunte alla schermata home su iOS hanno un contenitore cookie separato da Safari, e
+la sessione aperta nel browser non passa nell'app installata. La seconda: **senza barra degli indirizzi
+il ricarico è un pull-to-refresh**, e il ricarico è il rimedio documentato per la finestra cieca del
+deploy — la versione si legge ancora dalla navbar, ma il gesto per rimediare è un altro.
+
+Questa parte **ribalta una decisione scritta**, e vale la pena saperlo leggendo `DECISIONS.md`: il
+2026-08-18, quando le icone furono fatte fuori macro, si scrisse «nessun manifest, nessuna PWA, nessun
+service worker», con la motivazione che l'installabilità era una superficie in più che nessuno aveva
+chiesto. Poi l'ha chiesta l'owner. Cambia il fatto, non il ragionamento — e il service worker, che era
+la parte del ragionamento che regge ancora, è rimasto fuori.
 
 ---
 

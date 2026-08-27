@@ -12,9 +12,14 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## Pianificata, non aperta
 
+Nessuna.
+
+## In corso
+
 **M20 — «Il marchio nel nav, e l'app che si installa sul telefono»**
-([20-marchio-e-app-installabile.md](20-marchio-e-app-installabile.md)), pianificata il 2026-08-27
-dall'unica richiesta rimasta nel quaderno dopo `v1.19.2`. Il marchio «F» entra nella navbar accanto a
+([20-marchio-e-app-installabile.md](20-marchio-e-app-installabile.md)), pianificata **e aperta** il
+2026-08-27, su `feature/20-marchio-e-app-installabile`, dall'unica richiesta rimasta nel quaderno dopo
+`v1.19.2`. Il marchio «F» entra nella navbar accanto a
 «Fantasta», le icone si rifanno dal disegno nuovo, e l'applicazione diventa **installabile sulla
 schermata home** — manifest, meta iOS, e la misura 192 che a `v1.15.1` era stata saltata proprio
 perché serve solo a un manifest. Niente schema, niente backfill, nessuna dipendenza nuova: il rilascio
@@ -45,9 +50,14 @@ prossima volta che si vedono dei 404 su un chunk durante un rilascio, ed è per 
 sopravvissuta alla macro: la macro era la cura, quella riga è il sintomo, e il sintomo si incontra
 comunque.
 
-## In corso
-
-Nessuna.
+**Dove è arrivata**, al 2026-08-27: fatti M20-01 → M20-04, gate verde (baseline **914** test, chiusa a
+**917**: tre per il manifest, e il terzo è quello che prende il rinomino delle icone). Restano due task
+e **vogliono l'owner**: M20-05 è l'installazione su un iPhone vero con `pnpm dev:lan`, e con lei la
+guardata al marchio sul telefono che chiude M20-02; M20-07 è la verifica dei tre percorsi nuovi da
+fuori, dopo il deploy. ⚠ Due cose trovate lavorando cambiano quello che c'era scritto nella spec, e
+stanno annotate nei task: Next emette `mobile-web-app-capable` e **non**
+`apple-mobile-web-app-capable`, e il marchio nel nav **tronca il nome dell'utente** di 23–26 pixel,
+contro quello che dice la verifica 3.
 
 ---
 

@@ -321,26 +321,104 @@ server block e nginx **rifiuta di ripartire**.
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M20-01** — Aprire `feature/20-marchio-e-app-installabile` da `dev`. Rileggere questo file, la
+- [x] **M20-01** — Aprire `feature/20-marchio-e-app-installabile` da `dev`. Rileggere questo file, la
       voce `DECISIONS.md` del 2026-08-18 sull'icona (**tutta**: metà di questa spec è scritta contro
       quella) e le regole di produzione di `CLAUDE.md`. `pnpm test` verde come baseline, col numero
       annotato qui. `git add` dei due file sorgente in `fixtures/` — sono arrivati untracked, e un
       commit che li dimentica lascia una macro che non si può rigenerare
+      → **Baseline: 914 test, 52 file.** I due file di `fixtures/` erano già committati in `c69784a`
+      insieme alla spec, quindi quel pezzo era fatto: `git ls-files fixtures/` li vede entrambi.
+      ⚠ **Il primo `pnpm test` è stato rosso, e non per un test**: 914 test verdi ma
+      `tests/db/admin.test.ts` è morto nell'`afterAll`, con
+      `update or delete on table "users" violates foreign key constraint "members_user_id_users_id_fk"`
+      — `dropUsers` prima che i membri di quel giro fossero via. **Non riprodotto**: il file da solo
+      passa (29 test), e la suite intera al secondo giro è verde tutta (914/52). Guardato il database
+      dopo: il cascade su `members.auction_id` c'è (`confdeltype = c`), **zero** membri orfani, e i
+      65 utenti `@test.invalid` residui sono la perdita nota di `makeGameAuction`, che non traccia i
+      suoi otto utenti. Cioè: un flake di teardown fra file, **causa non identificata**, e fuori dal
+      perimetro di M20 — annotato qui e non inseguito, come M18 aveva già annotato di non aggiustare
+      una terza volta la stessa misura
 - [ ] **M20-02** — Il marchio nel nav (§1): `Logo()` in fondo a `components/nav/navbar.tsx`, il
       `<Link>` a `flex items-center gap-2`, `currentColor`, `aria-hidden`, `clipPath` buttato.
       **Guardarlo prima di fissare la misura**: portale sul telefono in LAN a 375px, pagina di accesso
       (dove la navbar è il solo logo senza sessione), dashboard. `h-5` è un punto di partenza, non un
       risultato. **Nessun `dark:`**
-- [ ] **M20-03** — Le icone (§2): riscrivere `scripts/genera-icone.py`, dargli a mano, committare i
+      → **Fatto il codice, e la misura è cambiata: `h-6`, non `h-5`.** `Logo()` in fondo a
+      `navbar.tsx`, `clipPath` e `<defs>` buttati, `currentColor`, `aria-hidden`, nessun `dark:`.
+      La misura è stata **guardata a 375px** — tre altezze a confronto in un banco di prova statico
+      con i valori esatti dei token e il font Geist, invece di accendere l'app (in locale c'è la
+      simulazione «Prova» in `LIVE`, e il tick dei bot l'avrebbe fatta proseguire da sé). Cosa si è
+      visto: a `h-5` il marchio sta timido accanto a «Fantasta» in semibold, a `h-7` la domina.
+      E una ragione **misurata** che non era nella spec: **24px è la `line-height` del `text-base`
+      accanto**, quindi sulla pagina di accesso la barra resta alta 45px come prima; `h-7` la
+      porterebbe a 49, cioè il marchio si pagherebbe con l'altezza di ogni pagina.
+      → ⚠ **Trovato quello che la spec dava per gratis.** §1 dice «a 375px a sinistra c'era solo il
+      titolo, e quindici pixel ci stanno»: ci stanno, ma **li paga il nome dell'utente**, perché è lui
+      l'unico elemento con `min-w-0 truncate`. Misurato: la riga non va mai a capo (`nav.scrollWidth`
+      = 375 in ogni caso), ma il nome sulla dashboard di un amministratore passa da **61px a 35**, e
+      nel portale — senza il pulsante Admin — un nome lungo passa da **intero a troncato** (134px →
+      115). `h-5` ne restituirebbe tre pixel, cioè non cambierebbe quel caso: la scelta è fra il
+      marchio e il nome intero, non fra due altezze. **La verifica 3 della spec va letta così**: non
+      va a capo, sì; «non tronca il nome più di prima» **è falso**, e il numero è 23–26px.
+      → **Resta la guardata sul telefono in LAN**, che è la sola cosa che un banco di prova non fa:
+      va nella stessa sessione di M20-05, che vuole l'iPhone dell'owner
+- [x] **M20-03** — Le icone (§2): riscrivere `scripts/genera-icone.py`, dargli a mano, committare i
       cinque file, cancellare `fixtures/favicon-512.png`. Guardare le rese ingrandite **prima** di
       committarle, come si fece a `v1.15.1`, e riletto il `.ico` per controllo che le tre misure ci
       siano davvero
-- [ ] **M20-04** — Il manifest e iOS (§3, §4, §5): `public/` con le due icone e il commento sul
+      → **Fatto, cinque file.** `app/favicon.ico` (riletto: `[(16,16), (32,32), (48,48)]`, le tre
+      misure ci sono), `app/icon.png` 512, `app/apple-icon.png` 180, `public/icon-192.png`,
+      `public/icon-512.png`. I due 512 hanno **gli stessi byte** (sha256 identico, verificato).
+      `fixtures/favicon-512.png` cancellato con `git rm`.
+      → **I numeri della spec su `logo.png` sono confermati misurandoli di nuovo**: 1080×1080, alpha
+      `(255, 255)` cioè opaco su tutta l'immagine, bianco dal 33 al 67% in orizzontale e dal 27 al 73
+      in verticale. Quindi l'appiattimento di iOS è davvero sparito: `apple_icon()` è una riduzione e
+      un `convert("RGB")`.
+      → **Guardate le rese ingrandite, e dicono quello che la spec prevedeva**: a 48 il marchio è
+      netto, a 32 è leggibile, a 16 è un campo di colore col bianco che diventa una macchia — accettato
+      in §0. Guardato anche il **ritaglio circolare di Android** simulato all'80%: il marchio non
+      viene sfiorato, come diceva il conto del 28,6% contro il 40%. ⚠ È una **simulazione**, non un
+      dispositivo: la verifica 11 resta **non verificata** finché un Android vero non c'è.
+      → ⚠ **Una cosa in più, non prevista dalla spec, con i numeri accanto**: i PNG escono in **RGB e
+      non RGBA**. L'alpha della sorgente è 255 su tutta l'immagine, cioè un canale che non porta
+      informazione, e portarselo dietro costava **89 KB** — il 512 passa da 510 a 431 KB, il 192 da 60
+      a 48. Restano file grossi (452 KB il 512 su disco) e la ragione va saputa prima di sospettare un
+      errore: la **grana** del gradiente è rumore, ed è esattamente ciò che un compressore senza
+      perdita non può togliere. Se 452 KB per l'icona che il telefono scarica all'installazione sono
+      troppi, la strada è una sorgente meno granulosa, non un'opzione dello script
+- [x] **M20-04** — Il manifest e iOS (§3, §4, §5): `public/` con le due icone e il commento sul
       perché i nomi sono quelli, `app/manifest.ts` con le quattro voci, `appleWebApp` nel layout. Più
       `tests/manifest.test.ts`: i campi che contano, le quattro voci di icona, e che i due file
       dichiarati **esistano su disco** — costa poco e prende un rinomino, che è il modo esatto in cui
       questa macro può rompersi in silenzio. In locale: `/manifest.webmanifest` risponde JSON valido e
       il `<link rel="manifest">` è nella pagina
+      → **Fatto tutto, e provato con l'app accesa.** `public/README.md` accanto alle due icone (il
+      perché dei nomi, e che si rigenerano dallo script); `app/manifest.ts` con le quattro voci;
+      `appleWebApp` nel `metadata` del layout, più il perché di **nessun `viewport-fit=cover`**
+      scritto sopra `viewport`, che è il punto in cui verrà proposto.
+      → **`tests/manifest.test.ts`, 3 test, e il terzo è provato al contrario**: rinominato
+      `public/icon-192.png` in `icon.png` — cioè esattamente l'errore «per pulizia» — il test **fallisce**
+      con il messaggio giusto. Rinominato indietro subito.
+      → **Come è stata fatta la prova locale senza toccare niente dell'owner**: in locale c'è la
+      simulazione «Prova» in `LIVE/WAITING_PICK`, e accendere l'app avrebbe fatto partire il tick dei
+      bot su quell'asta. Quindi il dev server è girato su un database **usa-e-getta** (`asta_m20`,
+      creato, `db:push`, e cancellato alla fine) sulla porta 3001. Riletta dopo: «Prova» è ancora
+      `LIVE/WAITING_PICK`.
+      → **Cosa ha risposto**: `/manifest.webmanifest` → `200` con
+      `content-type: application/manifest+json`, JSON valido, quattro voci di icona, `display:
+      standalone`, e **senza sessione**; `/icon-192.png` e `/icon-512.png` → `200 image/png`; le tre
+      icone di `app/` → `200`. Nella pagina di accesso ci sono `<link rel="manifest">` e i meta di
+      Apple. Confermato anche il `sizes="16x16"` sul `.ico` che §2 dice di non «aggiustare».
+      → ⚠ **Trovato un errore nella spec, e va saputo prima di M20-05.** §5 dice che Next traduce
+      `appleWebApp.capable` in `apple-mobile-web-app-capable`. **Non è così**: Next 15.5.23 emette
+      **`mobile-web-app-capable`** (letto in `next/dist/lib/metadata/generate/basic.js`, riga 263, e
+      visto nella pagina servita). Gli altri due meta sono quelli previsti,
+      `apple-mobile-web-app-title` e `-status-bar-style`. Il nome legacy con il prefisso `apple-`
+      **non c'è**, e nessuno lo può aggiungere passando da `appleWebApp`. Cosa significa: su iOS
+      moderno lo standalone lo decide `display: standalone` del manifest, quindi *dovrebbe* bastare —
+      ma «dovrebbe» è precisamente ciò che M20-05 esiste per non dire. **Nessun rimedio inventato
+      qui**: se sull'iPhone l'app non si apre senza barra degli indirizzi, il primo tentativo è quel
+      meta legacy scritto a mano in `metadata.other`, e sarà una riga con una prova dietro
 - [ ] **M20-05** — **Provare l'installazione su un iPhone vero**, con `pnpm dev:lan`. Aggiungi alla
       schermata home → l'icona è il marchio (non uno screenshot della pagina), il nome è «Fantasta»,
       si apre **senza barra degli indirizzi**, e **si entra**: prima con email e password, poi con
@@ -353,6 +431,18 @@ server block e nginx **rifiuta di ripartire**.
       `DECISIONS.md` col **ribaltamento datato** della voce 2026-08-18 e le quattro decisioni del
       2026-08-27; `ARCHITECTURE.md`; `CHANGELOG.md` con le due cose di §6 scritte per l'owner;
       `features/README.md`
+      → **Gate verde al primo giro**, con `lsof` dato prima e nessun dev server acceso: `pnpm test`
+      **917 test, 53 file** (baseline 914 + i tre del manifest), `pnpm typecheck` muto, `pnpm build`
+      pulita — e nell'elenco delle rotte c'è `○ /manifest.webmanifest`, cioè è compilata **statica**.
+      Nessun `dark:` nel codice nuovo, `lib/db/schema.ts` non toccato (`git diff --stat` sul branch).
+      → **Documentazione fatta**: `DECISIONS.md` con la voce del 2026-08-27 (il ribaltamento datato, le
+      quattro decisioni, e le quattro cose trovate lavorando); `ARCHITECTURE.md` con il marchio dentro
+      il capitolo della navbar e una sezione nuova, «L'app che si installa sul telefono»;
+      `features/README.md` con M20 passata a «in corso» e dove è arrivata.
+      → ⚠ **Il `CHANGELOG.md` e il numero di versione restano da scrivere, ed è di proposito**: §6
+      punto 1 dice che l'esito del giro Google **diventa una riga del changelog**, e quell'esito lo sa
+      solo M20-05. Scriverlo prima vorrebbe dire scrivere una promessa. Il rito lo mette comunque su
+      `dev` dopo il merge della feature, quindi l'ordine torna: iPhone → changelog e `1.20.0` → `main`
 - [ ] **M20-07** — **Dopo il deploy**, e non è una formalità (§7): la versione dalla navbar, poi
       `curl -I` sul manifest e su **entrambe** le icone di `public/`, guardando `x-powered-by:
       Next.js`. Se un'icona dà 404 l'app non è installabile, e il 404 di nginx si riconosce proprio da
