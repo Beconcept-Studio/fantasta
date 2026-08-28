@@ -1,11 +1,17 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeEach, expect, it, suite, vi } from "vitest";
 
 import { db } from "@/lib/db";
-import { auctions, carmyPlayers, listonePlayers, players } from "@/lib/db/schema";
+import {
+  auctions,
+  carmyPlayers,
+  listonePlayers,
+  players,
+  userListone,
+} from "@/lib/db/schema";
 import {
   CARMY_FASCE,
   CARMY_TEAM_BY_SIGLA,
@@ -29,6 +35,10 @@ import {
   uploadListone,
 } from "@/lib/engine/listone";
 import { loadAuctionState, persistTransition } from "@/lib/engine/mutate";
+import {
+  uploadUserListone,
+  userListoneStatus,
+} from "@/lib/engine/user-listone";
 import {
   createAuction,
   importPlayers,
@@ -985,6 +995,246 @@ suite.runIf(dbUp)("nessun dato di M10B sta su un percorso critico", () => {
     // Gli stessi giocatori, nello stesso ordine di acquisto.
     expect(ottenuti.comprati).toEqual(attesi.comprati);
   }, 240_000);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// M21 — il listone personale
+//
+// ⚠ **Stanno qui, e non in `tests/db/user-listone.test.ts`, per la stessa ragione
+// di M10B**: il caricamento personale si aggancia a `listone_players`, quindi
+// vuole un listone caricato — e questo file **possiede** quella tabella. Quel
+// file lì resta a provare lo schema, che di listone non ha bisogno.
+// ═════════════════════════════════════════════════════════════════════════════
+
+suite.runIf(dbUp)("il caricamento del listone personale", () => {
+  /** Un utente che può vedere gli insight, cioè che può caricare il proprio file. */
+  async function proUser(label = "pro"): Promise<string> {
+    const id = await makeUser(label, { isPro: true });
+    createdUsers.push(id);
+    return id;
+  }
+
+  async function righeDi(userId: string) {
+    return db
+      .select()
+      .from(userListone)
+      .where(eq(userListone.userId, userId))
+      .orderBy(asc(userListone.extId));
+  }
+
+  it("aggancia gli stessi 487 nomi del gemello, e conta i tre obiettivi", async () => {
+    await uploadListone(LISTONE, T0);
+    const me = await proUser();
+
+    const result = await uploadUserListone(me, CARMY, T0);
+    if (!result.ok) throw new Error(result.error.message);
+
+    // ⚠ **Gli stessi numeri del caricamento admin**, e non è una coincidenza: è
+    // lo stesso file, lo stesso parser e lo stesso `matchToListone`. Se un giorno
+    // questi due numeri divergessero, i due percorsi avrebbero cominciato a
+    // leggere lo stesso foglio in due modi.
+    expect(result.value.fromFile).toBe(497);
+    expect(result.value.written).toBe(487);
+    expect(result.value.unmatched).toHaveLength(10);
+    expect(result.value.teamMismatches).toHaveLength(3);
+    // E la cosa che solo questo percorso legge.
+    expect(result.value.obiettivi).toBe(3);
+
+    expect(await righeDi(me)).toHaveLength(487);
+  });
+
+  it("porta le fasce col loro ordine, e chi non ne ha resta senza numero", async () => {
+    await uploadListone(LISTONE, T0);
+    const me = await proUser();
+    await uploadUserListone(me, CARMY, T0);
+
+    const righe = await righeDi(me);
+    const perRank = new Map<number, string>();
+    for (const row of righe) {
+      if (row.fasciaRank !== null) perRank.set(row.fasciaRank, row.fascia!);
+    }
+    // L'ordine del **mio** file, che sul file di riferimento coincide con quello
+    // che l'applicazione conosce già.
+    expect(
+      [...perRank.entries()].sort(([a], [b]) => a - b).map(([, f]) => f),
+    ).toEqual([...CARMY_FASCE]);
+
+    // Chi nel foglio è `Non Impostata` arriva senza fascia e senza numero: è il
+    // gruppo «Senza fascia» in fondo alla tabella.
+    const senza = righe.filter((row) => row.fascia === null);
+    expect(senza.length).toBeGreaterThan(0);
+    expect(senza.every((row) => row.fasciaRank === null)).toBe(true);
+  });
+
+  it("i tre obiettivi hanno un nome, e sono solo quelli", async () => {
+    await uploadListone(LISTONE, T0);
+    const me = await proUser();
+    await uploadUserListone(me, CARMY, T0);
+
+    const obiettivi = await db
+      .select({ extId: userListone.extId })
+      .from(userListone)
+      .where(and(eq(userListone.userId, me), eq(userListone.obiettivo, true)));
+    expect(obiettivi).toHaveLength(3);
+
+    const nomi = await db
+      .select({ name: listonePlayers.name })
+      .from(listonePlayers)
+      .where(
+        inArray(
+          listonePlayers.extId,
+          obiettivi.map((o) => o.extId),
+        ),
+      );
+    expect(nomi.map((r) => r.name).sort()).toEqual([
+      "Baturina",
+      "McTominay",
+      "Rowe",
+    ]);
+  });
+
+  /**
+   * ⚠ **Due persone, due listoni, e nessuna delle due vede l'altro.** È la
+   * proprietà per cui `Obiett.` si può importare qui e non su `carmy_players`
+   * (M21 §0): il dato non esce da chi l'ha caricato.
+   */
+  it("due utenti tengono due listoni indipendenti", async () => {
+    await uploadListone(LISTONE, T0);
+    const me = await proUser("io");
+    const altro = await proUser("altro");
+
+    await uploadUserListone(me, CARMY, T0);
+    await uploadUserListone(altro, minimalCarmy(), T0);
+
+    expect(await righeDi(me)).toHaveLength(487);
+    // Il foglio ridotto ha un giocatore per ruolo: quattro righe, e nessuna delle
+    // 487 dell'altro.
+    expect(await righeDi(altro)).toHaveLength(4);
+  });
+
+  /**
+   * ⚠ **Sostituisce le mie righe, non fonde**, e per la ragione di sempre: un
+   * obiettivo tolto dal file deve poter sparire. Il `DELETE` è ristretto a un
+   * `user_id`, quindi il listone di chi guarda non si accorge di niente.
+   */
+  it("ri-importare sostituisce il mio, e non tocca quello degli altri", async () => {
+    await uploadListone(LISTONE, T0);
+    const me = await proUser("sostituisco");
+    const altro = await proUser("spettatore");
+
+    await uploadUserListone(me, CARMY, T0);
+    await uploadUserListone(altro, CARMY, T0);
+    expect(await righeDi(me)).toHaveLength(487);
+
+    const dopo = new Date("2026-08-28T18:00:00.000Z");
+    const secondo = await uploadUserListone(me, minimalCarmy(), dopo);
+    if (!secondo.ok) throw new Error(secondo.error.message);
+
+    const mie = await righeDi(me);
+    expect(mie).toHaveLength(4);
+    expect(mie.every((r) => r.uploadedAt.getTime() === dopo.getTime())).toBe(true);
+    // Il foglio ridotto non segna nessun obiettivo: i tre di prima sono spariti,
+    // che è tutto il punto della sostituzione.
+    expect(mie.filter((r) => r.obiettivo)).toHaveLength(0);
+    expect(secondo.value.obiettivi).toBe(0);
+
+    // E l'altro ha ancora i suoi 487, coi suoi tre obiettivi.
+    const sue = await righeDi(altro);
+    expect(sue).toHaveLength(487);
+    expect(sue.filter((r) => r.obiettivo)).toHaveLength(3);
+  });
+
+  it("⚠ senza listone a sistema rifiuta, e dice a chi rivolgersi", async () => {
+    const me = await proUser("senza-listone");
+
+    const result = await uploadUserListone(me, CARMY, T0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("CARMY_NO_LISTONE");
+    // ⚠ Il messaggio **non** è quello del pannello admin: un partecipante il
+    // listone non lo può caricare, e «carica prima il listone» sarebbe un ordine
+    // impossibile da eseguire.
+    expect(result.error.message).toContain("amministratore");
+    expect(await righeDi(me)).toHaveLength(0);
+  });
+
+  it("⚠ sotto la soglia di aggancio non scrive niente", async () => {
+    await uploadListone(estraneoListone(), T0);
+    const me = await proUser("sotto-soglia");
+
+    const result = await uploadUserListone(me, CARMY, T0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("CARMY_COVERAGE");
+    expect(result.error.message).toContain(
+      `${Math.round(CARMY_MATCH_THRESHOLD * 100)}%`,
+    );
+    expect(await righeDi(me)).toHaveLength(0);
+  });
+
+  it("un caricamento fallito non tocca quello di prima", async () => {
+    await uploadListone(LISTONE, T0);
+    const me = await proUser("fallito");
+    await uploadUserListone(me, CARMY, T0);
+    expect(await righeDi(me)).toHaveLength(487);
+
+    // Il listone cambia sotto e diventa estraneo: il secondo caricamento
+    // fallisce, e la transazione lascia in piedi le 487 righe di prima.
+    await uploadListone(estraneoListone(), T0);
+    expect((await uploadUserListone(me, CARMY, T0)).ok).toBe(false);
+    expect(await righeDi(me)).toHaveLength(487);
+  });
+
+  /**
+   * ⚠ **Il gate sta nel motore, non solo nella Server Action** (regola 6). La UI
+   * disabilita la tab; qui si prova che il server rifiuta comunque, con il file
+   * giusto e il listone a posto — cioè che l'unica cosa che manca è il permesso.
+   */
+  it("⚠ un utente senza permesso viene rifiutato anche con il file perfetto", async () => {
+    await uploadListone(LISTONE, T0);
+    const normale = await user("normale");
+
+    const result = await uploadUserListone(normale, CARMY, T0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("FORBIDDEN");
+    expect(await righeDi(normale)).toHaveLength(0);
+  });
+
+  it("e un amministratore carica il proprio, senza avere il flag Pro", async () => {
+    await uploadListone(LISTONE, T0);
+    const boss = await makeUser("admin", { isAdmin: true });
+    createdUsers.push(boss);
+
+    const result = await uploadUserListone(boss, CARMY, T0);
+    expect(result.ok).toBe(true);
+    expect(await righeDi(boss)).toHaveLength(487);
+  });
+});
+
+suite.runIf(dbUp)("lo stato del listone personale", () => {
+  it("chi non ha mai importato non ha niente, e non è un errore", async () => {
+    const nessuno = await user("mai-importato");
+    expect(await userListoneStatus(nessuno)).toEqual({
+      rows: 0,
+      obiettivi: 0,
+      uploadedAt: null,
+    });
+  });
+
+  it("dopo un caricamento dice righe, obiettivi e data", async () => {
+    await uploadListone(LISTONE, T0);
+    const me = await makeUser("stato", { isPro: true });
+    createdUsers.push(me);
+    await uploadUserListone(me, CARMY, T0);
+
+    const status = await userListoneStatus(me);
+    expect(status.rows).toBe(487);
+    expect(status.obiettivi).toBe(3);
+    // ⚠ `max()` in SQL grezzo torna una stringa: senza `asDate` qui arriverebbe
+    // un `getTime is not a function`.
+    expect(status.uploadedAt?.getTime()).toBe(T0.getTime());
+  });
 });
 
 // ─── Aiutanti di M10B ────────────────────────────────────────────────────────

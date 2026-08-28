@@ -629,9 +629,23 @@ Scritto qui perché **non è deducibile dal codice** e la sessione in cui è suc
       identico. Il silenzio si copre col conteggio nel riepilogo (M21-06). `uploadCarmy` mappa le
       colonne una per una, quindi ignora i due campi nuovi senza una riga di modifica, e i suoi test
       passano **non toccati**. 13 test nuovi → **942 in 54 file**
-- [ ] **M21-06** — Il motore del caricamento personale (§6) in `lib/engine/`: aggancio, soglia,
+- [x] **M21-06** — Il motore del caricamento personale (§6) in `lib/engine/`: aggancio, soglia,
       sostituzione, riepilogo. Test sul fixture vero, compreso il rifiuto sotto soglia e il rifiuto
       senza listone a sistema
+      → `lib/engine/user-listone.ts`, con `uploadUserListone` e `userListoneStatus`. **L'aggancio è
+      stato estratto** in `matchToListone` dentro `carmy.ts`: è il caso della regola 8 — il secondo
+      chiamante è arrivato, e due copie di quel ciclo sarebbero due modi di leggere lo stesso foglio
+      che divergono su dieci righe su cinquecento senza che nessuno lo veda. ⚠ **Il rifiuto sotto
+      soglia invece resta separato, e non per distrazione**: la quota si misura uguale, il messaggio
+      no — «carica prima il listone aggiornato» a un partecipante è un ordine che non può eseguire,
+      quindi il suo dice di rivolgersi a un amministratore. ⚠ **Il gate `canSeeInsights` sta nel
+      motore**, non solo nella Server Action: metterlo solo nell'azione vorrebbe dire che il giorno
+      in cui nasce un secondo chiamante la guardia resta indietro senza che un test se ne accorga —
+      e così è provabile in `tests/db/`. Il riepilogo porta anche **quanti obiettivi** ha letto, ed è
+      il rimedio deciso a M21-05 per la colonna non obbligatoria: uno zero lì dice la stessa cosa di
+      un rifiuto, a chi ha il file in mano. ⚠ **I test stanno in `tests/db/listone.test.ts`** e non
+      nel file di M21-03, per la ragione di M10B: il caricamento personale si aggancia a
+      `listone_players`, e quel file **possiede** quella tabella. 12 test nuovi → **954 in 54 file**
 - [ ] **M21-07** — `listPickPool` con `userId` e la risoluzione «personale se c'è, globale
       altrimenti» + `fasciaGruppo` (§5). ⚠ **Il test che conta è quello dell'assenza**: per un
       utente non-Pro le quattro chiavi non devono esistere nel risultato, non essere `null`
