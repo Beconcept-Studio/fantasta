@@ -565,9 +565,20 @@ Scritto qui perché **non è deducibile dal codice** e la sessione in cui è suc
       abbastanza da «correggere» un difetto inesistente. Gli screenshot si prendono da **CDP**
       (`Emulation.setDeviceMetricsOverride` + `Page.captureScreenshot`), che è lo stesso contesto in
       cui si misura il DOM: uno screenshot che non concorda con la misura non è una prova
-- [ ] **M21-03** — Lo schema (§2): `user_listone` e le due colonne su `player_insights`. `pnpm
+- [x] **M21-03** — Lo schema (§2): `user_listone` e le due colonne su `player_insights`. `pnpm
       db:push` in locale, e **il primo test in `tests/db/` che tocca la tabella nuova** — è il modo
       in cui ci si accorge di una colonna dimenticata prima del server
+      → Fatto come da §2, senza scostamenti: quattordici colonne, `PRIMARY KEY (user_id, ext_id)`,
+      `ON DELETE CASCADE`, nessuna FK verso `listone_players`; `gol_fatti` e `assist` **nullable** su
+      `player_insights`. Il push in locale ha prodotto le tre istruzioni attese e nessuna domanda.
+      Otto test in `tests/db/user-listone.test.ts` → **925 in 54 file**, verde. ⚠ **Il file può
+      stare da solo**, al contrario di M10B: `user_listone` non è una tabella globale — ogni riga
+      appartiene a un utente usa-e-getta, quindi non c'è nessuna tabella condivisa da «possedere» e
+      la cicatrice dei worker paralleli non si applica. ⚠ **Una nota per chi scriverà altri test sui
+      vincoli**: il messaggio d'errore di Drizzle è solo `Failed query: …` con dentro la query, e il
+      vincolo violato sta nella **causa** (`cause.code`, `cause.constraint`). Un
+      `rejects.toThrow(/duplicate key/)` non passa, e — peggio — se passasse accetterebbe qualunque
+      fallimento di quella `INSERT`
 - [ ] **M21-04** — Gol e Assist dalla fonte A (§3): `parseFantalabListone`, l'`upsert` di
       `refreshInsights`, e un test sul fixture vero che verifica che i due numeri arrivino e che la
       fonte B **non** li tocchi
