@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { Tabs } from "radix-ui";
 import { useState } from "react";
 
 import { useDeletedRedirect } from "@/app/auctions/use-deleted-redirect";
 import { BidModal } from "@/components/auction/bid-modal";
+import { Countdown } from "@/components/auction/countdown";
 import { DeletedCurtain } from "@/components/auction/deleted-curtain";
 import { Identity } from "@/components/auction/identity";
+import { ListoneTable } from "@/components/auction/listone-table";
 import { LotCard } from "@/components/auction/lot-card";
 import { LotClosedCard } from "@/components/auction/lot-closed-card";
 import { MembersPanel } from "@/components/auction/members-panel";
@@ -38,6 +41,11 @@ import {
 } from "@/lib/realtime/portal";
 import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
 import { useAuctionStream, useHeartbeat } from "@/lib/realtime/use-auction-stream";
+import type { UserListoneStatus } from "@/lib/engine/user-listone";
+import { cn } from "@/lib/utils";
+
+/** Le due metà della pagina. `asta` è quella di sempre, ed è attiva al caricamento. */
+type Tab = "asta" | "listone";
 
 /**
  * Il portale del partecipante (F5-01): **una sola pagina, e nient'altro che lo
@@ -71,6 +79,7 @@ export function Portal({
   pool,
   viewerIsOwner,
   budget,
+  listone,
 }: {
   auctionId: string;
   /** Il listone dell'asta, letto una volta dal server: non viaggia nello snapshot. */
@@ -102,6 +111,18 @@ export function Portal({
    * `serializeSnapshot` non è stato toccato (I8).
    */
   budget: number;
+  /**
+   * Cosa ho già importato del mio listone — e, per la sua sola presenza, **se
+   * posso vedere la tab Listone** (M21 §7).
+   *
+   * ⚠ **`null` per chi non ha `canSeeInsights`**, e non è un modo elegante di
+   * scrivere un booleano: è la stessa regola delle quattro chiavi del pool. Chi
+   * non ha il permesso non riceve *niente* — nemmeno il numero di righe del
+   * proprio foglio — invece di riceverlo e vederselo nascondere da un `if` nel
+   * JSX. La tab resta **visibile e spenta**, con accanto scritto perché: una tab
+   * che non c'è non si può desiderare.
+   */
+  listone: UserListoneStatus | null;
 }) {
   const { snapshot, connected, offset, deleted } = useAuctionStream(auctionId);
   useHeartbeat(auctionId);
@@ -122,6 +143,19 @@ export function Portal({
    * breve è che dentro un ruolo lo stesso posto chiama più volte.
    */
   const [dismissedTurnKey, setDismissedTurnKey] = useState<string | null>(null);
+  /**
+   * ⚠ **Il terzo pezzo di stato locale del portale**, dopo i due `dismissed*` che
+   * M17 aveva dichiarato «il secondo e ultimo» (M21 §1). La regola 7 regge lo
+   * stesso, e va detto perché: quei due sono «questa cosa che si apre da sé l'ho
+   * chiusa io», questo è «quale metà della pagina sto guardando». Nessuno dei tre
+   * può rendere una schermata **irraggiungibile** a chi si collega dopo — chi apre
+   * la pagina adesso trova `asta`, che è tutto ciò che c'era prima di M21.
+   *
+   * Se un giorno la tab attiva finisse nell'URL o in `localStorage`, quella
+   * proprietà andrebbe riverificata: una tab ricordata è una schermata che dipende
+   * da cosa hai fatto prima.
+   */
+  const [tab, setTab] = useState<Tab>("asta");
   const [skipping, setSkipping] = useState(false);
 
   async function skipReveal() {
@@ -196,6 +230,9 @@ export function Portal({
   const scene = sceneOf(snapshot, myMemberId);
   const tone = toneOf(scene, snapshot.auction.status);
   const pickOpen = shouldOpenPickSheet(snapshot, myMemberId, dismissedTurnKey);
+  // Il permesso è già stato deciso dal server, che a chi non ce l'ha non manda
+  // niente: qui si legge l'assenza, non si ricalcola la regola.
+  const canSeeListone = listone !== null;
 
   const action = (
     <SceneAction
@@ -227,9 +264,44 @@ export function Portal({
   const actionInBody = scene === "REVEAL";
 
   return (
-    <>
-      <PortalHeader snapshot={snapshot} me={me} connected={connected} />
+    <Tabs.Root
+      value={tab}
+      onValueChange={(value) => setTab(value as Tab)}
+      // ⚠ **Non è una navigazione, ed è tecnico prima che estetico** (M21 §1).
+      // Due rotte smonterebbero `Portal`, quindi `useAuctionStream`, quindi la
+      // connessione SSE: ogni tocco su una tab chiuderebbe lo stream e ne
+      // aprirebbe un altro, col registro del server che vede una disconnessione e
+      // una riconnessione per ogni cambio di tab, nel mezzo di un'asta.
+      activationMode="manual"
+    >
+      {/*
+        ⚠ **Un contenitore incollato solo, con dentro due strisce.** Sotto `lg`
+        gli elementi `sticky` sarebbero due — l'intestazione e questa barra — e
+        due `sticky top-0` fratelli si sovrappongono: il secondo avrebbe bisogno
+        di sapere l'altezza del primo, cioè di un numero magico da tenere
+        allineato a mano. Incollandoli insieme quel numero non esiste, e da `lg`
+        resta solo la barra perché l'intestazione è `lg:hidden`.
 
+        ⚠ M21 §8 chiede di guardarle **insieme su un telefono vero**: due strisce
+        incollate mangiano l'altezza che serve a offrire, che è ciò che M17 stava
+        restituendo. Se si accavallano, la prima da rivedere è questa.
+      */}
+      <div className="sticky top-0 z-40">
+        <PortalHeader snapshot={snapshot} me={me} connected={connected} />
+        <PortalTabs
+          tab={tab}
+          canSeeListone={canSeeListone}
+          scene={scene}
+          snapshot={snapshot}
+          offset={offset}
+          frozen={screen.frozen}
+          myMemberId={myMemberId}
+          onOpenBid={() => setDismissedLotId(null)}
+          onOpenPick={() => setDismissedTurnKey(null)}
+        />
+      </div>
+
+      <Tabs.Content value="asta">
       {/*
         ⚠ **max-w-6xl e non max-w-xl** (M17 §2): fino a v1.16.0 la larghezza
         larga stava nell'intestazione e quella stretta nel corpo, cioè al
@@ -356,6 +428,28 @@ export function Portal({
           </section>
         </div>
       </main>
+      </Tabs.Content>
+
+      {/*
+        ⚠ **La tab Listone si monta solo quando è attiva**, che è il
+        comportamento di `Tabs.Content`: cinquecento righe non restano in memoria
+        mentre si offre. E non c'è niente da perdere quando si smonta — i filtri
+        sono l'unico stato, e sono una preferenza di chi guarda, non una schermata
+        raggiungibile (regola 7).
+      */}
+      <Tabs.Content value="listone">
+        <main className="mx-auto w-full max-w-6xl p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          {listone === null ? null : (
+            <ListoneTable
+              auctionId={auctionId}
+              pool={pool}
+              snapshot={snapshot}
+              budget={budget}
+              status={listone}
+            />
+          )}
+        </main>
+      </Tabs.Content>
 
       {/*
         ⚠ **I due pannelli si alternano senza che nessuno li coordini**, ed è la
@@ -393,7 +487,150 @@ export function Portal({
           onBid={(amount) => sendAction(auctionId, { type: "BID", amount })}
         />
       )}
-    </>
+    </Tabs.Root>
+  );
+}
+
+/**
+ * La barra delle tab, e il countdown che ci vive dentro (M21 §1 e §8).
+ *
+ * ⚠ **Perché il countdown sta qui e non solo nella card.** M17 §4 ha costruito i
+ * due pannelli su una promessa precisa: chiuderne uno non nasconde niente, perché
+ * la card sotto tiene *il tempo che resta* e *il pulsante che riapre*. Quella card
+ * sta nella tab Asta. Chi chiude il pannello dal Listone si troverebbe davanti a
+ * una tabella, senza countdown e senza strada per tornare — cioè esattamente il
+ * vicolo cieco che M17 aveva chiuso. È la stessa promessa, spostata dove serve.
+ *
+ * ⚠ **E si vede solo nella tab Listone**, che è una scelta e non una svista: in
+ * quella dell'Asta le stesse tre cose sono dieci pixel più in basso, dentro la
+ * card della scena. Ripeterle vorrebbe dire spendere due volte l'altezza che M17
+ * ha passato una macro intera a restituire al telefono.
+ *
+ * ⚠ **Il countdown resta rendering** (regola 1): stesso `Countdown`, stesso
+ * `offset` dello stream, stesso `pausedAt`. Non decide niente, disegna un numero
+ * che il server ha già deciso.
+ */
+function PortalTabs({
+  tab,
+  canSeeListone,
+  scene,
+  snapshot,
+  offset,
+  frozen,
+  myMemberId,
+  onOpenBid,
+  onOpenPick,
+}: {
+  tab: Tab;
+  canSeeListone: boolean;
+  scene: Scene;
+  snapshot: Snapshot;
+  offset: number;
+  frozen: boolean;
+  myMemberId: string | null;
+  onOpenBid: () => void;
+  onOpenPick: () => void;
+}) {
+  const time = sceneTime(scene, snapshot);
+  const azione = azioneDiScena(scene, snapshot, myMemberId);
+
+  return (
+    <div className="bg-background/95 supports-backdrop-filter:bg-background/80 border-b backdrop-blur">
+      <div className="mx-auto flex w-full max-w-6xl items-center gap-2 px-4 py-2">
+        <Tabs.List className="bg-muted flex gap-1 rounded-lg p-1">
+          <Linguetta value="asta">Asta</Linguetta>
+          <Linguetta value="listone" disabled={!canSeeListone}>
+            Listone
+          </Linguetta>
+        </Tabs.List>
+
+        {/*
+          ⚠ **Una riga di testo e non un tooltip**, ed è la strada che M21 §7
+          lasciava aperta esplicitamente: «se in fase di UI si rivelasse fragile
+          sul telefono — dove un tooltip senza hover non esiste — la strada
+          alternativa è una riga di testo sotto le tab, e si decide guardandola».
+          Guardata: su un telefono un tooltip su un elemento disabilitato non si
+          apre in nessun modo, quindi sarebbe una spiegazione che nessuno legge
+          proprio dove la tab spenta si tocca. La tab **resta visibile** — una tab
+          che non c'è non si può desiderare — e accanto c'è scritto perché.
+        */}
+        {!canSeeListone && (
+          <span className="text-muted-foreground text-xs">
+            Il Listone è per gli utenti Pro
+          </span>
+        )}
+
+        {tab === "listone" && time !== null && (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-muted-foreground hidden text-xs sm:inline">
+              {time.label}
+            </span>
+            <Countdown
+              deadline={time.deadline}
+              offset={offset}
+              pausedAt={frozen ? snapshot.auction.pausedAt : null}
+              className="text-sm font-semibold"
+            />
+            {azione !== null && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={frozen}
+                onClick={azione === "pick" ? onOpenPick : onOpenBid}
+              >
+                {azione === "pick" ? "Scegli" : "Offri"}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Quale pannello riapre il pulsante della barra, se ce n'è uno da riaprire.
+ *
+ * Le due condizioni sono le stesse di `SceneAction`, e restano **due copie di due
+ * righe** invece di un'astrazione: là il pulsante è alto 48px e a piena larghezza
+ * perché è l'azione della card, qui è un pulsante piccolo in una barra: stesse
+ * condizioni, forme diverse, e un componente solo che prendesse anche la forma
+ * sarebbe più difficile da leggere di così (regola 8).
+ */
+function azioneDiScena(
+  scene: Scene,
+  snapshot: Snapshot,
+  myMemberId: string | null,
+): "pick" | "bid" | null {
+  if (scene === "PICK_MINE") return "pick";
+  if (scene === "OFFERS" || scene === "TIE_OPEN") {
+    return amEligible(snapshot.currentLot, myMemberId) ? "bid" : null;
+  }
+  return null;
+}
+
+function Linguetta({
+  value,
+  disabled = false,
+  children,
+}: {
+  value: Tab;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tabs.Trigger
+      value={value}
+      disabled={disabled}
+      className={cn(
+        "rounded-md px-3 py-1.5 text-sm font-medium",
+        "data-[state=active]:bg-background data-[state=active]:shadow-sm",
+        "data-[state=inactive]:text-muted-foreground",
+        disabled && "opacity-50",
+      )}
+    >
+      {children}
+    </Tabs.Trigger>
   );
 }
 

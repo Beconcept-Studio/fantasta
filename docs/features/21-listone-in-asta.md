@@ -549,7 +549,9 @@ prima da rivedere è questa, non quella.
   personale è **una lente**, non una modifica del gioco.
 - **Nessun `Obiett.` sul percorso globale** (§0).
 - **Nessun `dark:`** nel codice nuovo.
-- **Nessun pacchetto nuovo**: `Tabs` e `Tooltip` da `radix-ui`, l'icona da `lucide-react`.
+- **Nessun pacchetto nuovo**: `Tabs` da `radix-ui`, l'icona da `lucide-react`. (⚠ `Tooltip` era
+  previsto e **non serve più**: la tab spenta si spiega con una riga di testo accanto — vedi
+  M21-10.)
 
 ---
 
@@ -687,11 +689,52 @@ Scritto qui perché **non è deducibile dal codice** e la sessione in cui è suc
       su `fvm`/`quot`/nome perché l'ordine deve essere **stabile** — due disegni a un secondo di
       distanza non si rimescolano sotto le dita. ⚠ La funzione **non sa** quale vocabolario è in
       gioco: ordina per `fasciaRank`, che il server ha già deciso. 11 test nuovi → **971 in 54 file**
-- [ ] **M21-09** — Le tab e la barra sticky col countdown (§1, §8). ⚠ Provare **il rientro**: aprire
+- [x] **M21-09** — Le tab e la barra sticky col countdown (§1, §8). ⚠ Provare **il rientro**: aprire
       il Listone, farsi arrivare il turno, chiudere il pannello, e verificare che dalla barra si
       riapra. È il buco che §8 esiste per chiudere, e non lo copre nessun test automatico
-- [ ] **M21-10** — La tabella e i filtri (§4), col gate Pro e il tooltip (§7)
-- [ ] **M21-11** — Il modale di import (§6), con il riepilogo e lo stato vuoto
+      → `Tabs` di `radix-ui` dentro `Portal`, stato locale, nessuna rotta nuova. ⚠ **Lo `sticky` è
+      stato tolto da `PortalHeader` e messo su un contenitore che tiene insieme intestazione e
+      barra**: due `sticky top-0` fratelli si sovrappongono, e il secondo avrebbe avuto bisogno di
+      sapere l'altezza del primo — cioè di un numero magico da tenere allineato a mano. Un
+      contenitore solo e quel numero non esiste. ⚠ **Il countdown si vede solo nella tab Listone**,
+      ed è una scelta: nella tab Asta le stesse tre cose sono dieci pixel più in basso, dentro la
+      card della scena, e ripeterle spenderebbe due volte l'altezza che M17 ha passato una macro a
+      restituire al telefono. Guardato in Chrome via CDP: la barra porta «si chiude fra 2s» e il
+      pulsante «Offri», che riapre il modale
+- [x] **M21-10** — La tabella e i filtri (§4), col gate Pro e il tooltip (§7)
+      → ⚠ **Niente `Tooltip`: una riga di testo accanto alla tab spenta**, che è la strada che §7
+      lasciava aperta e diceva di decidere guardandola. Guardata: su un telefono un tooltip su un
+      elemento disabilitato non si apre in nessun modo, quindi sarebbe una spiegazione che nessuno
+      legge proprio dove la tab spenta si tocca. La tab resta visibile e spenta, e accanto c'è
+      scritto «Il Listone è per gli utenti Pro». **Un pacchetto in meno del previsto**: `Tooltip`
+      non serve più. Verificato a schermo con tre utenti veri — Pro con import, Pro senza import,
+      non-Pro
+- [x] **M21-11** — Il modale di import (§6), con il riepilogo e lo stato vuoto
+      → `Dialog` di `radix-ui` + Server Action in `app/auctions/[id]/play/actions.ts`. ⚠ **Il modale
+      non si chiude da sé quando riesce**: il riepilogo è la parte da leggere — dieci nomi non
+      agganciati dicono che il foglio e il listone hanno cominciato a divergere — e chiudersi
+      sull'esito lo farebbe sparire nell'istante in cui compare. ⚠ **`revalidatePath` sulla pagina di
+      gioco è ciò che fa comparire i dati**: il listone risolto è una prop letta all'apertura, non
+      passa dallo stream. Lo stato vuoto **non è una tabella vuota**: chi non ha importato vede la
+      tabella piena coi valori globali, con sopra una riga che dice cosa manca
+
+> ### ⚠ Due cose viste a schermo che la fase di progettazione non poteva vedere
+>
+> Il banco di prova di M21-02 disegnava la tab **da sola**, senza la pagina intorno. A schermo, nella
+> pagina vera, sono comparse due cose:
+>
+> 1. **Due file di pillole una sotto l'altra.** Sopra la barra delle tab c'è già la navigazione
+>    dell'asta — `Asta live` / `Storico` — che ha esattamente lo stesso aspetto: due gruppi di
+>    pillole identici che significano cose diverse («in quale schermata dell'asta sono» contro «quale
+>    metà di questa pagina guardo»). Non è rotto, è ridondante da guardare, e sul telefono sono due
+>    righe di intestazione in più. **Lasciato com'è, perché è il disegno approvato**: la strada, se si
+>    vuole, è dare alle due tab un aspetto diverso — sottolineatura invece di pillola — così le due
+>    file non si somigliano più. È una decisione dell'owner, non mia.
+> 2. **L'intestazione delle colonne non è incollata**, mentre nel banco lo era: con la barra delle tab
+>    sopra, un `thead` incollato avrebbe bisogno di sapere quanto è alta quella barra — lo stesso
+>    numero magico che il contenitore unico ha appena tolto di mezzo. Scorrendo cinquecento righe le
+>    intestazioni escono di scena; le intestazioni di **gruppo** (la fascia) restano il punto di
+>    riferimento. Da rivedere se dà fastidio guardandolo davvero.
 - [ ] **M21-12** — `docs/DECISIONS.md`: il ribaltamento di §0, datato; le due regole per l'ordine
       delle fasce (§4); la scelta della tabella sola (§2). `docs/ARCHITECTURE.md` aggiornato — è un
       criterio di chiusura, non un extra

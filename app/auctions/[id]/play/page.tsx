@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { canSeeInsights } from "@/lib/domain";
 import { getAuctionOverview, listPickPool } from "@/lib/engine/setup";
+import { userListoneStatus } from "@/lib/engine/user-listone";
 
 import { Portal } from "./portal";
 
@@ -47,11 +48,18 @@ export default async function PlayPage({
   // lato server, così la tab Listone e la lista di chiamata mostrano gli stessi
   // valori — i miei, se ho caricato il mio foglio (M21 §5).
   const pool = await listPickPool(id, canSeeInsights(user), user.id);
+  // ⚠ **Non si chiede affatto per chi non ha il permesso** (M21 §7): il gate
+  // decide una query, non un `className`, e chi non può vedere la tab non riceve
+  // nemmeno quanti giocatori ha nel proprio foglio.
+  const listone = canSeeInsights(user)
+    ? await userListoneStatus(user.id)
+    : null;
 
   return (
     <Portal
       auctionId={id}
       pool={pool}
+      listone={listone}
       viewerIsOwner={overview.viewerIsOwner}
       // I crediti di partenza di questa asta, per tradurre il `PMA` del foglio da
       // percentuale a cifra offribile nella lista di chiamata (M17). Prop e non
