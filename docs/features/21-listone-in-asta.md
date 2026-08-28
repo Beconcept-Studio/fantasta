@@ -443,11 +443,25 @@ limite del corpo delle Server Action, e il caricamento admin gemello fa già esa
    accenti, senza maiuscole, senza spazi — perché la differenza fra `Sí` e `SI` non è
    un'informazione, è una tastiera.
 2. **L'indice della fascia**, cioè l'ordine in cui le fasce compaiono nel file. Si calcola **in un
-   posto solo**, leggendo i quattro fogli in ordine `P, D, C, A` e assegnando a ogni fascia nuova il
-   numero successivo. ⚠ Il merge fra i quattro fogli non è banale e va scritto sapendolo: `P` e `A`
-   **non hanno** `Titolare "Scarso"`, che in `D` e `C` sta fra `Scomm.` e `Outsider` — la prima
-   occorrenza in ordine di foglio dà il risultato giusto su questo file, e il test lo fissa sul
-   fixture vero.
+   posto solo**, leggendo i quattro fogli in ordine `P, D, C, A`.
+
+   ⚠ **Correzione misurata, M21-05 (2026-08-28): «assegnare a ogni fascia nuova il numero
+   successivo» è sbagliato, e sbaglia proprio sul file di riferimento.** Questa spec diceva che la
+   prima occorrenza in ordine di foglio dava il risultato giusto. Non lo dà: `P` fa
+   `… Scomm. → Outsider` e `Titolare "Scarso"` compare **solo** in `D` e `C`, dove sta *fra* le due —
+   quindi accodandolo prenderebbe il numero **dopo** `Outsider`, cioè un ordine che due fogli su
+   quattro smentiscono, dentro la funzione che esiste apposta per rispettare il file.
+
+   Si fa invece un **ordinamento topologico**: ogni foglio è una catena e dichiara «questa fascia
+   precede quella», si estraggono le fasce senza predecessori, e a parità vale l'ordine di prima
+   apparizione. Un ciclo — due fogli che si contraddicono — **non fa fallire il caricamento**: si
+   rompe il pareggio e si tira avanti, perché rifiutare un file intero per due gruppi in ordine
+   discorde punirebbe chi l'ha compilato per una cosa che a schermo è dieci righe più in su.
+
+   Il test è il migliore che questa macro abbia: sul file vero l'ordine ricavato è **esattamente
+   `CARMY_FASCE`**, che in M10B era stato scritto **a mano** leggendo lo stesso foglio — e la cui nota
+   dice che l'unico punto da indovinare era proprio fra `Titolare "Scarso"` e `Outsider`. Due
+   derivazioni indipendenti della stessa verità.
 
 ⚠ **Il parser resta puro e resta condiviso.** `parseCarmy` è la stessa funzione per i due percorsi:
 `uploadCarmy` ignora i due campi nuovi, il caricamento personale li usa. Due parser per lo stesso
@@ -600,10 +614,21 @@ Scritto qui perché **non è deducibile dal codice** e la sessione in cui è suc
       fuori dall'`upsert` si riempirebbe al primo `INSERT` e non si aggiornerebbe mai più) e quello
       che **svuota le due colonne a mano su una tabella piena** e guarda il refresh successivo
       riempirle — è la verifica 21, cioè la prova in locale che il rilascio non vuole nessun backfill
-- [ ] **M21-05** — Il parser (§6): `Obiett.` normalizzato e `fascia_rank` col merge dei quattro
+- [x] **M21-05** — Il parser (§6): `Obiett.` normalizzato e `fascia_rank` col merge dei quattro
       fogli, con i test sul fixture vero — incluso quello su `Titolare "Scarso"`, che in `P` e `A`
       non c'è. ⚠ Verificare che `uploadCarmy` continui a comportarsi **identico**: i suoi test
       esistenti devono passare senza modifiche
+      → **La spec sbagliava, e §6.2 è stato corretto**: la prima occorrenza in ordine di foglio
+      metteva `Titolare "Scarso"` **dopo** `Outsider`, contro quello che dicono `D` e `C`. Ora è un
+      ordinamento topologico (`mergeFasce`, esportata per il suo test), e sul file vero produce
+      **esattamente `CARMY_FASCE`** — che M10B aveva scritto a mano leggendo lo stesso foglio.
+      `Obiett.` si confronta normalizzato: nel file è `Sí` acuto, la richiesta scriveva `SI`, e un
+      confronto letterale avrebbe letto **zero obiettivi senza dirlo**. Sono tre, e hanno un nome:
+      McTominay, Baturina, Rowe. ⚠ **La colonna è volutamente fuori da `REQUIRED_COLUMNS`**: serve a
+      un percorso e il rifiuto ne fermerebbe due — `uploadCarmy` non la guarda, e deve restare
+      identico. Il silenzio si copre col conteggio nel riepilogo (M21-06). `uploadCarmy` mappa le
+      colonne una per una, quindi ignora i due campi nuovi senza una riga di modifica, e i suoi test
+      passano **non toccati**. 13 test nuovi → **942 in 54 file**
 - [ ] **M21-06** — Il motore del caricamento personale (§6) in `lib/engine/`: aggancio, soglia,
       sostituzione, riepilogo. Test sul fixture vero, compreso il rifiuto sotto soglia e il rifiuto
       senza listone a sistema
