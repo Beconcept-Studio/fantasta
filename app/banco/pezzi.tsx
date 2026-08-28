@@ -12,7 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
+import { pmaCrediti } from "@/lib/domain";
+
 import { FASCE, RIGHE, type Riga } from "./dati";
+
+/** I crediti di partenza di un'asta tipo: nella pagina vera arrivano come prop. */
+const BUDGET = 500;
 
 
 
@@ -223,7 +228,7 @@ export function RigaTabella({ r }: { r: Riga }) {
   return (
     <tr className="hover:bg-muted/40">
       <td className="border-b px-2 py-1.5">
-        <IconaObiettivo obiettivo={r.obiettivo} />
+        <IconaObiettivo obiettivo={r.obiettivo} sempre />
       </td>
       <td className="border-b px-2 py-1.5">
         <span className="text-muted-foreground font-mono text-xs">{r.role}</span>
@@ -237,8 +242,21 @@ export function RigaTabella({ r }: { r: Riga }) {
           </Badge>
         )}
       </td>
-      <td className="border-b px-2 py-1.5 text-right tabular-nums">
-        {r.pma === null ? <Vuoto /> : `${r.pma}%`}
+      <td className="border-b px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
+        {r.pma === null ? (
+          <Vuoto />
+        ) : (
+          <>
+            {r.pma}%{" "}
+            {/* ⚠ I crediti accanto alla percentuale, come nella lista di chiamata:
+                una percentuale non si può offrire, e sotto un countdown nessuno
+                la converte a mente. Sul telefono non c'è la larghezza e resta
+                solo il `%` (decisione dell'owner, fase UI del 2026-08-28). */}
+            <span className="text-muted-foreground text-xs">
+              ({pmaCrediti(r.pma, BUDGET)})
+            </span>
+          </>
+        )}
       </td>
       <td className="border-b px-2 py-1.5 text-right tabular-nums">
         {r.fmvExp ?? <Vuoto />}
@@ -265,7 +283,7 @@ export function RigaTabella({ r }: { r: Riga }) {
 export function RigaMobileA({ r }: { r: Riga }) {
   return (
     <div className="flex items-start gap-2 px-3 py-2.5">
-      <IconaObiettivo obiettivo={r.obiettivo} className="mt-0.5 shrink-0" />
+      <IconaObiettivo obiettivo={r.obiettivo} sempre className="mt-0.5 shrink-0" />
 
       {/* ⚠ `min-w-0` è ciò che permette al nome di troncare invece di spingere
           fuori schermo il PMA: senza, il flex item non scende sotto il proprio

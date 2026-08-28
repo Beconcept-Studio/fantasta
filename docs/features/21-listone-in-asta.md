@@ -172,7 +172,17 @@ E tre che prendo io, dichiarate qui perché siano contestabili:
    `CARMY_FASCE` per quello globale.
 9. **Il filtro dei ruoli segue il ruolo in gioco finché non lo tocco**; appena lo tocco è mio e non
    si muove più, fino al ricarico della pagina.
-10. **`PMA` in percentuale con i crediti accanto**, come già fa la lista di chiamata.
+10. **`PMA` in percentuale con i crediti accanto**, come già fa la lista di chiamata. ⚠ **Corretta
+    dalla fase UI**: i crediti stanno solo da `sm` in su, sul telefono non c'è la larghezza (§4).
+
+**Quattro dalla fase di progettazione UI, lo stesso giorno**, prese guardando il banco di prova e non
+descrivendolo — sono quelle che hanno cambiato la spec, ed è il motivo per cui quella fase esisteva:
+
+11. **Dentro il gruppo si ordina per `PMA DESC`**, non per `fvm`. Cambia §4, e con esso il test di
+    `listoneRows`.
+12. **La colonna del ruolo si aggiunge**, e c'è sempre. Non era nell'elenco della richiesta.
+13. **L'icona dell'obiettivo è su ogni riga**, grigia o verde.
+14. **Sul telefono le righe sono un elenco su tre linee**, non una tabella che scorre di lato.
 
 ---
 
@@ -291,9 +301,22 @@ listoneRows(pool, snapshot, { roles, query, soloObiettivi })
 ```
 
 Differisce dalla vicina in tre punti, e sono tutti e tre la richiesta: **più ruoli in OR** invece di
-uno solo, **il filtro obiettivi**, e **nessun tetto di quaranta righe**. L'ordinamento **dentro il
-gruppo** resta quello di casa — `fvm DESC, quot DESC, nome` — mentre i gruppi vanno nell'ordine
-delle fasce.
+uno solo, **il filtro obiettivi**, e **nessun tetto di quaranta righe**. I gruppi vanno nell'ordine
+delle fasce; dentro il gruppo si ordina per **`PMA DESC`**, dal più caro.
+
+⚠ **`PMA` e non `fvm`, ed è una divergenza voluta dalla lista di chiamata** (decisione della fase UI,
+2026-08-28, guardando il banco di prova). La spec di questa macro diceva `fvm DESC` per coerenza con
+la vicina, e guardandola non regge: `fvm` **non è in tabella** — l'owner l'ha fatto togliere a M17,
+«un valore FMV che non capisco cosa sia» — quindi scorrendo, la lista sembra ordinata per niente. È
+lo stesso difetto che M17 aveva dovuto compensare nel pannello di chiamata con la riga
+dell'auto-pick.
+
+E qui quella compensazione **non serve, perché non c'è niente da compensare**: nel pannello di
+chiamata l'ordine *è* una promessa — «il primo è quello che il timer comprerebbe al posto tuo» — e
+per questo non si tocca. Nel Listone non si sceglie niente, si guarda chi resta: nessun auto-pick da
+raccontare, nessuna promessa da mantenere, e l'unico criterio giusto è **quello che chi legge può
+verificare sulla riga**. ⚠ La conseguenza da tenere in mente: **le due liste della stessa serata
+sono ordinate diversamente**, ed è deliberato. `availablePlayers` non si tocca.
 
 ⚠ **Nessuna query per lotto, e nessun evento da ascoltare.** «Sincronizzata in tempo reale con ogni
 lotto» è già risolto dal fatto che la tabella è funzione dello snapshot: quando un lotto chiude, la
@@ -305,7 +328,22 @@ farlo sparire prima dell'assegnazione sarebbe una bugia — per di più una bugi
 sé, perché se il lotto va deserto quel giocatore torna disponibile.
 
 **Le colonne**, nell'ordine della richiesta: Fascia (nell'intestazione del gruppo, non ripetuta su
-ogni riga), Obiettivo, Nome (con la squadra), PMA, FMV Exp., Gol, Assist, Note.
+ogni riga), Obiettivo, **Ruolo**, Nome (con la squadra), PMA, FMV Exp., Gol, Assist, Note.
+
+⚠ **Il Ruolo non è nell'elenco della richiesta, ed è stato aggiunto guardando la tabella** (fase UI,
+2026-08-28): coi ruoli in OR — che la richiesta chiede — un gruppo «Top» può contenere portieri e
+difensori insieme, e senza quella lettera non si legge di chi si sta parlando. È una lettera in
+grigio a sinistra del nome, e c'è **sempre**, non solo quando i ruoli filtrati sono più d'uno: una
+tabella che cambia forma sotto le dita costa più di una colonna da dieci pixel.
+
+**L'icona dell'obiettivo c'è su ogni riga**, grigia quando non è un obiettivo e verde quando lo è
+(decisione dell'owner, fase UI). L'alternativa guardata era mostrarla solo sugli obiettivi, con uno
+spazio vuoto altrove; è stata scartata.
+
+**Il `PMA` porta i crediti accanto** — `17.7% (89)` — come già fa la lista di chiamata, e con la
+stessa `pmaCrediti`: una percentuale non si può offrire, e sotto un countdown nessuno la converte a
+mente. ⚠ **Sul telefono resta solo la percentuale**: la larghezza non c'è, ed è il primo posto in cui
+questa macro paga il fatto che il portale è mobile-first.
 
 Le Note sono i **tag del foglio**, resi con `CarmyTags` che esiste già ed è già la forma con cui si
 vedono altrove. Nessun componente nuovo: se i badge del listone e quelli del pannello di chiamata
@@ -330,6 +368,18 @@ regole diventeranno una. Non prima (regola 8).
 tabella con dentro sia `Top` (mia) sia `Top` (globale) come due gruppi diversi, e non esiste un
 giocatore che compare sotto una fascia che io non ho scritto. Il gruppo «Senza fascia» è il prezzo
 di questa promessa, ed è il prezzo giusto: dice la verità — *su costui non ho un giudizio mio*.
+
+**Sul telefono la tabella diventa un elenco**, non una tabella che scorre di lato (decisione della
+fase UI, viste entrambe): icona e ruolo e nome e squadra e PMA sulla prima riga, `exp / gol / ass`
+sulla seconda, le note sulla terza; le fasce restano come intestazioni di gruppo. La strada scartata
+è quella del Centro dati — `overflow-x-auto` con un `min-w` — che è onesta ma chiede di scorrere in
+orizzontale la cosa principale di una tab, su un telefono, durante un'asta. Costa altezza: **circa
+57px a riga**, misurati.
+
+⚠ **Il nome tronca senza `min-w-0` sulla catena dei flex, e questo è misurato**: a 375px il caso
+peggiore vero delle 495 righe del listone — «Milinkovic-Savic V. · Napoli» — sta dentro,
+`scrollWidth` resta 375 e nessun PMA esce. Se un anno un nome più lungo entrasse nel listone, il
+rimedio è `min-w-0` **su ogni anello**, non solo sul padre.
 
 **Nessuna paginazione, nessun ordinamento per colonna.** Cinquecento righe girano già nel browser da
 M8, e il Centro dati fa lo stesso con la stessa misura (~250 KB) senza paginare. L'ordinamento per
@@ -484,13 +534,22 @@ prima da rivedere è questa, non quella.
       server gira su un database **usa-e-getta** (`asta_banco`), e la simulata è congelata a
       `LIVE/WAITING_PICK`. È la stessa ricetta di M20, e da qui in avanti vale come regola per
       qualunque lavoro di UI che non abbia bisogno dei dati veri
-- [ ] **M21-02** — **La progettazione UI della tab Listone, prima di qualunque codice di
+- [x] **M21-02** — **La progettazione UI della tab Listone, prima di qualunque codice di
       produzione** (è la richiesta esplicita dell'owner). Barra delle tab e sua versione sticky col
       countdown, tooltip della tab spenta, intestazioni di gruppo, la riga della tabella sul
       telefono a 375px e su desktop, il modale di import, lo stato vuoto di chi non ha importato.
       **Guardarla**, non descriverla. ⚠ Se la progettazione cambia una scelta di questa spec,
       **la spec si aggiorna nella stessa sessione** e il cambiamento si dichiara: è la parte della
       richiesta che vale quanto le altre
+      → Fatta in `app/banco/`, con i componenti veri e i dati veri dei fixture. **Ha cambiato la spec
+      in quattro punti** (decisioni 11–14) più la correzione della 10: l'ordinamento dentro il gruppo,
+      la colonna del ruolo, l'icona su ogni riga, l'elenco invece della tabella sul telefono.
+      ⚠ **Una lezione di metodo che vale oltre questa macro**: Chrome
+      `--headless --screenshot --window-size=375` **impagina a ~800px e poi ritaglia**, quindi mostra
+      una pagina che non esiste — il `PMA` sembrava fuori schermo e non lo era, e ci ho creduto
+      abbastanza da «correggere» un difetto inesistente. Gli screenshot si prendono da **CDP**
+      (`Emulation.setDeviceMetricsOverride` + `Page.captureScreenshot`), che è lo stesso contesto in
+      cui si misura il DOM: uno screenshot che non concorda con la misura non è una prova
 - [ ] **M21-03** — Lo schema (§2): `user_listone` e le due colonne su `player_insights`. `pnpm
       db:push` in locale, e **il primo test in `tests/db/` che tocca la tabella nuova** — è il modo
       in cui ci si accorge di una colonna dimenticata prima del server
@@ -544,24 +603,25 @@ prima da rivedere è questa, non quella.
    ricaricare la pagina**.
 7. **Il giocatore in asta adesso è ancora in tabella**, con il suo badge; se il lotto va deserto
    resta, se viene assegnato sparisce.
-8. **Il filtro dei ruoli parte dal ruolo in gioco**, si può mettere in OR, e una volta toccato non si
+8. **Dentro un gruppo l'ordine è per PMA decrescente**, e la colonna del ruolo c'è su ogni riga.
+9. **Il filtro dei ruoli parte dal ruolo in gioco**, si può mettere in OR, e una volta toccato non si
    muove più quando l'asta cambia ruolo.
-9. **La ricerca trova per nome e per squadra**, accenti e maiuscole comprese.
-10. **Importando il file di riferimento**: le fasce sono nell'ordine del file, gli obiettivi hanno
+10. **La ricerca trova per nome e per squadra**, accenti e maiuscole comprese.
+11. **Importando il file di riferimento**: le fasce sono nell'ordine del file, gli obiettivi hanno
     l'icona verde, il filtro obiettivi li isola, e il riepilogo dice righe scritte, non agganciate e
     squadre discordanti.
-11. **Chi non ha importato vede la tabella piena** con i valori globali e **nessun** obiettivo.
-12. **Chi ha importato vede «Senza fascia» in fondo**, con dentro chi nel suo file non c'è, e quelle
+12. **Chi non ha importato vede la tabella piena** con i valori globali e **nessun** obiettivo.
+13. **Chi ha importato vede «Senza fascia» in fondo**, con dentro chi nel suo file non c'è, e quelle
     righe hanno comunque PMA, FMV Exp. e note globali quando ci sono.
-13. **Ri-importare sostituisce**: un obiettivo tolto dal file sparisce dalla tabella.
-14. **Due utenti diversi vedono due tabelle diverse**, e nessuno dei due vede gli obiettivi
+14. **Ri-importare sostituisce**: un obiettivo tolto dal file sparisce dalla tabella.
+15. **Due utenti diversi vedono due tabelle diverse**, e nessuno dei due vede gli obiettivi
     dell'altro. Provato con due sessioni sulla stessa asta.
-15. **Gol e Assist ci sono** e vengono dalla fonte A: si spegne il file personale e restano.
-16. **Il rientro dal Listone**: turno mio, chiudo il pannello dal Listone, la barra sticky mostra il
+16. **Gol e Assist ci sono** e vengono dalla fonte A: si spegne il file personale e restano.
+17. **Il rientro dal Listone**: turno mio, chiudo il pannello dal Listone, la barra sticky mostra il
     countdown e il pulsante lo riapre.
-17. **Su un telefono vero a 375px**: la barra delle tab e l'intestazione incollata non si mangiano
+18. **Su un telefono vero a 375px**: la barra delle tab e l'intestazione incollata non si mangiano
     l'altezza dell'offerta, e la riga della tabella si legge.
-18. **`serializeSnapshot` non è toccato**: verificato sul diff `origin/main..dev`, non dedotto.
-19. **Niente `dark:` nel codice nuovo**, e la TV resta bianco su nero com'era.
-20. **`pnpm db:push` dato sul server**, e **nessun backfill** richiesto: le due colonne nuove si sono
+19. **`serializeSnapshot` non è toccato**: verificato sul diff `origin/main..dev`, non dedotto.
+20. **Niente `dark:` nel codice nuovo**, e la TV resta bianco su nero com'era.
+21. **`pnpm db:push` dato sul server**, e **nessun backfill** richiesto: le due colonne nuove si sono
     riempite da sole al primo refresh.
