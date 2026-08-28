@@ -4,6 +4,20 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.21.1] — 2026-08-28
+
+**Cambia una cosa sola, e si vede nella linguetta del browser: l'icona.** Quella di prima era nata
+per la schermata home del telefono — un marchio bianco su un gradiente con la grana — e lì resta
+esattamente com'era. A 16 pixel, dentro una linguetta, quel disegno non era più un marchio: era una
+macchia di colore. Adesso la linguetta ha un'icona sua, disegnata per quella misura: il marchio verde
+da solo, campiture piatte e contorni netti, su fondo trasparente — così sta bene sia sulle barre
+chiare sia su quelle scure.
+
+**L'icona sulla schermata home non cambia**: chi ha già installato l'app non deve rifare niente.
+
+⚠ **Se nella linguetta vedi ancora quella vecchia non è un difetto**: le favicon sono la cosa che i
+browser tengono in cache più a lungo. `Cmd+Shift+R`, oppure chiudi e riapri la linguetta.
+
 ## [1.21.0] — 2026-08-28
 
 **Dentro «Asta live» il corpo della pagina diventa due linguette: `Asta`, che è tutto quello che
