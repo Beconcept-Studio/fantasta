@@ -12,7 +12,17 @@ Quando una macro viene pianificata, le richieste che ci confluiscono **spariscon
 
 ## Pianificata, non aperta
 
-Nessuna.
+- **M21 — Il listone dentro l'asta** (`21-listone-in-asta.md`): dentro «Asta live» il corpo della
+  pagina diventa due tab, e la seconda è la lista di chi è ancora libero — raggruppata per fascia,
+  coi propri obiettivi marcati, aggiornata da sé a ogni lotto. Con un **import personale**: il foglio
+  che l'applicazione ha a sistema è di una persona sola, qui ognuno carica il proprio.
+  ⚠ **Tocca lo schema** (`user_listone`, più due colonne su `player_insights`): al deploy serve
+  `pnpm db:push` sul server. Nessun backfill.
+  ⚠ **Ribalta una decisione scritta di M10B** — la colonna `Obiett.` che il parser butta di
+  proposito — e §0 spiega perché il ribaltamento sta in piedi: là il foglio era uno e globale, qui
+  l'import è per utente.
+  ⚠ **Ha una fase di progettazione UI vincolante prima del codice** (M21-02), chiesta dall'owner: se
+  quella fase cambia una scelta della spec, la spec si aggiorna nella stessa sessione.
 
 ## In corso
 
