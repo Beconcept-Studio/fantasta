@@ -472,12 +472,18 @@ prima da rivedere è questa, non quella.
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M21-01** — Aprire `feature/21-listone-in-asta` da `dev`. Rileggere **questo file**, il blocco
+- [x] **M21-01** — Aprire `feature/21-listone-in-asta` da `dev`. Rileggere **questo file**, il blocco
       di `parseCarmy.ts` su `Obiett.` (§0 è scritto contro quello), M10B §6 sull'asimmetria fra la
       lista e l'auto-pick, e le regole di produzione di `CLAUDE.md` — questa macro **tocca lo
       schema**. `pnpm test` verde come baseline, col numero annotato qui.
       `fixtures/obiettivi.html` è già committato insieme a questa spec — era arrivato untracked
       con la richiesta, e una macro che non si può rigenerare comincia da un file dimenticato
+      → **Baseline: 917 test in 53 file**, verde al primo giro. ⚠ **Trovata un'asta simulata lasciata
+      `LIVE` il 23 agosto nel database locale**: accendere `pnpm dev` l'ha rimessa in moto e ha
+      consumato una manciata di lotti prima che me ne accorgessi. Rimedio senza toccarla: il dev
+      server gira su un database **usa-e-getta** (`asta_banco`), e la simulata è congelata a
+      `LIVE/WAITING_PICK`. È la stessa ricetta di M20, e da qui in avanti vale come regola per
+      qualunque lavoro di UI che non abbia bisogno dei dati veri
 - [ ] **M21-02** — **La progettazione UI della tab Listone, prima di qualunque codice di
       produzione** (è la richiesta esplicita dell'owner). Barra delle tab e sua versione sticky col
       countdown, tooltip della tab spenta, intestazioni di gruppo, la riga della tabella sul
