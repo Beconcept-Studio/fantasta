@@ -1,20 +1,39 @@
 #!/usr/bin/env python3
-"""Genera le icone dell'applicazione dal PNG sorgente. Si dà a mano, una volta.
+"""Genera le icone dell'applicazione dai PNG sorgente. Si dà a mano, una volta.
 
     python3 scripts/genera-icone.py
 
-Sorgente: `fixtures/logo.png` — 1080×1080 PNG RGBA con **l'alpha interamente
-opaco** (min e max entrambi 255), il marchio bianco al centro su un gradiente
-verde → giallo → blu notte con la grana. Il riquadro del bianco misura il 34% in
-orizzontale e il 46% in verticale, centrato esatto.
+⚠ **Le sorgenti sono due, e non è una ridondanza da risolvere**: sono due lavori
+diversi, e dal 2026-08-28 lo dicono anche a occhio.
 
-Scrive **cinque** file, per **due** consumatori diversi:
+    fixtures/logo.png          1080×1080, tela piena, opaco: il marchio bianco su
+                               un gradiente verde → giallo → blu notte con la
+                               grana. È **l'app**: l'icona sulla schermata home,
+                               dove c'è spazio e serve una tessera riconoscibile.
 
-    app/favicon.ico        16 + 32 + 48, scritto byte per byte
-    app/icon.png           512  — Next lo trova per convenzione di nome
-    app/apple-icon.png     180  — RGB, senza canale alpha
-    public/icon-192.png    192  ┐ le due icone del manifest, che hanno bisogno
-    public/icon-512.png    512  ┘ di un URL **stabile** (M20 §3)
+    fixtures/logo-favicon.png  2257×3204, **trasparente fuori dal disegno**: il
+                               marchio verde da solo, con i suoi contorni scuri.
+                               È **la linguetta del browser**, dove il disegno
+                               vive a 16 pixel e un gradiente con la grana
+                               diventa una macchia. (Il master vettoriale è
+                               `fixtures/logo-favicon.svg`, tenuto accanto ma non
+                               usato: rasterizzarlo vorrebbe dire aggiungere una
+                               dipendenza per un guadagno che a 16px non c'è.)
+
+Scrive **cinque** file, e adesso da due sorgenti:
+
+    app/favicon.ico        16 + 32 + 48, scritto byte per byte   ← logo-favicon
+    app/icon.png           512, RGBA — Next lo trova per nome    ← logo-favicon
+    app/apple-icon.png     180  — RGB, senza canale alpha        ← logo
+    public/icon-192.png    192  ┐ le due icone del manifest, che ← logo
+    public/icon-512.png    512  ┘ vogliono un URL **stabile**    ← logo
+
+⚠ **`app/icon.png` e `public/icon-512.png` non hanno più gli stessi byte**, e fino
+al 2026-08-27 li avevano — la nota che lo diceva, qui e in `public/README.md`, è
+stata riscritta apposta. La divergenza è **voluta**: il primo è la linguetta, il
+secondo è la tessera che il telefono mette sulla schermata home. Chi un giorno
+notasse i due file diversi e li «riallineasse» spegnerebbe esattamente la
+distinzione che questa versione ha introdotto.
 
 ⚠ **Non fa parte della build, e non deve entrarci.** Nessuno lo chiama: né la
 build, né `tsc`, né ESLint lo guardano. Le icone cambiano una volta all'anno, e i
@@ -28,11 +47,18 @@ sarebbe la scelta ovvia in un progetto Node, non è utilizzabile qui: c'è sotto
 `node_modules/.pnpm` perché lo porta Next.js, ma con `pnpm` non è issato, quindi
 un `require("sharp")` dalla radice risponde `MODULE_NOT_FOUND`.
 
-**Cosa è cambiato con M20**, rispetto alla ricetta di `v1.15.1` — che partiva da
+**Perché la linguetta ha una sorgente sua** (2026-08-28, richiesta dell'owner):
+l'icona di M20 è nata per la schermata home e lì funziona; a 16 pixel, in una
+linguetta, un gradiente con la grana perde il marchio e resta una macchia di
+colore. Il disegno nuovo è il contrario: campiture piatte, nessuna grana, contorni
+netti. Le tre misure dell'ICO sono state **guardate ingrandite su fondo chiaro e
+su fondo scuro** prima di scegliere il margine.
+
+**Cosa era cambiato con M20**, rispetto alla ricetta di `v1.15.1` — che partiva da
 `fixtures/favicon-512.png`, un cerchio blu su fondo trasparente, adesso
 cancellato:
 
-  * l'**appiattimento** dell'icona di iOS non serve più. L'alpha della sorgente è
+  * l'**appiattimento** dell'icona di iOS non serve più. L'alpha di `logo.png` è
     già opaco a tela piena, quindi il difetto che quel codice esisteva per evitare
     — iOS che riempie la trasparenza di nero e mette gli angoli neri attorno al
     disegno — non è più possibile. Resta una conversione a RGB;
@@ -51,6 +77,14 @@ import struct
 from PIL import Image
 
 SORGENTE = "fixtures/logo.png"
+SORGENTE_TAB = "fixtures/logo-favicon.png"
+
+#: Quanto respiro lascia il marchio della linguetta ai bordi della tela quadrata.
+#: **Scelto guardando** le tre misure ingrandite su fondo chiaro e su fondo scuro
+#: (2026-08-28): a zero il disegno tocca i bordi e in un contesto con gli angoli
+#: arrotondati rischia il taglio; al 10% a 16 pixel il marchio perde peso e la
+#: linguetta diventa smorta. Il 4% è il punto in cui non tocca e non si rimpicciolisce.
+MARGINE_TAB = 0.04
 
 
 def giu(src, n):
@@ -64,6 +98,31 @@ def giu(src, n):
     essere un disegno con dei dettagli, è questo il punto in cui rimetterla.
     """
     return src.resize((n, n), Image.LANCZOS)
+
+
+def quadrata(src, n, margine=MARGINE_TAB):
+    """Il marchio della linguetta, centrato in una tela quadrata **trasparente**.
+
+    ⚠ **Serve perché la sorgente non è quadrata**, e una favicon lo è per forza:
+    `logo-favicon.png` è 2257×3204, cioè un rapporto di 0,704, e il disegno arriva
+    a filo su tutti e quattro i lati (il riquadro dell'inchiostro *è* l'immagine,
+    misurato). Si adatta quindi l'**altezza** e la larghezza viene da sé: il
+    marchio occupa il 92% della tela in verticale e il 65% in orizzontale, con le
+    bande trasparenti ai lati.
+
+    ⚠ **La tela resta trasparente**, ed è la ragione per cui questa funzione non
+    passa da `salva()`. La barra delle linguette è chiara o scura a seconda del
+    tema del sistema: un fondo bianco cucito qui sotto diventerebbe un francobollo
+    bianco su una barra scura. Le campiture verdi si leggono su entrambi i fondi,
+    e i contorni scuri — che a 16 pixel spariscono comunque — non servono a
+    reggere il disegno.
+    """
+    alt = round(n * (1 - 2 * margine))
+    lar = max(1, round(alt * src.width / src.height))
+    marchio = src.resize((lar, alt), Image.LANCZOS)
+    tela = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    tela.paste(marchio, ((n - lar) // 2, (n - alt) // 2), marchio)
+    return tela
 
 
 def salva(im, percorso):
@@ -163,16 +222,21 @@ def main():
     if src.size != (1080, 1080):
         raise SystemExit(f"{SORGENTE} non è 1080×1080 ma {src.size}")
 
-    # ⚠ **Il 512 esce due volte, dagli stessi byte e da una sola riduzione.**
-    # `app/icon.png` la trova Next per convenzione di nome e ne genera il `<link>`
-    # da sé; `public/icon-512.png` la dichiara il manifest, che ha bisogno di un
-    # URL **stabile** — le rotte generate da `app/` portano un hash che cambia col
-    # contenuto. Due consumatori, una sorgente. Il prezzo è dei byte duplicati, e
-    # l'alternativa era scrivere `metadata.icons` a mano, cioè tenere allineate
-    # due verità per la stessa cosa (M20 §3).
-    grande = giu(src, 512)
-    salva(grande, "app/icon.png")
-    salva(grande, "public/icon-512.png")
+    tab = Image.open(SORGENTE_TAB).convert("RGBA")
+    # Non quadrata di proposito, e verticale: se un giorno arrivasse una sorgente
+    # orizzontale, `quadrata()` la adatterebbe comunque all'altezza e uscirebbe un
+    # francobollo. Meglio fermarsi e guardare il file.
+    if tab.height <= tab.width:
+        raise SystemExit(
+            f"{SORGENTE_TAB} è {tab.size}: il marchio della linguetta è verticale, "
+            "e `quadrata()` adatta l'altezza. Rileggila prima di rigenerare."
+        )
+
+    # ⚠ **`public/icon-512.png` non è più lo stesso file di `app/icon.png`**, e la
+    # divergenza è il punto di questa versione: la linguetta ha una sorgente sua.
+    # Questo resta quello del manifest, che ha bisogno di un URL **stabile** — le
+    # rotte generate da `app/` portano un hash che cambia col contenuto.
+    salva(giu(src, 512), "public/icon-512.png")
 
     # ⚠ **`public/icon-192.png` e non `public/icon.png`**: quel nome collide con
     # la rotta `/icon.png` che Next genera da `app/icon.png`. Un rinomino «per
@@ -181,7 +245,18 @@ def main():
     salva(giu(src, 192), "public/icon-192.png")
 
     apple_icon(src).save("app/apple-icon.png", optimize=True)
-    scrivi_ico([giu(src, 16), giu(src, 32), giu(src, 48)], "app/favicon.ico")
+
+    # ⚠ **Le due icone della linguetta, e sono due perché i browser scelgono da
+    # sé.** `favicon.ico` è la strada vecchia e universale; `app/icon.png` è il
+    # `<link rel="icon">` che Next emette per convenzione di nome, e Chrome
+    # preferisce spesso quello. Cambiarne uno solo vorrebbe dire vedere l'icona
+    # nuova su un browser e la vecchia su un altro — che è il modo in cui si
+    # rilascia una favicon e si crede che non abbia funzionato.
+    #
+    # Qui **non** si passa da `salva()`: quella toglie il canale alpha, e la
+    # trasparenza è tutto il punto (vedi `quadrata`).
+    quadrata(tab, 512).save("app/icon.png", optimize=True)
+    scrivi_ico([quadrata(tab, n) for n in (16, 32, 48)], "app/favicon.ico")
 
     # Il controllo di rilettura: che nell'ICO le tre misure ci siano davvero.
     # ⚠ Su questo file Next dichiarerà `sizes="16x16"`, perché legge la prima voce

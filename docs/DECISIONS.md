@@ -3817,3 +3817,50 @@ intestazione non deve comparire comunque: la tab mostra solo chi è rimasto.
 listone non ha più semplicemente non aggancia e non compare. Con un vincolo, il file personale di un
 partecipante potrebbe far **fallire il prossimo caricamento del listone di sistema** — cioè bloccare
 il lavoro dell'amministratore.
+
+---
+
+## 2026-08-28 — La linguetta del browser ha una sorgente sua
+
+**Il fatto è cambiato, non il ragionamento.** M20 aveva una sorgente sola,
+`fixtures/logo.png`, e ne ricavava tutte e cinque le icone: era la scelta giusta con un disegno solo,
+e il suo §3 diceva bene perché — «due consumatori, una sorgente», con `app/icon.png` e
+`public/icon-512.png` **byte per byte identici**. Usandola, l'owner ha visto la cosa che non si vedeva
+progettandola: quella tessera è nata per la **schermata home**, dove è grande, e a **16 pixel** dentro
+una linguetta un gradiente con la grana non è più un marchio, è una macchia di colore.
+
+Quindi da oggi le sorgenti sono **due**, e non è una duplicazione da risolvere:
+
+    fixtures/logo.png          → apple-icon, icon-192, icon-512   (l'app)
+    fixtures/logo-favicon.png  → favicon.ico, app/icon.png        (la linguetta)
+
+⚠ **Conseguenza da conoscere prima di «riallineare» due file che sembrano sbagliati**: `app/icon.png`
+e `public/icon-512.png` **non hanno più gli stessi byte**. La nota che affermava il contrario è stata
+riscritta in `public/README.md`, in `scripts/genera-icone.py` e in `docs/ARCHITECTURE.md` — nei tre
+posti in cui qualcuno la leggerebbe prima di toccare quei file.
+
+**Della linguetta si cambiano sempre due file insieme**, e questa è la parte facile da sbagliare:
+`app/favicon.ico` **e** `app/icon.png`. I browser scelgono da sé — l'ICO è la strada vecchia e
+universale, il PNG è il `<link rel="icon">` che Next emette per convenzione di nome, e Chrome
+preferisce spesso quello. Cambiarne uno solo vuol dire vedere l'icona nuova su un browser e la vecchia
+su un altro, cioè credere che il rilascio non abbia funzionato.
+
+**Tre scelte di forma, prese guardando e non stimando.** Il marchio nuovo è verticale (2257×3204,
+rapporto 0,704) e arriva a filo su tutti e quattro i lati — il riquadro dell'inchiostro *è* l'immagine,
+misurato — mentre una favicon è quadrata per forza. Quindi:
+
+- **si adatta l'altezza**, e le bande trasparenti stanno ai lati: il marchio prende il 92% della tela
+  in verticale e il 65% in orizzontale;
+- **il margine è il 4%**, scelto guardando le tre misure ingrandite su fondo chiaro e su fondo scuro:
+  a zero il disegno tocca i bordi e in un contesto con gli angoli arrotondati rischia il taglio, al
+  10% a 16 pixel il marchio perde peso e la linguetta diventa smorta;
+- **la tela resta trasparente**, e per questo l'icona della linguetta non passa dal `salva()` dello
+  script, che toglie il canale alpha. La barra delle linguette è chiara o scura secondo il tema del
+  sistema: un fondo bianco cucito sotto diventerebbe un francobollo bianco su una barra scura. Le
+  campiture verdi si leggono su entrambi i fondi, e i contorni scuri — che a 16 pixel spariscono
+  comunque — non servono a reggere il disegno.
+
+⚠ **Il master vettoriale `fixtures/logo-favicon.svg` è committato ma non usato dallo script**: si parte
+dal PNG. Rasterizzare l'SVG vorrebbe dire aggiungere una dipendenza (`cairosvg`, `rsvg-convert`) per un
+guadagno che a 16 pixel non esiste — e lo script tiene fuori le dipendenze di proposito, per la stessa
+ragione per cui non usa `sharp`.

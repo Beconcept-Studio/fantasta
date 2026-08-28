@@ -1418,14 +1418,27 @@ nel `metadata` del layout, e sono deliberatamente ridondanti col manifest: Safar
 è la stessa scelta di tenere insieme `proxy_buffering off` e `X-Accel-Buffering` sulla rotta dello
 stream.
 
-Le icone sono **cinque file committati**, generati a mano una volta da `fixtures/logo.png` con
-`scripts/genera-icone.py`, che non è chiamato da nessuna build. Tre stanno in `app/` e le trova Next
-per convenzione di nome; due stanno in `public/`, e questa cartella è nata per loro. Il motivo è che
-il manifest dichiara le sue icone per URL, e le rotte generate dai file dentro `app/` portano un hash
-che cambia col contenuto: un `<link>` che Next scrive da sé può contenerlo, un manifest scritto a mano
-no. Il 512 quindi esiste **due volte con gli stessi byte**, una per ciascun consumatore, da una sola
-sorgente e da una sola riduzione. È il prezzo per non scrivere `metadata.icons` a mano, cioè per non
-tenere allineate due verità sulla stessa cosa. ⚠ E in `public/` i nomi sono `icon-192.png` e
+Le icone sono **cinque file committati**, generati a mano con `scripts/genera-icone.py`, che non è
+chiamato da nessuna build. Tre stanno in `app/` e le trova Next per convenzione di nome; due stanno in
+`public/`, e questa cartella è nata per loro. Il motivo è che il manifest dichiara le sue icone per
+URL, e le rotte generate dai file dentro `app/` portano un hash che cambia col contenuto: un `<link>`
+che Next scrive da sé può contenerlo, un manifest scritto a mano no. È il prezzo per non scrivere
+`metadata.icons` a mano, cioè per non tenere allineate due verità sulla stessa cosa.
+
+⚠ **E le sorgenti sono due, dal 2026-08-28, perché sono due lavori diversi.** `fixtures/logo.png` — la
+tessera a tela piena, gradiente e grana — resta l'icona dell'**app**: quella che finisce sulla
+schermata home del telefono, dove c'è spazio. `fixtures/logo-favicon.png` è il marchio verde da solo su
+fondo trasparente, e fa la **linguetta del browser**: a 16 pixel un gradiente con la grana perde il
+disegno e resta una macchia di colore, mentre delle campiture piatte reggono. Conseguenza da conoscere
+prima di «riallineare» due file che sembrano sbagliati: `app/icon.png` e `public/icon-512.png` **non
+hanno più gli stessi byte**, e prima li avevano. Sono due consumatori diversi con due disegni diversi,
+ed è voluto.
+
+⚠ **Della linguetta si cambiano sempre due file insieme** — `app/favicon.ico` e `app/icon.png` — perché
+i browser scelgono da sé quale usare: l'ICO è la strada vecchia e universale, il PNG è il `<link
+rel="icon">` che Next emette per convenzione di nome, e Chrome preferisce spesso quello. Cambiarne uno
+solo vuol dire vedere l'icona nuova su un browser e la vecchia su un altro, cioè credere che il
+rilascio non abbia funzionato. ⚠ E in `public/` i nomi sono `icon-192.png` e
 `icon-512.png` perché `icon.png` collide con la rotta che Next genera da `app/icon.png`: un rinomino
 per pulizia romperebbe l'installazione, e lo farebbe **in silenzio** — il manifest continuerebbe a
 rispondere, con dentro due URL che danno 404. È l'unico modo in cui questa parte può rompersi senza
