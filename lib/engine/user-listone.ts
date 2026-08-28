@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { listonePlayers, userListone, users } from "@/lib/db/schema";
-import { canSeeInsights } from "@/lib/domain";
+import { type CarmyJudgement, canSeeInsights } from "@/lib/domain";
 import { parseCarmy } from "@/lib/import/parseCarmy";
 
 import {
@@ -179,6 +179,67 @@ export async function uploadUserListone(
       uploadedAt: now,
     });
   });
+}
+
+// ─── La lettura, per il pool ─────────────────────────────────────────────────
+
+/** Una riga del mio listone, nella forma che serve a risolvere il pool. */
+export type MyListoneRow = {
+  /** Il giudizio, nella stessa forma di quello globale: è quello che vince. */
+  judgement: CarmyJudgement;
+  obiettivo: boolean;
+  fascia: string | null;
+  fasciaRank: number | null;
+};
+
+/**
+ * Tutto il mio listone, per `ext_id`.
+ *
+ * ⚠ **Tutto, e non filtrato sugli `ext_id` dell'asta**, che pure sarebbe la
+ * lettura più stretta. La ragione è che da questa mappa si legge anche **una
+ * domanda diversa** — *ho importato?* — che è una proprietà di una persona, non
+ * di un'asta: filtrando, chi ha importato un file i cui giocatori non stanno nel
+ * listone di *questa* asta risulterebbe «non ha mai importato», e si vedrebbe le
+ * fasce globali al posto delle sue. Sono al massimo cinquecento righe strette,
+ * lette una volta per apertura di pagina.
+ *
+ * ⚠ **Il permesso non si controlla qui**, al contrario del caricamento: il
+ * chiamante è `listPickPool`, che la chiama **solo** dentro il ramo
+ * `withInsights` — cioè dopo che `canSeeInsights` ha già deciso. Un controllo in
+ * più qui darebbe l'impressione che ci siano due regole da tenere allineate.
+ */
+export async function myListone(
+  userId: string,
+): Promise<Map<number, MyListoneRow>> {
+  const rows = await db
+    .select()
+    .from(userListone)
+    .where(eq(userListone.userId, userId));
+
+  return new Map(
+    rows.map((row) => [
+      row.extId,
+      {
+        // ⚠ Niente `sourceName`/`sourceTeam`: il mio file non li conserva, e la
+        // chiave assente è la verità (vedi `CarmyJudgement`).
+        judgement: {
+          extId: row.extId,
+          fascia: row.fascia,
+          prezzo: row.prezzo,
+          pma: row.pma,
+          titolarita: row.titolarita,
+          affidabilita: row.affidabilita,
+          integrita: row.integrita,
+          fmvExp: row.fmvExp,
+          tags: row.tags,
+          commento: row.commento,
+        },
+        obiettivo: row.obiettivo,
+        fascia: row.fascia,
+        fasciaRank: row.fasciaRank,
+      },
+    ]),
+  );
 }
 
 // ─── Lo stato, per il modale ─────────────────────────────────────────────────

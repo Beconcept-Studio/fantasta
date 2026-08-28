@@ -229,8 +229,48 @@ export type PoolPlayer = {
    * ⚠ **E non entra in `serializeSnapshot`.** Viaggia su `listPickPool`, che è la
    * lettura del listone e non lo stato del gioco: la regola 3 protegge gli importi
    * delle buste durante `LOT_OPEN`, e qui non c'è nessuna offerta da sanificare.
+   *
+   * ⚠ **Da M21 è il giudizio *risolto*, e questo cambia cosa vede il pannello di
+   * chiamata** (M21 §5). Chi ha caricato il proprio foglio vede qui i **propri**
+   * valori invece di quelli globali, anche nella lista di chiamata: è la
+   * conseguenza voluta della decisione 1 — «il mio file vince sul globale» non ha
+   * senso se vale solo in una delle due liste — ma va scritta qui perché non
+   * venga scoperta guardando una schermata che nessuno aveva pensato di cambiare.
+   * La decisione la prende la query, una volta sola.
    */
   carmy?: CarmyJudgement;
+  /**
+   * Questa riga viene dal **mio** file (M21 §5).
+   *
+   * Esiste per poterlo **mostrare** dove serve: `carmy` da solo non dice più da
+   * quale dei due fogli arriva, e «questo prezzo è il tuo» è un'informazione
+   * diversa da «questo prezzo è quello di Carmy».
+   */
+  mio?: true;
+  /** È nella mia lista della spesa: la colonna `Obiett.` del mio file. */
+  obiettivo?: true;
+  /**
+   * La fascia sotto cui questa riga va raggruppata, **già decisa dal server**.
+   *
+   * ⚠ **Separata da `carmy.fascia`, e non è una ridondanza** (M21 §5).
+   * `carmy.fascia` è un **dato** — la fascia scritta nella riga che ha vinto la
+   * risoluzione. Questa è una **decisione**: sotto quale intestazione va la riga,
+   * applicata la regola del vocabolario unico (§4). Tenerle distinte è ciò che
+   * permette a un giocatore di stare in «Senza fascia» — cioè con questa chiave
+   * **assente** — mostrando comunque i valori globali che ha.
+   */
+  fasciaGruppo?: string;
+  /**
+   * Dove sta quella fascia nell'ordine, dal gruppo più alto al più basso.
+   *
+   * ⚠ **Aggiunta in M21-07, e §5 ne dichiarava tre: questa è la quarta.** Serve
+   * perché l'ordine dei gruppi dipende da **quale vocabolario è in gioco** — il
+   * mio `fascia_rank` se ho importato, `CARMY_FASCE` altrimenti — e §5 promette
+   * che «il browser riceve una forma sola e non ricalcola nessuna regola». Senza,
+   * il client dovrebbe sapere in quale dei due mondi si trova per ordinare le
+   * intestazioni, cioè ricalcolare la decisione che il server ha già preso.
+   */
+  fasciaRank?: number;
 };
 
 export type Snapshot = {

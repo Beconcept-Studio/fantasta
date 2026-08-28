@@ -42,7 +42,11 @@ export default async function PlayPage({
 
   // ⚠ Il flag decide una **query**, non un `className` (M8 §6): chi non lo ha
   // non riceve gli insight nel payload, invece di riceverli e non vederli.
-  const pool = await listPickPool(id, canSeeInsights(user));
+  //
+  // ⚠ E da M21 passa anche **chi sta guardando**: il listone personale si risolve
+  // lato server, così la tab Listone e la lista di chiamata mostrano gli stessi
+  // valori — i miei, se ho caricato il mio foglio (M21 §5).
+  const pool = await listPickPool(id, canSeeInsights(user), user.id);
 
   return (
     <Portal

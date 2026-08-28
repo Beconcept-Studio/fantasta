@@ -405,7 +405,22 @@ carmy?: CarmyJudgement   // NON è nuova: adesso è il giudizio RISOLTO
 mio?: true               // questa riga viene dal mio file
 obiettivo?: true         // è un mio obiettivo
 fasciaGruppo?: string    // la fascia con cui raggruppare, già decisa (§4)
+fasciaRank?: number      // dove sta quel gruppo nell'ordine — aggiunta a M21-07
 ```
+
+⚠ **La quarta chiave è stata aggiunta implementando, e la ragione è questa stessa
+sezione.** L'ordine dei gruppi dipende da **quale vocabolario è in gioco** — il mio
+`fascia_rank` se ho importato, `CARMY_FASCE` altrimenti — e senza il numero il client
+dovrebbe sapere in quale dei due mondi si trova per ordinare le intestazioni: cioè
+ricalcolare la decisione che il server ha già preso, contro la promessa di questo
+paragrafo. Non è una decisione nuova, è la stessa applicata fino in fondo.
+
+⚠ **E `CarmyJudgement` perde due chiavi obbligatorie**: `sourceName` e `sourceTeam`
+diventano opzionali, perché il listone personale non le conserva — la sua tabella ha le
+colonne di `carmy_players` meno quelle due. Un giudizio mio arriva **senza**, invece che
+col nome del listone copiato dentro: l'assenza è la verità, un valore inventato sarebbe
+la spiegazione falsa di un aggancio avvenuto in un altro modo. Nessuna schermata le
+legge: servono a capire un import, non a disegnare una riga.
 
 ⚠ **`?` e non `| null`, senza eccezioni**, che è la regola di M8 §6 e M10B §7 letta per la terza
 volta: la chiave è **assente** per chi non ha il permesso, non `null` da nascondere. Questo tipo
@@ -646,9 +661,20 @@ Scritto qui perché **non è deducibile dal codice** e la sessione in cui è suc
       un rifiuto, a chi ha il file in mano. ⚠ **I test stanno in `tests/db/listone.test.ts`** e non
       nel file di M21-03, per la ragione di M10B: il caricamento personale si aggancia a
       `listone_players`, e quel file **possiede** quella tabella. 12 test nuovi → **954 in 54 file**
-- [ ] **M21-07** — `listPickPool` con `userId` e la risoluzione «personale se c'è, globale
+- [x] **M21-07** — `listPickPool` con `userId` e la risoluzione «personale se c'è, globale
       altrimenti» + `fasciaGruppo` (§5). ⚠ **Il test che conta è quello dell'assenza**: per un
       utente non-Pro le quattro chiavi non devono esistere nel risultato, non essere `null`
+      → Fatto, e §5 è stato aggiornato in due punti: **`fasciaRank` è la quarta chiave** (senza, il
+      client dovrebbe sapere quale vocabolario è in gioco per ordinare le intestazioni, cioè
+      rifare la decisione che il server ha già preso) e **`CarmyJudgement` perde due chiavi
+      obbligatorie**, `sourceName`/`sourceTeam`, che il listone personale non conserva. ⚠ **«Ho
+      importato» si decide una volta sola e non riga per riga**: è ciò che rende vera la decisione 5
+      — o le fasce sono tutte mie, o sono tutte globali, mai una tabella con `Top` mia e `Top`
+      globale come due gruppi. Il test dell'assenza è scritto sul caso peggiore, che non è teorico:
+      un utente che **ha** un listone a database e ha **perso** il flag Pro. `userId` lo passano
+      **due** pagine, `play` e `manage`: la regia è la regia di chi la guarda, e mostrarle i prezzi
+      globali a chi ne ha caricati di suoi sarebbe la stessa incoerenza che la decisione 1 toglie.
+      6 test nuovi → **960 in 54 file**
 - [ ] **M21-08** — `listoneRows` in `lib/realtime/portal.ts` (§4), funzione pura con i suoi test:
       ruoli in OR, ricerca su nome e squadra, filtro obiettivi, esclusione di chi è già in una rosa,
       il giocatore in asta che **resta**, ordinamento dentro il gruppo, ordine dei gruppi nelle due

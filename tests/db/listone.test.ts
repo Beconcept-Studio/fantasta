@@ -1212,6 +1212,211 @@ suite.runIf(dbUp)("il caricamento del listone personale", () => {
   });
 });
 
+// ─── La risoluzione «personale se c'è, globale altrimenti» ───────────────────
+
+suite.runIf(dbUp)("il pool risolve il listone personale", () => {
+  /**
+   * Un'asta di gioco con due giudizi globali addosso ai suoi primi giocatori.
+   *
+   * ⚠ **I giudizi si scrivono a mano invece di caricare il foglio vero**, per la
+   * cicatrice già scritta più in alto: il listone sintetico numera gli `ext_id`
+   * **da 1** e quelli veri partono da 4, quindi i due insiemi si sovrappongono.
+   * Qui la sovrapposizione è **voluta e misurata**: due `ext_id` noti.
+   */
+  async function scena() {
+    const game = await gameAuction();
+    await db.insert(carmyPlayers).values(
+      [1, 2].map((extId) => ({
+        extId,
+        sourceName: `Giocatore ${extId}`,
+        sourceTeam: "INT",
+        fascia: "Outsider",
+        prezzo: 10,
+        pma: 2,
+        titolarita: 2,
+        affidabilita: 2,
+        integrita: 2,
+        fmvExp: 5,
+        tags: ["globale"],
+        commento: null,
+        uploadedAt: T0,
+      })),
+    );
+    return game;
+  }
+
+  /** Le righe del mio listone su due giocatori dell'asta, scritte a mano. */
+  async function importaPer(userId: string) {
+    await db.insert(userListone).values([
+      {
+        userId,
+        extId: 1,
+        obiettivo: true,
+        fascia: "La mia Top",
+        fasciaRank: 0,
+        pma: 42,
+        fmvExp: 9,
+        prezzo: 99,
+        titolarita: 5,
+        affidabilita: 5,
+        integrita: 5,
+        tags: ["mio"],
+        commento: null,
+        uploadedAt: T0,
+      },
+      {
+        userId,
+        extId: 3,
+        obiettivo: false,
+        fascia: "La mia Seconda",
+        fasciaRank: 1,
+        pma: 7,
+        fmvExp: 6,
+        prezzo: 12,
+        titolarita: 3,
+        affidabilita: 3,
+        integrita: 3,
+        tags: [],
+        commento: null,
+        uploadedAt: T0,
+      },
+    ]);
+  }
+
+  const trova = (pool: Awaited<ReturnType<typeof listPickPool>>, n: number) =>
+    pool.find((p) => p.name === `Giocatore ${n}`)!;
+
+  /**
+   * ⚠ **Il test che conta di M21-07, ed è quello dell'assenza** (M21 §5). Le
+   * quattro chiavi non devono **esistere** nell'oggetto per chi non ha il
+   * permesso: `PoolPlayer` finisce nel payload RSC di un client component, cioè
+   * nel browser, leggibile in DevTools in tre click.
+   *
+   * ⚠ E il caso è scelto apposta come il peggiore: un utente che **ha** un
+   * listone personale a database e ha perso il flag Pro. Non è teorico — il
+   * caricamento richiede il permesso, ma il permesso si può togliere dopo.
+   */
+  it("⚠ un non-pro non riceve nessuna delle quattro chiavi, nemmeno se ha importato", async () => {
+    const game = await scena();
+    const normale = await user("decaduto");
+    await importaPer(normale);
+
+    const pool = await listPickPool(game.auctionId, false, normale);
+    expect(pool.length).toBeGreaterThan(0);
+    for (const player of pool) {
+      const keys = Object.keys(player);
+      expect(keys).not.toContain("carmy");
+      expect(keys).not.toContain("mio");
+      expect(keys).not.toContain("obiettivo");
+      expect(keys).not.toContain("fasciaGruppo");
+      expect(keys).not.toContain("fasciaRank");
+      expect(keys).not.toContain("insights");
+    }
+  });
+
+  it("chi ha importato vede i propri valori, e il proprio vocabolario di fasce", async () => {
+    const game = await scena();
+    const me = await user("importato");
+    await importaPer(me);
+
+    const pool = await listPickPool(game.auctionId, true, me);
+
+    // Il giocatore che sta in tutti e due i fogli: **vince il mio** (decisione 1).
+    expect(trova(pool, 1)).toMatchObject({
+      mio: true,
+      obiettivo: true,
+      fasciaGruppo: "La mia Top",
+      fasciaRank: 0,
+      carmy: { pma: 42, prezzo: 99, tags: ["mio"] },
+    });
+    // ⚠ E il giudizio personale arriva **senza** `sourceName`: il mio file non lo
+    // conserva, e la chiave assente è la verità.
+    expect(Object.keys(trova(pool, 1).carmy!)).not.toContain("sourceName");
+
+    // Quello che sta solo nel mio: c'è, e non è un obiettivo.
+    expect(trova(pool, 3)).toMatchObject({
+      mio: true,
+      fasciaGruppo: "La mia Seconda",
+      fasciaRank: 1,
+      carmy: { pma: 7 },
+    });
+    expect(Object.keys(trova(pool, 3))).not.toContain("obiettivo");
+  });
+
+  /**
+   * ⚠ **Il gruppo «Senza fascia», che è il prezzo del vocabolario unico**
+   * (decisione 5). Chi nel mio file non c'è tiene i valori globali — la tabella
+   * resta piena — ma **non** prende la fascia globale: `fasciaGruppo` è assente,
+   * e la tabella lo mette in fondo. Non esiste una tabella con dentro `Top` mia e
+   * `Top` globale come due gruppi diversi.
+   */
+  it("⚠ chi ha importato non vede mai una fascia globale, ma ne tiene i valori", async () => {
+    const game = await scena();
+    const me = await user("misto");
+    await importaPer(me);
+
+    const pool = await listPickPool(game.auctionId, true, me);
+    const solamenteGlobale = trova(pool, 2);
+
+    // I valori globali ci sono: PMA, prezzo e note non si perdono.
+    expect(solamenteGlobale.carmy).toMatchObject({ pma: 2, tags: ["globale"] });
+    // Ma non è mio, e non ha nessun gruppo: è «Senza fascia».
+    const keys = Object.keys(solamenteGlobale);
+    expect(keys).not.toContain("mio");
+    expect(keys).not.toContain("fasciaGruppo");
+    expect(keys).not.toContain("fasciaRank");
+  });
+
+  it("chi non ha importato vede una tabella piena, con le fasce globali e nessun obiettivo", async () => {
+    const game = await scena();
+    const me = await user("mai-importato-pool");
+
+    const pool = await listPickPool(game.auctionId, true, me);
+
+    // Il vocabolario è quello globale, e l'ordine è quello di `CARMY_FASCE`.
+    expect(trova(pool, 1)).toMatchObject({
+      fasciaGruppo: "Outsider",
+      fasciaRank: CARMY_FASCE.indexOf("Outsider"),
+      carmy: { pma: 2, tags: ["globale"] },
+    });
+    // Nessuna riga è mia, e nessuna è un obiettivo: non ho un file.
+    expect(pool.filter((p) => "mio" in p)).toHaveLength(0);
+    expect(pool.filter((p) => "obiettivo" in p)).toHaveLength(0);
+  });
+
+  /**
+   * ⚠ **Senza `userId` il pool è quello di prima**, ed è la garanzia che nessun
+   * chiamante possa ricevere per sbaglio il listone di qualcun altro: chi non
+   * dice di chi è la pagina non riceve il foglio di nessuno.
+   */
+  it("senza utente non arriva nessun dato personale, e i giudizi restano globali", async () => {
+    const game = await scena();
+    const me = await user("ignorato");
+    await importaPer(me);
+
+    const pool = await listPickPool(game.auctionId, true);
+    expect(trova(pool, 1).carmy).toMatchObject({ pma: 2, tags: ["globale"] });
+    expect(pool.filter((p) => "mio" in p)).toHaveLength(0);
+    expect(pool.filter((p) => "obiettivo" in p)).toHaveLength(0);
+  });
+
+  it("due utenti sulla stessa asta ricevono due pool diversi", async () => {
+    const game = await scena();
+    const primo = await user("primo");
+    const secondo = await user("secondo");
+    await importaPer(primo);
+
+    const suo = await listPickPool(game.auctionId, true, primo);
+    const altrui = await listPickPool(game.auctionId, true, secondo);
+
+    expect(trova(suo, 1)).toMatchObject({ obiettivo: true, fasciaGruppo: "La mia Top" });
+    // L'altro non vede né l'obiettivo né la fascia di chi ha importato: è la
+    // proprietà per cui `Obiett.` si può importare qui e non su `carmy_players`.
+    expect(Object.keys(trova(altrui, 1))).not.toContain("obiettivo");
+    expect(trova(altrui, 1)).toMatchObject({ fasciaGruppo: "Outsider" });
+  });
+});
+
 suite.runIf(dbUp)("lo stato del listone personale", () => {
   it("chi non ha mai importato non ha niente, e non è un errore", async () => {
     const nessuno = await user("mai-importato");
