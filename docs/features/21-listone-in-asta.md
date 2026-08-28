@@ -562,13 +562,26 @@ Scritto qui perché **non è deducibile dal codice** e la sessione in cui è suc
 1. **In `asta` — il database di sviluppo — c'è una simulata lasciata `LIVE` il 2026-08-23**
    (`51f56216-199c-48a5-8551-70eab533f433`, «Prova»). Accendere `pnpm dev` la **rimette in moto** e le
    consuma i lotti: è successo il 2026-08-28. È congelata a `LIVE/WAITING_PICK` e non è stata toccata
-   altrimenti. Chi riprende: o la mette in pausa dal pannello prima di lavorare, o lavora su
-   `asta_banco` (la ricetta è in `scripts/banco/LEGGIMI.md`).
-2. **Il banco di prova è `app/banco/`** — due rotte, `/banco` e `/banco/telefono` — con i componenti
-   veri e i dati veri dei fixture. ⚠ È **pubblico, senza `requireUser()`**, e `next build` lo
-   compila: **va cancellato a M21-13**, insieme a `scripts/banco/`.
-3. **Gli screenshot si prendono da CDP**, non col flag `--screenshot`. Il perché è in M21-02 e in
-   `scripts/banco/LEGGIMI.md`, e vale la pena leggerlo prima di fidarsi di un'immagine.
+   altrimenti. Chi riprende: o la mette in pausa dal pannello prima di lavorare, o lavora su un
+   database usa-e-getta (`asta_banco`, la ricetta è qui sotto).
+2. **Il banco di prova non esiste più**, cancellato a M21-13 com'era previsto: era `app/banco/` —
+   pubblico, senza `requireUser()`, e `next build` lo compilava — con accanto `scripts/banco/`. Si
+   rilegge con `git show 45d1eb0:app/banco/pezzi.tsx` e fratelli, insieme allo script che riempiva il
+   database usa-e-getta (`scripts/banco/riempi.ts`) e a quello che entrava col login di sviluppo e
+   fotografava da CDP (`scripts/banco/entra.mjs`).
+3. **Gli screenshot si prendono da CDP**, non col flag `--screenshot`: `--headless --screenshot
+   --window-size=375` impagina a ~800px e poi ritaglia, cioè mostra una pagina che non esiste. E
+   ⚠ **`element.click()` non attiva una linguetta Radix**, che risponde a `mousedown`: uno screenshot
+   in cui la tab non cambia non vuol dire che la tab sia rotta. Tutte e due sono costate tempo.
+4. **La ricetta del database usa-e-getta**, che è la sola cosa del banco che valeva la pena tenere
+   scritta:
+
+   ```bash
+   docker exec fantasta-db psql -U postgres -c "CREATE DATABASE asta_banco;"
+   DATABASE_URL=postgres://postgres:dev@localhost:5433/asta_banco pnpm exec drizzle-kit push --force
+   DATABASE_URL=postgres://postgres:dev@localhost:5433/asta_banco pnpm db:seed --auction-status=mid
+   env DATABASE_URL=postgres://postgres:dev@localhost:5433/asta_banco pnpm dev
+   ```
 
 ## Task
 
@@ -745,9 +758,18 @@ Scritto qui perché **non è deducibile dal codice** e la sessione in cui è suc
       chi leggerà fra sei mesi: perché le tab non sono due rotte, il buco che aprivano e la barra che
       lo chiude, la tabella come funzione dello snapshot, la risoluzione lato server e il vocabolario
       unico. `docs/features/README.md`: M21 spostata da «pianificata» a «in corso»
-- [ ] **M21-13** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ la build vuole il dev
+- [x] **M21-13** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ la build vuole il dev
       server **spento**, e la prima dopo una sessione di `pnpm dev` può morire da sola: si ridà).
       Prova su `dev` con Docker, seed e una simulata, e **dal telefono** con `pnpm dev:lan`
+      → **971 test in 54 file**, typecheck e build verdi. `app/banco/` e `scripts/banco/` cancellati
+      com'era previsto — quel banco era **pubblico senza `requireUser()`** e `next build` lo
+      compilava. Prova fatta **dall'owner in autonomia** su `asta_banco`, con tutti e quattro i login:
+      Pro con import, Pro senza, non-Pro, e l'amministratore. Nessun difetto trovato.
+      ⚠ **Una trappola nel gate, subito dopo la cancellazione**: `pnpm typecheck` è diventato rosso
+      con `Cannot find module '../../app/banco/telefono/page.js'` — dentro `.next/types/validator.ts`,
+      che è **generato** e puntava ancora alla rotta appena cancellata. Non è codice nostro e non è un
+      errore vero: si ridà `pnpm build`, che lo rigenera, e il typecheck torna verde. Finita in
+      `CLAUDE.md` fra gli errori noti, perché il messaggio punta su un file che nel repo non esiste
 - [ ] **M21-14** — **Dopo il deploy**, e non è una formalità: `pnpm db:push` sul server con nessuna
       asta `LIVE` o `PAUSED`, poi `pm2 reload deploy/ecosystem.config.cjs --update-env`. Poi la
       versione dalla navbar (`curl -s https://fantasta.rggndr.it/signin | grep -oE '1\.[0-9]+\.[0-9]+'`),
