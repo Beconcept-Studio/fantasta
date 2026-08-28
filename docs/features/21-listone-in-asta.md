@@ -126,8 +126,10 @@ disegno.
 Non serve un parser nuovo: serve che `parseCarmy` smetta di buttare due cose (§5).
 
 **2. `Gol` e `Assist` sono già nella fonte pubblica giornaliera.** In
-`fixtures/fantalab-listone.json` ogni giocatore ha `gol_fatti` e `assist`; `parseFantalabListone` li
-legge e `player_insights` non li conserva. Prenderli da lì invece che dal file personale vuol dire
+`fixtures/fantalab-listone.json` ogni giocatore ha `gol_fatti` e `assist`, accanto alle statistiche
+che già importiamo. ⚠ **Ma il parser oggi non li estrae**: `parseFantalabListone` costruisce una
+riga con undici campi e quei due non ci sono, quindi non è vero che «li abbiamo e non li mostriamo»
+— vanno aggiunti in due punti, il tipo di riga e l'`upsert`. Prenderli da lì invece che dal file personale vuol dire
 che li ha **chiunque sia Pro**, anche senza aver mai importato niente, e che sono **aggiornati ogni
 giorno** invece che vecchi quanto il file (§3).
 
@@ -259,8 +261,9 @@ a mano, cioè il passo che «nulla ti ricorda» di `CLAUDE.md`.
 
 ## §3 — Gol e Assist, dalla fonte che li aggiorna
 
-`parseFantalabListone` legge già la risposta intera: si aggiungono `gol_fatti` e `assist` alle righe
-che produce, e `refreshInsights` le scrive nell'`upsert` per colonna che già fa.
+Due aggiunte e nient'altro: `gol_fatti` e `assist` entrano nella riga che `parseFantalabListone`
+produce — la risposta della fonte li contiene già, è il parser che oggi si ferma prima — e
+`refreshInsights` li scrive nell'`upsert` per colonna che già fa.
 
 ⚠ **Si aggiungono all'`upsert` della fonte A e a nessun'altra scrittura.** La fonte B
 (`refreshSetPieces`) tocca solo i due rank, e mescolare le due scritture è il modo in cui una `GET`
@@ -337,10 +340,11 @@ tabella si legge.
 
 `listPickPool` prende **`userId`** oltre a `withInsights`, e risolve **lato server** la regola
 «personale se c'è, globale altrimenti». Il browser riceve una forma sola e non ricalcola nessuna
-regola. `PoolPlayer` cresce di tre chiavi:
+regola. `PoolPlayer` **cresce di tre chiavi**, e la quarta è quella che già c'è e cambia
+significato:
 
 ```ts
-carmy?: CarmyJudgement   // già esistente: adesso è il giudizio RISOLTO
+carmy?: CarmyJudgement   // NON è nuova: adesso è il giudizio RISOLTO
 mio?: true               // questa riga viene dal mio file
 obiettivo?: true         // è un mio obiettivo
 fasciaGruppo?: string    // la fascia con cui raggruppare, già decisa (§4)
