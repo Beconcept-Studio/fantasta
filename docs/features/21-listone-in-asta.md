@@ -721,23 +721,30 @@ Scritto qui perché **non è deducibile dal codice** e la sessione in cui è suc
 > ### ⚠ Due cose viste a schermo che la fase di progettazione non poteva vedere
 >
 > Il banco di prova di M21-02 disegnava la tab **da sola**, senza la pagina intorno. A schermo, nella
-> pagina vera, sono comparse due cose:
+> pagina vera, sono comparse due cose. **Portate all'owner il 2026-08-28, e tutte e due lasciate come
+> sono**: si scrivono qui perché la prossima volta che qualcuno le guarda sappia che non sono sfuggite.
 >
 > 1. **Due file di pillole una sotto l'altra.** Sopra la barra delle tab c'è già la navigazione
 >    dell'asta — `Asta live` / `Storico` — che ha esattamente lo stesso aspetto: due gruppi di
 >    pillole identici che significano cose diverse («in quale schermata dell'asta sono» contro «quale
->    metà di questa pagina guardo»). Non è rotto, è ridondante da guardare, e sul telefono sono due
->    righe di intestazione in più. **Lasciato com'è, perché è il disegno approvato**: la strada, se si
->    vuole, è dare alle due tab un aspetto diverso — sottolineatura invece di pillola — così le due
->    file non si somigliano più. È una decisione dell'owner, non mia.
+>    metà di questa pagina guardo»). Non è rotto, è ridondante da guardare. L'alternativa proposta era
+>    dare alle due tab la sottolineatura invece della pillola; **l'owner ha scelto di lasciare il
+>    disegno approvato**.
 > 2. **L'intestazione delle colonne non è incollata**, mentre nel banco lo era: con la barra delle tab
 >    sopra, un `thead` incollato avrebbe bisogno di sapere quanto è alta quella barra — lo stesso
 >    numero magico che il contenitore unico ha appena tolto di mezzo. Scorrendo cinquecento righe le
->    intestazioni escono di scena; le intestazioni di **gruppo** (la fascia) restano il punto di
->    riferimento. Da rivedere se dà fastidio guardandolo davvero.
-- [ ] **M21-12** — `docs/DECISIONS.md`: il ribaltamento di §0, datato; le due regole per l'ordine
+>    intestazioni escono di scena, e restano le intestazioni di **gruppo** (la fascia) come punto di
+>    riferimento. **Va bene così** (owner, 2026-08-28).
+- [x] **M21-12** — `docs/DECISIONS.md`: il ribaltamento di §0, datato; le due regole per l'ordine
       delle fasce (§4); la scelta della tabella sola (§2). `docs/ARCHITECTURE.md` aggiornato — è un
       criterio di chiusura, non un extra
+      → In `DECISIONS.md` sono **tre** voci datate 2026-08-28 e non due: al ribaltamento di §0 e alle
+      due regole delle fasce si è aggiunta quella che l'implementazione ha reso necessaria —
+      **l'ordine delle fasce non si accoda, si ordina topologicamente** (M21-05), con la misura che
+      la giustifica. In `ARCHITECTURE.md` una sezione nuova, «Il listone dentro l'asta», scritta per
+      chi leggerà fra sei mesi: perché le tab non sono due rotte, il buco che aprivano e la barra che
+      lo chiude, la tabella come funzione dello snapshot, la risoluzione lato server e il vocabolario
+      unico. `docs/features/README.md`: M21 spostata da «pianificata» a «in corso»
 - [ ] **M21-13** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ la build vuole il dev
       server **spento**, e la prima dopo una sessione di `pnpm dev` può morire da sola: si ridà).
       Prova su `dev` con Docker, seed e una simulata, e **dal telefono** con `pnpm dev:lan`

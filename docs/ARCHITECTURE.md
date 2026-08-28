@@ -3600,6 +3600,111 @@ non c'è.
 
 ---
 
+## Il listone dentro l'asta: una tab, e il foglio di ognuno
+
+Durante un'asta si guardano due cose: **cosa sta succedendo adesso** e **chi è rimasto**. Fino alla
+v1.20.0 il portale rispondeva benissimo alla prima e per niente alla seconda: la lista dei giocatori
+esisteva, ma viveva dentro il pannello di chiamata — cioè si apriva solo quando toccava a te e spariva
+appena avevi scelto. Nei venti minuti in cui tocca agli altri, che sono la maggior parte della serata,
+chi voleva sapere quanti difensori di fascia alta restassero non aveva nessun posto dove guardare.
+
+La tab Listone è quel posto. E porta con sé la cosa che quella lista richiede per essere *tua*: un
+**import personale**, perché il foglio che l'applicazione ha a sistema è di una persona sola.
+
+### Due tab, e perché non sono due rotte
+
+Il corpo di `/auctions/[id]/play` è diviso in due linguette: **Asta**, che è il contenuto di sempre e
+sta attiva al caricamento, e **Listone**. La ragione per cui non sono due indirizzi è tecnica prima
+che estetica: una navigazione smonterebbe il portale, quindi l'hook dello stream, quindi la
+connessione SSE — ogni tocco su una linguetta chiuderebbe uno stream e ne aprirebbe un altro, con il
+registro delle connessioni del server che vede una disconnessione e una riconnessione per ogni cambio
+di tab, nel mezzo di un'asta. Le tab sono **stato locale del client**, ed è il terzo pezzo di stato
+locale del portale dopo i due «questa cosa che si apre da sé l'ho chiusa io».
+
+Che siano tre non allenta la regola per cui ogni schermata è funzione dello snapshot: nessuno dei tre
+può rendere una schermata **irraggiungibile** a chi si collega adesso — chi apre la pagina trova
+`Asta`, che è tutto ciò che c'era prima. Il giorno in cui la tab attiva finisse nell'URL o nel
+`localStorage`, quella proprietà andrebbe riverificata: una tab ricordata è una schermata che dipende
+da cosa hai fatto prima.
+
+### Il buco che le tab aprivano, e la barra che lo chiude
+
+I due pannelli che si aprono da soli — la chiamata e l'offerta — stanno **fuori** dal contenitore
+delle tab e continuano ad aprirsi identici mentre guardi il Listone: la tabella non si muove sotto le
+dita di chi sta leggendo un elenco. Ma quei pannelli erano stati costruiti su una promessa precisa:
+*chiuderne uno non nasconde niente, perché la card sotto tiene il tempo che resta e il pulsante che
+riapre*. Quella card sta nella tab Asta. Chi chiudeva il pannello dal Listone si sarebbe trovato
+davanti a una tabella, senza countdown e senza strada per tornare — esattamente il vicolo cieco che
+quella promessa esisteva per chiudere.
+
+Quindi la barra delle linguette è **incollata in cima**, e quando c'è una scadenza in corso porta a
+destra tre cose: l'etichetta della scena, il countdown, e il pulsante che riapre il pannello. È la
+stessa promessa, spostata dove serve. Il countdown resta **rendering**: stesso componente, stesso
+scarto d'orologio dello stream, e non decide niente — disegna un numero che il server ha già deciso.
+
+⚠ Due dettagli che sembrano arbitrari e non lo sono. Il primo: l'elemento incollato è **uno solo**,
+un contenitore che tiene insieme l'intestazione mobile e la barra. Due elementi incollati fratelli si
+sovrappongono, e il secondo avrebbe avuto bisogno di conoscere l'altezza del primo — cioè un numero
+magico da tenere allineato a mano a un componente che cambia. Il secondo: il countdown nella barra si
+vede **solo nella tab Listone**, perché nella tab Asta le stesse tre cose sono dieci pixel più in
+basso, dentro la card della scena, e ripeterle spenderebbe due volte l'altezza che il telefono non ha.
+
+### La tabella è funzione dello snapshot, e per questo è già sincronizzata
+
+La richiesta diceva «questa tabella deve essere sincronizzata in tempo reale con ogni lotto». Non c'è
+una riga di codice che lo faccia: la tabella è una **funzione pura** del listone caricato all'apertura
+della pagina e dello snapshot corrente. Quando un lotto si chiude, la rosa del vincitore cambia, lo
+snapshot arriva, la riga sparisce. Chi ricarica a metà asta vede la stessa tabella di chi non si è
+mosso, perché non c'è niente da recuperare.
+
+Il giocatore **in asta adesso resta in tabella**, con un badge: non è ancora di nessuno, e farlo
+sparire prima dell'assegnazione sarebbe una bugia — per di più una bugia che si corregge da sé, perché
+se il lotto va deserto quel giocatore torna disponibile.
+
+Dentro ogni gruppo l'ordine è per **`PMA` decrescente**, ed è una divergenza voluta dalla lista di
+chiamata. Là l'ordine *è una promessa* — «il primo è quello che il timer comprerebbe al posto tuo» — e
+per questo non si tocca. Qui non si sceglie niente, si guarda chi resta: nessun auto-pick da
+raccontare, e l'unico criterio giusto è quello che chi legge **può verificare sulla riga**. Le due
+liste della stessa serata sono ordinate diversamente, e va bene così.
+
+### Personale se c'è, globale altrimenti — deciso dal server
+
+Ognuno può caricare il **proprio** foglio: stesso file, stesso parser, stesso aggancio per nome al
+listone di sistema, stessa soglia sotto la quale non si scrive niente. Cambia chi è il proprietario, e
+quindi cosa si può dire: il foglio globale è mostrato a tutti, e per questo la colonna degli obiettivi
+lì non entra — sarebbe la lista della spesa di una persona pubblicata a dodici. Il foglio personale ha
+un `user_id`, non esce da chi l'ha caricato, e l'obiettivo è il motivo per cui esiste.
+
+La risoluzione avviene **lato server, una volta sola**, dentro la stessa lettura che già portava gli
+insight e i giudizi: chi ha importato riceve i propri valori, chi non l'ha fatto riceve quelli
+globali, e il browser riceve **una forma sola** senza nessuna regola da riapplicare. Conseguenza
+voluta e da conoscere: chi ha caricato il proprio foglio vede i propri valori **anche nella lista di
+chiamata**, perché «il mio file vince sul globale» non ha senso se vale solo in una delle due liste.
+
+Il vocabolario delle fasce invece **non si mescola mai**: o sono tutte le mie, nell'ordine del mio
+file, o sono tutte quelle globali. Chi nel mio file non c'è finisce in un gruppo «Senza fascia» in
+fondo — tenendo comunque prezzo, fantamedia attesa e note globali. È il prezzo della promessa, ed è il
+prezzo giusto, perché dice la verità: *su costui non ho un giudizio mio*.
+
+### Chi vede la tab, e come la vede chi non può
+
+Il permesso è lo stesso di ogni altro dato riservato dell'applicazione — Pro **oppure**
+amministratore — e come sempre decide **una query, non un `className`**: chi non ce l'ha non riceve né
+i giudizi, né gli obiettivi, né le fasce, e nemmeno il conteggio del proprio foglio. Nel payload non
+c'è niente da nascondere perché non c'è niente.
+
+La linguetta però **resta visibile e spenta**, con accanto scritto che è per gli utenti Pro: è una
+scelta di prodotto, non una protezione — una tab che non c'è non si può desiderare. La spiegazione è
+una riga di testo e non un fumetto al passaggio del mouse, per una ragione che si vede solo provando:
+su un telefono un fumetto su un elemento disabilitato non si apre in nessun modo, cioè sarebbe una
+spiegazione assente proprio dove la tab spenta si tocca.
+
+E la solita cosa da ricordare, la quinta di fila: **tutto questo nasce vuoto**. Senza nessun import
+personale la tab mostra la tabella piena con i valori del foglio globale e nessun obiettivo, e senza
+nemmeno il foglio globale mostra i nomi e i due numeri della fonte pubblica. Niente si rompe.
+
+---
+
 ## I tre loop: cosa gira da sé, dentro il processo
 
 Quasi tutto in questa applicazione parte perché qualcuno ha premuto qualcosa. Tre cose no. Girano da
