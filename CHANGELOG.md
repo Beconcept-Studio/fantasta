@@ -4,6 +4,49 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.21.0] — 2026-08-28
+
+**Dentro «Asta live» il corpo della pagina diventa due linguette: `Asta`, che è tutto quello che
+c'era prima e resta identica, e `Listone` — la lista di chi è ancora libero.** È per gli utenti Pro;
+per gli altri la linguetta si vede ma è spenta, con accanto scritto perché.
+
+**Serve a una cosa sola, ed è quella che mancava**: nei venti minuti in cui tocca agli altri — cioè
+la maggior parte della serata — sapere chi resta. Fino a ieri la lista dei giocatori esisteva solo
+dentro il pannello di chiamata, quindi si apriva quando toccava a te e spariva appena avevi scelto.
+
+**La tabella è raggruppata per fascia** e mostra, riga per riga: l'icona dell'obiettivo, il ruolo, il
+nome con la squadra, il PMA con accanto i crediti che valgono in questa asta, la fantamedia attesa,
+**gol e assist** — che sono nuovi e arrivano dalla fonte pubblica, quindi si aggiornano da soli ogni
+giorno — e le note del foglio. Sopra ci sono la ricerca per giocatore o squadra, il filtro dei ruoli
+(più di uno insieme, e parte dal ruolo che si sta comprando) e il filtro «Obiettivi».
+
+**Si aggiorna da sé a ogni lotto**: chi viene comprato sparisce senza ricaricare la pagina. Chi è in
+asta **adesso** resta in tabella con un badge, perché non è ancora di nessuno — se il lotto va deserto
+torna disponibile.
+
+**«Importa obiettivi»: il foglio è tuo.** Il file che l'applicazione ha a sistema è di una persona
+sola; da questa versione ognuno carica il proprio, con le proprie fasce, i propri prezzi e la propria
+lista della spesa. ⚠ **Quello che importi non lo vede nessun altro**, e vale in tutte le aste a cui
+partecipi. Si carica una volta, ri-caricarlo sostituisce quello di prima — quindi un obiettivo tolto
+dal file sparisce davvero. Il file non viene conservato.
+
+Chi ha importato vede **i propri** valori anche nella lista di chiamata, e le **proprie** fasce
+nell'ordine del proprio file; chi nel suo file non c'è finisce in un gruppo «Senza fascia» in fondo,
+tenendo comunque prezzo, fantamedia e note del foglio a sistema. Chi non ha importato niente vede la
+tabella piena, con i valori di sempre.
+
+**Il riepilogo dell'import dice cosa è andato storto**, come quello dell'amministratore: quanti
+giocatori sono entrati, quanti obiettivi ha letto, i nomi che il listone non conosce — di solito
+acquisti più recenti del listone caricato — e le squadre discordanti, che di solito sono
+trasferimenti e vengono importate lo stesso.
+
+**Mentre guardi il Listone l'asta non ti perde.** La barra delle linguette resta incollata in alto e,
+quando c'è una scadenza in corso, porta il countdown e il pulsante che riapre il pannello: si può
+offrire senza tornare indietro.
+
+⚠ **Sul telefono la tabella diventa un elenco su tre righe**, non una tabella da scorrere di lato, e
+il PMA resta la sola percentuale: i crediti accanto compaiono da uno schermo medio in su.
+
 ## [1.20.0] — 2026-08-27
 
 **Due cose: il marchio si vede dentro l'app, e l'app si mette sulla schermata home come un'app.**
