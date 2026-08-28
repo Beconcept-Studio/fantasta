@@ -561,9 +561,20 @@ Scritto qui perché **non è deducibile dal codice** e la sessione in cui è suc
 
 1. **In `asta` — il database di sviluppo — c'è una simulata lasciata `LIVE` il 2026-08-23**
    (`51f56216-199c-48a5-8551-70eab533f433`, «Prova»). Accendere `pnpm dev` la **rimette in moto** e le
-   consuma i lotti: è successo il 2026-08-28. È congelata a `LIVE/WAITING_PICK` e non è stata toccata
-   altrimenti. Chi riprende: o la mette in pausa dal pannello prima di lavorare, o lavora su un
-   database usa-e-getta (`asta_banco`, la ricetta è qui sotto).
+   consuma i lotti.
+
+   ⚠ **E non è solo `pnpm dev`: la fa avanzare anche `pnpm test`**, che è la scoperta della fine di
+   M21 e vale più della nota originale. Lo `sweep` dello scheduler è **globale** — «tutte le aste
+   `LIVE` con la deadline scaduta» — e `tests/db/scheduler.test.ts` lo chiama per davvero, contro
+   `asta`. Quindi **ogni giro di test la spinge avanti di una fase**: misurata a fine giornata a
+   `LIVE/LOT_OPEN` con 36 giocatori assegnati e `state_version` 339, con la deadline ferma
+   all'istante dell'ultimo `pnpm test`. Non è un guasto — è lo sweep che fa il suo mestiere su
+   un'asta che nessuno ha chiuso — ma spiega perché quell'asta si muove anche quando l'app è spenta,
+   e toglie di mezzo la spiegazione sbagliata («qualcuno ha acceso il dev server»).
+
+   Chi riprende: o la mette in **pausa** dal pannello — che è l'unica cosa che la ferma davvero,
+   perché lo sweep non tocca le `PAUSED` — o accetta che si consumi. Per lavorare senza pensarci,
+   un database usa-e-getta (`asta_banco`, la ricetta è qui sotto).
 2. **Il banco di prova non esiste più**, cancellato a M21-13 com'era previsto: era `app/banco/` —
    pubblico, senza `requireUser()`, e `next build` lo compilava — con accanto `scripts/banco/`. Si
    rilegge con `git show 45d1eb0:app/banco/pezzi.tsx` e fratelli, insieme allo script che riempiva il
