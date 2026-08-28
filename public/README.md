@@ -29,14 +29,24 @@ per prendere esattamente questo errore.
 
 ## Come si rigenerano
 
-Non a mano e non con un editor di immagini: dalla sorgente, con lo script che le
+Non a mano e non con un editor di immagini: dalle sorgenti, con lo script che le
 produce tutte e cinque insieme.
 
     python3 scripts/genera-icone.py
 
-La sorgente è `fixtures/logo.png`. `public/icon-512.png` ha **gli stessi byte** di
-`app/icon.png` — due consumatori diversi, una sola sorgente — e non è una
-duplicazione da risolvere: il perché è scritto nello script e in `M20 §3`.
+⚠ **Le sorgenti sono due, e i due file da 512 non hanno gli stessi byte.** Fino al
+2026-08-27 ne bastava una e i due 512 erano identici; adesso no, ed è voluto:
+
+    fixtures/logo.png          → apple-icon, icon-192, icon-512 (**l'app**: la
+                                 tessera sulla schermata home, tela piena)
+    fixtures/logo-favicon.png  → favicon.ico, app/icon.png (**la linguetta** del
+                                 browser: il marchio da solo, fondo trasparente)
+
+A 16 pixel un gradiente con la grana perde il disegno e resta una macchia di
+colore: la linguetta ha avuto una sorgente sua il 2026-08-28, su richiesta
+dell'owner. Chi notasse i due 512 diversi e li «riallineasse» spegnerebbe proprio
+questa distinzione. **`public/icon-512.png` è quello dell'app**, e questa cartella
+serve solo il manifest.
 
 ## Cosa non va messo qui dentro
 
