@@ -3734,3 +3734,86 @@ simulazione in `LIVE/WAITING_PICK`, e accendere l'app avrebbe fatto partire il t
 il dev server è girato su un database **usa-e-getta** (creato, `db:push`, cancellato alla fine) su una
 porta sua. Riletta dopo, la simulazione era ferma dov'era. Vale come procedura ogni volta che serve
 l'app accesa e in locale c'è un'asta di qualcuno.
+
+⚠ **Correzione al metodo di verifica, misurata dopo il deploy di `v1.20.0`.** §7 di M20 — e la voce del
+2026-08-18 da cui veniva — dicevano di distinguere il 404 di nginx da quello di Next per l'intestazione
+`x-powered-by: Next.js`. **Vale sui 404, non sui 200.** In produzione quell'intestazione non compare su
+*nessuna* risposta `200`, nemmeno su `/icon.png` e `/apple-icon.png`, che sono rotte generate da Next e
+che nginx non potrebbe servire dal disco: quindi la sua assenza su un `200` non dice niente su chi ha
+risposto. Verificato in entrambe le direzioni: `/non-esiste-m20.png` risponde `404` **con**
+l'intestazione — cioè i `.png` arrivano a Node — e `/favicon.ico` risponde `404` **senza**, 146 byte,
+che è il 404 di nginx di sempre. **A un `200` si chiede il contenuto, non l'intestazione**: le due icone
+nuove sono state scaricate e confrontate con lo `sha256` dei file locali, identiche entrambe. È la stessa
+disciplina del «un `HTTP 200` non è una verifica di deploy», applicata un livello più in là — anche la
+*spia* di una verifica va verificata.
+
+---
+
+## 2026-08-28 — M21: `Obiett.` si importa, ma solo dalla porta di ciascuno
+
+**Il ribaltamento, e cosa esattamente cade.** `lib/import/parseCarmy.ts` butta la colonna `Obiett.`
+dal 2026-08-12, con la ragione scritta lì dentro: «è la **lista della spesa di chi compila il
+foglio**, non un giudizio sul giocatore: metterla nell'app vorrebbe dire mostrare a dodici persone
+chi punta a comprare l'autore del file, il quale gioca la stessa asta». **Quella frase è ancora
+giusta, e per questo non si cancella.** Ciò che cade è il suo *presupposto*: là il foglio era **uno
+solo e globale**, quindi importare quella colonna significava pubblicare la lista della spesa di una
+persona sola. Da M21 esiste un secondo percorso, **per utente**, in cui il file è mio e il dato non
+esce dal mio browser.
+
+⚠ **La distinzione è a valle del parser, ed è la parte da non perdere**: `parseCarmy` adesso legge la
+colonna, `uploadCarmy` — il percorso globale verso `carmy_players` — continua a **ignorarla**, e lì
+l'obiezione di M10B vale identica. Non è «M10B sbagliava»: è «M10B decideva su un altro caso».
+
+Due parser per lo stesso file non esistono, e non devono nascere: sarebbero due modi di leggere `PMA`
+che divergono al primo formato strano. Un parser solo, due chiamanti che ne usano porzioni diverse.
+
+## 2026-08-28 — L'ordine delle fasce non si accoda: si ordina topologicamente
+
+La spec di M21 §6 diceva di ricavare l'ordine delle fasce dal file «leggendo i quattro fogli in
+ordine `P, D, C, A` e assegnando a ogni fascia nuova il numero successivo», e aggiungeva che «la
+prima occorrenza in ordine di foglio dà il risultato giusto su questo file». **Misurato: no.**
+
+Sui quattro fogli del file del 2026-08-12 `P` fa `… Scomm. → Outsider` e `Titolare "Scarso"` compare
+**solo** in `D` e `C`, dove sta **fra le due**. Accodando alla prima occorrenza prenderebbe il numero
+**dopo** `Outsider`: un ordine che due fogli su quattro smentiscono, prodotto dalla funzione che
+esiste apposta per rispettare il file.
+
+Ogni foglio è una **catena** e afferma un ordine parziale; il merge è un ordinamento topologico, con
+l'ordine di prima apparizione a rompere i pareggi. Un ciclo — due fogli che si contraddicono — **non
+fa fallire il caricamento**: si rompe il pareggio e si tira avanti, perché rifiutare il file
+personale di qualcuno per due gruppi in ordine discorde punirebbe chi l'ha compilato per una cosa
+che, a schermo, è un'intestazione dieci righe più in su.
+
+⚠ **La prova che regge la scelta è un'uguaglianza fra due derivazioni indipendenti**: sul file vero
+l'ordine ricavato è **esattamente `CARMY_FASCE`**, che in M10B era stato scritto **a mano** leggendo
+lo stesso foglio — e la cui nota dice che l'unico punto da indovinare era proprio fra
+`Titolare "Scarso"` e `Outsider`. Il test le confronta.
+
+## 2026-08-28 — Due regole per l'ordine delle fasce, e una tabella sola per il listone personale
+
+**Due vocabolari, mai mescolati.** Chi ha importato il proprio foglio vede **le sue** fasce
+nell'ordine del **suo** file (`user_listone.fascia_rank`); chi non ha importato vede quelle globali
+nell'ordine di `CARMY_FASCE`. Sono **due regole per lo stesso concetto**, ed è una scelta: derivare
+anche l'ordine globale dal file vorrebbe dire mettere le mani su `CARMY_FASCE`, che regge i filtri
+del pannello di chiamata e funziona, per un guadagno che nessuno vedrebbe — le fasce del foglio
+globale sono le sette di sempre, verificate su quattro file. Se un giorno il foglio globale usasse
+fasce libere, si aggiungerà un `fascia_rank` anche a `carmy_players` e le due regole diventeranno
+una. Non prima.
+
+⚠ **E il vocabolario non si mescola mai**: non esiste una tabella con dentro `Top` (mia) e `Top`
+(globale) come due gruppi diversi. Il prezzo è il gruppo **«Senza fascia»** in fondo, dove finisce chi
+nel mio file non c'è — tenendo però PMA, FMV Exp. e note globali. È il prezzo giusto, perché dice la
+verità: *su costui non ho un giudizio mio*. Conseguenza pratica: «ho importato» si decide **una volta
+sola** per pagina, non riga per riga.
+
+**Una tabella e non due.** Servivano tre cose oltre alle righe: quando ho importato, quante righe, e
+l'ordine delle fasce. La tentazione era una seconda tabella `user_listone_imports` con un
+`fasce jsonb`. Non serve: `uploaded_at` è uguale su tutte le righe di un caricamento — come già fanno
+`listone_players` e `carmy_players` — e l'ordine vive riga per riga in `fascia_rank`. L'unica cosa in
+più che la seconda tabella darebbe è **la fascia le cui righe sono state tutte comprate**, e quella
+intestazione non deve comparire comunque: la tab mostra solo chi è rimasto.
+
+⚠ **Nessuna `FOREIGN KEY` verso `listone_players`**, come per `carmy_players`: un `ext_id` che il
+listone non ha più semplicemente non aggancia e non compare. Con un vincolo, il file personale di un
+partecipante potrebbe far **fallire il prossimo caricamento del listone di sistema** — cioè bloccare
+il lavoro dell'amministratore.

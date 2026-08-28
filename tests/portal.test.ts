@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CarmyJudgement, Role } from "@/lib/domain";
 import {
   NO_CARMY_FILTERS,
+  NO_LISTONE_FILTERS,
   amInTie,
   autoPickCandidate,
   availablePlayers,
@@ -12,6 +13,7 @@ import {
   compareRevealBids,
   countdownLabel,
   hasCarmyFilters,
+  listoneRows,
   parseAmount,
   pausedRemaining,
   portalScreen,
@@ -447,6 +449,201 @@ describe("giocatori chiamabili", () => {
 
   it("i presi si leggono dalle rose dello snapshot, non da una query", () => {
     expect([...takenPlayerIds(conRose)]).toEqual(["p2"]);
+  });
+});
+
+// ─── La tab Listone (M21 §4) ─────────────────────────────────────────────────
+
+describe("listoneRows — chi resta, raggruppato per fascia", () => {
+  /** Un giocatore del pool, con la sola parte di giudizio che la tabella guarda. */
+  function p(
+    id: string,
+    over: Partial<PoolPlayer> & { pma?: number | null } = {},
+  ): PoolPlayer {
+    const { pma, ...rest } = over;
+    const base: PoolPlayer = {
+      id,
+      name: id,
+      team: "Inter",
+      role: "A",
+      fvm: 100,
+      quot: 10,
+      ...rest,
+    };
+    if (pma === undefined) return base;
+    return {
+      ...base,
+      carmy: {
+        extId: 1,
+        fascia: base.fasciaGruppo ?? null,
+        prezzo: null,
+        pma,
+        titolarita: null,
+        affidabilita: null,
+        integrita: null,
+        fmvExp: null,
+        tags: [],
+        commento: null,
+        ...base.carmy,
+      },
+    };
+  }
+
+  /** Il caso di riferimento: due fasce, un «Senza fascia», due ruoli. */
+  const pool: PoolPlayer[] = [
+    p("top-basso", { fasciaGruppo: "Top", fasciaRank: 0, pma: 10 }),
+    p("top-alto", { fasciaGruppo: "Top", fasciaRank: 0, pma: 20, obiettivo: true }),
+    p("terza", { fasciaGruppo: "Terza", fasciaRank: 2, pma: 5, role: "D" }),
+    p("orfano", { pma: 30 }),
+  ];
+
+  it("raggruppa per fascia, nell'ordine del rank, e «Senza fascia» in fondo", () => {
+    const groups = listoneRows(pool, snapshot());
+    expect(groups.map((g) => g.fascia)).toEqual(["Top", "Terza", null]);
+  });
+
+  /**
+   * ⚠ **`PMA` decrescente, non `fvm`**, ed è la divergenza voluta dalla lista di
+   * chiamata (decisione della fase UI): là l'ordine *è* una promessa sull'
+   * auto-pick, qui è l'unico criterio che chi legge può verificare sulla riga —
+   * `fvm` in tabella non c'è nemmeno.
+   */
+  it("dentro il gruppo ordina per PMA decrescente", () => {
+    const [top] = listoneRows(pool, snapshot());
+    expect(top.players.map((x) => x.id)).toEqual(["top-alto", "top-basso"]);
+  });
+
+  it("⚠ chi non ha un PMA finisce in fondo al suo gruppo, non in cima", () => {
+    const conNulli = [
+      p("senza", { fasciaGruppo: "Top", fasciaRank: 0 }),
+      p("con", { fasciaGruppo: "Top", fasciaRank: 0, pma: 1 }),
+    ];
+    expect(
+      listoneRows(conNulli, snapshot())[0].players.map((x) => x.id),
+    ).toEqual(["con", "senza"]);
+  });
+
+  it("i ruoli sono in OR, e nessun ruolo scelto vuol dire tutti", () => {
+    const soloD = listoneRows(pool, snapshot(), {
+      ...NO_LISTONE_FILTERS,
+      roles: ["D"],
+    });
+    expect(soloD.flatMap((g) => g.players).map((x) => x.id)).toEqual(["terza"]);
+
+    const dueRuoli = listoneRows(pool, snapshot(), {
+      ...NO_LISTONE_FILTERS,
+      roles: ["D", "A"],
+    });
+    expect(dueRuoli.flatMap((g) => g.players)).toHaveLength(4);
+
+    // ⚠ Zero interruttori accesi non è «nessuno»: chi li spegne tutti sta
+    // togliendo un filtro, non chiedendo una tabella vuota.
+    expect(
+      listoneRows(pool, snapshot(), NO_LISTONE_FILTERS).flatMap((g) => g.players),
+    ).toHaveLength(4);
+  });
+
+  it("la ricerca guarda nome e squadra, con accenti e maiuscole", () => {
+    const conAccento = [
+      p("uno", { name: "Milinkovic-Savic V.", team: "Napoli", pma: 1 }),
+      p("due", { name: "Konè", team: "Roma", pma: 1 }),
+    ];
+    const ids = (query: string) =>
+      listoneRows(conAccento, snapshot(), { ...NO_LISTONE_FILTERS, query })
+        .flatMap((g) => g.players)
+        .map((x) => x.id);
+
+    expect(ids("NAPOLI")).toEqual(["uno"]);
+    expect(ids("kone")).toEqual(["due"]);
+    expect(ids("  savic ")).toEqual(["uno"]);
+  });
+
+  it("il filtro obiettivi isola la lista della spesa", () => {
+    const soli = listoneRows(pool, snapshot(), {
+      ...NO_LISTONE_FILTERS,
+      soloObiettivi: true,
+    });
+    expect(soli.flatMap((g) => g.players).map((x) => x.id)).toEqual(["top-alto"]);
+  });
+
+  /**
+   * ⚠ **Il gruppo intero sparisce quando si svuota**, invece di restare come
+   * un'intestazione vuota: è la ragione per cui `user_listone` non ha bisogno di
+   * una seconda tabella che ricordi «quali fasce esistevano» (M21 §2). La tabella
+   * mostra solo chi è rimasto.
+   */
+  it("un gruppo rimasto senza righe non compare affatto", () => {
+    const groups = listoneRows(pool, snapshot(), {
+      ...NO_LISTONE_FILTERS,
+      soloObiettivi: true,
+    });
+    expect(groups.map((g) => g.fascia)).toEqual(["Top"]);
+  });
+
+  /**
+   * ⚠ **La sincronia col lotto, senza una riga scritta per ottenerla** (I10).
+   * Chi è già in una rosa sparisce perché lo dice lo snapshot, non perché sia
+   * arrivato un evento: chi ricarica a metà asta vede la stessa tabella di chi
+   * non si è mosso.
+   */
+  it("chi è già in una rosa non c'è più", () => {
+    const conRosa = snapshot({
+      members: [
+        member(ME, 0, {
+          roster: [
+            {
+              assignmentId: "a1",
+              playerId: "top-alto",
+              name: "top-alto",
+              role: "A",
+              team: "Inter",
+              price: 50,
+            },
+          ],
+        }),
+        member(OTHER, 1),
+      ],
+    });
+    const ids = listoneRows(pool, conRosa).flatMap((g) => g.players).map((x) => x.id);
+    expect(ids).not.toContain("top-alto");
+    expect(ids).toContain("top-basso");
+  });
+
+  /**
+   * ⚠ **Il giocatore in asta adesso resta**, e non è una dimenticanza: non è
+   * ancora di nessuno, e farlo sparire prima dell'assegnazione sarebbe una bugia
+   * che si corregge da sé — se il lotto va deserto, quel giocatore torna
+   * disponibile. Il badge lo mette il componente.
+   */
+  it("⚠ il giocatore del lotto aperto è ancora in tabella", () => {
+    const inAsta = snapshot({
+      currentLot: lot({ player: { ...lot().player, id: "top-alto" } }),
+    });
+    const ids = listoneRows(pool, inAsta).flatMap((g) => g.players).map((x) => x.id);
+    expect(ids).toContain("top-alto");
+  });
+
+  it("con un pool vuoto non ci sono gruppi, e non è un errore", () => {
+    expect(listoneRows([], snapshot())).toEqual([]);
+  });
+
+  /**
+   * Le due modalità di vocabolario, viste da qui: la funzione **non sa** quale
+   * sia in gioco — il server ha già deciso `fasciaGruppo` e `fasciaRank` — e
+   * ordina allo stesso modo in tutti e due i casi. È il punto di §5: il browser
+   * riceve una forma sola.
+   */
+  it("ordina le fasce personali come quelle globali, senza sapere quali siano", () => {
+    const mie = [
+      p("a", { fasciaGruppo: "La mia Seconda", fasciaRank: 1, pma: 1 }),
+      p("b", { fasciaGruppo: "La mia Top", fasciaRank: 0, pma: 1 }),
+      p("c", { pma: 1 }),
+    ];
+    expect(listoneRows(mie, snapshot()).map((g) => g.fascia)).toEqual([
+      "La mia Top",
+      "La mia Seconda",
+      null,
+    ]);
   });
 });
 

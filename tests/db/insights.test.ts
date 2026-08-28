@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, expect, it, suite } from "vitest";
 
 import { db } from "@/lib/db";
@@ -197,6 +197,73 @@ suite.skipIf(!available)("gli insight dal listone Fantalab", () => {
     expect(berardi?.rigoristaRank).toBeNull();
   });
 
+  /**
+   * M21 §3 — gol e assist arrivano fino alla tabella.
+   *
+   * ⚠ **La colonna nullable non basta a farla scrivere**, ed è il guasto che
+   * questo test esiste per prendere: l'`upsert` di M8 elenca le colonne una per
+   * una, quindi una colonna nuova aggiunta allo schema e dimenticata lì dentro
+   * resterebbe `null` per sempre **senza nessun errore** — la prima passata la
+   * riempirebbe (è un `INSERT`), la seconda non la aggiornerebbe più. Per questo
+   * l'asserzione arriva dopo **due** refresh.
+   */
+  it("porta gol e assist della fonte A, anche alla seconda passata", async () => {
+    const { impl } = fakeFetch({ [LISTONE_URL]: listoneBody });
+    await refreshListoneInsights({ fetchImpl: impl });
+    await refreshListoneInsights({ fetchImpl: impl });
+
+    const berardi = await db.query.playerInsights.findFirst({
+      where: eq(playerInsights.extId, 531),
+    });
+    expect(berardi).toMatchObject({ golFatti: 6, assist: 4 });
+
+    // Zero è un dato pieno, non un buco: chi non ha segnato ha `0`, e nessuna
+    // riga resta `null` dopo un refresh riuscito.
+    const [conti] = await db
+      .select({
+        nulli: sql<number>`count(*) filter (where ${playerInsights.golFatti} is null)::int`,
+        gol: sql<number>`sum(${playerInsights.golFatti})::int`,
+        assist: sql<number>`sum(${playerInsights.assist})::int`,
+      })
+      .from(playerInsights);
+    expect(conti.nulli).toBe(0);
+    expect(conti.gol).toBe(933);
+    expect(conti.assist).toBe(653);
+  });
+
+  /**
+   * ⚠ **La prova che il rilascio non vuole nessun backfill** (M21 §2, verifica
+   * 21). Le righe che il giorno del deploy sono già a sistema nascono con
+   * `null`, e devono riempirsi **da sé** al primo refresh giornaliero: qui si
+   * riproduce esattamente quello stato — le due colonne svuotate a mano su una
+   * tabella piena — e si guarda cosa fa il refresh successivo.
+   *
+   * Se un giorno questo test diventasse rosso, il rilascio avrebbe bisogno di un
+   * passo a mano che «nulla ti ricorda».
+   */
+  it("⚠ una riga già a sistema con le due colonne vuote si riempie al refresh, senza backfill", async () => {
+    const { impl } = fakeFetch({ [LISTONE_URL]: listoneBody });
+    await refreshListoneInsights({ fetchImpl: impl });
+
+    // Lo stato del giorno del deploy: righe vecchie, colonne nuove vuote.
+    await db.update(playerInsights).set({ golFatti: null, assist: null });
+    expect(
+      (
+        await db.query.playerInsights.findFirst({
+          where: eq(playerInsights.extId, 531),
+        })
+      )?.golFatti,
+    ).toBeNull();
+
+    await refreshListoneInsights({ fetchImpl: impl });
+
+    expect(
+      await db.query.playerInsights.findFirst({
+        where: eq(playerInsights.extId, 531),
+      }),
+    ).toMatchObject({ golFatti: 6, assist: 4 });
+  });
+
   it("⚠ una fonte irraggiungibile non lascia la tabella a metà", async () => {
     const { impl } = fakeFetch({ [LISTONE_URL]: listoneBody });
     await refreshListoneInsights({ fetchImpl: impl });
@@ -284,6 +351,45 @@ suite.skipIf(!available)("i rigoristi e i calci piazzati", () => {
     expect(status.setPiecesUpdatedAt).not.toBeNull();
     // ⚠ Il refresh dei piazzati **non** tocca il timestamp del listone.
     expect(status.listoneUpdatedAt).not.toBeNull();
+  });
+
+  /**
+   * ⚠ **La fonte B non tocca gol e assist**, ed è la metà di M21 §3 che il
+   * codice non dice da solo: `refreshSetPieces` scrive i due rank con un
+   * `UPDATE … SET`, quindi il giorno in cui qualcuno ci aggiungesse una colonna
+   * della fonte A, una `GET` ai rigoristi comincerebbe a sovrascrivere i gol —
+   * ed è **esattamente** la ragione per cui il foglio di Carmy ha una tabella
+   * sua invece di tre colonne qui.
+   *
+   * Il momento in cui si romperebbe è invisibile a occhio: i due refresh
+   * riescono, il pannello dice bene, e i numeri diventano zeri.
+   */
+  it("⚠ e non tocca gol e assist, che sono della fonte A", async () => {
+    const listone = fakeFetch({ [LISTONE_URL]: listoneBody });
+    await refreshListoneInsights({ fetchImpl: listone.impl });
+
+    const prima = await db.query.playerInsights.findFirst({
+      where: eq(playerInsights.extId, 2137),
+    });
+    expect(prima).toMatchObject({ golFatti: 8, assist: 1 });
+
+    const { impl } = fakeFetch({ [RIGORISTI_URL]: rigoristiBody });
+    const result = await refreshSetPieces({ fetchImpl: impl });
+    expect(result.ok).toBe(true);
+
+    // Scamacca è designato, quindi la sua riga è stata scritta davvero — e i due
+    // numeri della fonte A sono ancora i suoi.
+    const dopo = await db.query.playerInsights.findFirst({
+      where: eq(playerInsights.extId, 2137),
+    });
+    expect(dopo?.rigoristaRank).toBe(1);
+    expect(dopo).toMatchObject({ golFatti: 8, assist: 1 });
+
+    // E nessuna riga della tabella ha perso i suoi: il totale è quello di prima.
+    const [conti] = await db
+      .select({ gol: sql<number>`sum(${playerInsights.golFatti})::int` })
+      .from(playerInsights);
+    expect(conti.gol).toBe(933);
   });
 
   it("⚠ rifiuta se il listone non è stato importato, invece di scrivere zero righe e dire bene", async () => {
@@ -414,6 +520,10 @@ suite.skipIf(!available)("il pool e gli insight", () => {
       team: "Sassuolo",
       statsSeason: "current",
       startsEleven: 24,
+      // I due numeri di M21 fanno tutta la strada: fonte → tabella → pool. La
+      // tab Listone li legge da qui, e non da una query sua.
+      golFatti: 6,
+      assist: 4,
     });
 
     // E la maggioranza resta **senza**, perché gli altri 39 hanno id sintetici:

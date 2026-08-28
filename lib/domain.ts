@@ -224,6 +224,20 @@ export type PlayerInsights = {
   rigoriParati: number;
   fmvHome: number | null;
   fmvAway: number | null;
+  /**
+   * Gol e assist della stagione di `statsSeason` (M21 §3).
+   *
+   * ⚠ **`number | null` e non `number`**, al contrario del parser che scrive
+   * sempre un contatore: le righe già a sistema il giorno del rilascio nascono
+   * con `null` e si riempiono al primo refresh giornaliero. È la colonna
+   * nullable dello schema letta dalla parte della UI, che tratta `null` come
+   * «non ancora arrivato» e scrive un trattino — mentre lo `0` è un dato pieno e
+   * si scrive `0`. Quando la distinzione sparirà da sola, fra un refresh e
+   * l'altro, il tipo resterà comunque onesto: una fonte pubblica può tornare a
+   * non rispondere.
+   */
+  golFatti: number | null;
+  assist: number | null;
   /** `1` = primo della gerarchia. `null` = non designato. */
   rigoristaRank: number | null;
   piazzatiRank: number | null;
@@ -463,9 +477,22 @@ export function carmyFasciaRank(fascia: string | null | undefined): number {
  */
 export type CarmyJudgement = {
   extId: number;
-  /** Il nome e la sigla come li scrive il foglio: spiegano un aggancio. */
-  sourceName: string;
-  sourceTeam: string;
+  /**
+   * Il nome e la sigla come li scrive il foglio: spiegano un aggancio.
+   *
+   * ⚠ **Opzionali da M21, e non per comodità.** Il listone **personale** non li
+   * conserva — la sua tabella ha le colonne di `carmy_players` meno queste due —
+   * perché una riga che è mia si spiega da sé: l'ho caricata io, e se non
+   * aggancia lo dice il riepilogo del mio import. Un giudizio personale arriva
+   * quindi **senza le due chiavi**, invece che con il nome del listone copiato
+   * dentro: l'assenza è la verità, un valore inventato sarebbe una spiegazione
+   * falsa di un aggancio che non è avvenuto così.
+   *
+   * Nessuna schermata le legge oggi: servono a capire un import, non a
+   * disegnare una riga.
+   */
+  sourceName?: string;
+  sourceTeam?: string;
   fascia: string | null;
   /** `null` anche quando il foglio scrive `0`: zero non è un'offerta valida. */
   prezzo: number | null;

@@ -46,7 +46,12 @@ export default async function ManagePage({
   // resta funzione dello snapshot, che le rose ce le ha.
   // Stessa regola del portale (M8 §6): un owner con gli insight li vede anche
   // in regia, uno senza no. Un predicato, due chiamate, nessuna eccezione.
-  const pool = await listPickPool(id, canSeeInsights(user));
+  //
+  // ⚠ E anche qui l'utente, per la stessa ragione (M21 §5): questa pagina è la
+  // regia **di chi la sta guardando**, quindi il suo foglio vale qui come nel
+  // portale. Un pannello delle correzioni che mostrasse i prezzi globali a chi ne
+  // ha caricati di suoi sarebbe la stessa incoerenza che la decisione 1 toglie.
+  const pool = await listPickPool(id, canSeeInsights(user), user.id);
 
   return (
     <ManageConsole

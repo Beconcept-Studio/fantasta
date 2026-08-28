@@ -9,7 +9,7 @@ import {
   CARMY_TEAM_BY_SIGLA,
   normalizeCarmyName,
 } from "@/lib/domain";
-import { CARMY_SHEETS, parseCarmy } from "@/lib/import/parseCarmy";
+import { CARMY_SHEETS, mergeFasce, parseCarmy } from "@/lib/import/parseCarmy";
 import { parseListone } from "@/lib/import/parseListone";
 
 /**
@@ -278,9 +278,15 @@ describe("parseCarmy — il giudizio, che è il motivo per cui il file esiste", 
       "affidabilita",
       "commento",
       "fascia",
+      // ⚠ Le due di M21 sono **giudizio e lista della spesa**, non statistiche: la
+      // regola che questo test difende è «Carmy non porta numeri nuovi», e
+      // `obiettivo` e `fasciaRank` non sono numeri della stagione — sono cosa
+      // pensa di un giocatore chi ha compilato il foglio.
+      "fasciaRank",
       "fmvExp",
       "integrita",
       "name",
+      "obiettivo",
       "pma",
       "prezzo",
       "role",
@@ -288,6 +294,210 @@ describe("parseCarmy — il giudizio, che è il motivo per cui il file esiste", 
       "team",
       "titolarita",
     ]);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// M21 — la lista della spesa e l'ordine delle fasce
+//
+// Le due cose che il parser **buttava**, e che il caricamento personale usa. Sul
+// percorso globale (`uploadCarmy`) restano ignorate: la prova sta in
+// `tests/db/listone.test.ts`, che è dove quel percorso vive.
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe("parseCarmy — gli obiettivi (M21)", () => {
+  it("sono tre, e sono quelli che il foglio segna `Sí`", () => {
+    const obiettivi = rows().filter((row) => row.obiettivo);
+    expect(obiettivi.map((row) => row.name).sort()).toEqual([
+      "Baturina",
+      "McTominay",
+      "Rowe",
+    ]);
+    // Gli altri 494 non lo sono: la colonna ha **due soli valori** nel file.
+    expect(rows().filter((row) => !row.obiettivo)).toHaveLength(494);
+  });
+
+  /**
+   * ⚠ **La differenza fra `Sí` e `SI` è una tastiera, non un'informazione.** Nel
+   * file di riferimento l'accento è **acuto**, la richiesta dell'owner scriveva
+   * `SI`, e un confronto letterale avrebbe letto zero obiettivi da uno dei due —
+   * senza dire niente, perché una colonna piena di valori sconosciuti si legge
+   * esattamente come una colonna vuota.
+   */
+  it("tollera come lo scrivi: accenti, maiuscole e spazi non contano", () => {
+    const result = parseCarmy(
+      workbookFrom({
+        P: [
+          { ...ROW, Nome: "Acuto", "Obiett.": "Sí" },
+          { ...ROW, Nome: "Grave", "Obiett.": "Sì" },
+          { ...ROW, Nome: "Maiuscolo", "Obiett.": "SI" },
+          { ...ROW, Nome: "Spazi", "Obiett.": "  si  " },
+          { ...ROW, Nome: "Iniziale", "Obiett.": "S" },
+        ],
+      }),
+    );
+    if (!result.ok) throw new Error(result.error.message);
+
+    const portieri = result.value.filter((row) => row.role === "P");
+    expect(portieri.every((row) => row.obiettivo)).toBe(true);
+  });
+
+  /**
+   * ⚠ **Quello che non è un sì riconosciuto vale `false`, e non si indovina.**
+   * `x`, `1`, `true` non compaiono in nessun file visto: accettarli vorrebbe dire
+   * decidere al posto di chi compila — un `1` in quella cella potrebbe benissimo
+   * essere una priorità. Il riepilogo del caricamento dice quanti obiettivi ha
+   * letto, ed è lì che uno zero inatteso si vede.
+   */
+  it("e non indovina: vuoto, `no` e `1` non sono obiettivi", () => {
+    const result = parseCarmy(
+      workbookFrom({
+        D: [
+          { ...ROW, Nome: "Vuoto", "Obiett.": "" },
+          { ...ROW, Nome: "Nullo", "Obiett.": null },
+          { ...ROW, Nome: "Negato", "Obiett.": "no" },
+          { ...ROW, Nome: "Numero", "Obiett.": 1 },
+        ],
+      }),
+    );
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value.filter((row) => row.obiettivo)).toEqual([]);
+  });
+
+  /**
+   * ⚠ **La colonna non è obbligatoria, ed è una scelta contro l'argomento di
+   * `REQUIRED_COLUMNS`.** Pretenderla fermerebbe **due** percorsi per una colonna
+   * che ne serve uno: `uploadCarmy` non la guarda, e M21 promette che quel
+   * caricamento resti identico a prima. Un foglio più vecchio deve poter ancora
+   * entrare dal pannello dell'amministratore.
+   */
+  it("un foglio senza la colonna si legge lo stesso, e non ha obiettivi", () => {
+    const senzaObiett = { ...ROW };
+    delete (senzaObiett as Record<string, unknown>)["Obiett."];
+
+    const result = parseCarmy(workbookFrom({ P: [senzaObiett] }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.every((row) => !row.obiettivo)).toBe(true);
+  });
+});
+
+describe("parseCarmy — l'ordine delle fasce viene dal file (M21)", () => {
+  /**
+   * ⚠ **Due derivazioni indipendenti della stessa verità.** `CARMY_FASCE` è stato
+   * scritto **a mano** in M10B leggendo questo stesso foglio, e la sua nota dice
+   * che l'unico punto da indovinare era proprio fra `Titolare "Scarso"` e
+   * `Outsider`. `mergeFasce` lo ricava dai quattro fogli senza saperlo. Se i due
+   * risultati divergono, uno dei due sbaglia — e questo test è l'unico posto in
+   * cui la cosa si può notare prima che qualcuno guardi una tabella storta.
+   */
+  it("l'ordine ricavato dal file è esattamente `CARMY_FASCE`", () => {
+    const perRank = new Map<number, string>();
+    for (const row of rows()) {
+      if (row.fasciaRank !== null) perRank.set(row.fasciaRank, row.fascia!);
+    }
+    const ordine = [...perRank.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([, fascia]) => fascia);
+
+    expect(ordine).toEqual([...CARMY_FASCE]);
+  });
+
+  /**
+   * ⚠ **Il caso che la spec di M21 aveva sbagliato, e che il file dimostra.**
+   * La spec diceva «assegnando a ogni fascia nuova il numero successivo — la
+   * prima occorrenza in ordine di foglio dà il risultato giusto». Misurato: **no.**
+   * `P` finisce `… Scomm. → Outsider`, e `Titolare "Scarso"` compare solo in `D`,
+   * quindi accodandolo prenderebbe il numero **dopo** `Outsider` — un ordine che
+   * due fogli su quattro smentiscono, nella funzione che esiste apposta per
+   * rispettare il file. Qui i due numeri sono scritti in chiaro.
+   */
+  it("⚠ `Titolare \"Scarso\"` sta **prima** di `Outsider`, benché compaia dopo", () => {
+    const rank = (fascia: string) =>
+      rows().find((row) => row.fascia === fascia)!.fasciaRank;
+
+    expect(rank('Titolare "Scarso"')).toBe(5);
+    expect(rank("Outsider")).toBe(6);
+    // E i due fogli che lo dicono sono `D` e `C`: in `P` e `A` quella fascia non
+    // esiste affatto.
+    const conScarso = new Set(
+      rows()
+        .filter((row) => row.fascia === 'Titolare "Scarso"')
+        .map((row) => row.role),
+    );
+    expect([...conScarso].sort()).toEqual(["C", "D"]);
+  });
+
+  it("la stessa fascia ha lo stesso numero in tutti e quattro i fogli", () => {
+    // Se non fosse così il raggruppamento si spezzerebbe in due gruppi omonimi,
+    // che è il modo silenzioso in cui una tabella raggruppata mente.
+    const perFascia = new Map<string, Set<number>>();
+    for (const row of rows()) {
+      if (row.fascia === null) continue;
+      const set = perFascia.get(row.fascia) ?? new Set();
+      set.add(row.fasciaRank!);
+      perFascia.set(row.fascia, set);
+    }
+    for (const [fascia, ranks] of perFascia) {
+      expect(ranks.size, `${fascia} ha ${ranks.size} numeri diversi`).toBe(1);
+    }
+  });
+
+  it("chi non ha fascia non ha nemmeno un numero: sono gli 84 `Non Impostata`", () => {
+    const senza = rows().filter((row) => row.fascia === null);
+    expect(senza).toHaveLength(84);
+    expect(senza.every((row) => row.fasciaRank === null)).toBe(true);
+    // È il gruppo «Senza fascia» in fondo alla tabella: un numero lo metterebbe
+    // in mezzo agli altri.
+    expect(rows().filter((row) => row.fasciaRank === null)).toHaveLength(84);
+  });
+});
+
+describe("mergeFasce — mettere insieme quattro sequenze parziali", () => {
+  it("una sequenza sola è già l'ordine", () => {
+    expect(mergeFasce([["Top", "Media", "Bassa"]])).toEqual([
+      "Top",
+      "Media",
+      "Bassa",
+    ]);
+  });
+
+  /** Il caso vero, ridotto all'osso: la fascia in mezzo manca a due sequenze. */
+  it("⚠ inserisce al posto giusto, non in coda", () => {
+    expect(
+      mergeFasce([
+        ["Top", "Scomm.", "Outsider"],
+        ["Top", "Scomm.", 'Titolare "Scarso"', "Outsider"],
+      ]),
+    ).toEqual(["Top", "Scomm.", 'Titolare "Scarso"', "Outsider"]);
+  });
+
+  it("tiene l'ordine di prima apparizione fra fasce che nessuno confronta", () => {
+    // Due sequenze che non si toccano: non esiste nessun ordine «giusto» fra i due
+    // gruppi, e si tiene quello in cui si sono viste.
+    expect(mergeFasce([["A", "B"], ["X", "Y"]])).toEqual(["A", "B", "X", "Y"]);
+  });
+
+  /**
+   * ⚠ **Due fogli che si contraddicono non fanno fallire il caricamento.** Non
+   * c'è nessun ordine giusto da trovare, e rifiutare l'intero file personale per
+   * due fasce in ordine discorde punirebbe chi l'ha compilato per una cosa che, a
+   * schermo, è un gruppo dieci righe più in alto. Si rompe il pareggio con
+   * l'ordine di prima apparizione, e soprattutto **si esce**: un ciclo non deve
+   * diventare un giro infinito dentro un'importazione.
+   */
+  it("un ciclo non blocca niente: le fasce escono tutte, una volta sola", () => {
+    const ordine = mergeFasce([
+      ["A", "B"],
+      ["B", "A"],
+    ]);
+    expect(ordine).toHaveLength(2);
+    expect(new Set(ordine)).toEqual(new Set(["A", "B"]));
+  });
+
+  it("nessuna sequenza, nessuna fascia", () => {
+    expect(mergeFasce([])).toEqual([]);
+    expect(mergeFasce([[], []])).toEqual([]);
   });
 });
 
