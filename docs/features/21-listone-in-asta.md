@@ -675,10 +675,18 @@ Scritto qui perché **non è deducibile dal codice** e la sessione in cui è suc
       **due** pagine, `play` e `manage`: la regia è la regia di chi la guarda, e mostrarle i prezzi
       globali a chi ne ha caricati di suoi sarebbe la stessa incoerenza che la decisione 1 toglie.
       6 test nuovi → **960 in 54 file**
-- [ ] **M21-08** — `listoneRows` in `lib/realtime/portal.ts` (§4), funzione pura con i suoi test:
+- [x] **M21-08** — `listoneRows` in `lib/realtime/portal.ts` (§4), funzione pura con i suoi test:
       ruoli in OR, ricerca su nome e squadra, filtro obiettivi, esclusione di chi è già in una rosa,
       il giocatore in asta che **resta**, ordinamento dentro il gruppo, ordine dei gruppi nelle due
       modalità di vocabolario
+      → Torna **gruppi**, non righe: `{ fascia, players }[]`, con `fascia: null` per «Senza fascia»,
+      sempre in fondo. La parola non sta nella funzione pura — è rendering, e il componente la
+      traduce. Tre decisioni piccole prese scrivendola, tutte nei test: **nessun ruolo scelto vuol
+      dire tutti** (chi spegne tutti gli interruttori sta togliendo un filtro, non chiedendo una
+      tabella vuota), **chi non ha `PMA` va in fondo al gruppo** e non in cima, e a parità si scende
+      su `fvm`/`quot`/nome perché l'ordine deve essere **stabile** — due disegni a un secondo di
+      distanza non si rimescolano sotto le dita. ⚠ La funzione **non sa** quale vocabolario è in
+      gioco: ordina per `fasciaRank`, che il server ha già deciso. 11 test nuovi → **971 in 54 file**
 - [ ] **M21-09** — Le tab e la barra sticky col countdown (§1, §8). ⚠ Provare **il rientro**: aprire
       il Listone, farsi arrivare il turno, chiudere il pannello, e verificare che dalla barra si
       riapra. È il buco che §8 esiste per chiudere, e non lo copre nessun test automatico
