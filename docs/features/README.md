@@ -16,18 +16,33 @@ Nessuna.
 
 ## In corso
 
-- **M21 — Il listone dentro l'asta** (`21-listone-in-asta.md`), su `feature/21-listone-in-asta`.
-  Dentro «Asta live» il corpo della pagina diventa due tab, e la seconda è la lista di chi è ancora
-  libero — raggruppata per fascia, coi propri obiettivi marcati, aggiornata da sé a ogni lotto. Con un
-  **import personale**: il foglio che l'applicazione ha a sistema è di una persona sola, qui ognuno
-  carica il proprio.
-  ⚠ **Tocca lo schema** (`user_listone`, più due colonne su `player_insights`): al deploy serve
-  `pnpm db:push` sul server. Nessun backfill.
-  ⚠ **Ribalta una decisione scritta di M10B** — la colonna `Obiett.` che il parser butta di
-  proposito — e §0 spiega perché il ribaltamento sta in piedi: là il foglio era uno e globale, qui
-  l'import è per utente.
-  Fatti M21-01→12; restano il gate con la prova su `dev` e dal telefono (M21-13, che **cancella anche
-  `app/banco/` e `scripts/banco/`**) e il `pnpm db:push` sul server dopo il deploy (M21-14).
+Nessuna.
+
+---
+
+**M21 è in produzione da `v1.21.0`** (2026-08-28): pianificata il mattino, aperta, lavorata, provata
+dall'owner e rilasciata **nella stessa giornata**. Baseline 917 test, chiusa a **971**. La fase di
+progettazione UI chiesta dall'owner ha cambiato la spec in quattro punti *prima* del codice; scrivendo
+il codice la spec è cambiata in altri tre, e tutti e tre sono annotati dove stavano.
+
+⚠ **Il ribaltamento è il pezzo da conoscere.** M10B aveva scritto, dentro `parseCarmy.ts`, che la
+colonna `Obiett.` non si importa: «è la lista della spesa di chi compila il foglio, non un giudizio sul
+giocatore». Quella frase è **ancora giusta** e non è stata cancellata: cade il suo presupposto — là il
+foglio era uno solo e globale, qui l'import è **per utente** e il dato non esce da chi l'ha caricato.
+Il parser adesso la legge, `uploadCarmy` continua a ignorarla, e la distinzione vive a valle. Non è
+«M10B sbagliava»: è «M10B decideva su un altro caso».
+
+⚠ **E una cosa che la spec dava per buona era falsa, misurata sul file vero**: l'ordine delle fasce non
+si ricava accodando ogni fascia nuova nell'ordine dei fogli — così `Titolare "Scarso"`, che sta solo in
+`D` e `C`, finirebbe **dopo** `Outsider`, contro quello che dicono due fogli su quattro. Si ordina
+topologicamente, e la prova che regge la scelta è che sul file di riferimento il risultato è
+**esattamente `CARMY_FASCE`**, scritto a mano in M10B leggendo lo stesso foglio: due derivazioni
+indipendenti della stessa verità.
+
+⚠ **La finestra fra il deploy e il `pnpm db:push`**, che questa macro ha attraversato per ~6 minuti,
+va conosciuta prima della prossima macro che tocca lo schema: in quei minuti in produzione gira il
+codice nuovo su uno schema vecchio, e qui `/play` andava in errore **per i soli utenti Pro e
+amministratori**. Nessuna scrittura a rischio, ma il `db:push` va dato appena il deploy finisce.
 
 ---
 
@@ -450,6 +465,7 @@ una **seconda ratifica** il 2026-08-12: la richiesta di un badge «Infortunato (
 
 | Macro | Tema | Versione |
 |---|---|---|
+| [M21](21-listone-in-asta.md) | Il listone dentro l'asta: una tab accanto all'asta con chi è ancora libero, raggruppato per fascia, e un **import personale** — ognuno carica il proprio foglio, con i propri obiettivi | v1.21.0 — 2026-08-28 |
 | [M20](20-marchio-e-app-installabile.md) | Il marchio nel nav, e l'app che si installa sul telefono: manifest, icone dal disegno nuovo, niente service worker | v1.20.0 — 2026-08-27 |
 | [M18](18-rosa-a-fisarmonica.md) | La rosa a fisarmonica: i reparti che si aprono, la quota di budget, l'ordine di estrazione | v1.18.0 — 2026-08-23 |
 | [M17](17-portale-tre-colonne.md) | Il portale a tre colonne: la chiamata a pannello, e una colonna di stato che si legge a colpo d'occhio | v1.17.0 — 2026-08-22 |

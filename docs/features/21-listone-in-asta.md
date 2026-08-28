@@ -1,7 +1,7 @@
 # M21 — Il listone dentro l'asta: una tab, gli obiettivi di ognuno, e i giocatori che restano
 
-> **Stato:** **pianificata**, non aperta. Nasce dall'unica richiesta del quaderno del 2026-08-28,
-> tolta da `docs/REQUESTS.md` lo stesso giorno.
+> **Stato:** **chiusa**, in produzione da **`v1.21.0`** (2026-08-28). Nasce dall'unica richiesta
+> del quaderno del 2026-08-28, tolta da `docs/REQUESTS.md` lo stesso giorno.
 >
 > ⚠ **Tocca lo schema del database? Sì.** Una tabella nuova (`user_listone`) e due colonne su
 > `player_insights`. Dopo il deploy serve `pnpm db:push` sul server, con nessuna asta `LIVE` o
@@ -770,11 +770,22 @@ Scritto qui perché **non è deducibile dal codice** e la sessione in cui è suc
       che è **generato** e puntava ancora alla rotta appena cancellata. Non è codice nostro e non è un
       errore vero: si ridà `pnpm build`, che lo rigenera, e il typecheck torna verde. Finita in
       `CLAUDE.md` fra gli errori noti, perché il messaggio punta su un file che nel repo non esiste
-- [ ] **M21-14** — **Dopo il deploy**, e non è una formalità: `pnpm db:push` sul server con nessuna
+- [x] **M21-14** — **Dopo il deploy**, e non è una formalità: `pnpm db:push` sul server con nessuna
       asta `LIVE` o `PAUSED`, poi `pm2 reload deploy/ecosystem.config.cjs --update-env`. Poi la
       versione dalla navbar (`curl -s https://fantasta.rggndr.it/signin | grep -oE '1\.[0-9]+\.[0-9]+'`),
       e **verificare che `gol_fatti` e `assist` si siano riempiti** dopo il primo refresh: sono
       nullable apposta, ma se restassero vuote vorrebbe dire che l'`upsert` non le scrive
+      → Deploy partito da sé, **1.21.0 servita 2m40s dopo il push**. Poi il `db:push` sul server: le
+      stesse tre istruzioni date in locale, nessuna domanda, e `pm2 reload`. Import provato
+      dall'owner **su un'asta vera in produzione**: funziona.
+      ⚠ **La finestra fra il deploy e il `db:push` non è innocua, e va saputa prima della prossima
+      macro che tocca lo schema.** Per quei ~6 minuti in produzione girava il codice nuovo su uno
+      schema vecchio: `/play` andava in errore **per gli utenti Pro e amministratori** — la lettura
+      del pool tocca `player_insights.gol_fatti` e `user_listone`, che ancora non c'erano — mentre
+      chi non è Pro non passa da quel ramo e non si è accorto di niente. Nessuna scrittura a
+      rischio, solo letture. La cosa da ricordare non è «è andata bene»: è che **il `db:push` va dato
+      appena il deploy finisce**, e che chi rilascia deve stare davanti al terminale in quei due
+      minuti invece di andarsene
 
 ---
 
