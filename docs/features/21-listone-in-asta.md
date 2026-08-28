@@ -172,7 +172,17 @@ E tre che prendo io, dichiarate qui perché siano contestabili:
    `CARMY_FASCE` per quello globale.
 9. **Il filtro dei ruoli segue il ruolo in gioco finché non lo tocco**; appena lo tocco è mio e non
    si muove più, fino al ricarico della pagina.
-10. **`PMA` in percentuale con i crediti accanto**, come già fa la lista di chiamata.
+10. **`PMA` in percentuale con i crediti accanto**, come già fa la lista di chiamata. ⚠ **Corretta
+    dalla fase UI**: i crediti stanno solo da `sm` in su, sul telefono non c'è la larghezza (§4).
+
+**Quattro dalla fase di progettazione UI, lo stesso giorno**, prese guardando il banco di prova e non
+descrivendolo — sono quelle che hanno cambiato la spec, ed è il motivo per cui quella fase esisteva:
+
+11. **Dentro il gruppo si ordina per `PMA DESC`**, non per `fvm`. Cambia §4, e con esso il test di
+    `listoneRows`.
+12. **La colonna del ruolo si aggiunge**, e c'è sempre. Non era nell'elenco della richiesta.
+13. **L'icona dell'obiettivo è su ogni riga**, grigia o verde.
+14. **Sul telefono le righe sono un elenco su tre linee**, non una tabella che scorre di lato.
 
 ---
 
@@ -265,6 +275,13 @@ Due aggiunte e nient'altro: `gol_fatti` e `assist` entrano nella riga che `parse
 produce — la risposta della fonte li contiene già, è il parser che oggi si ferma prima — e
 `refreshInsights` li scrive nell'`upsert` per colonna che già fa.
 
+⚠ **«Due aggiunte» è vero per le scritture, non per il diff** (misurato a M21-04). I punti in cui i
+due numeri vanno elencati **a mano, colonna per colonna**, sono quattro: il parser, l'`upsert`, il
+tipo `PlayerInsights` di `lib/domain.ts` — dichiarato a mano perché lo legge un client component — e
+le due proiezioni che ricopiano le colonne una per una, `listPickPool` e `centroDatiRows`. Nessuna di
+queste fallisce da sé se la si dimentica: la colonna resta vuota, o non arriva al browser, e non lo
+dice nessuno.
+
 ⚠ **Si aggiungono all'`upsert` della fonte A e a nessun'altra scrittura.** La fonte B
 (`refreshSetPieces`) tocca solo i due rank, e mescolare le due scritture è il modo in cui una `GET`
 cancella i dati dell'altra — la ragione per cui M10B ha una tabella sua invece di tre colonne qui.
@@ -291,9 +308,22 @@ listoneRows(pool, snapshot, { roles, query, soloObiettivi })
 ```
 
 Differisce dalla vicina in tre punti, e sono tutti e tre la richiesta: **più ruoli in OR** invece di
-uno solo, **il filtro obiettivi**, e **nessun tetto di quaranta righe**. L'ordinamento **dentro il
-gruppo** resta quello di casa — `fvm DESC, quot DESC, nome` — mentre i gruppi vanno nell'ordine
-delle fasce.
+uno solo, **il filtro obiettivi**, e **nessun tetto di quaranta righe**. I gruppi vanno nell'ordine
+delle fasce; dentro il gruppo si ordina per **`PMA DESC`**, dal più caro.
+
+⚠ **`PMA` e non `fvm`, ed è una divergenza voluta dalla lista di chiamata** (decisione della fase UI,
+2026-08-28, guardando il banco di prova). La spec di questa macro diceva `fvm DESC` per coerenza con
+la vicina, e guardandola non regge: `fvm` **non è in tabella** — l'owner l'ha fatto togliere a M17,
+«un valore FMV che non capisco cosa sia» — quindi scorrendo, la lista sembra ordinata per niente. È
+lo stesso difetto che M17 aveva dovuto compensare nel pannello di chiamata con la riga
+dell'auto-pick.
+
+E qui quella compensazione **non serve, perché non c'è niente da compensare**: nel pannello di
+chiamata l'ordine *è* una promessa — «il primo è quello che il timer comprerebbe al posto tuo» — e
+per questo non si tocca. Nel Listone non si sceglie niente, si guarda chi resta: nessun auto-pick da
+raccontare, nessuna promessa da mantenere, e l'unico criterio giusto è **quello che chi legge può
+verificare sulla riga**. ⚠ La conseguenza da tenere in mente: **le due liste della stessa serata
+sono ordinate diversamente**, ed è deliberato. `availablePlayers` non si tocca.
 
 ⚠ **Nessuna query per lotto, e nessun evento da ascoltare.** «Sincronizzata in tempo reale con ogni
 lotto» è già risolto dal fatto che la tabella è funzione dello snapshot: quando un lotto chiude, la
@@ -305,7 +335,22 @@ farlo sparire prima dell'assegnazione sarebbe una bugia — per di più una bugi
 sé, perché se il lotto va deserto quel giocatore torna disponibile.
 
 **Le colonne**, nell'ordine della richiesta: Fascia (nell'intestazione del gruppo, non ripetuta su
-ogni riga), Obiettivo, Nome (con la squadra), PMA, FMV Exp., Gol, Assist, Note.
+ogni riga), Obiettivo, **Ruolo**, Nome (con la squadra), PMA, FMV Exp., Gol, Assist, Note.
+
+⚠ **Il Ruolo non è nell'elenco della richiesta, ed è stato aggiunto guardando la tabella** (fase UI,
+2026-08-28): coi ruoli in OR — che la richiesta chiede — un gruppo «Top» può contenere portieri e
+difensori insieme, e senza quella lettera non si legge di chi si sta parlando. È una lettera in
+grigio a sinistra del nome, e c'è **sempre**, non solo quando i ruoli filtrati sono più d'uno: una
+tabella che cambia forma sotto le dita costa più di una colonna da dieci pixel.
+
+**L'icona dell'obiettivo c'è su ogni riga**, grigia quando non è un obiettivo e verde quando lo è
+(decisione dell'owner, fase UI). L'alternativa guardata era mostrarla solo sugli obiettivi, con uno
+spazio vuoto altrove; è stata scartata.
+
+**Il `PMA` porta i crediti accanto** — `17.7% (89)` — come già fa la lista di chiamata, e con la
+stessa `pmaCrediti`: una percentuale non si può offrire, e sotto un countdown nessuno la converte a
+mente. ⚠ **Sul telefono resta solo la percentuale**: la larghezza non c'è, ed è il primo posto in cui
+questa macro paga il fatto che il portale è mobile-first.
 
 Le Note sono i **tag del foglio**, resi con `CarmyTags` che esiste già ed è già la forma con cui si
 vedono altrove. Nessun componente nuovo: se i badge del listone e quelli del pannello di chiamata
@@ -331,6 +376,18 @@ tabella con dentro sia `Top` (mia) sia `Top` (globale) come due gruppi diversi, 
 giocatore che compare sotto una fascia che io non ho scritto. Il gruppo «Senza fascia» è il prezzo
 di questa promessa, ed è il prezzo giusto: dice la verità — *su costui non ho un giudizio mio*.
 
+**Sul telefono la tabella diventa un elenco**, non una tabella che scorre di lato (decisione della
+fase UI, viste entrambe): icona e ruolo e nome e squadra e PMA sulla prima riga, `exp / gol / ass`
+sulla seconda, le note sulla terza; le fasce restano come intestazioni di gruppo. La strada scartata
+è quella del Centro dati — `overflow-x-auto` con un `min-w` — che è onesta ma chiede di scorrere in
+orizzontale la cosa principale di una tab, su un telefono, durante un'asta. Costa altezza: **circa
+57px a riga**, misurati.
+
+⚠ **Il nome tronca senza `min-w-0` sulla catena dei flex, e questo è misurato**: a 375px il caso
+peggiore vero delle 495 righe del listone — «Milinkovic-Savic V. · Napoli» — sta dentro,
+`scrollWidth` resta 375 e nessun PMA esce. Se un anno un nome più lungo entrasse nel listone, il
+rimedio è `min-w-0` **su ogni anello**, non solo sul padre.
+
 **Nessuna paginazione, nessun ordinamento per colonna.** Cinquecento righe girano già nel browser da
 M8, e il Centro dati fa lo stesso con la stessa misura (~250 KB) senza paginare. L'ordinamento per
 colonna non è nella richiesta e romperebbe il raggruppamento per fascia, che è il modo in cui questa
@@ -348,7 +405,22 @@ carmy?: CarmyJudgement   // NON è nuova: adesso è il giudizio RISOLTO
 mio?: true               // questa riga viene dal mio file
 obiettivo?: true         // è un mio obiettivo
 fasciaGruppo?: string    // la fascia con cui raggruppare, già decisa (§4)
+fasciaRank?: number      // dove sta quel gruppo nell'ordine — aggiunta a M21-07
 ```
+
+⚠ **La quarta chiave è stata aggiunta implementando, e la ragione è questa stessa
+sezione.** L'ordine dei gruppi dipende da **quale vocabolario è in gioco** — il mio
+`fascia_rank` se ho importato, `CARMY_FASCE` altrimenti — e senza il numero il client
+dovrebbe sapere in quale dei due mondi si trova per ordinare le intestazioni: cioè
+ricalcolare la decisione che il server ha già preso, contro la promessa di questo
+paragrafo. Non è una decisione nuova, è la stessa applicata fino in fondo.
+
+⚠ **E `CarmyJudgement` perde due chiavi obbligatorie**: `sourceName` e `sourceTeam`
+diventano opzionali, perché il listone personale non le conserva — la sua tabella ha le
+colonne di `carmy_players` meno quelle due. Un giudizio mio arriva **senza**, invece che
+col nome del listone copiato dentro: l'assenza è la verità, un valore inventato sarebbe
+la spiegazione falsa di un aggancio avvenuto in un altro modo. Nessuna schermata le
+legge: servono a capire un import, non a disegnare una riga.
 
 ⚠ **`?` e non `| null`, senza eccezioni**, che è la regola di M8 §6 e M10B §7 letta per la terza
 volta: la chiave è **assente** per chi non ha il permesso, non `null` da nascondere. Questo tipo
@@ -386,11 +458,25 @@ limite del corpo delle Server Action, e il caricamento admin gemello fa già esa
    accenti, senza maiuscole, senza spazi — perché la differenza fra `Sí` e `SI` non è
    un'informazione, è una tastiera.
 2. **L'indice della fascia**, cioè l'ordine in cui le fasce compaiono nel file. Si calcola **in un
-   posto solo**, leggendo i quattro fogli in ordine `P, D, C, A` e assegnando a ogni fascia nuova il
-   numero successivo. ⚠ Il merge fra i quattro fogli non è banale e va scritto sapendolo: `P` e `A`
-   **non hanno** `Titolare "Scarso"`, che in `D` e `C` sta fra `Scomm.` e `Outsider` — la prima
-   occorrenza in ordine di foglio dà il risultato giusto su questo file, e il test lo fissa sul
-   fixture vero.
+   posto solo**, leggendo i quattro fogli in ordine `P, D, C, A`.
+
+   ⚠ **Correzione misurata, M21-05 (2026-08-28): «assegnare a ogni fascia nuova il numero
+   successivo» è sbagliato, e sbaglia proprio sul file di riferimento.** Questa spec diceva che la
+   prima occorrenza in ordine di foglio dava il risultato giusto. Non lo dà: `P` fa
+   `… Scomm. → Outsider` e `Titolare "Scarso"` compare **solo** in `D` e `C`, dove sta *fra* le due —
+   quindi accodandolo prenderebbe il numero **dopo** `Outsider`, cioè un ordine che due fogli su
+   quattro smentiscono, dentro la funzione che esiste apposta per rispettare il file.
+
+   Si fa invece un **ordinamento topologico**: ogni foglio è una catena e dichiara «questa fascia
+   precede quella», si estraggono le fasce senza predecessori, e a parità vale l'ordine di prima
+   apparizione. Un ciclo — due fogli che si contraddicono — **non fa fallire il caricamento**: si
+   rompe il pareggio e si tira avanti, perché rifiutare un file intero per due gruppi in ordine
+   discorde punirebbe chi l'ha compilato per una cosa che a schermo è dieci righe più in su.
+
+   Il test è il migliore che questa macro abbia: sul file vero l'ordine ricavato è **esattamente
+   `CARMY_FASCE`**, che in M10B era stato scritto **a mano** leggendo lo stesso foglio — e la cui nota
+   dice che l'unico punto da indovinare era proprio fra `Titolare "Scarso"` e `Outsider`. Due
+   derivazioni indipendenti della stessa verità.
 
 ⚠ **Il parser resta puro e resta condiviso.** `parseCarmy` è la stessa funzione per i due percorsi:
 `uploadCarmy` ignora i due campi nuovi, il caricamento personale li usa. Due parser per lo stesso
@@ -463,59 +549,227 @@ prima da rivedere è questa, non quella.
   personale è **una lente**, non una modifica del gioco.
 - **Nessun `Obiett.` sul percorso globale** (§0).
 - **Nessun `dark:`** nel codice nuovo.
-- **Nessun pacchetto nuovo**: `Tabs` e `Tooltip` da `radix-ui`, l'icona da `lucide-react`.
+- **Nessun pacchetto nuovo**: `Tabs` da `radix-ui`, l'icona da `lucide-react`. (⚠ `Tooltip` era
+  previsto e **non serve più**: la tab spenta si spiega con una riga di testo accanto — vedi
+  M21-10.)
 
 ---
+
+## ⚠ Lo stato della macchina locale, per chi riprende
+
+Scritto qui perché **non è deducibile dal codice** e la sessione in cui è successo non c'è più.
+
+1. **In `asta` — il database di sviluppo — c'è una simulata lasciata `LIVE` il 2026-08-23**
+   (`51f56216-199c-48a5-8551-70eab533f433`, «Prova»). Accendere `pnpm dev` la **rimette in moto** e le
+   consuma i lotti: è successo il 2026-08-28. È congelata a `LIVE/WAITING_PICK` e non è stata toccata
+   altrimenti. Chi riprende: o la mette in pausa dal pannello prima di lavorare, o lavora su un
+   database usa-e-getta (`asta_banco`, la ricetta è qui sotto).
+2. **Il banco di prova non esiste più**, cancellato a M21-13 com'era previsto: era `app/banco/` —
+   pubblico, senza `requireUser()`, e `next build` lo compilava — con accanto `scripts/banco/`. Si
+   rilegge con `git show 45d1eb0:app/banco/pezzi.tsx` e fratelli, insieme allo script che riempiva il
+   database usa-e-getta (`scripts/banco/riempi.ts`) e a quello che entrava col login di sviluppo e
+   fotografava da CDP (`scripts/banco/entra.mjs`).
+3. **Gli screenshot si prendono da CDP**, non col flag `--screenshot`: `--headless --screenshot
+   --window-size=375` impagina a ~800px e poi ritaglia, cioè mostra una pagina che non esiste. E
+   ⚠ **`element.click()` non attiva una linguetta Radix**, che risponde a `mousedown`: uno screenshot
+   in cui la tab non cambia non vuol dire che la tab sia rotta. Tutte e due sono costate tempo.
+4. **La ricetta del database usa-e-getta**, che è la sola cosa del banco che valeva la pena tenere
+   scritta:
+
+   ```bash
+   docker exec fantasta-db psql -U postgres -c "CREATE DATABASE asta_banco;"
+   DATABASE_URL=postgres://postgres:dev@localhost:5433/asta_banco pnpm exec drizzle-kit push --force
+   DATABASE_URL=postgres://postgres:dev@localhost:5433/asta_banco pnpm db:seed --auction-status=mid
+   env DATABASE_URL=postgres://postgres:dev@localhost:5433/asta_banco pnpm dev
+   ```
 
 ## Task
 
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
 > sessione in cui è stata scritta.
 
-- [ ] **M21-01** — Aprire `feature/21-listone-in-asta` da `dev`. Rileggere **questo file**, il blocco
+- [x] **M21-01** — Aprire `feature/21-listone-in-asta` da `dev`. Rileggere **questo file**, il blocco
       di `parseCarmy.ts` su `Obiett.` (§0 è scritto contro quello), M10B §6 sull'asimmetria fra la
       lista e l'auto-pick, e le regole di produzione di `CLAUDE.md` — questa macro **tocca lo
       schema**. `pnpm test` verde come baseline, col numero annotato qui.
       `fixtures/obiettivi.html` è già committato insieme a questa spec — era arrivato untracked
       con la richiesta, e una macro che non si può rigenerare comincia da un file dimenticato
-- [ ] **M21-02** — **La progettazione UI della tab Listone, prima di qualunque codice di
+      → **Baseline: 917 test in 53 file**, verde al primo giro. ⚠ **Trovata un'asta simulata lasciata
+      `LIVE` il 23 agosto nel database locale**: accendere `pnpm dev` l'ha rimessa in moto e ha
+      consumato una manciata di lotti prima che me ne accorgessi. Rimedio senza toccarla: il dev
+      server gira su un database **usa-e-getta** (`asta_banco`), e la simulata è congelata a
+      `LIVE/WAITING_PICK`. È la stessa ricetta di M20, e da qui in avanti vale come regola per
+      qualunque lavoro di UI che non abbia bisogno dei dati veri
+- [x] **M21-02** — **La progettazione UI della tab Listone, prima di qualunque codice di
       produzione** (è la richiesta esplicita dell'owner). Barra delle tab e sua versione sticky col
       countdown, tooltip della tab spenta, intestazioni di gruppo, la riga della tabella sul
       telefono a 375px e su desktop, il modale di import, lo stato vuoto di chi non ha importato.
       **Guardarla**, non descriverla. ⚠ Se la progettazione cambia una scelta di questa spec,
       **la spec si aggiorna nella stessa sessione** e il cambiamento si dichiara: è la parte della
       richiesta che vale quanto le altre
-- [ ] **M21-03** — Lo schema (§2): `user_listone` e le due colonne su `player_insights`. `pnpm
+      → Fatta in `app/banco/`, con i componenti veri e i dati veri dei fixture. **Ha cambiato la spec
+      in quattro punti** (decisioni 11–14) più la correzione della 10: l'ordinamento dentro il gruppo,
+      la colonna del ruolo, l'icona su ogni riga, l'elenco invece della tabella sul telefono.
+      ⚠ **Una lezione di metodo che vale oltre questa macro**: Chrome
+      `--headless --screenshot --window-size=375` **impagina a ~800px e poi ritaglia**, quindi mostra
+      una pagina che non esiste — il `PMA` sembrava fuori schermo e non lo era, e ci ho creduto
+      abbastanza da «correggere» un difetto inesistente. Gli screenshot si prendono da **CDP**
+      (`Emulation.setDeviceMetricsOverride` + `Page.captureScreenshot`), che è lo stesso contesto in
+      cui si misura il DOM: uno screenshot che non concorda con la misura non è una prova
+- [x] **M21-03** — Lo schema (§2): `user_listone` e le due colonne su `player_insights`. `pnpm
       db:push` in locale, e **il primo test in `tests/db/` che tocca la tabella nuova** — è il modo
       in cui ci si accorge di una colonna dimenticata prima del server
-- [ ] **M21-04** — Gol e Assist dalla fonte A (§3): `parseFantalabListone`, l'`upsert` di
+      → Fatto come da §2, senza scostamenti: quattordici colonne, `PRIMARY KEY (user_id, ext_id)`,
+      `ON DELETE CASCADE`, nessuna FK verso `listone_players`; `gol_fatti` e `assist` **nullable** su
+      `player_insights`. Il push in locale ha prodotto le tre istruzioni attese e nessuna domanda.
+      Otto test in `tests/db/user-listone.test.ts` → **925 in 54 file**, verde. ⚠ **Il file può
+      stare da solo**, al contrario di M10B: `user_listone` non è una tabella globale — ogni riga
+      appartiene a un utente usa-e-getta, quindi non c'è nessuna tabella condivisa da «possedere» e
+      la cicatrice dei worker paralleli non si applica. ⚠ **Una nota per chi scriverà altri test sui
+      vincoli**: il messaggio d'errore di Drizzle è solo `Failed query: …` con dentro la query, e il
+      vincolo violato sta nella **causa** (`cause.code`, `cause.constraint`). Un
+      `rejects.toThrow(/duplicate key/)` non passa, e — peggio — se passasse accetterebbe qualunque
+      fallimento di quella `INSERT`
+- [x] **M21-04** — Gol e Assist dalla fonte A (§3): `parseFantalabListone`, l'`upsert` di
       `refreshInsights`, e un test sul fixture vero che verifica che i due numeri arrivino e che la
       fonte B **non** li tocchi
-- [ ] **M21-05** — Il parser (§6): `Obiett.` normalizzato e `fascia_rank` col merge dei quattro
+      → I due campi nel parser (contatori, `0` e non `null`: qui lo zero *è* un'informazione) e
+      nell'`upsert` della fonte A. ⚠ **Erano quattro i punti da toccare, non due**, e vale la pena
+      saperlo prima di aggiungere la prossima colonna: `PlayerInsights` in `lib/domain.ts` — che è
+      dichiarato a mano perché lo legge un client component — e le **due** proiezioni che elencano le
+      colonne una per una, `listPickPool` e `centroDatiRows`. Una colonna aggiunta allo schema e
+      dimenticata in una di quelle resta invisibile senza nessun errore. Misurato sul fixture:
+      **933 gol e 653 assist** su 497 righe, 209 giocatori a secco. Quattro test nuovi → **929 in 54
+      file**. Due meritano il nome per esteso: quello che fa **due** refresh di fila (una colonna
+      fuori dall'`upsert` si riempirebbe al primo `INSERT` e non si aggiornerebbe mai più) e quello
+      che **svuota le due colonne a mano su una tabella piena** e guarda il refresh successivo
+      riempirle — è la verifica 21, cioè la prova in locale che il rilascio non vuole nessun backfill
+- [x] **M21-05** — Il parser (§6): `Obiett.` normalizzato e `fascia_rank` col merge dei quattro
       fogli, con i test sul fixture vero — incluso quello su `Titolare "Scarso"`, che in `P` e `A`
       non c'è. ⚠ Verificare che `uploadCarmy` continui a comportarsi **identico**: i suoi test
       esistenti devono passare senza modifiche
-- [ ] **M21-06** — Il motore del caricamento personale (§6) in `lib/engine/`: aggancio, soglia,
+      → **La spec sbagliava, e §6.2 è stato corretto**: la prima occorrenza in ordine di foglio
+      metteva `Titolare "Scarso"` **dopo** `Outsider`, contro quello che dicono `D` e `C`. Ora è un
+      ordinamento topologico (`mergeFasce`, esportata per il suo test), e sul file vero produce
+      **esattamente `CARMY_FASCE`** — che M10B aveva scritto a mano leggendo lo stesso foglio.
+      `Obiett.` si confronta normalizzato: nel file è `Sí` acuto, la richiesta scriveva `SI`, e un
+      confronto letterale avrebbe letto **zero obiettivi senza dirlo**. Sono tre, e hanno un nome:
+      McTominay, Baturina, Rowe. ⚠ **La colonna è volutamente fuori da `REQUIRED_COLUMNS`**: serve a
+      un percorso e il rifiuto ne fermerebbe due — `uploadCarmy` non la guarda, e deve restare
+      identico. Il silenzio si copre col conteggio nel riepilogo (M21-06). `uploadCarmy` mappa le
+      colonne una per una, quindi ignora i due campi nuovi senza una riga di modifica, e i suoi test
+      passano **non toccati**. 13 test nuovi → **942 in 54 file**
+- [x] **M21-06** — Il motore del caricamento personale (§6) in `lib/engine/`: aggancio, soglia,
       sostituzione, riepilogo. Test sul fixture vero, compreso il rifiuto sotto soglia e il rifiuto
       senza listone a sistema
-- [ ] **M21-07** — `listPickPool` con `userId` e la risoluzione «personale se c'è, globale
+      → `lib/engine/user-listone.ts`, con `uploadUserListone` e `userListoneStatus`. **L'aggancio è
+      stato estratto** in `matchToListone` dentro `carmy.ts`: è il caso della regola 8 — il secondo
+      chiamante è arrivato, e due copie di quel ciclo sarebbero due modi di leggere lo stesso foglio
+      che divergono su dieci righe su cinquecento senza che nessuno lo veda. ⚠ **Il rifiuto sotto
+      soglia invece resta separato, e non per distrazione**: la quota si misura uguale, il messaggio
+      no — «carica prima il listone aggiornato» a un partecipante è un ordine che non può eseguire,
+      quindi il suo dice di rivolgersi a un amministratore. ⚠ **Il gate `canSeeInsights` sta nel
+      motore**, non solo nella Server Action: metterlo solo nell'azione vorrebbe dire che il giorno
+      in cui nasce un secondo chiamante la guardia resta indietro senza che un test se ne accorga —
+      e così è provabile in `tests/db/`. Il riepilogo porta anche **quanti obiettivi** ha letto, ed è
+      il rimedio deciso a M21-05 per la colonna non obbligatoria: uno zero lì dice la stessa cosa di
+      un rifiuto, a chi ha il file in mano. ⚠ **I test stanno in `tests/db/listone.test.ts`** e non
+      nel file di M21-03, per la ragione di M10B: il caricamento personale si aggancia a
+      `listone_players`, e quel file **possiede** quella tabella. 12 test nuovi → **954 in 54 file**
+- [x] **M21-07** — `listPickPool` con `userId` e la risoluzione «personale se c'è, globale
       altrimenti» + `fasciaGruppo` (§5). ⚠ **Il test che conta è quello dell'assenza**: per un
       utente non-Pro le quattro chiavi non devono esistere nel risultato, non essere `null`
-- [ ] **M21-08** — `listoneRows` in `lib/realtime/portal.ts` (§4), funzione pura con i suoi test:
+      → Fatto, e §5 è stato aggiornato in due punti: **`fasciaRank` è la quarta chiave** (senza, il
+      client dovrebbe sapere quale vocabolario è in gioco per ordinare le intestazioni, cioè
+      rifare la decisione che il server ha già preso) e **`CarmyJudgement` perde due chiavi
+      obbligatorie**, `sourceName`/`sourceTeam`, che il listone personale non conserva. ⚠ **«Ho
+      importato» si decide una volta sola e non riga per riga**: è ciò che rende vera la decisione 5
+      — o le fasce sono tutte mie, o sono tutte globali, mai una tabella con `Top` mia e `Top`
+      globale come due gruppi. Il test dell'assenza è scritto sul caso peggiore, che non è teorico:
+      un utente che **ha** un listone a database e ha **perso** il flag Pro. `userId` lo passano
+      **due** pagine, `play` e `manage`: la regia è la regia di chi la guarda, e mostrarle i prezzi
+      globali a chi ne ha caricati di suoi sarebbe la stessa incoerenza che la decisione 1 toglie.
+      6 test nuovi → **960 in 54 file**
+- [x] **M21-08** — `listoneRows` in `lib/realtime/portal.ts` (§4), funzione pura con i suoi test:
       ruoli in OR, ricerca su nome e squadra, filtro obiettivi, esclusione di chi è già in una rosa,
       il giocatore in asta che **resta**, ordinamento dentro il gruppo, ordine dei gruppi nelle due
       modalità di vocabolario
-- [ ] **M21-09** — Le tab e la barra sticky col countdown (§1, §8). ⚠ Provare **il rientro**: aprire
+      → Torna **gruppi**, non righe: `{ fascia, players }[]`, con `fascia: null` per «Senza fascia»,
+      sempre in fondo. La parola non sta nella funzione pura — è rendering, e il componente la
+      traduce. Tre decisioni piccole prese scrivendola, tutte nei test: **nessun ruolo scelto vuol
+      dire tutti** (chi spegne tutti gli interruttori sta togliendo un filtro, non chiedendo una
+      tabella vuota), **chi non ha `PMA` va in fondo al gruppo** e non in cima, e a parità si scende
+      su `fvm`/`quot`/nome perché l'ordine deve essere **stabile** — due disegni a un secondo di
+      distanza non si rimescolano sotto le dita. ⚠ La funzione **non sa** quale vocabolario è in
+      gioco: ordina per `fasciaRank`, che il server ha già deciso. 11 test nuovi → **971 in 54 file**
+- [x] **M21-09** — Le tab e la barra sticky col countdown (§1, §8). ⚠ Provare **il rientro**: aprire
       il Listone, farsi arrivare il turno, chiudere il pannello, e verificare che dalla barra si
       riapra. È il buco che §8 esiste per chiudere, e non lo copre nessun test automatico
-- [ ] **M21-10** — La tabella e i filtri (§4), col gate Pro e il tooltip (§7)
-- [ ] **M21-11** — Il modale di import (§6), con il riepilogo e lo stato vuoto
-- [ ] **M21-12** — `docs/DECISIONS.md`: il ribaltamento di §0, datato; le due regole per l'ordine
+      → `Tabs` di `radix-ui` dentro `Portal`, stato locale, nessuna rotta nuova. ⚠ **Lo `sticky` è
+      stato tolto da `PortalHeader` e messo su un contenitore che tiene insieme intestazione e
+      barra**: due `sticky top-0` fratelli si sovrappongono, e il secondo avrebbe avuto bisogno di
+      sapere l'altezza del primo — cioè di un numero magico da tenere allineato a mano. Un
+      contenitore solo e quel numero non esiste. ⚠ **Il countdown si vede solo nella tab Listone**,
+      ed è una scelta: nella tab Asta le stesse tre cose sono dieci pixel più in basso, dentro la
+      card della scena, e ripeterle spenderebbe due volte l'altezza che M17 ha passato una macro a
+      restituire al telefono. Guardato in Chrome via CDP: la barra porta «si chiude fra 2s» e il
+      pulsante «Offri», che riapre il modale
+- [x] **M21-10** — La tabella e i filtri (§4), col gate Pro e il tooltip (§7)
+      → ⚠ **Niente `Tooltip`: una riga di testo accanto alla tab spenta**, che è la strada che §7
+      lasciava aperta e diceva di decidere guardandola. Guardata: su un telefono un tooltip su un
+      elemento disabilitato non si apre in nessun modo, quindi sarebbe una spiegazione che nessuno
+      legge proprio dove la tab spenta si tocca. La tab resta visibile e spenta, e accanto c'è
+      scritto «Il Listone è per gli utenti Pro». **Un pacchetto in meno del previsto**: `Tooltip`
+      non serve più. Verificato a schermo con tre utenti veri — Pro con import, Pro senza import,
+      non-Pro
+- [x] **M21-11** — Il modale di import (§6), con il riepilogo e lo stato vuoto
+      → `Dialog` di `radix-ui` + Server Action in `app/auctions/[id]/play/actions.ts`. ⚠ **Il modale
+      non si chiude da sé quando riesce**: il riepilogo è la parte da leggere — dieci nomi non
+      agganciati dicono che il foglio e il listone hanno cominciato a divergere — e chiudersi
+      sull'esito lo farebbe sparire nell'istante in cui compare. ⚠ **`revalidatePath` sulla pagina di
+      gioco è ciò che fa comparire i dati**: il listone risolto è una prop letta all'apertura, non
+      passa dallo stream. Lo stato vuoto **non è una tabella vuota**: chi non ha importato vede la
+      tabella piena coi valori globali, con sopra una riga che dice cosa manca
+
+> ### ⚠ Due cose viste a schermo che la fase di progettazione non poteva vedere
+>
+> Il banco di prova di M21-02 disegnava la tab **da sola**, senza la pagina intorno. A schermo, nella
+> pagina vera, sono comparse due cose. **Portate all'owner il 2026-08-28, e tutte e due lasciate come
+> sono**: si scrivono qui perché la prossima volta che qualcuno le guarda sappia che non sono sfuggite.
+>
+> 1. **Due file di pillole una sotto l'altra.** Sopra la barra delle tab c'è già la navigazione
+>    dell'asta — `Asta live` / `Storico` — che ha esattamente lo stesso aspetto: due gruppi di
+>    pillole identici che significano cose diverse («in quale schermata dell'asta sono» contro «quale
+>    metà di questa pagina guardo»). Non è rotto, è ridondante da guardare. L'alternativa proposta era
+>    dare alle due tab la sottolineatura invece della pillola; **l'owner ha scelto di lasciare il
+>    disegno approvato**.
+> 2. **L'intestazione delle colonne non è incollata**, mentre nel banco lo era: con la barra delle tab
+>    sopra, un `thead` incollato avrebbe bisogno di sapere quanto è alta quella barra — lo stesso
+>    numero magico che il contenitore unico ha appena tolto di mezzo. Scorrendo cinquecento righe le
+>    intestazioni escono di scena, e restano le intestazioni di **gruppo** (la fascia) come punto di
+>    riferimento. **Va bene così** (owner, 2026-08-28).
+- [x] **M21-12** — `docs/DECISIONS.md`: il ribaltamento di §0, datato; le due regole per l'ordine
       delle fasce (§4); la scelta della tabella sola (§2). `docs/ARCHITECTURE.md` aggiornato — è un
       criterio di chiusura, non un extra
-- [ ] **M21-13** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ la build vuole il dev
+      → In `DECISIONS.md` sono **tre** voci datate 2026-08-28 e non due: al ribaltamento di §0 e alle
+      due regole delle fasce si è aggiunta quella che l'implementazione ha reso necessaria —
+      **l'ordine delle fasce non si accoda, si ordina topologicamente** (M21-05), con la misura che
+      la giustifica. In `ARCHITECTURE.md` una sezione nuova, «Il listone dentro l'asta», scritta per
+      chi leggerà fra sei mesi: perché le tab non sono due rotte, il buco che aprivano e la barra che
+      lo chiude, la tabella come funzione dello snapshot, la risoluzione lato server e il vocabolario
+      unico. `docs/features/README.md`: M21 spostata da «pianificata» a «in corso»
+- [x] **M21-13** — Gate: `pnpm test`, `pnpm typecheck`, `pnpm build` verdi (⚠ la build vuole il dev
       server **spento**, e la prima dopo una sessione di `pnpm dev` può morire da sola: si ridà).
       Prova su `dev` con Docker, seed e una simulata, e **dal telefono** con `pnpm dev:lan`
+      → **971 test in 54 file**, typecheck e build verdi. `app/banco/` e `scripts/banco/` cancellati
+      com'era previsto — quel banco era **pubblico senza `requireUser()`** e `next build` lo
+      compilava. Prova fatta **dall'owner in autonomia** su `asta_banco`, con tutti e quattro i login:
+      Pro con import, Pro senza, non-Pro, e l'amministratore. Nessun difetto trovato.
+      ⚠ **Una trappola nel gate, subito dopo la cancellazione**: `pnpm typecheck` è diventato rosso
+      con `Cannot find module '../../app/banco/telefono/page.js'` — dentro `.next/types/validator.ts`,
+      che è **generato** e puntava ancora alla rotta appena cancellata. Non è codice nostro e non è un
+      errore vero: si ridà `pnpm build`, che lo rigenera, e il typecheck torna verde. Finita in
+      `CLAUDE.md` fra gli errori noti, perché il messaggio punta su un file che nel repo non esiste
 - [ ] **M21-14** — **Dopo il deploy**, e non è una formalità: `pnpm db:push` sul server con nessuna
       asta `LIVE` o `PAUSED`, poi `pm2 reload deploy/ecosystem.config.cjs --update-env`. Poi la
       versione dalla navbar (`curl -s https://fantasta.rggndr.it/signin | grep -oE '1\.[0-9]+\.[0-9]+'`),
@@ -538,24 +792,25 @@ prima da rivedere è questa, non quella.
    ricaricare la pagina**.
 7. **Il giocatore in asta adesso è ancora in tabella**, con il suo badge; se il lotto va deserto
    resta, se viene assegnato sparisce.
-8. **Il filtro dei ruoli parte dal ruolo in gioco**, si può mettere in OR, e una volta toccato non si
+8. **Dentro un gruppo l'ordine è per PMA decrescente**, e la colonna del ruolo c'è su ogni riga.
+9. **Il filtro dei ruoli parte dal ruolo in gioco**, si può mettere in OR, e una volta toccato non si
    muove più quando l'asta cambia ruolo.
-9. **La ricerca trova per nome e per squadra**, accenti e maiuscole comprese.
-10. **Importando il file di riferimento**: le fasce sono nell'ordine del file, gli obiettivi hanno
+10. **La ricerca trova per nome e per squadra**, accenti e maiuscole comprese.
+11. **Importando il file di riferimento**: le fasce sono nell'ordine del file, gli obiettivi hanno
     l'icona verde, il filtro obiettivi li isola, e il riepilogo dice righe scritte, non agganciate e
     squadre discordanti.
-11. **Chi non ha importato vede la tabella piena** con i valori globali e **nessun** obiettivo.
-12. **Chi ha importato vede «Senza fascia» in fondo**, con dentro chi nel suo file non c'è, e quelle
+12. **Chi non ha importato vede la tabella piena** con i valori globali e **nessun** obiettivo.
+13. **Chi ha importato vede «Senza fascia» in fondo**, con dentro chi nel suo file non c'è, e quelle
     righe hanno comunque PMA, FMV Exp. e note globali quando ci sono.
-13. **Ri-importare sostituisce**: un obiettivo tolto dal file sparisce dalla tabella.
-14. **Due utenti diversi vedono due tabelle diverse**, e nessuno dei due vede gli obiettivi
+14. **Ri-importare sostituisce**: un obiettivo tolto dal file sparisce dalla tabella.
+15. **Due utenti diversi vedono due tabelle diverse**, e nessuno dei due vede gli obiettivi
     dell'altro. Provato con due sessioni sulla stessa asta.
-15. **Gol e Assist ci sono** e vengono dalla fonte A: si spegne il file personale e restano.
-16. **Il rientro dal Listone**: turno mio, chiudo il pannello dal Listone, la barra sticky mostra il
+16. **Gol e Assist ci sono** e vengono dalla fonte A: si spegne il file personale e restano.
+17. **Il rientro dal Listone**: turno mio, chiudo il pannello dal Listone, la barra sticky mostra il
     countdown e il pulsante lo riapre.
-17. **Su un telefono vero a 375px**: la barra delle tab e l'intestazione incollata non si mangiano
+18. **Su un telefono vero a 375px**: la barra delle tab e l'intestazione incollata non si mangiano
     l'altezza dell'offerta, e la riga della tabella si legge.
-18. **`serializeSnapshot` non è toccato**: verificato sul diff `origin/main..dev`, non dedotto.
-19. **Niente `dark:` nel codice nuovo**, e la TV resta bianco su nero com'era.
-20. **`pnpm db:push` dato sul server**, e **nessun backfill** richiesto: le due colonne nuove si sono
+19. **`serializeSnapshot` non è toccato**: verificato sul diff `origin/main..dev`, non dedotto.
+20. **Niente `dark:` nel codice nuovo**, e la TV resta bianco su nero com'era.
+21. **`pnpm db:push` dato sul server**, e **nessun backfill** richiesto: le due colonne nuove si sono
     riempite da sole al primo refresh.

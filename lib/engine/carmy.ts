@@ -78,6 +78,72 @@ export const CARMY_MATCH_THRESHOLD = 0.9;
  */
 export const CARMY_STALE_HOURS = 24;
 
+// ─── L'aggancio al listone, condiviso dai due caricamenti ────────────────────
+
+/** Chi ha agganciato ma con un'altra squadra: un trasferimento, o un omonimo. */
+export type TeamMismatch = { name: string; carmy: string; listone: string };
+
+export type CarmyMatchOutcome = {
+  /** Le righe che hanno trovato un `ext_id`, con quell'`ext_id` addosso. */
+  matched: (CarmyRow & { extId: number })[];
+  /** I nomi che il listone non conosce, **per nome e non per numero**. */
+  unmatched: string[];
+  teamMismatches: TeamMismatch[];
+};
+
+/** Una riga del listone a sistema, per l'aggancio. */
+type ListoneKey = { extId: number; name: string; team: string };
+
+/**
+ * Aggancia le righe di un foglio al listone a sistema, per nome normalizzato.
+ *
+ * ⚠ **Estratta a M21-06, ed è il caso della regola 8: il secondo chiamante è
+ * arrivato.** I due caricamenti — quello globale dell'amministratore e quello
+ * personale di un partecipante — leggono **lo stesso file** con lo stesso parser,
+ * e devono agganciarlo **allo stesso modo**: stesso `normalizeCarmyName`, stessa
+ * sigla usata come controllo e non come chiave, stessa lista di nomi mancati. Due
+ * copie di questo ciclo sarebbero due modi di leggere lo stesso foglio che
+ * divergono al primo nome strano — e nessuno se ne accorgerebbe, perché
+ * divergerebbero su dieci righe su cinquecento.
+ *
+ * ⚠ **Quello che invece resta separato è il rifiuto sotto soglia**, e non per
+ * distrazione: la quota si misura uguale, ma il messaggio no. All'amministratore
+ * si dice «carica prima il listone aggiornato», perché è lui a poterlo fare; a un
+ * partecipante quella frase sarebbe un ordine che non può eseguire.
+ */
+export function matchToListone(
+  rows: CarmyRow[],
+  listone: ListoneKey[],
+): CarmyMatchOutcome {
+  const byName = new Map(listone.map((row) => [normalizeCarmyName(row.name), row]));
+
+  const matched: (CarmyRow & { extId: number })[] = [];
+  const unmatched: string[] = [];
+  const teamMismatches: TeamMismatch[] = [];
+
+  for (const row of rows) {
+    const target = byName.get(normalizeCarmyName(row.name));
+    if (!target) {
+      unmatched.push(row.name);
+      continue;
+    }
+    // La sigla è il controllo: si traduce e si confronta, e una discordanza si
+    // **segnala** senza fermare il caricamento — è un trasferimento, e il
+    // giudizio su quel giocatore vale comunque.
+    const expected = CARMY_TEAM_BY_SIGLA[row.team];
+    if (expected !== undefined && expected !== target.team) {
+      teamMismatches.push({
+        name: row.name,
+        carmy: expected,
+        listone: target.team,
+      });
+    }
+    matched.push({ ...row, extId: target.extId });
+  }
+
+  return { matched, unmatched, teamMismatches };
+}
+
 // ─── Il caricamento ──────────────────────────────────────────────────────────
 
 export type CarmyUploadSummary = {
@@ -97,7 +163,7 @@ export type CarmyUploadSummary = {
    * il listone non aveva. **Si segnala, non si ingoia.** Sul file del 2026-08-12
    * sono tre, e sono tutti e tre mercato vero.
    */
-  teamMismatches: { name: string; carmy: string; listone: string }[];
+  teamMismatches: TeamMismatch[];
   uploadedAt: Date;
 };
 
@@ -144,33 +210,7 @@ export async function uploadCarmy(
       );
     }
 
-    const byName = new Map(
-      listone.map((row) => [normalizeCarmyName(row.name), row]),
-    );
-
-    const matched: (CarmyRow & { extId: number })[] = [];
-    const unmatched: string[] = [];
-    const teamMismatches: CarmyUploadSummary["teamMismatches"] = [];
-
-    for (const row of rows) {
-      const target = byName.get(normalizeCarmyName(row.name));
-      if (!target) {
-        unmatched.push(row.name);
-        continue;
-      }
-      // La sigla è il controllo: si traduce e si confronta, e una discordanza si
-      // **segnala** senza fermare il caricamento — è un trasferimento, e il
-      // giudizio su quel giocatore vale comunque.
-      const expected = CARMY_TEAM_BY_SIGLA[row.team];
-      if (expected !== undefined && expected !== target.team) {
-        teamMismatches.push({
-          name: row.name,
-          carmy: expected,
-          listone: target.team,
-        });
-      }
-      matched.push({ ...row, extId: target.extId });
-    }
+    const { matched, unmatched, teamMismatches } = matchToListone(rows, listone);
 
     const quota = matched.length / rows.length;
     if (quota < CARMY_MATCH_THRESHOLD) {

@@ -49,6 +49,16 @@ import { type Result, fail, ok } from "@/lib/engine/errors";
  * il quale gioca la stessa asta. Non si importa, e la ragione sta scritta qui
  * perché è la colonna che qualcuno vorrà aggiungere.
  *
+ * ⚠ **E qualcuno l'ha aggiunta: M21, il 2026-08-28.** La frase qui sopra è ancora
+ * giusta e per questo non si cancella — quello che cade è il suo **presupposto**.
+ * Là il foglio era uno solo e globale, quindi importare `Obiett.` voleva dire
+ * pubblicare la lista della spesa di una persona sola; da M21 esiste un secondo
+ * percorso, **per utente**, in cui il file è mio e il dato non esce dal mio
+ * browser. Quindi il parser adesso la legge, e **la distinzione sta a valle**:
+ * `uploadCarmy` — il percorso globale verso `carmy_players` — continua a
+ * ignorarla, e lì l'obiezione vale identica. Non è «M10B sbagliava», è «M10B
+ * decideva su un altro caso» (M21 §0, `DECISIONS.md` alla data).
+ *
  * ## ⚠ Lo zero non è un voto
  *
  * Il foglio scrive l'assenza in tre modi diversi, e il database la scrive in uno:
@@ -80,6 +90,125 @@ const COLUMNS = {
 const NOTE_COLUMNS = ["Nota 1", "Nota 2", "Nota 3", "Nota 4", "Nota 5"] as const;
 
 /**
+ * La lista della spesa (M21 §6).
+ *
+ * ⚠ **Volutamente fuori da `REQUIRED_COLUMNS`**, ed è una scelta contro
+ * l'argomento che quell'elenco esiste per fare — «una persona rinomina una
+ * colonna, e l'import scrive in silenzio 497 righe vuote». Qui non regge, per
+ * una ragione sola: **la colonna serve a un percorso e il rifiuto ne fermerebbe
+ * due.** `uploadCarmy` non la guarda nemmeno, e M21 promette che quel percorso
+ * resti **identico**; pretenderla vorrebbe dire che un foglio più vecchio smette
+ * di poter essere caricato dall'amministratore per una colonna che a
+ * `carmy_players` non serve.
+ *
+ * Il silenzio si copre dall'altra parte: il riepilogo del caricamento personale
+ * dice **quanti obiettivi** ha letto, e uno zero lì è la stessa informazione di
+ * un rifiuto — arrivata a chi può correggere il file, invece che a chi non ne ha
+ * uno.
+ */
+const OBIETTIVO_COLUMN = "Obiett.";
+
+/**
+ * `Sí`, `SI`, `sì`: la stessa cosa scritta da tre tastiere.
+ *
+ * Si confronta **normalizzato** — senza accenti, senza maiuscole, senza spazi —
+ * perché la differenza fra `Sí` e `SI` non è un'informazione. Nel file di
+ * riferimento la colonna ha **due soli valori** su 497 righe, misurati: vuota
+ * (494) e `Sí` (3).
+ *
+ * ⚠ **L'insieme è corto di proposito.** `x`, `1`, `true` non compaiono in nessun
+ * file visto, e accettarli vorrebbe dire indovinare cosa scriverà un domani chi
+ * compila: un `1` in quella cella potrebbe benissimo essere una priorità, non un
+ * sì. Quello che non è riconosciuto vale `false`, e il conteggio del riepilogo lo
+ * rende visibile.
+ */
+const OBIETTIVO_SI = new Set(["si", "s"]);
+
+function isObiettivo(value: unknown): boolean {
+  const normalized = asText(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, "");
+  return OBIETTIVO_SI.has(normalized);
+}
+
+/**
+ * L'ordine delle fasce **come lo dice il file**, fondendo i quattro fogli (M21 §6).
+ *
+ * Ogni foglio è una sequenza: i giocatori sono ordinati dalla fascia più alta
+ * alla più bassa e nessuna fascia si ripete — verificato sui quattro fogli del
+ * file del 2026-08-12. Quindi ogni foglio afferma un ordine **parziale**, e il
+ * lavoro è metterli insieme senza contraddirne nessuno.
+ *
+ * ⚠ **Non è «la prima occorrenza in ordine di foglio», e la differenza si vede
+ * sul file vero.** La spec di M21 diceva di accodare ogni fascia nuova; misurato,
+ * quel metodo sbaglia: `P` e `A` non hanno `Titolare "Scarso"`, che in `D` e `C`
+ * sta **fra `Scomm.` e `Outsider`**, quindi accodandolo alla prima occorrenza
+ * finirebbe **dopo `Outsider`** — cioè in un ordine che due dei quattro fogli
+ * smentiscono, nella funzione che esiste apposta per rispettare il file.
+ *
+ * Si fa invece un ordinamento topologico: ogni foglio dà gli archi «questa fascia
+ * precede quella», e si estraggono le fasce senza predecessori, a parità nell'
+ * ordine in cui si sono viste la prima volta. Sul file vero il risultato è
+ * **esattamente `CARMY_FASCE`**, che è stato scritto a mano leggendo lo stesso
+ * foglio: due derivazioni indipendenti della stessa verità, ed è il test.
+ *
+ * ⚠ **Un ciclo non fa fallire niente.** Se due fogli si contraddicessero — `A`
+ * prima di `B` in uno, il contrario nell'altro — non c'è nessun ordine giusto da
+ * trovare: si rompe il pareggio con l'ordine di prima apparizione e si tira
+ * avanti. Rifiutare l'intero caricamento personale per due fasce in ordine
+ * discorde punirebbe chi ha compilato il foglio per una cosa che, a schermo, è
+ * un gruppo dieci righe più in alto.
+ */
+export function mergeFasce(sequences: readonly (readonly string[])[]): string[] {
+  const firstSeen: string[] = [];
+  const successors = new Map<string, Set<string>>();
+  const indegree = new Map<string, number>();
+
+  const node = (fascia: string) => {
+    if (!successors.has(fascia)) {
+      firstSeen.push(fascia);
+      successors.set(fascia, new Set());
+      indegree.set(fascia, 0);
+    }
+  };
+
+  for (const sequence of sequences) {
+    for (const fascia of sequence) node(fascia);
+    // Solo le coppie **consecutive**: la catena porta la transitività da sé, e
+    // gli archi restano quanti sono le fasce invece del loro quadrato.
+    for (let i = 1; i < sequence.length; i += 1) {
+      const from = sequence[i - 1];
+      const to = sequence[i];
+      if (from === to) continue;
+      const edges = successors.get(from)!;
+      if (edges.has(to)) continue;
+      edges.add(to);
+      indegree.set(to, indegree.get(to)! + 1);
+    }
+  }
+
+  const ordered: string[] = [];
+  const taken = new Set<string>();
+  while (ordered.length < firstSeen.length) {
+    const next =
+      firstSeen.find((f) => !taken.has(f) && indegree.get(f) === 0) ??
+      // Nessuna senza predecessori: c'è un ciclo. Si prende la prima vista fra
+      // quelle rimaste, e il giro successivo riprende normalmente.
+      firstSeen.find((f) => !taken.has(f))!;
+
+    taken.add(next);
+    ordered.push(next);
+    for (const to of successors.get(next)!) {
+      indegree.set(to, indegree.get(to)! - 1);
+    }
+  }
+
+  return ordered;
+}
+
+/**
  * Le colonne senza le quali il file non è il file.
  *
  * ⚠ **Il rifiuto è forte di proposito.** Questo foglio lo compila una persona, e
@@ -103,6 +232,25 @@ export type CarmyRow = {
   /** Dal nome del foglio, non dalla colonna `Ruolo`. */
   role: Role;
   fascia: string | null;
+  /**
+   * Il posto della fascia nell'ordine del file, da `0`. `null` per chi non ha
+   * fascia — che nel foglio si scrive `"Non Impostata"`, ed è il gruppo «Senza
+   * fascia» in fondo alla tabella (M21 §4).
+   *
+   * ⚠ **È una proprietà del file, non della riga**, e per questo si calcola solo
+   * quando tutti e quattro i fogli sono stati letti: la stessa fascia in due
+   * fogli deve avere lo stesso numero, o il raggruppamento si spezza in due.
+   */
+  fasciaRank: number | null;
+  /**
+   * La colonna `Obiett.`: «lo voglio comprare» (M21).
+   *
+   * ⚠ **La legge solo il caricamento personale.** `uploadCarmy`, che scrive la
+   * tabella globale, la ignora — vedi il commento in testa al file: sul percorso
+   * globale l'obiezione di M10B vale identica, e questo campo lì non deve
+   * arrivare da nessuna parte.
+   */
+  obiettivo: boolean;
   prezzo: number | null;
   /** Il `PMA`, in punti percentuali: `10.5` sta per «10,5%». */
   pma: number | null;
@@ -184,6 +332,8 @@ export function parseCarmy(file: ArrayBuffer | Uint8Array): Result<CarmyRow[]> {
   // possono agganciare a due giocatori diversi, e sceglierne una a caso è il
   // genere di silenzio che si scopre in asta.
   const seen = new Map<string, string>();
+  /** La sequenza delle fasce di ciascun foglio, per `mergeFasce`. */
+  const sequences: string[][] = [];
 
   for (const sheetName of CARMY_SHEETS) {
     const sheet = workbook.Sheets[sheetName];
@@ -205,6 +355,7 @@ export function parseCarmy(file: ArrayBuffer | Uint8Array): Result<CarmyRow[]> {
       return fail("CARMY_EMPTY", `Il foglio "${sheetName}" è vuoto.`);
     }
 
+    const sequence: string[] = [];
     const header = Object.keys(sheetRows[0]);
     const missing = REQUIRED_COLUMNS.filter((col) => !header.includes(col));
     if (missing.length > 0) {
@@ -268,12 +419,24 @@ export function parseCarmy(file: ArrayBuffer | Uint8Array): Result<CarmyRow[]> {
       const fmvExp = asNumber(raw[COLUMNS.fmvExp]);
       const commento = asText(raw[COLUMNS.commento]);
 
+      // `"Non Impostata"` è il modo in cui il foglio scrive «nessuna fascia».
+      const fasciaVera =
+        fascia === "" || fascia === CARMY_FASCIA_ASSENTE ? null : fascia;
+      // La sequenza del foglio, senza ripetizioni. Sul file vero una fascia non
+      // torna mai dopo essersi chiusa, ma un `includes` costa niente e rende la
+      // sequenza corretta anche su un file rimescolato a mano.
+      if (fasciaVera !== null && !sequence.includes(fasciaVera)) {
+        sequence.push(fasciaVera);
+      }
+
       rows.push({
         name,
         team,
         role: sheetName,
-        // `"Non Impostata"` è il modo in cui il foglio scrive «nessuna fascia».
-        fascia: fascia === "" || fascia === CARMY_FASCIA_ASSENTE ? null : fascia,
+        fascia: fasciaVera,
+        // Riempito sotto, quando tutti e quattro i fogli hanno parlato.
+        fasciaRank: null,
+        obiettivo: isObiettivo(raw[OBIETTIVO_COLUMN]),
         // Zero non è un prezzo: non è nemmeno un'offerta valida.
         prezzo: prezzoRaw === null || prezzoRaw === 0 ? null : prezzoRaw,
         // ⚠ Come la scrive il foglio, **non** ricalcolata da `prezzo`: sono due
@@ -297,10 +460,19 @@ export function parseCarmy(file: ArrayBuffer | Uint8Array): Result<CarmyRow[]> {
         commento: commento === "" ? null : commento,
       });
     }
+
+    sequences.push(sequence);
   }
 
   if (rows.length === 0) {
     return fail("CARMY_EMPTY", "Il file non contiene nessuna riga.");
+  }
+
+  // L'ordine delle fasce è una proprietà **del file**: si decide qui, in un posto
+  // solo, quando tutti e quattro i fogli hanno parlato.
+  const rank = new Map(mergeFasce(sequences).map((fascia, i) => [fascia, i]));
+  for (const row of rows) {
+    row.fasciaRank = row.fascia === null ? null : (rank.get(row.fascia) ?? null);
   }
 
   return ok(rows);

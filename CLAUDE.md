@@ -355,6 +355,11 @@ un diagramma testuale dove serve. **Aggiornarlo è un criterio di chiusura della
   identica al secondo tentativo** (successo il 2026-08-12, con dev già spento e nessuna modifica in
   mezzo). Il sintomo punta sulla rotta dello stream, cioè sul punto più delicato dell'app, e non
   c'entra niente: prima di indagare, ridai `pnpm build`.
+- **Una rotta cancellata lascia `pnpm typecheck` rosso su un file che non esiste**: `.next/types/`
+  è **generato**, e finché non si ridà `pnpm build` il suo `validator.ts` continua a importare la
+  pagina appena tolta — `Cannot find module '../../app/.../page.js'`. Il messaggio punta su un
+  percorso che nel repo non c'è più, quindi sembra un import rimasto in giro e non lo è: si ridà
+  `pnpm build` e il typecheck torna verde (successo il 2026-08-28, cancellando il banco di M21).
 - **Chunk client stantio in dev**: dopo molte modifiche con `pnpm dev` acceso, il browser può
   chiedere un bundle che non esiste più — `404 su /_next/static/chunks/app/.../page.js`. Il sintomo
   inganna: la pagina *si carica* ma non idrata, il portale resta su "Mi collego all'asta…" e non

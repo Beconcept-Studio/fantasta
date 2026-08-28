@@ -329,6 +329,8 @@ export async function centroDatiRows(): Promise<CentroDatiRow[]> {
         rigoriParati: insights.rigoriParati,
         fmvHome: insights.fmvHome,
         fmvAway: insights.fmvAway,
+        golFatti: insights.golFatti,
+        assist: insights.assist,
         rigoristaRank: insights.rigoristaRank,
         piazzatiRank: insights.piazzatiRank,
       },

@@ -483,6 +483,29 @@ export const playerInsights = pgTable("player_insights", {
   fmvAway: real("fmv_away"),
 
   /**
+   * Gol e assist della stagione a cui punta `stats_season` (M21 §3).
+   *
+   * ⚠ **Vengono da qui e non dal foglio personale**, che pure li ha: prenderli
+   * dalla fonte A vuol dire che li ha **chiunque** sia Pro, anche senza aver mai
+   * caricato niente, e che sono **aggiornati ogni giorno** invece che vecchi
+   * quanto il file di qualcuno. Il file personale porta il giudizio e la lista
+   * della spesa; i numeri li porta la fonte, e ce n'è **una sola** — due copie
+   * degli stessi gol sarebbero una domanda in più a cui rispondere ogni volta.
+   *
+   * ⚠ **Nullable, ed è ciò che evita il backfill.** Le righe già a sistema
+   * nascono con `null` e si riempiono al primo refresh giornaliero di M11, che
+   * gira da sé entro un quarto d'ora: la UI tratta `null` come «non ancora
+   * arrivato» e scrive un trattino. `NOT NULL` avrebbe preteso il passo a mano
+   * che «nulla ti ricorda» (`CLAUDE.md`).
+   *
+   * ⚠ Li scrive **solo** l'`upsert` della fonte A. La fonte B (`refreshSetPieces`)
+   * tocca i due rank e nient'altro: mescolare le due scritture è il modo in cui
+   * una `GET` cancella i dati dell'altra.
+   */
+  golFatti: integer("gol_fatti"),
+  assist: integer("assist"),
+
+  /**
    * Fonte B, `fantacalcio.it/rigoristi-serie-a`. `1` = primo della gerarchia,
    * `null` = non designato — che è un'informazione, non un dato mancante.
    *
@@ -591,6 +614,125 @@ export const carmyPlayers = pgTable("carmy_players", {
   /** Uguale su tutte le righe di uno stesso caricamento, come in `listone_players`. */
   uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull(),
 });
+
+// ─── Il giudizio di un umano su sé stesso (per utente, non per asta) ─────────
+
+/**
+ * Il foglio che ognuno carica per sé: le sue fasce, i suoi prezzi, e **la sua
+ * lista della spesa** (M21 §2).
+ *
+ * ⚠ **Le colonne sono quelle di `carmy_players`**, più `obiettivo` e
+ * `fascia_rank` e meno `source_name` e `source_team`, e la somiglianza è
+ * deliberata: le due tabelle contengono la stessa cosa — il giudizio di una
+ * persona su un calciatore — e differiscono solo per **chi è quella persona e
+ * chi lo può vedere**. Il file è lo stesso, il parser è lo stesso
+ * (`parseCarmy`), e i due percorsi divergono solo qui.
+ *
+ * ⚠ **`Obiett.` entra solo da questa porta, e §0 di M21 è scritto contro la nota
+ * di `parseCarmy.ts`.** Quella nota dice che gli obiettivi non si importano
+ * perché sono «la lista della spesa di chi compila il foglio», e mostrarla
+ * vorrebbe dire far vedere a dodici persone cosa punta a comprare l'autore del
+ * file, che gioca la stessa asta. **La frase è ancora giusta**: cade il suo
+ * presupposto, cioè che il foglio sia uno solo e globale. Qui l'import è per
+ * utente e il dato non esce mai da chi l'ha caricato. Sul percorso globale —
+ * `uploadCarmy` verso `carmy_players` — la colonna resta ignorata, e non è una
+ * dimenticanza: lì l'obiezione di M10B vale identica.
+ *
+ * ⚠ **`ON DELETE CASCADE` su `user_id`**: cancellare un utente porta via il suo
+ * listone, che è l'unico comportamento sensato per un dato che non ha senso
+ * senza il suo proprietario. Non viola la regola 5 (mai un `DELETE` su
+ * `assignments` e `ledger`): qui non ci sono assegnazioni né ledger, è
+ * l'opinione di una persona su dei calciatori — la stessa ragione per cui un
+ * caricamento sostituisce le proprie righe invece di fonderle, perché un
+ * obiettivo tolto dal file deve poter sparire.
+ *
+ * ⚠ **Una tabella e non due**, e la scelta va capita. Servivano tre cose oltre
+ * alle righe: **quando** ho importato, **quante** righe, e **l'ordine delle
+ * fasce**. La tentazione è una seconda tabella `user_listone_imports` con un
+ * `fasce jsonb`; non serve. `uploaded_at` è uguale su tutte le righe di un
+ * caricamento — esattamente come `carmy_players` e `listone_players` già
+ * lavorano — e l'ordine delle fasce vive riga per riga in `fascia_rank`. L'unica
+ * cosa che la seconda tabella darebbe in più è **la fascia le cui righe sono
+ * state tutte comprate**, e quell'intestazione non deve comparire comunque: la
+ * tab Listone mostra solo chi è rimasto (regola 8).
+ *
+ * ⚠ **Nessuna FOREIGN KEY verso `listone_players`**, e non è una dimenticanza:
+ * è la stessa asimmetria di `carmy_players` e `player_insights`, tabelle globali
+ * indipendenti lette in `LEFT JOIN`. Un `ext_id` che il listone non ha più dopo
+ * una sostituzione semplicemente non aggancia e non compare; una `FOREIGN KEY`
+ * farebbe invece fallire il **prossimo caricamento del listone di sistema** per
+ * colpa del file personale di qualcuno.
+ *
+ * Come le altre tre tabelle globali: **l'asta funziona con questa tabella
+ * vuota**, si legge in `LEFT JOIN` e nessun percorso critico la attraversa.
+ */
+export const userListone = pgTable(
+  "user_listone",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** L'`ext_id` del listone a cui il nome ha agganciato: non viene dal file. */
+    extId: integer("ext_id").notNull(),
+    /**
+     * La colonna `Obiett.` del foglio: «lo voglio comprare».
+     *
+     * ⚠ **`NOT NULL DEFAULT false`, e non nullable**: qui lo zero *è*
+     * un'informazione — «non è un mio obiettivo» — al contrario dei voti e dei
+     * prezzi qui sotto, dove lo zero del foglio significa «riga non compilata».
+     * È anche ciò che permette all'icona di stare su **ogni** riga, grigia o
+     * verde, senza un terzo stato da disegnare.
+     */
+    obiettivo: boolean("obiettivo").notNull().default(false),
+    /**
+     * La fascia **come l'ha scritta chi ha caricato**: campo libero, non un
+     * valore di `CARMY_FASCE`.
+     */
+    fascia: text("fascia"),
+    /**
+     * L'ordine in cui quella fascia compare nel file, da 0.
+     *
+     * ⚠ **È il dato che sostituisce `CARMY_FASCE` per chi ha importato**, e per
+     * questo esiste: nel foglio i giocatori sono ordinati dalla fascia più alta
+     * alla più bassa e la fascia non si ripete mai — verificato sui quattro fogli
+     * del file di riferimento — quindi «l'ordine in cui compaiono» è ben
+     * definito. Lo calcola il parser leggendo i fogli in ordine `P, D, C, A`.
+     *
+     * ⚠ **Due regole per lo stesso concetto, ed è una scelta** (M21 §4): l'ordine
+     * del file vale per il listone personale, `CARMY_FASCE` per quello globale.
+     * `CARMY_FASCE` regge oggi i filtri del pannello di chiamata e funziona;
+     * derivarne anche quell'ordine dal file sarebbe un guadagno che nessuno
+     * vedrebbe. Se un giorno il foglio globale usasse fasce libere, si aggiungerà
+     * un `fascia_rank` anche a `carmy_players` e le due regole diventeranno una.
+     * Non prima (regola 8).
+     */
+    fasciaRank: integer("fascia_rank"),
+    /** Il `PMA` in punti percentuali, come lo scrive il foglio. Vedi `carmy_players.pma`. */
+    pma: real("pma"),
+    /** La fantamedia attesa. */
+    fmvExp: real("fmv_exp"),
+    /** Il prezzo consigliato in crediti. `null` quando il foglio scrive `0`. */
+    prezzo: integer("prezzo"),
+    /** I tre giudizi da 1 a 5. `null` sullo zero, che è una riga non compilata. */
+    titolarita: integer("titolarita"),
+    affidabilita: integer("affidabilita"),
+    integrita: integer("integrita"),
+    /** Le note del foglio, già ripulite e senza i vuoti. */
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    commento: text("commento"),
+    /** Uguale su tutte le righe di uno stesso caricamento: è la data dell'import. */
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    /**
+     * ⚠ **Una riga per giocatore per utente**, e la chiave composta è anche
+     * l'indice della sola query che esiste — «tutto il listone di questo
+     * utente» — perché `user_id` è la sua colonna di testa. Nessun indice in
+     * più: non c'è nessuna lettura per `ext_id` che ignori l'utente.
+     */
+    primaryKey({ columns: [t.userId, t.extId] }),
+  ],
+);
 
 // ─── Come sono andate le due fonti pubbliche (globale, non per asta) ─────────
 
@@ -858,6 +1000,8 @@ export type PlayerInsightRow = typeof playerInsights.$inferSelect;
 export type NewPlayerInsightRow = typeof playerInsights.$inferInsert;
 export type CarmyPlayerRow = typeof carmyPlayers.$inferSelect;
 export type NewCarmyPlayerRow = typeof carmyPlayers.$inferInsert;
+export type UserListoneRow = typeof userListone.$inferSelect;
+export type NewUserListoneRow = typeof userListone.$inferInsert;
 export type SourceRunRow = typeof sourceRuns.$inferSelect;
 export type Lot = typeof lots.$inferSelect;
 export type LotRound = typeof lotRounds.$inferSelect;

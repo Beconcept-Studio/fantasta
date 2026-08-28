@@ -332,8 +332,8 @@ async function writeListoneRows(
   rows: ParsedInsight[],
   updatedAt: Date,
 ): Promise<void> {
-  // A blocchi, perché un solo `INSERT` da 497 righe con 14 colonne supera
-  // comodamente i parametri che ci stanno in una query.
+  // A blocchi, perché un solo `INSERT` da 497 righe con diciassette colonne
+  // supera comodamente i parametri che ci stanno in una query.
   const CHUNK = 100;
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK).map((r) => ({ ...r, listoneUpdatedAt: updatedAt }));
@@ -356,6 +356,13 @@ async function writeListoneRows(
           rigoriParati: sql`excluded.rigori_parati`,
           fmvHome: sql`excluded.fmv_home`,
           fmvAway: sql`excluded.fmv_away`,
+          // ⚠ Gol e assist stanno **qui e in nessun'altra scrittura** (M21 §3):
+          // sono colonne della fonte A, e `refreshSetPieces` continua a toccare
+          // i due rank e basta. Mescolare le due scritture è il modo in cui una
+          // `GET` cancella i dati dell'altra — la ragione per cui il foglio di
+          // Carmy ha una tabella sua invece di tre colonne in questa.
+          golFatti: sql`excluded.gol_fatti`,
+          assist: sql`excluded.assist`,
           listoneUpdatedAt: sql`excluded.listone_updated_at`,
         },
       });

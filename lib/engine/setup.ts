@@ -19,6 +19,7 @@ import {
   type BotFill,
   type BotStrategy,
   type Role,
+  carmyFasciaRank,
   isAppAdmin,
   strategyFor,
 } from "@/lib/domain";
@@ -36,6 +37,7 @@ import { insightsForExtIds } from "./insights";
 import { isUuid } from "./ids";
 import { readListoneForCopy } from "./listone";
 import { auctionGone } from "./mutate";
+import { type MyListoneRow, myListone } from "./user-listone";
 import {
   type AuctionConfig,
   type AuctionConfigInput,
@@ -1315,10 +1317,23 @@ export async function listPlayers(
  * due regole da tenere allineate, e i filtri della lista di chiamata — che si
  * vedono solo agli `is_pro` — sono l'**interfaccia** sopra questo dato, non la sua
  * protezione (M10B §7).
+ *
+ * ⚠ **E da M21 risolve «personale se c'è, globale altrimenti», qui e non nel
+ * browser** (M21 §5). `userId` serve a questo: chi ha caricato il proprio foglio
+ * riceve i **propri** valori, chi non l'ha fatto riceve quelli globali, e il
+ * client riceve **una forma sola** senza nessuna regola da riapplicare. Le
+ * quattro chiavi che ne escono — `carmy` risolto, `mio`, `obiettivo`,
+ * `fasciaGruppo` con il suo `fasciaRank` — seguono la stessa strada delle altre:
+ * **assenti** per chi non ha il permesso, non `null` da nascondere.
+ *
+ * ⚠ **Senza `userId` il comportamento è quello di prima**, ed è voluto: il
+ * chiamante che non sa di chi è la pagina non può ricevere il listone di
+ * nessuno.
  */
 export async function listPickPool(
   auctionId: string,
   withInsights = false,
+  userId?: string,
 ): Promise<PoolPlayer[]> {
   if (!isUuid(auctionId)) return [];
 
@@ -1360,25 +1375,60 @@ export async function listPickPool(
   }
 
   const extIds = rows.map((r) => r.extId);
-  // ⚠ Due letture e non un `JOIN`: le due tabelle sono globali e indipendenti, e
+  // ⚠ Letture separate e non un `JOIN`: le tabelle sono globali e indipendenti, e
   // il foglio di Carmy può essere vuoto mentre gli insight ci sono (e viceversa).
   // Chi ha l'uno e non l'altro deve arrivare comunque, con la sola chiave che ha.
-  const [insights, carmy] = await Promise.all([
+  const [insights, carmy, mine] = await Promise.all([
     insightsForExtIds(extIds),
     carmyForExtIds(extIds),
+    userId === undefined
+      ? Promise.resolve(new Map<number, MyListoneRow>())
+      : myListone(userId),
   ]);
+
+  /**
+   * ⚠ **«Ho importato» si decide una volta sola, non riga per riga**, ed è ciò
+   * che rende vera la promessa del vocabolario unico (M21 §4, decisione 5): o le
+   * fasce sono tutte le mie, o sono tutte quelle globali. Deciderlo per riga
+   * produrrebbe una tabella con dentro `Top` (mia) e `Top` (globale) come due
+   * gruppi diversi, che è esattamente la cosa che la decisione 5 vieta.
+   */
+  const hoImportato = mine.size > 0;
 
   return rows.map(({ extId, ...player }) => {
     const found = insights.get(extId);
-    const judged = carmy.get(extId);
+    const globale = carmy.get(extId);
+    const mio = mine.get(extId);
+    // Decisione 1: il mio file vince, riga per riga. Chi nel mio file non c'è
+    // resta con i valori globali — una tabella piena, non una tabella a buchi.
+    const judged = mio?.judgement ?? globale;
+
     // ⚠ Niente `insights: undefined`: la chiave si aggiunge **solo** se c'è
     // qualcosa. Un `undefined` esplicito sparirebbe comunque nella
     // serializzazione, ma il tipo direbbe una cosa diversa da quella che il test
     // asserisce — e quel test è la differenza fra un dato protetto e uno nascosto.
-    // Le due chiavi si aggiungono **una per una e solo se ci sono**: un giocatore
-    // giudicato da Carmy ma senza riga di insight arriva con `carmy` e senza
-    // `insights`, e la UI di M10B sa già trattarlo (è il ripiego di `titolarita`).
-    const withCarmy = judged ? { ...player, carmy: judged } : player;
+    // Vale per tutte le chiavi qui sotto, una per una: un giocatore giudicato ma
+    // senza riga di insight arriva con `carmy` e senza `insights`, e la UI di
+    // M10B sa già trattarlo (è il ripiego di `titolarita`).
+    let withCarmy: PoolPlayer = judged ? { ...player, carmy: judged } : player;
+    if (mio) withCarmy = { ...withCarmy, mio: true };
+    if (mio?.obiettivo) withCarmy = { ...withCarmy, obiettivo: true };
+
+    // Il vocabolario: il mio se ho importato, quello globale altrimenti. Mai
+    // mescolati, e mai la fascia globale su una tabella che usa le mie.
+    const gruppo = hoImportato ? (mio?.fascia ?? null) : (globale?.fascia ?? null);
+    if (gruppo !== null) {
+      const rank = hoImportato ? mio?.fasciaRank : carmyFasciaRank(gruppo);
+      withCarmy = {
+        ...withCarmy,
+        fasciaGruppo: gruppo,
+        // ⚠ `carmyFasciaRank` torna `CARMY_FASCE.length` per una fascia che non
+        // conosce: è già «in fondo», che è il posto giusto per una fascia nuova
+        // comparsa nel foglio globale.
+        ...(rank === null || rank === undefined ? {} : { fasciaRank: rank }),
+      };
+    }
+
     if (!found) return withCarmy;
     return {
       ...withCarmy,
@@ -1395,6 +1445,8 @@ export async function listPickPool(
         rigoriParati: found.rigoriParati,
         fmvHome: found.fmvHome,
         fmvAway: found.fmvAway,
+        golFatti: found.golFatti,
+        assist: found.assist,
         rigoristaRank: found.rigoristaRank,
         piazzatiRank: found.piazzatiRank,
       },

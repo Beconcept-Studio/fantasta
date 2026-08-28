@@ -791,6 +791,153 @@ export function availablePlayers(
     .sort((a, b) => b.fvm - a.fvm || b.quot - a.quot || a.name.localeCompare(b.name));
 }
 
+// ─── La tab Listone (M21 §4) ─────────────────────────────────────────────────
+
+/** Cosa si vede nella tab Listone, oltre a chi è già stato preso. */
+export type ListoneFilters = {
+  /**
+   * I ruoli, **in OR**. Un insieme vuoto non è «nessuno»: è «tutti».
+   *
+   * ⚠ È la lettura giusta di una fila di interruttori spenti — chi li spegne
+   * tutti sta togliendo un filtro, non chiedendo una tabella vuota — ed è anche
+   * l'unico modo di non avere uno stato in cui la tab non mostra niente e non
+   * dice perché.
+   */
+  roles: readonly Role[];
+  /** Ricerca su nome **e** squadra, tollerante ad accenti e maiuscole. */
+  query: string;
+  /** Solo la mia lista della spesa. */
+  soloObiettivi: boolean;
+};
+
+export const NO_LISTONE_FILTERS: ListoneFilters = {
+  roles: [],
+  query: "",
+  soloObiettivi: false,
+};
+
+/** Un gruppo della tabella: l'intestazione e le sue righe. */
+export type ListoneGroup = {
+  /**
+   * La fascia, oppure `null` per il gruppo «Senza fascia», che sta sempre in
+   * fondo.
+   *
+   * ⚠ La **parola** «Senza fascia» non sta qui: è rendering, e questa è una
+   * funzione pura che non scrive testo a schermo. Qui c'è il fatto — su costui
+   * non ho un giudizio mio — e il componente lo traduce.
+   */
+  fascia: string | null;
+  players: PoolPlayer[];
+};
+
+/**
+ * La tabella della tab Listone: chi è ancora libero, raggruppato per fascia.
+ *
+ * È la sorella di `availablePlayers`, e differisce in tre punti che sono tutti e
+ * tre la richiesta (M21 §4): **più ruoli in OR** invece di uno solo, **il filtro
+ * obiettivi**, e **nessun tetto di quaranta righe**.
+ *
+ * ⚠ **Nessuna query per lotto, e nessun evento da ascoltare.** «Sincronizzata in
+ * tempo reale con ogni lotto» è già risolto dal fatto che questa è una funzione
+ * dello snapshot: quando un lotto chiude, la rosa del vincitore cambia, lo
+ * snapshot arriva, la riga sparisce. È I10 senza scrivere una riga per ottenerlo.
+ *
+ * ⚠ **Il giocatore in asta adesso resta in tabella.** Non è ancora di nessuno —
+ * `takenPlayerIds` legge le rose, e il lotto aperto non ne ha ancora toccata
+ * nessuna — e farlo sparire prima dell'assegnazione sarebbe una bugia che si
+ * corregge da sé, perché se il lotto va deserto quel giocatore torna disponibile.
+ * Il badge «in asta» lo mette il componente, che il lotto corrente ce l'ha.
+ *
+ * ⚠ **Dentro il gruppo si ordina per `PMA` decrescente, non per `fvm`** — ed è una
+ * divergenza voluta dalla lista di chiamata, decisa nella fase di progettazione
+ * guardando il banco di prova. Là l'ordine **è una promessa** («il primo è quello
+ * che il timer comprerebbe al posto tuo») e non si tocca; qui non si sceglie
+ * niente, si guarda chi resta, e l'unico criterio giusto è quello che chi legge
+ * **può verificare sulla riga** — mentre `fvm` in tabella non c'è nemmeno, tolto
+ * a M17. Conseguenza da tenere in mente: **le due liste della stessa serata sono
+ * ordinate diversamente**, e va bene così.
+ */
+export function listoneRows(
+  pool: PoolPlayer[],
+  snapshot: Snapshot,
+  filters: ListoneFilters = NO_LISTONE_FILTERS,
+): ListoneGroup[] {
+  const taken = takenPlayerIds(snapshot);
+  const needle = fold(filters.query.trim());
+  const roles = new Set(filters.roles);
+
+  const rows = pool.filter(
+    (p) =>
+      !taken.has(p.id) &&
+      (roles.size === 0 || roles.has(p.role)) &&
+      (!filters.soloObiettivi || p.obiettivo === true) &&
+      (needle === "" ||
+        fold(p.name).includes(needle) ||
+        fold(p.team).includes(needle)),
+  );
+
+  // La chiave del gruppo è la **decisione** presa dal server (`fasciaGruppo`),
+  // non `carmy.fascia`: è ciò che permette a un giocatore di stare in «Senza
+  // fascia» mostrando comunque i valori globali che ha (M21 §5).
+  const groups = new Map<string | null, ListoneGroup>();
+  const ranks = new Map<string | null, number>();
+
+  for (const player of rows) {
+    const fascia = player.fasciaGruppo ?? null;
+    const group = groups.get(fascia) ?? { fascia, players: [] };
+    group.players.push(player);
+    groups.set(fascia, group);
+
+    // ⚠ Il **minimo** fra le righe del gruppo, non il primo che capita: se due
+    // righe della stessa fascia arrivassero con numeri diversi — un file
+    // rimescolato a mano — la tabella deve comunque avere un ordine solo.
+    const rank = player.fasciaRank ?? SENZA_RANK;
+    ranks.set(fascia, Math.min(ranks.get(fascia) ?? rank, rank));
+  }
+
+  for (const group of groups.values()) group.players.sort(perPma);
+
+  return [...groups.values()].sort((a, b) => {
+    // «Senza fascia» sta in fondo, sempre: è il prezzo del vocabolario unico, e
+    // il suo posto è dopo tutto ciò su cui un giudizio c'è.
+    if (a.fascia === null) return b.fascia === null ? 0 : 1;
+    if (b.fascia === null) return -1;
+    return (
+      (ranks.get(a.fascia) ?? SENZA_RANK) - (ranks.get(b.fascia) ?? SENZA_RANK) ||
+      a.fascia.localeCompare(b.fascia, "it")
+    );
+  });
+}
+
+/**
+ * Dove finisce un gruppo di cui non si conosce l'ordine: dopo tutti quelli che
+ * un numero ce l'hanno. Non capita col file di riferimento — il parser dà un
+ * numero a ogni fascia che scrive — e capita eccome con righe messe a mano.
+ */
+const SENZA_RANK = Number.MAX_SAFE_INTEGER;
+
+/**
+ * `PMA` decrescente, e i tre pareggi che restano.
+ *
+ * ⚠ **Chi il `PMA` non ce l'ha va in fondo, non in cima.** `null` significa «su
+ * questo non c'è un prezzo consigliato» — nel foglio è uno `0%`, cioè un
+ * giocatore che chi ha compilato non pensa di comprare — e trattarlo come zero
+ * avrebbe lo stesso effetto, ma per caso: qui è scritto.
+ */
+function perPma(a: PoolPlayer, b: PoolPlayer): number {
+  const pa = a.carmy?.pma ?? null;
+  const pb = b.carmy?.pma ?? null;
+  if (pa !== pb) {
+    if (pa === null) return 1;
+    if (pb === null) return -1;
+    return pb - pa;
+  }
+  // A parità si scende sui due numeri che ci sono sempre, così l'ordine è
+  // **stabile**: due tabelle disegnate a un secondo di distanza non si
+  // rimescolano sotto le dita.
+  return b.fvm - a.fvm || b.quot - a.quot || a.name.localeCompare(b.name, "it");
+}
+
 // ─── I filtri di Carmy sulla lista di chiamata (M10B §6) ─────────────────────
 
 /**
