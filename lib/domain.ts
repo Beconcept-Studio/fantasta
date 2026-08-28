@@ -224,6 +224,20 @@ export type PlayerInsights = {
   rigoriParati: number;
   fmvHome: number | null;
   fmvAway: number | null;
+  /**
+   * Gol e assist della stagione di `statsSeason` (M21 §3).
+   *
+   * ⚠ **`number | null` e non `number`**, al contrario del parser che scrive
+   * sempre un contatore: le righe già a sistema il giorno del rilascio nascono
+   * con `null` e si riempiono al primo refresh giornaliero. È la colonna
+   * nullable dello schema letta dalla parte della UI, che tratta `null` come
+   * «non ancora arrivato» e scrive un trattino — mentre lo `0` è un dato pieno e
+   * si scrive `0`. Quando la distinzione sparirà da sola, fra un refresh e
+   * l'altro, il tipo resterà comunque onesto: una fonte pubblica può tornare a
+   * non rispondere.
+   */
+  golFatti: number | null;
+  assist: number | null;
   /** `1` = primo della gerarchia. `null` = non designato. */
   rigoristaRank: number | null;
   piazzatiRank: number | null;

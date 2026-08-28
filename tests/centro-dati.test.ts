@@ -39,6 +39,8 @@ function insights(over: Partial<PlayerInsights> = {}): PlayerInsights {
     rigoriParati: 0,
     fmvHome: null,
     fmvAway: null,
+    golFatti: null,
+    assist: null,
     rigoristaRank: null,
     piazzatiRank: null,
     ...over,

@@ -275,6 +275,13 @@ Due aggiunte e nient'altro: `gol_fatti` e `assist` entrano nella riga che `parse
 produce — la risposta della fonte li contiene già, è il parser che oggi si ferma prima — e
 `refreshInsights` li scrive nell'`upsert` per colonna che già fa.
 
+⚠ **«Due aggiunte» è vero per le scritture, non per il diff** (misurato a M21-04). I punti in cui i
+due numeri vanno elencati **a mano, colonna per colonna**, sono quattro: il parser, l'`upsert`, il
+tipo `PlayerInsights` di `lib/domain.ts` — dichiarato a mano perché lo legge un client component — e
+le due proiezioni che ricopiano le colonne una per una, `listPickPool` e `centroDatiRows`. Nessuna di
+queste fallisce da sé se la si dimentica: la colonna resta vuota, o non arriva al browser, e non lo
+dice nessuno.
+
 ⚠ **Si aggiungono all'`upsert` della fonte A e a nessun'altra scrittura.** La fonte B
 (`refreshSetPieces`) tocca solo i due rank, e mescolare le due scritture è il modo in cui una `GET`
 cancella i dati dell'altra — la ragione per cui M10B ha una tabella sua invece di tre colonne qui.
@@ -579,9 +586,20 @@ Scritto qui perché **non è deducibile dal codice** e la sessione in cui è suc
       vincolo violato sta nella **causa** (`cause.code`, `cause.constraint`). Un
       `rejects.toThrow(/duplicate key/)` non passa, e — peggio — se passasse accetterebbe qualunque
       fallimento di quella `INSERT`
-- [ ] **M21-04** — Gol e Assist dalla fonte A (§3): `parseFantalabListone`, l'`upsert` di
+- [x] **M21-04** — Gol e Assist dalla fonte A (§3): `parseFantalabListone`, l'`upsert` di
       `refreshInsights`, e un test sul fixture vero che verifica che i due numeri arrivino e che la
       fonte B **non** li tocchi
+      → I due campi nel parser (contatori, `0` e non `null`: qui lo zero *è* un'informazione) e
+      nell'`upsert` della fonte A. ⚠ **Erano quattro i punti da toccare, non due**, e vale la pena
+      saperlo prima di aggiungere la prossima colonna: `PlayerInsights` in `lib/domain.ts` — che è
+      dichiarato a mano perché lo legge un client component — e le **due** proiezioni che elencano le
+      colonne una per una, `listPickPool` e `centroDatiRows`. Una colonna aggiunta allo schema e
+      dimenticata in una di quelle resta invisibile senza nessun errore. Misurato sul fixture:
+      **933 gol e 653 assist** su 497 righe, 209 giocatori a secco. Quattro test nuovi → **929 in 54
+      file**. Due meritano il nome per esteso: quello che fa **due** refresh di fila (una colonna
+      fuori dall'`upsert` si riempirebbe al primo `INSERT` e non si aggiornerebbe mai più) e quello
+      che **svuota le due colonne a mano su una tabella piena** e guarda il refresh successivo
+      riempirle — è la verifica 21, cioè la prova in locale che il rilascio non vuole nessun backfill
 - [ ] **M21-05** — Il parser (§6): `Obiett.` normalizzato e `fascia_rank` col merge dei quattro
       fogli, con i test sul fixture vero — incluso quello su `Titolare "Scarso"`, che in `P` e `A`
       non c'è. ⚠ Verificare che `uploadCarmy` continui a comportarsi **identico**: i suoi test

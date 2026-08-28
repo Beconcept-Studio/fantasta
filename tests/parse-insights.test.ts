@@ -80,6 +80,49 @@ describe("parseFantalabListone", () => {
     });
   });
 
+  /**
+   * M21 §3 — i due numeri che la tab Listone mostra, e che **il parser non
+   * leggeva**.
+   *
+   * ⚠ La spec di M21 partiva dall'idea che «li abbiamo già e non li mostriamo»:
+   * è falso, ed è stato misurato prima di progettare. Nella risposta ci sono da
+   * sempre — `gol_fatti` e `assist` — ma la riga che il parser costruiva si
+   * fermava a `fmv_away`. Questo test è il confine fra le due cose.
+   *
+   * I numeri sono esatti come tutti gli altri di questo file: 933 gol e 653
+   * assist sulle 497 righe della risposta del 2026-08-11, e 209 giocatori a
+   * secco. Un «almeno qualcosa» passerebbe anche se la fonte smettesse di
+   * mandarli — e siccome sono contatori, il parser scriverebbe **zero ovunque**
+   * senza fallire.
+   */
+  it("legge gol e assist, che sono contatori: 933 e 653, e 209 a secco", () => {
+    const result = parseFantalabListone(listoneBytes);
+    if (!result.ok) throw new Error(result.error.message);
+
+    const rows = result.value.rows;
+    expect(rows.reduce((s, r) => s + r.golFatti, 0)).toBe(933);
+    expect(rows.reduce((s, r) => s + r.assist, 0)).toBe(653);
+    // ⚠ Zero e non `null`: qui lo zero *è* un'informazione — non ha segnato — al
+    // contrario di `fmvHome`, dove lo zero della fonte significa «nessuna media».
+    expect(rows.filter((r) => r.golFatti === 0)).toHaveLength(209);
+    expect(rows.every((r) => Number.isInteger(r.golFatti))).toBe(true);
+    expect(rows.every((r) => Number.isInteger(r.assist))).toBe(true);
+
+    // I due di §2 con i loro numeri, e il capocannoniere della risposta.
+    expect(rows.find((r) => r.extId === 531)).toMatchObject({
+      golFatti: 6,
+      assist: 4,
+    });
+    expect(rows.find((r) => r.extId === 184)).toMatchObject({
+      golFatti: 3,
+      assist: 2,
+    });
+    expect(rows.find((r) => r.extId === 2764)).toMatchObject({
+      golFatti: 17,
+      assist: 6,
+    });
+  });
+
   it("le squadre sono venti, col nome pieno: è la stessa stringa di players.team", () => {
     const result = parseFantalabListone(listoneBytes);
     if (!result.ok) throw new Error(result.error.message);

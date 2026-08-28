@@ -1395,6 +1395,8 @@ export async function listPickPool(
         rigoriParati: found.rigoriParati,
         fmvHome: found.fmvHome,
         fmvAway: found.fmvAway,
+        golFatti: found.golFatti,
+        assist: found.assist,
         rigoristaRank: found.rigoristaRank,
         piazzatiRank: found.piazzatiRank,
       },

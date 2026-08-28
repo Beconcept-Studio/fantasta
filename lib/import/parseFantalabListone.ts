@@ -51,6 +51,25 @@ export type ParsedInsight = {
   rigoriParati: number;
   fmvHome: number | null;
   fmvAway: number | null;
+  /**
+   * Gol e assist della stagione dichiarata da `statsSeason` (M21 §3).
+   *
+   * ⚠ **Erano già nella risposta e il parser si fermava prima**: la spec di M21
+   * lo dava per fatto — «li abbiamo e non li mostriamo» — e non era vero. Sono
+   * `gol_fatti` e `assist` nel corpo della fonte, misurati su tutte e 497 le
+   * righe della risposta salvata: 288 giocatori con almeno un gol, 263 con
+   * almeno un assist, massimo 17 per entrambi.
+   *
+   * ⚠ **Contatori come `rigoriFatti`, quindi `0` e non `null` quando mancano.**
+   * Qui lo zero *è* un'informazione — non ha segnato — al contrario di
+   * `fmv_home`, dove lo zero significa «nessuna media» e diventa `null`.
+   *
+   * ⚠ **Nessun `display_gol_fatti` nella fonte**, al contrario delle presenze:
+   * verificato sulle chiavi della risposta, e per questo non c'è la scelta fra
+   * due numeri che `presenze` ha dovuto fare.
+   */
+  golFatti: number;
+  assist: number;
 };
 
 export type ParsedListone = {
@@ -195,6 +214,8 @@ export function parseFantalabListone(
       rigoriParati: counter(row.rigori_parati),
       fmvHome: decimalOrNull(row.fmv_home),
       fmvAway: decimalOrNull(row.fmv_away),
+      golFatti: counter(row.gol_fatti),
+      assist: counter(row.assist),
     });
   }
 
