@@ -517,6 +517,21 @@ prima da rivedere è questa, non quella.
 
 ---
 
+## ⚠ Lo stato della macchina locale, per chi riprende
+
+Scritto qui perché **non è deducibile dal codice** e la sessione in cui è successo non c'è più.
+
+1. **In `asta` — il database di sviluppo — c'è una simulata lasciata `LIVE` il 2026-08-23**
+   (`51f56216-199c-48a5-8551-70eab533f433`, «Prova»). Accendere `pnpm dev` la **rimette in moto** e le
+   consuma i lotti: è successo il 2026-08-28. È congelata a `LIVE/WAITING_PICK` e non è stata toccata
+   altrimenti. Chi riprende: o la mette in pausa dal pannello prima di lavorare, o lavora su
+   `asta_banco` (la ricetta è in `scripts/banco/LEGGIMI.md`).
+2. **Il banco di prova è `app/banco/`** — due rotte, `/banco` e `/banco/telefono` — con i componenti
+   veri e i dati veri dei fixture. ⚠ È **pubblico, senza `requireUser()`**, e `next build` lo
+   compila: **va cancellato a M21-13**, insieme a `scripts/banco/`.
+3. **Gli screenshot si prendono da CDP**, non col flag `--screenshot`. Il perché è in M21-02 e in
+   `scripts/banco/LEGGIMI.md`, e vale la pena leggerlo prima di fidarsi di un'immagine.
+
 ## Task
 
 > Da rifinire all'apertura della macro. Sono la traduzione della spec, non un impegno preso nella
