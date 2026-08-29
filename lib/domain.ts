@@ -661,6 +661,41 @@ export function canSeeInsights(
   return user?.isPro === true || user?.isAdmin === true;
 }
 
+/**
+ * Chi vede Stats+ nel portale (M22 §6).
+ *
+ * ⚠ **Le due metà del gate sono di natura diversa, e confonderle è l'errore da
+ * non fare.** `canSeeInsights` decide una **query**: a chi non passa, `carmy`
+ * non arriva affatto. `statsPlus` decide che cosa l'applicazione **mostra** a
+ * chi quei PMA li ha già ricevuti — è un gate **di prodotto**, non una difesa, e
+ * `lib/db/schema.ts` lo dice per esteso sulla colonna. Chi un giorno volesse
+ * "rafforzarlo" spostando il calcolo sul server pagherebbe un blocco
+ * serializzato per dodici viewer a ogni transizione per nascondere un'addizione
+ * a chi ha già gli addendi.
+ *
+ * ⚠ **L'`AND` non è una cautela, è forzato dai dati**: senza `is_pro` non ci
+ * sono PMA, quindi Stats+ non avrebbe niente da calcolare. Un `statsPlus` senza
+ * Pro è un interruttore che promette e non fa, ed è il pannello di
+ * amministrazione a dirlo — nel momento in cui lo si accende, non l'utente
+ * scoprendo uno spazio vuoto.
+ *
+ * ⚠ **E qui l'amministratore *non* è implicito, al contrario di
+ * `canSeeInsights` dieci righe più su.** Non è una svista da uniformare: là
+ * l'implicito esiste perché chi importa i dati deve poterli guardare; qui
+ * costerebbe l'unica prova che serve davvero — aprire il portale **senza**
+ * Stats+, che è come lo vede quasi tutto il tavolo. Accendersi il flag da sé si
+ * può: `setUserStatsPlus` permette di toccare la propria riga, come
+ * `setUserPro`.
+ */
+export function canSeeStatsPlus(
+  user:
+    | { isPro: boolean; isAdmin: boolean; statsPlus: boolean }
+    | null
+    | undefined,
+): boolean {
+  return canSeeInsights(user) && user?.statsPlus === true;
+}
+
 // ─── Il refresh giornaliero (M11) ────────────────────────────────────────────
 
 /**

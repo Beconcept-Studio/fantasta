@@ -50,6 +50,7 @@ export default async function AdminUsersPage({
         : romeDateTime(user.emailVerifiedAt.toISOString()),
     isAdmin: user.isAdmin,
     isPro: user.isPro,
+    statsPlus: user.statsPlus,
     isBot: user.isBot,
     createdOn: romeDay(user.createdAt.toISOString()),
     ownedAuctions: user.ownedAuctions,

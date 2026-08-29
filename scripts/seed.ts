@@ -248,7 +248,37 @@ async function seedUsers(): Promise<{ created: number; ids: string[] }> {
   // più `psql` sarebbe una barzelletta.
   const first = rows.find((row) => row.displayName === DEV_USERS[0]);
   if (first) {
-    await db.update(users).set({ isAdmin: true }).where(eq(users.id, first.id));
+    // ⚠ **`statsPlus` va acceso a mano anche all'amministratore** (M22 §6.2):
+    // al contrario di `is_pro`, Stats+ **non** è implicito per chi amministra, e
+    // senza questa riga il primo utente di prova aprirebbe il portale senza
+    // trovarci la funzione — cercandone la causa nel codice, che è il posto
+    // sbagliato. È lo stesso gesto che in produzione si fa una volta in
+    // `/admin/users`, qui automatizzato per la stessa ragione per cui `isAdmin`
+    // lo è: aprire `psql` per provare una funzione sarebbe una barzelletta.
+    await db
+      .update(users)
+      .set({ isAdmin: true, statsPlus: true })
+      .where(eq(users.id, first.id));
+  }
+
+  // ⚠ **Il secondo e il terzo utente sono la coppia di confronto di M22 §9.2**:
+  // entrambi Pro, **uno con Stats+ e uno senza**. È l'unico modo di guardare
+  // fianco a fianco le due schermate e verificare che chi non ha il flag veda il
+  // portale di sempre — che è la promessa di §8, e l'unica che non si può
+  // provare da un account solo.
+  const conStats = rows.find((row) => row.displayName === DEV_USERS[1]);
+  if (conStats) {
+    await db
+      .update(users)
+      .set({ isPro: true, statsPlus: true })
+      .where(eq(users.id, conStats.id));
+  }
+  const senzaStats = rows.find((row) => row.displayName === DEV_USERS[2]);
+  if (senzaStats) {
+    await db
+      .update(users)
+      .set({ isPro: true, statsPlus: false })
+      .where(eq(users.id, senzaStats.id));
   }
 
   // L'ordine è quello di DEV_USERS, non quello alfabetico: i posti dell'asta

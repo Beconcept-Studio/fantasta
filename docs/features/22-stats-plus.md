@@ -873,26 +873,40 @@ pure, non sanno chi è l'utente.
 - [x] ⚠ ~~Nessuna colonna nuova~~ → **`users.stats_plus`, assegnato dall'amministratore, e l'admin
       non è implicito** (owner, 2026-08-29). §6 riscritto all'apertura
 
-**Il motore** — commit 1
+**Il motore** — commit 1 ✅
 
-- [ ] `lotSeq` su `SnapshotRosterEntry` in `lib/realtime/types.ts`, con la nota di §7.2
-- [ ] Popolarlo in `serializeSnapshot` risolvendo `a.lotId` → `lots.seq`, con una `Map` costruita una
+- [x] `lotSeq` su `SnapshotRosterEntry` in `lib/realtime/types.ts`, con la nota di §7.2
+- [x] Popolarlo in `serializeSnapshot` risolvendo `a.lotId` → `lots.seq`, con una `Map` costruita una
       volta sola fuori dal ciclo per membro (non un `find` per assegnazione)
-- [ ] Il test in `tests/db/snapshot.test.ts`: `source = "AUCTION"` → il `seq` giusto,
+- [x] Il test in `tests/db/snapshot.test.ts`: `source = "AUCTION"` → il `seq` giusto,
       `source = "MANUAL"` → `null`
+- [x] ⚠ **Fuori programma, e non è di M22**: F4-09 passava a uno sweep **globale** un `advancePhase`
+      non filtrato, quindi faceva avanzare le aste degli altri file di test — che girano in
+      parallelo — e li faceva vedere rossi con «expected [] to include …». `cancello.test.ts:143`
+      aveva già diagnosticato e risolto lo stesso problema con `sweeperFor`; qui il filtro mancava.
+      Era **latente**: aggiungere un test in quel file ha spostato di qualche decina di millisecondi
+      il momento dell'incrocio, e da 0 rossi si è passati a 3 deterministici
 
-**Il flag** — commit 2, i dieci punti di §6.4
+**Il flag** — commit 2, i dieci punti di §6.4 ✅
 
-- [ ] `users.stats_plus` in `lib/db/schema.ts`, con la nota di §6.3 sul suo statuto
-- [ ] `canSeeStatsPlus` in `lib/domain.ts`, accanto a `canSeeInsights`
-- [ ] `setUserStatsPlus` in `lib/engine/admin.ts` + il tipo e la `select` di `listUsers`
-- [ ] Il ramo in `app/admin/actions.ts`; `USER_FIELDS` e le etichette in `lib/admin-users.ts`,
+- [x] `users.stats_plus` in `lib/db/schema.ts`, con la nota di §6.3 sul suo statuto
+- [x] `canSeeStatsPlus` in `lib/domain.ts`, accanto a `canSeeInsights`
+- [x] `setUserStatsPlus` in `lib/engine/admin.ts` + il tipo e la `select` di `listUsers`
+- [x] Il ramo in `app/admin/actions.ts`; `USER_FIELDS` e le etichette in `lib/admin-users.ts`,
       **col commento dei «quattro campi» riscritto** (§6.4)
-- [ ] L'interruttore in `user-panel.tsx` con la frase di §6.1, la colonna in `user-row.tsx`, il
-      passaggio in `app/admin/users/page.tsx`
-- [ ] La prop verso `Portal` in `app/auctions/[id]/play/page.tsx`
-- [ ] `makeUser` in `tests/db/helpers.ts` + **un utente del seed col flag acceso**
-- [ ] `pnpm db:push` in locale
+- [x] L'interruttore in `user-panel.tsx` con la frase di §6.1, la colonna in `user-row.tsx` e
+      l'intestazione in `users-table.tsx`, il passaggio in `app/admin/users/page.tsx`
+- [x] `makeUser` in `tests/db/helpers.ts` + **gli utenti del seed**: il primo (amministratore) col
+      flag acceso — senza, in locale Stats+ non si vedrebbe e si cercherebbe la causa nel codice — e
+      il secondo e il terzo entrambi Pro, **uno con Stats+ e uno senza**, che è la coppia di
+      confronto di §9.2
+- [x] `pnpm db:push` in locale
+- [x] I test: le otto combinazioni del gate, i due casi scritti per nome, `setUserStatsPlus` sulla
+      propria riga e senza Pro
+- [ ] ⚠ **Spostato al commit che lo legge** (era il decimo punto di §6.4): la prop verso `Portal` in
+      `app/auctions/[id]/play/page.tsx`. Aggiungerla qui avrebbe voluto dire una prop che nessuno
+      legge fino a tre commit dopo — cioè un'astrazione prima del primo chiamante, non del secondo
+      (regola 8). Il gate esiste ed è provato; il filo si tira quando c'è qualcosa da accendere
 
 **Il calcolo** — `lib/stats-plus.ts`, funzioni pure, nessun import di `lib/db`
 

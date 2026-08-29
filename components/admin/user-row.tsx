@@ -35,6 +35,12 @@ export type AdminUserView = {
   isAdmin: boolean;
   /** ⚠ Vede gli insight sul listone (M8). Un amministratore li vede comunque. */
   isPro: boolean;
+  /**
+   * ⚠ Vede Stats+ nel portale (M22). **Le due differenze con la riga qui sopra
+   * sono volute**: vale solo insieme a `isPro`, e l'amministratore *non* lo ha
+   * implicito — `canSeeStatsPlus` in `lib/domain.ts` spiega perché.
+   */
+  statsPlus: boolean;
   isBot: boolean;
   createdOn: string;
   ownedAuctions: number;
@@ -79,6 +85,16 @@ export function UserRow({
       <td className="px-3 py-2 text-sm">{user.isAdmin ? "Sì" : "No"}</td>
 
       <td className="px-3 py-2 text-sm">{user.isPro ? "Sì" : "No"}</td>
+
+      {/*
+        ⚠ **«Sì» senza Pro non è un errore da evidenziare**, e va detto perché la
+        tentazione c'è: il flag è acceso e non mostra niente. Ma il criterio della
+        colonna «Email verificata» qui sopra è **si evidenzia ciò su cui si deve
+        agire**, e qui non c'è niente da fare — la combinazione è legale, innocua,
+        e spesso transitoria (si accendono i due flag in due gesti). Chi la crea
+        l'ha già letta nel pannello, che lo dice mentre si accende.
+      */}
+      <td className="px-3 py-2 text-sm">{user.statsPlus ? "Sì" : "No"}</td>
 
       <td className="px-3 py-2 text-right">
         <Button type="button" variant="outline" size="sm" onClick={onView}>

@@ -37,7 +37,12 @@ export async function databaseAvailable(): Promise<boolean> {
  */
 export async function makeUser(
   label = "test",
-  options: { isAdmin?: boolean; isPro?: boolean; verified?: boolean } = {},
+  options: {
+    isAdmin?: boolean;
+    isPro?: boolean;
+    statsPlus?: boolean;
+    verified?: boolean;
+  } = {},
 ): Promise<string> {
   // Un uuid, non `Date.now()+contatore`: i file di test girano in worker
   // paralleli e due `makeUser` nello stesso millisecondo collidevano su
@@ -53,6 +58,7 @@ export async function makeUser(
       // ⚠ Il default è **senza** permessi, come per `isAdmin`: chi collauda un
       // gate ha bisogno che la riga di partenza non lo passi.
       isPro: options.isPro ?? false,
+      statsPlus: options.statsPlus ?? false,
       emailVerifiedAt: options.verified === true ? new Date() : null,
     })
     .returning({ id: users.id });

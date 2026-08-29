@@ -99,6 +99,33 @@ export const users = pgTable(
      * è per quello che esiste `users_admin_not_bot_check`.
      */
     isPro: boolean("is_pro").notNull().default(false),
+    /**
+     * Vede Stats+ nel portale (M22): la temperatura dell'asta rispetto ai PMA e
+     * le alternative ancora libere del lotto in corso.
+     *
+     * ⚠ **Vale solo insieme a `is_pro`, e non è una cautela in più: è forzato
+     * dai dati.** Senza `is_pro` la chiave `carmy` non arriva affatto nel
+     * payload (M8 §6, M10B §7), quindi niente PMA, niente fasce, niente
+     * titolarità — un `stats_plus` da solo sarebbe un pannello vuoto. Il
+     * predicato che li mette insieme è `canSeeStatsPlus` in `lib/domain.ts`.
+     *
+     * ⚠ **L'amministratore *non* lo ha implicito, al contrario di `is_pro`.** Là
+     * l'implicito serve a guardare i dati appena importati; qui non c'è niente
+     * da importare, e renderlo implicito toglierebbe l'unico modo di vedere il
+     * portale **senza** Stats+ — cioè come lo vede quasi tutto il tavolo.
+     * Conseguenza voluta: dopo un deploy nessuno lo vede, chi ha deployato
+     * compreso, finché non se lo accende.
+     *
+     * ⚠ **Non è una difesa, ed è la stessa nota di `is_pro` per la stessa
+     * ragione** (M22 §6.3): un utente Pro senza questo flag riceve comunque i
+     * PMA e lo snapshot, cioè **tutti gli addendi**. Questo booleano decide che
+     * cosa l'applicazione *mostra*, non che cosa quel browser *può sapere*. Va
+     * detto qui perché non venga difeso, un giorno, con un argomento che non ha
+     * — e perché il rimedio sbagliato è ovvio e costoso: spostare il calcolo sul
+     * server vorrebbe dire serializzare un blocco per dodici viewer a ogni
+     * transizione per nascondere un'addizione a chi ha già gli addendi.
+     */
+    statsPlus: boolean("stats_plus").notNull().default(false),
     /** Un partecipante simulato. Le sue mosse le decide il tick di `lib/engine/bots.ts`. */
     isBot: boolean("is_bot").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })

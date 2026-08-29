@@ -136,6 +136,8 @@ export function UsersTable({
                 <th className="px-3 py-2 font-medium">Admin</th>
                 {/* M8 — chi vede titolarità, rigoristi e piazzati in `/play`. */}
                 <th className="px-3 py-2 font-medium">Pro</th>
+                {/* M22 — chi vede la temperatura dell'asta e le alternative. */}
+                <th className="px-3 py-2 font-medium">Stats+</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
