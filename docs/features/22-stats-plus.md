@@ -696,10 +696,24 @@ non si eredita.
 | chi è libero, chi ha comprato cosa e a quanto | `SnapshotMember.roster[]` |
 | crediti e capacità di spesa | `SnapshotMember.credits`, `.maxBid` |
 | il ruolo in corso e l'ordine dei ruoli | `SnapshotAuction.currentRole`, `.roleOrder` |
-| il budget iniziale del tavolo | `SnapshotMember.credits + Σ prezzi` |
+| il budget del tavolo | ⚠ `budget`, la prop che `Portal` **già riceve** — vedi sotto |
 
 Il pool arriva **una volta sola**, fuori dallo snapshot, ed è immutabile dall'import: è la ragione per
 cui il costo di questa macro sul canale è **un intero per riga di rosa** e nient'altro.
+
+⚠ **La riga del budget è stata corretta il 2026-08-29, scrivendo il codice** (owner: *«sono d'accordo
+nell'usare la dinamica»*). Questa tabella diceva `SnapshotMember.credits + Σ prezzi`, cioè
+ricostruirlo dallo stato. Si usa invece **`budget`, la prop che `Portal` riceve già** da
+`overview.auction.budgetDefault` — la stessa che `listone-table.tsx` e `insights.tsx` passano a
+`pmaCrediti`. Tre ragioni, in ordine di gravità:
+
+1. **La formula diverge per membro.** `adjustBudget` scrive nel ledger, quindi dopo una rettifica
+   `credits + Σ prezzi` dà un numero diverso per ciascuno — e quale dei dodici sarebbe «il budget del
+   tavolo»? Il termometro cambierebbe a seconda di chi lo guarda, che è esattamente ciò che I10 vieta.
+2. **Darebbe allo stesso PMA due cifre in crediti diverse in due schermate.** `atteso` non è un numero
+   interno: è la cifra che va a schermo accanto al prezzo pagato (§5.1). Per questo si calcola con
+   **`pmaCrediti`**, la funzione già esistente, e non con `pma / 100 × budget` riscritto qui.
+3. È il budget **configurato** invece che dedotto: non c'è niente da ricostruire.
 
 ### 7.2 `lotSeq` su `SnapshotRosterEntry` — un campo, tre usi
 
@@ -910,18 +924,35 @@ pure, non sanno chi è l'utente.
 
 **Il calcolo** — `lib/stats-plus.ts`, funzioni pure, nessun import di `lib/db`
 
-- [ ] `pianoPerRuolo(pool)` — le quote dal foglio caricato (§2)
-- [ ] `lottiInformativi(snapshot, pool, ruolo)` — il filtro sull'ingresso (§3.4)
-- [ ] `temperatura(...)` — i punti osservati e il loro numero (§3.1)
-- [ ] `saldoRuoliChiusi(...)` — solo per i ruoli finiti (§3.2)
-- [ ] `scatto(...)` — prima metà contro seconda, da 8 lotti in su (§3.3)
-- [ ] `avvisi(...)` — le due soglie dichiarate (§3.5)
+*Commit 3 — il termometro* ✅
+
+- [x] `pianoPerRuolo(pool)` — le quote dal foglio caricato (§2)
+- [x] `lottiInformativi(snapshot, pool, budget, ruolo)` — il filtro sull'ingresso (§3.4)
+- [x] `temperatura(...)` — i punti osservati e il loro numero (§3.1)
+- [x] `saldoRuoliChiusi(...)` — solo per i ruoli finiti (§3.2)
+- [x] `scatto(...)` — prima metà contro seconda, da 8 lotti in su (§3.3)
+- [x] `avvisi(...)` — le due soglie dichiarate (§3.5)
+- [x] `pct(rapporto)` — il rapporto in percentuale, un posto solo (§5.0)
+
+⚠ **Due precisazioni prese scrivendolo, che la spec non fissava:**
+
+1. **Il denominatore è `budgetDefault`**, la prop che il portale già riceve, **non**
+   `credits + Σ prezzi` come diceva §7.1 (owner, 2026-08-29). Quella formula **diverge per membro**
+   dopo un `adjustBudget` — e quale dei dodici numeri sarebbe «il budget del tavolo»? — e soprattutto
+   darebbe allo stesso PMA una cifra in crediti diversa da quella di `listone-table` e `insights`, che
+   usano `pmaCrediti(pma, budget)`. §7.1 è corretta di conseguenza.
+2. **`atteso` si calcola con `pmaCrediti`**, la stessa funzione delle altre due schermate, non con
+   `pma / 100 × budget` riscritto: è **la cifra che va a schermo** accanto al prezzo pagato (§5.1),
+   non un numero interno, quindi due arrotondamenti diversi sarebbero due verità sullo stesso lotto.
+3. **Gli avvisi confrontano mediane.** §3.5 non lo diceva e §3.1 vieta di risolverlo con una media:
+   è la stessa statistica dello scatto, così i due avvisi non possono contraddirsi sugli stessi lotti.
+
+*Commit 4 e 5*
+
 - [ ] `scartoPerPartecipante(...)` — speso contro piano degli slot riempiti (§3.6)
 - [ ] `alternative(...)` — i tre gruppi con la regola asimmetrica (§4.2)
 - [ ] `andatiStessaFascia(...)` — i venduti della fascia **in ordine di lotto**, con lo scarto in
       crediti e in percentuale, e l'allargamento alle fasce adiacenti sotto i 3 lotti (§5.1)
-- [ ] `pct(rapporto)` — il rapporto in percentuale, un posto solo (§5.0)
-
 **L'interfaccia**
 
 - [ ] `POSIZIONE_STATS` in un file suo, con le quattro forme scritte (§5.3)
@@ -938,9 +969,17 @@ pure, non sanno chi è l'utente.
 
 **Le prove**
 
-- [ ] L'invariante di §7.3: **cambiare le buste vive non cambia niente**
-- [ ] Il reset per ruolo, il saldo solo sui ruoli chiusi
-- [ ] Il filtro sull'ingresso, **e il caso che il rimedio archiviato sbagliava** (§9.1)
+- [x] L'invariante di §7.3: **cambiare le buste vive non cambia niente** — e con due guardie che la
+      spec non chiedeva: un secondo test verifica che i **due stati siano davvero diversi** (senza,
+      un refuso nel costruttore confronterebbe due snapshot identici e vedrebbe verde per sempre), e
+      l'asserzione è un `toEqual` sull'**oggetto intero**, così copre anche i campi che qualcuno
+      aggiungerà domani invece dei soli campi elencati oggi.
+      ⚠ **Ed è stato provato per mutazione**: introdotta di proposito una dipendenza da
+      `eligibleMemberIds`, il test diventa rosso. Un test d'invarianza che nessuno ha visto fallire
+      non è una prova, è una speranza
+- [x] Il reset per ruolo, il saldo solo sui ruoli chiusi
+- [x] Il filtro sull'ingresso, **e il caso che il rimedio archiviato sbagliava** (§9.1)
+- [x] Le due soglie sui casi limite (0,25 esatto, 4 lotti per parte)
 - [ ] L'asimmetria Bastoni / Bisseck, con i numeri veri
 - [ ] Le due soglie sui casi limite; il gate su tutte le combinazioni
 
