@@ -406,3 +406,277 @@ export function avvisi(
 
   return fuori;
 }
+
+// ─── §4 — le alternative del lotto in corso ──────────────────────────────────
+
+/**
+ * Un'alternativa catalogata, coi **fatti che discriminano e nessun punteggio**
+ * (§4.3): titolarità, presenze da titolare, tag, PMA in crediti, e se è un
+ * obiettivo. In quest'ordine, perché è l'ordine in cui si decide.
+ */
+export type Alternativa = {
+  playerId: string;
+  name: string;
+  team: string;
+  /** 1–5, il giudizio del foglio. */
+  titolarita: number;
+  /** Dal campo, se la fonte giornaliera ha risposto: `null` altrimenti. */
+  startsEleven: number | null;
+  presenze: number | null;
+  tags: string[];
+  fmvExp: number | null;
+  /** In punti percentuali, come lo scrive il foglio. */
+  pma: number;
+  /** Lo stesso PMA in crediti su questo budget: la cifra che va a schermo. */
+  atteso: number;
+  fasciaRank: number;
+  /** Positivo = fascia più bassa del chiamato, cioè più economica. */
+  deltaRank: number;
+  obiettivo: boolean;
+};
+
+export type Alternative = {
+  /** Veri sostituti dello slot. */
+  pariLivello: Alternativa[];
+  /** Puoi permetterti di non salire. */
+  costanoMeno: Alternativa[];
+  /** Ti riempie lo slot, non te lo risolve. Vive nella tab, non nel modale. */
+  ripiego: Alternativa[];
+};
+
+/** Il giudizio completo che serve a catalogare: senza, non c'è criterio. */
+type Catalogabile = {
+  player: PoolPlayer;
+  titolarita: number;
+  fasciaRank: number;
+  pma: number;
+};
+
+function catalogabile(player: PoolPlayer): Catalogabile | null {
+  const t = player.carmy?.titolarita;
+  const pma = player.carmy?.pma;
+  const rank = player.fasciaRank;
+  if (t === null || t === undefined) return null;
+  if (pma === null || pma === undefined) return null;
+  if (rank === undefined) return null;
+  return { player, titolarita: t, fasciaRank: rank, pma };
+}
+
+/** Chi compare in una rosa, in qualunque rosa. */
+function presiDaQualcuno(snapshot: Snapshot): Set<string> {
+  return new Set(tutteLeRose(snapshot).map((entry) => entry.playerId));
+}
+
+/**
+ * Chi altro, **ancora libero**, può riempire lo stesso slot del giocatore
+ * chiamato (§4.2). `null` se il chiamato non ha un giudizio da cui partire — che
+ * è uno stato normale con la sua frase, non un errore (§8).
+ *
+ * ⚠ **La regola è asimmetrica sulla titolarità, ed è il punto della sezione.**
+ * Se chiami un 5/5, un 3/5 **non** è un'alternativa; se chiami un 3/5, un 5/5 lo
+ * è eccome — costa solo di più. Un test simmetrico (`|Δtitolarità| ≤ 1`) direbbe
+ * che **Bisseck sostituisce Bastoni**, che è la cosa sbagliata, e la direbbe con
+ * la stessa faccia sicura. Il caso è misurato sul foglio in §4.1: dentro la
+ * stessa fascia la titolarità va da 3/5 a 5/5 in ogni ruolo, e la correlazione
+ * col PMA è solo `+0,50 / +0,25 / +0,45` — metà della variazione di prezzo
+ * dentro una fascia **non** è titolarità, e metà della titolarità **non** è nel
+ * prezzo. Un catalogo su fascia e prezzo mentirebbe.
+ *
+ * ⚠ **`Δrank ≤ 3` non è arbitrario**: senza limite il gruppo va da 5 a 21
+ * elementi e non distingue niente; con il limite va da 1 a 7 e cambia da
+ * giocatore a giocatore (misurato su otto chiamati). Oltre tre gradini di slot
+ * non stai scegliendo un'alternativa per lo stesso posto, stai scegliendo una
+ * rosa di forma diversa — e quella è un'altra domanda.
+ *
+ * ⚠ **«Libero» si deduce dalle rose, non da una query sul pool**: il pool sono
+ * cinquecento righe immutabili dall'import in poi, chi sia ancora libero è
+ * funzione dello stato.
+ */
+export function alternative(
+  snapshot: Snapshot,
+  pool: PoolPlayer[],
+  budget: number,
+  chiamatoId: string,
+): Alternative | null {
+  const chiamatoRow = pool.find((x) => x.id === chiamatoId);
+  const chiamato = chiamatoRow ? catalogabile(chiamatoRow) : null;
+  if (chiamato === null) return null;
+
+  const presi = presiDaQualcuno(snapshot);
+  const gruppi: Alternative = { pariLivello: [], costanoMeno: [], ripiego: [] };
+
+  for (const player of pool) {
+    if (player.id === chiamatoId) continue;
+    // Lo slot è di un ruolo: un centrocampista non riempie una casella di difesa.
+    if (player.role !== chiamato.player.role) continue;
+    if (presi.has(player.id)) continue;
+    const c = catalogabile(player);
+    // ⚠ Senza fascia o senza titolarità non entra in nessun gruppo, e il
+    // pannello lo dice invece di ingoiarlo: non c'è nessun criterio per
+    // catalogarlo. Nel foglio di riferimento sono 67 righe.
+    if (c === null) continue;
+
+    const deltaRank = c.fasciaRank - chiamato.fasciaRank;
+    const almenoTitolare = c.titolarita >= chiamato.titolarita;
+
+    const dove = almenoTitolare
+      ? deltaRank >= -1 && deltaRank <= 1
+        ? "pariLivello"
+        : // ⚠ Il gruppo che la prima stesura non copriva: «fascia più economica
+          // ma titolarità pari o migliore», cioè esattamente l'occasione. Quei
+          // giocatori cadevano fuori da ogni gruppo e sparivano dal pannello.
+          deltaRank >= 2 && deltaRank <= 3
+          ? "costanoMeno"
+          : null
+      : // Il ripiego è limitato a `Δrank ≤ 1` per la stessa ragione del limite
+        // sopra: senza, contiene tutto il fondo del listone e non è un catalogo,
+        // è un elenco.
+        deltaRank >= 0 && deltaRank <= 1
+        ? "ripiego"
+        : null;
+    if (dove === null) continue;
+
+    gruppi[dove].push({
+      playerId: player.id,
+      name: player.name,
+      team: player.team,
+      titolarita: c.titolarita,
+      startsEleven: player.insights?.startsEleven ?? null,
+      presenze: player.insights?.presenze ?? null,
+      tags: player.carmy?.tags ?? [],
+      fmvExp: player.carmy?.fmvExp ?? null,
+      pma: c.pma,
+      atteso: pmaCrediti(c.pma, budget),
+      fasciaRank: c.fasciaRank,
+      deltaRank,
+      obiettivo: player.obiettivo === true,
+    });
+  }
+
+  // ⚠ **Per PMA decrescente — il più caro per primo — e non «i migliori»**, che
+  // sarebbe il valore del giocatore rientrato dalla finestra (decisione 3). Il
+  // PMA è un fatto scritto nel foglio; un ordinamento per bontà sarebbe un
+  // giudizio, cioè la cosa che questa macro ha deciso di non dare.
+  for (const gruppo of ["pariLivello", "costanoMeno", "ripiego"] as const) {
+    gruppi[gruppo].sort((a, b) => b.pma - a.pma);
+  }
+  return gruppi;
+}
+
+// ─── §5.1 — i già andati della stessa fascia ─────────────────────────────────
+
+export type Andato = {
+  lotSeq: number;
+  playerId: string;
+  name: string;
+  /** Il PMA in crediti: quanto ci si aspettava. */
+  atteso: number;
+  /** Quanto è stato pagato. */
+  price: number;
+  /** `price − atteso`, in crediti: il numero che §5.0 vuole accanto alla percentuale. */
+  scarto: number;
+  rapporto: number;
+  /** Viene da una fascia adiacente, non da quella del chiamato (§5.1). */
+  adiacente: boolean;
+};
+
+export type AndatiStessaFascia = {
+  /** In **ordine di lotto**, non di prezzo. */
+  righe: Andato[];
+  /** Si è dovuto allargare alle fasce adiacenti per avere abbastanza righe. */
+  allargato: boolean;
+  /** Quanti della fascia del chiamato sono già andati, e quanti sono in tutto. */
+  andati: number;
+  totaleFascia: number;
+  /** Quanti restano liberi **oltre al chiamato**. */
+  liberiRestanti: number;
+};
+
+/** Sotto questo numero di righe la fascia si allarga alle adiacenti (§5.1). */
+export const MIN_ANDATI_PRIMA_DI_ALLARGARE = 3;
+
+/**
+ * Quanto è costato davvero chi occupava **lo stesso slot** del giocatore
+ * chiamato: il blocco che l'owner ha chiesto per nome, e il più diretto dei
+ * quattro. `null` se il chiamato non ha una fascia da cui partire.
+ *
+ * ⚠ **In ordine di lotto, non di prezzo**, ed è la differenza fra un elenco e
+ * un'informazione: così si **vede** dove il mercato ha girato. Un ordinamento
+ * per prezzo mostrerebbe le stesse quattro righe e nasconderebbe l'unica cosa
+ * che dicono insieme — che fra il secondo e il terzo nome la fascia si è
+ * ribaltata, cioè lo scatto di §3.3 letto da vicino.
+ *
+ * ⚠ **Sotto le tre righe si allarga alle fasce adiacenti, dicendolo** (`allargato`).
+ * Meglio quattro comparabili dichiarati un gradino sopra che due comparabili
+ * perfetti su cui non si può leggere niente.
+ *
+ * ⚠ **Qui non si applica la soglia dei 5 crediti di §3.4, e la differenza è
+ * voluta.** Il termometro risponde a «qual è il livello del ruolo» e scarta i
+ * lotti che non portano informazione; questo blocco risponde a «cosa è costato
+ * chi occupava lo slot», e lì un prezzo basso **è** la risposta. Dentro una
+ * fascia i PMA sono omogenei per costruzione — è quello che una fascia è —
+ * quindi in pratica i due insiemi coincidono; quando non coincidono, i conteggi
+ * («6 andati su 10») restano veri, che è ciò che si romperebbe filtrando.
+ */
+export function andatiStessaFascia(
+  snapshot: Snapshot,
+  pool: PoolPlayer[],
+  budget: number,
+  chiamatoId: string,
+): AndatiStessaFascia | null {
+  const chiamatoRow = pool.find((x) => x.id === chiamatoId);
+  const rank = chiamatoRow?.fasciaRank;
+  if (chiamatoRow === undefined || rank === undefined) return null;
+
+  const stessoRuolo = pool.filter((x) => x.role === chiamatoRow.role);
+  const nellaFascia = stessoRuolo.filter((x) => x.fasciaRank === rank);
+  const presi = presiDaQualcuno(snapshot);
+  const prezzi = new Map(
+    tutteLeRose(snapshot).map((entry) => [entry.playerId, entry]),
+  );
+
+  /** Le righe dei venduti fra i giocatori dati, in ordine di lotto. */
+  function righeDi(candidati: PoolPlayer[]): Andato[] {
+    const righe: Andato[] = [];
+    for (const player of candidati) {
+      if (player.id === chiamatoId) continue;
+      const entry = prezzi.get(player.id);
+      if (entry === undefined || entry.lotSeq === null) continue;
+      const pma = player.carmy?.pma;
+      if (pma === null || pma === undefined) continue;
+      const atteso = pmaCrediti(pma, budget);
+      righe.push({
+        lotSeq: entry.lotSeq,
+        playerId: player.id,
+        name: player.name,
+        atteso,
+        price: entry.price,
+        scarto: entry.price - atteso,
+        rapporto: entry.price / atteso,
+        adiacente: player.fasciaRank !== rank,
+      });
+    }
+    return righe.sort((a, b) => a.lotSeq - b.lotSeq);
+  }
+
+  const strette = righeDi(nellaFascia);
+  const allargato = strette.length < MIN_ANDATI_PRIMA_DI_ALLARGARE;
+  const righe = allargato
+    ? righeDi(
+        stessoRuolo.filter(
+          (x) => x.fasciaRank !== undefined && Math.abs(x.fasciaRank - rank) <= 1,
+        ),
+      )
+    : strette;
+
+  return {
+    righe,
+    allargato,
+    andati: nellaFascia.filter((x) => x.id !== chiamatoId && presi.has(x.id))
+      .length,
+    totaleFascia: nellaFascia.length,
+    liberiRestanti: nellaFascia.filter(
+      (x) => x.id !== chiamatoId && !presi.has(x.id),
+    ).length,
+  };
+}

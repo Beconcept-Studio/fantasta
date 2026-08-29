@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import type { Role } from "@/lib/domain";
 import {
+  MIN_ANDATI_PRIMA_DI_ALLARGARE,
   MIN_LOTTI_PER_PARTE,
   SOGLIA_AVVISO,
   SOGLIA_LOTTO_INFORMATIVO,
+  alternative,
+  andatiStessaFascia,
   avvisi,
   lottiInformativi,
   pct,
@@ -641,5 +644,353 @@ describe("§5.0 — `pct`, in un posto solo", () => {
 
   it("arrotonda all'intero: sotto il countdown non si leggono i decimali", () => {
     expect(pct(0.756)).toBe(-24);
+  });
+});
+
+// ─── §4.2 — le alternative, e la regola asimmetrica ──────────────────────────
+
+/**
+ * ⚠ **I numeri sono quelli veri del foglio** (§4.1), non inventati per far
+ * tornare il test: è il caso che l'owner ha portato, ed è il caso su cui una
+ * regola simmetrica sbaglia in silenzio.
+ *
+ * |          | fascia   | rank | PMA  | titolarità | tag             |
+ * |----------|----------|------|------|------------|-----------------|
+ * | Bastoni  | 1° Slot  | 0    | 6,2% | **5/5**    | `titolarissimo` |
+ * | Bisseck  | 2° Slot  | 1    | 4,4% | **3/5**    | `subentrante`   |
+ * | Hermoso  | 3° Slot  | 2    | 2,2% | **3/5**    | `cartellini`    |
+ */
+describe("§4.2 — chiamando un 5/5, un 3/5 non è un'alternativa; al contrario sì", () => {
+  function d(
+    id: string,
+    fasciaRank: number,
+    pma: number,
+    titolarita: number,
+    tags: string[] = [],
+  ): PoolPlayer {
+    return {
+      id,
+      name: id,
+      team: "Inter",
+      role: "D",
+      fvm: 100,
+      quot: 10,
+      fasciaGruppo: `${fasciaRank + 1}° Slot`,
+      fasciaRank,
+      carmy: {
+        extId: 1,
+        fascia: `${fasciaRank + 1}° Slot`,
+        prezzo: null,
+        pma,
+        titolarita,
+        affidabilita: null,
+        integrita: null,
+        fmvExp: null,
+        tags,
+        commento: null,
+      },
+    };
+  }
+
+  const pool: PoolPlayer[] = [
+    d("Bastoni", 0, 6.2, 5, ["titolarissimo"]),
+    d("Bisseck", 1, 4.4, 3, ["subentrante"]),
+    d("Hermoso", 2, 2.2, 3, ["cartellini"]),
+  ];
+
+  /** Tutti liberi: nessuna rosa, così i gruppi dipendono solo dalle regole. */
+  const tuttiLiberi = snapshot({
+    auction: { ...snapshot().auction, currentRole: "D" },
+    members: [member(ME, 0), member(OTHER, 1)],
+  });
+
+  it("⚠ chiamando Bastoni (5/5), Bisseck (3/5) NON è pari livello", () => {
+    const alt = alternative(tuttiLiberi, pool, BUDGET, "Bastoni")!;
+    expect(alt.pariLivello.map((x) => x.playerId)).not.toContain("Bisseck");
+    // Ci finisce, ma nel gruppo che dice la verità: ti riempie lo slot, non te
+    // lo risolve.
+    expect(alt.ripiego.map((x) => x.playerId)).toContain("Bisseck");
+  });
+
+  it("⚠ chiamando Bisseck (3/5), Bastoni (5/5) LO è: costa solo di più", () => {
+    const alt = alternative(tuttiLiberi, pool, BUDGET, "Bisseck")!;
+    expect(alt.pariLivello.map((x) => x.playerId)).toContain("Bastoni");
+  });
+
+  /**
+   * ⚠ **La prova che la regola è asimmetrica e non solo "giusta per caso".** Un
+   * test simmetrico — `|Δtitolarità| ≤ 1` — passerebbe entrambi i casi qui sopra
+   * e direbbe che Bisseck sostituisce Bastoni, con la stessa faccia sicura. Le
+   * due asserzioni insieme sono l'unica forma che una regola simmetrica non può
+   * soddisfare.
+   */
+  it("la coppia è la prova: la stessa relazione vale in un verso e non nell'altro", () => {
+    const daBastoni = alternative(tuttiLiberi, pool, BUDGET, "Bastoni")!;
+    const daBisseck = alternative(tuttiLiberi, pool, BUDGET, "Bisseck")!;
+    expect([
+      daBastoni.pariLivello.some((x) => x.playerId === "Bisseck"),
+      daBisseck.pariLivello.some((x) => x.playerId === "Bastoni"),
+    ]).toEqual([false, true]);
+  });
+
+  /**
+   * ⚠ **Il buco che il mock ha trovato il 2026-08-29** (§4.2): la regola scritta
+   * nella prima stesura aveva tre casi che **non coprivano** «fascia più
+   * economica, titolarità pari o migliore» — che è esattamente l'occasione, cioè
+   * la risposta a «posso rischiare una puntata più bassa». Quei giocatori
+   * cadevano fuori da ogni gruppo e sparivano dal pannello.
+   */
+  it("⚠ titolarità ≥ e Δrank = 2 finisce in «costano meno», non fuori da tutti i gruppi", () => {
+    const pari5 = [...pool, d("Economico", 2, 2.0, 5)];
+    const alt = alternative(tuttiLiberi, pari5, BUDGET, "Bastoni")!;
+    expect(alt.costanoMeno.map((x) => x.playerId)).toContain("Economico");
+    // E non è finito anche altrove: i gruppi non si sovrappongono.
+    expect(alt.pariLivello.map((x) => x.playerId)).not.toContain("Economico");
+    expect(alt.ripiego.map((x) => x.playerId)).not.toContain("Economico");
+  });
+
+  it("oltre tre gradini di slot non è più un'alternativa per lo stesso posto", () => {
+    const lontano = [...pool, d("Fondo", 4, 0.5, 5)];
+    const alt = alternative(tuttiLiberi, lontano, BUDGET, "Bastoni")!;
+    const tutti = [...alt.pariLivello, ...alt.costanoMeno, ...alt.ripiego];
+    expect(tutti.map((x) => x.playerId)).not.toContain("Fondo");
+  });
+
+  it("chi è già in una rosa non è libero, e non compare", () => {
+    const bissekPreso = snapshot({
+      auction: { ...snapshot().auction, currentRole: "D" },
+      members: [
+        member(ME, 0, {
+          roster: rosaDi([
+            { playerId: "Bisseck", role: "D", price: 22, lotSeq: 1 },
+          ]),
+        }),
+        member(OTHER, 1),
+      ],
+    });
+    const alt = alternative(bissekPreso, pool, BUDGET, "Bastoni")!;
+    const tutti = [...alt.pariLivello, ...alt.costanoMeno, ...alt.ripiego];
+    expect(tutti.map((x) => x.playerId)).not.toContain("Bisseck");
+  });
+
+  it("il chiamato non è alternativa di se stesso", () => {
+    const alt = alternative(tuttiLiberi, pool, BUDGET, "Bastoni")!;
+    const tutti = [...alt.pariLivello, ...alt.costanoMeno, ...alt.ripiego];
+    expect(tutti.map((x) => x.playerId)).not.toContain("Bastoni");
+  });
+
+  it("si ordina per PMA decrescente, che è un fatto e non un giudizio", () => {
+    // ⚠ Nessun ordinamento «i migliori»: sarebbe il valore del giocatore
+    // rientrato dalla finestra, che è fuori perimetro (decisione 3).
+    const molti = [
+      ...pool,
+      d("CaroA", 1, 5.0, 5),
+      d("CaroB", 1, 3.0, 5),
+      d("CaroC", 0, 7.0, 5),
+    ];
+    const alt = alternative(tuttiLiberi, molti, BUDGET, "Bisseck")!;
+    const pma = alt.pariLivello.map((x) => x.pma);
+    expect(pma).toEqual([...pma].sort((a, b) => b - a));
+  });
+
+  it("un giocatore senza giudizio non entra in nessun gruppo: non c'è criterio", () => {
+    const senzaTutto: PoolPlayer = {
+      id: "Ignoto",
+      name: "Ignoto",
+      team: "Inter",
+      role: "D",
+      fvm: 100,
+      quot: 10,
+    };
+    const alt = alternative(tuttiLiberi, [...pool, senzaTutto], BUDGET, "Bastoni")!;
+    const tutti = [...alt.pariLivello, ...alt.costanoMeno, ...alt.ripiego];
+    expect(tutti.map((x) => x.playerId)).not.toContain("Ignoto");
+  });
+
+  it("se è il CHIAMATO a non avere giudizio non c'è catalogo, ed è `null` non una lista vuota", () => {
+    // §8: «Questo giocatore non ha un PMA nel tuo foglio». Una lista vuota
+    // direbbe «non c'è nessuna alternativa», che è un'altra affermazione.
+    const senzaTutto: PoolPlayer = {
+      id: "Ignoto",
+      name: "Ignoto",
+      team: "Inter",
+      role: "D",
+      fvm: 100,
+      quot: 10,
+    };
+    expect(
+      alternative(tuttiLiberi, [...pool, senzaTutto], BUDGET, "Ignoto"),
+    ).toBeNull();
+  });
+
+  it("un'alternativa è cercata nello stesso ruolo: un centrocampista non riempie uno slot di difesa", () => {
+    const centrocampista: PoolPlayer = { ...d("Barella", 0, 6.0, 5), role: "C" };
+    const alt = alternative(tuttiLiberi, [...pool, centrocampista], BUDGET, "Bastoni")!;
+    const tutti = [...alt.pariLivello, ...alt.costanoMeno, ...alt.ripiego];
+    expect(tutti.map((x) => x.playerId)).not.toContain("Barella");
+  });
+});
+
+// ─── §5.1 — i già andati della stessa fascia ─────────────────────────────────
+
+describe("§5.1 — quanto è costato chi occupava lo stesso slot", () => {
+  /** Un difensore con fascia, PMA e titolarità. */
+  function d(id: string, fasciaRank: number, pma: number): PoolPlayer {
+    return {
+      id,
+      name: id,
+      team: "Inter",
+      role: "D",
+      fvm: 100,
+      quot: 10,
+      fasciaGruppo: `${fasciaRank + 1}° Slot`,
+      fasciaRank,
+      carmy: {
+        extId: 1,
+        fascia: `${fasciaRank + 1}° Slot`,
+        prezzo: null,
+        pma,
+        titolarita: 4,
+        affidabilita: null,
+        integrita: null,
+        fmvExp: null,
+        tags: [],
+        commento: null,
+      },
+    };
+  }
+
+  // Una fascia da 6, più due vicini di fascia adiacente.
+  const pool: PoolPlayer[] = [
+    d("Molina", 1, 7.2),
+    d("Solet", 1, 5.8),
+    d("Kalulu", 1, 5.2),
+    d("Bisseck", 1, 4.4),
+    d("Chiamato", 1, 6.0),
+    d("LiberoStessaFascia", 1, 5.0),
+    d("VicinoSopra", 0, 9.0),
+    d("VicinoSotto", 2, 3.0),
+  ];
+
+  function stato(presi: Preso[]) {
+    return snapshot({
+      auction: { ...snapshot().auction, currentRole: "D" },
+      members: [member(ME, 0, { roster: rosaDi(presi) }), member(OTHER, 1)],
+    });
+  }
+
+  /**
+   * ⚠ **L'ordine è di lotto, e la fascia si ribalta fra il secondo e il terzo
+   * nome.** È il caso di §5.1: ordinati per prezzo, questi quattro nomi
+   * mostrerebbero le stesse cifre e nasconderebbero l'unica cosa che dicono
+   * insieme — dove il mercato ha girato.
+   */
+  const quattroAndati: Preso[] = [
+    { playerId: "Molina", role: "D", price: 27, lotSeq: 3 },
+    { playerId: "Solet", role: "D", price: 21, lotSeq: 5 },
+    { playerId: "Kalulu", role: "D", price: 30, lotSeq: 8 },
+    { playerId: "Bisseck", role: "D", price: 25, lotSeq: 11 },
+  ];
+
+  it("in ordine di lotto, non di prezzo: si vede dove il mercato ha girato", () => {
+    const a = andatiStessaFascia(stato(quattroAndati), pool, BUDGET, "Chiamato")!;
+    expect(a.righe.map((r) => r.name)).toEqual([
+      "Molina",
+      "Solet",
+      "Kalulu",
+      "Bisseck",
+    ]);
+    // Per prezzo sarebbe Kalulu, Molina, Bisseck, Solet: le stesse righe, e il
+    // ribaltamento invisibile.
+    expect(a.righe.map((r) => r.name)).not.toEqual(
+      [...a.righe].sort((x, y) => y.price - x.price).map((r) => r.name),
+    );
+  });
+
+  it("porta lo scarto in crediti E in percentuale, che è quello che §5.0 chiede", () => {
+    const a = andatiStessaFascia(stato(quattroAndati), pool, BUDGET, "Chiamato")!;
+    // Molina: PMA 7,2% di 500 = 36 crediti attesi, pagato 27.
+    expect(a.righe[0]).toMatchObject({ atteso: 36, price: 27, scarto: -9 });
+    expect(pct(a.righe[0].rapporto)).toBe(-25);
+    // Kalulu: 5,2% = 26 attesi, pagato 30.
+    expect(a.righe[2]).toMatchObject({ atteso: 26, price: 30, scarto: 4 });
+    expect(pct(a.righe[2].rapporto)).toBe(15);
+  });
+
+  it("i conteggi rispondono a «quanti slot restano»", () => {
+    const a = andatiStessaFascia(stato(quattroAndati), pool, BUDGET, "Chiamato")!;
+    // Sei in fascia: il chiamato, quattro andati, uno libero.
+    expect(a).toMatchObject({ totaleFascia: 6, andati: 4, liberiRestanti: 1 });
+  });
+
+  it("con meno di 3 andati si allarga alle fasce adiacenti, e lo dice", () => {
+    const dueSoli: Preso[] = [
+      { playerId: "Molina", role: "D", price: 27, lotSeq: 3 },
+      { playerId: "Solet", role: "D", price: 21, lotSeq: 5 },
+      { playerId: "VicinoSopra", role: "D", price: 50, lotSeq: 1 },
+      { playerId: "VicinoSotto", role: "D", price: 10, lotSeq: 7 },
+    ];
+    const a = andatiStessaFascia(stato(dueSoli), pool, BUDGET, "Chiamato")!;
+    expect(a.allargato).toBe(true);
+    expect(a.righe.map((r) => r.name)).toEqual([
+      "VicinoSopra",
+      "Molina",
+      "Solet",
+      "VicinoSotto",
+    ]);
+    // ⚠ E si sa **quali** righe sono il prestito: «dichiarati un gradino sopra»
+    // è metà del patto, e senza questo campo la UI non potrebbe dirlo.
+    expect(a.righe.filter((r) => r.adiacente).map((r) => r.name)).toEqual([
+      "VicinoSopra",
+      "VicinoSotto",
+    ]);
+  });
+
+  it("con 3 andati non si allarga: la soglia è inclusiva", () => {
+    const a = andatiStessaFascia(
+      stato(quattroAndati.slice(0, 3)),
+      pool,
+      BUDGET,
+      "Chiamato",
+    )!;
+    expect(a.allargato).toBe(false);
+    expect(a.righe.every((r) => !r.adiacente)).toBe(true);
+    expect(MIN_ANDATI_PRIMA_DI_ALLARGARE).toBe(3);
+  });
+
+  it("un'assegnazione manuale non è un prezzo di mercato e non compare", () => {
+    const conManuale: Preso[] = [
+      ...quattroAndati,
+      { playerId: "LiberoStessaFascia", role: "D", price: 25, lotSeq: null },
+    ];
+    const a = andatiStessaFascia(stato(conManuale), pool, BUDGET, "Chiamato")!;
+    expect(a.righe.map((r) => r.name)).not.toContain("LiberoStessaFascia");
+    // ⚠ Ma nei conteggi c'è: quello slot è occupato davvero, e chi guarda
+    // «quanti ne restano» deve saperlo.
+    expect(a).toMatchObject({ andati: 5, liberiRestanti: 0 });
+  });
+
+  it("il chiamato non compare fra i suoi comparabili", () => {
+    const conSeStesso: Preso[] = [
+      ...quattroAndati,
+      { playerId: "Chiamato", role: "D", price: 33, lotSeq: 12 },
+    ];
+    const a = andatiStessaFascia(stato(conSeStesso), pool, BUDGET, "Chiamato")!;
+    expect(a.righe.map((r) => r.name)).not.toContain("Chiamato");
+    expect(a.totaleFascia).toBe(6);
+  });
+
+  it("senza fascia non c'è blocco, ed è `null` e non una lista vuota", () => {
+    const senzaFascia: PoolPlayer = {
+      id: "Ignoto",
+      name: "Ignoto",
+      team: "Inter",
+      role: "D",
+      fvm: 100,
+      quot: 10,
+    };
+    expect(
+      andatiStessaFascia(stato([]), [...pool, senzaFascia], BUDGET, "Ignoto"),
+    ).toBeNull();
   });
 });

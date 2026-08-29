@@ -9,7 +9,6 @@ import {
 import { setBroadcastHook } from "@/lib/engine/mutate";
 import { manualAssign, voidAssignment } from "@/lib/engine/override";
 import { derivePresence } from "@/lib/engine/presence";
-import { createScheduler } from "@/lib/engine/scheduler";
 import { loadForSnapshot, serializeSnapshot } from "@/lib/engine/snapshot";
 
 import { type GameAuction, makeGameAuction } from "./game-helpers";
@@ -18,6 +17,7 @@ import {
   databaseAvailable,
   dropAuctions,
   dropUsers,
+  sweeperFor,
 } from "./helpers";
 
 /**
@@ -368,23 +368,9 @@ describe.runIf(dbUp)("F4-09 — §12.33, niente fasi stantie", () => {
     // È il server a far scorrere il tempo: lo sweep dello scheduler, non il
     // client che chiede lo snapshot (regola 1).
     //
-    // ⚠ **L'`advance` è filtrato sull'asta di questo test, e non è pignoleria**:
-    // `sweep()` è globale — la query è «tutte le aste LIVE con la deadline
-    // scaduta» — e i file di test girano in parallelo. Con `advancePhase` nudo
-    // questo test faceva avanzare anche le aste degli altri file, e li vedeva
-    // rossi con «expected [] to include …»: il loro sweep trovava la propria
-    // asta già avanzata, quindi non più scaduta, quindi non più nella query.
-    //
-    // È lo stesso rimedio — e la stessa spiegazione — che `cancello.test.ts`
-    // aveva già scritto in `sweeperFor`. Qui mancava, e non si vedeva perché il
-    // rosso cadeva **negli altri due file**: chi lo trovava andava a cercare un
-    // bug dello scheduler, che è il posto sbagliato. M22 l'ha fatto emergere
-    // allungando questo file di un test, cioè spostando di qualche decina di
-    // millisecondi il momento in cui lo sweep incrocia i vicini — il che vuol
-    // dire che era latente e sarebbe toccato a qualcun altro.
-    const scheduler = createScheduler(async (id) => {
-      if (id === game.auctionId) await advancePhase(id);
-    });
+    // ⚠ **L'`advance` è filtrato**: `sweep()` è globale e i file di test
+    // girano in parallelo. `sweeperFor` porta la spiegazione per esteso.
+    const scheduler = sweeperFor(game.auctionId);
     const swept = await scheduler.sweep();
     scheduler.stop();
     expect(swept).toContain(game.auctionId);

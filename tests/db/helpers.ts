@@ -2,6 +2,8 @@ import { inArray } from "drizzle-orm";
 
 import { db, pool } from "@/lib/db";
 import { auctions, users } from "@/lib/db/schema";
+import { advancePhase } from "@/lib/engine/actions";
+import { createScheduler } from "@/lib/engine/scheduler";
 
 /**
  * Aiuti per i test che parlano con Postgres vero.
@@ -75,4 +77,31 @@ export async function dropUsers(ids: string[]): Promise<void> {
 
 export async function closeDatabase(): Promise<void> {
   await pool.end();
+}
+
+/**
+ * Uno sweep **vero**, che però fa avanzare **solo l'asta di questo test**.
+ *
+ * ⚠ **`sweep()` è globale e i file di test girano in parallelo.** La query è
+ * quella vera — «tutte le aste `LIVE` con la deadline scaduta», che è il pezzo
+ * di boot recovery da collaudare — ma passargli `advancePhase` nudo vuol dire
+ * mandare avanti **le aste degli altri file**, e anche quelle che stanno nel
+ * database di sviluppo e non c'entrano niente coi test. Filtrando l'`advance` la
+ * query resta vera e il vicinato resta in pace.
+ *
+ * ⚠ **È il terzo chiamante, ed è per questo che adesso vive qui.** La toppa
+ * nasce in `cancello.test.ts` (M14), che l'aveva già diagnosticata per esteso:
+ * `scheduler.test.ts` si vedeva rosso — «expected [] to include …» — per colpa
+ * di un altro file, e chi trovava quel rosso andava a cercare un bug dello
+ * scheduler, che è il posto sbagliato. Poi è servita in `snapshot.test.ts`
+ * (M22), e poi si è scoperto che serviva **anche a `scheduler.test.ts`**, che
+ * dell'inconveniente era la vittima dichiarata e ne era pure una causa. Tre
+ * copie della stessa cautela sono tre posti in cui la prossima si dimentica.
+ *
+ * **Se scrivi un test che chiama `sweep()` o `bootRecovery()`, usa questo.**
+ */
+export function sweeperFor(auctionId: string) {
+  return createScheduler(async (id) => {
+    if (id === auctionId) await advancePhase(id);
+  });
 }

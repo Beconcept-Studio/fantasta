@@ -23,6 +23,7 @@ import {
   databaseAvailable,
   dropAuctions,
   dropUsers,
+  sweeperFor,
 } from "./helpers";
 
 /**
@@ -171,7 +172,12 @@ describe.runIf(dbUp)("F3-08 — sweep e bootRecovery (Postgres vero)", () => {
       await startAuction(game.ownerId, game.auctionId, 0, Date.now() - 60_000),
     );
 
-    const s = createScheduler(advancePhase);
+    // ⚠ **Filtrato, e questo test è il motivo per cui l'helper esiste in tre
+    // file invece che in uno.** Con `advancePhase` nudo lo sweep faceva
+    // avanzare ogni asta `LIVE` scaduta del database — comprese quelle di
+    // sviluppo, che coi test non c'entrano niente. Lo sweep resta vero: è la
+    // stessa query, e l'asta di questo test avanza davvero.
+    const s = sweeperFor(game.auctionId);
     await s.sweep();
     s.stop();
 

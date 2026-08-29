@@ -947,12 +947,25 @@ pure, non sanno chi è l'utente.
 3. **Gli avvisi confrontano mediane.** §3.5 non lo diceva e §3.1 vieta di risolverlo con una media:
    è la stessa statistica dello scatto, così i due avvisi non possono contraddirsi sugli stessi lotti.
 
-*Commit 4 e 5*
+*Commit 4 — le alternative* ✅
+
+- [x] `alternative(...)` — i tre gruppi con la regola asimmetrica (§4.2)
+- [x] `andatiStessaFascia(...)` — i venduti della fascia **in ordine di lotto**, con lo scarto in
+      crediti e in percentuale, e l'allargamento alle fasce adiacenti sotto i 3 lotti (§5.1)
+- [x] L'asimmetria coi numeri veri di §4.1, **provata nei due versi insieme**: è l'unica forma di
+      asserzione che una regola simmetrica non può soddisfare
+- [x] La copertura dei tre gruppi (Δrank = 2 → «costano meno»), il limite a 3 gradini, il chiamato
+      escluso da sé, l'ordinamento per PMA decrescente
+
+⚠ **Una scelta presa scrivendolo**: `andatiStessaFascia` **non** applica la soglia dei 5 crediti di
+§3.4. Le due funzioni rispondono a domande diverse — il termometro a «qual è il livello del ruolo»,
+questo blocco a «cosa è costato chi occupava lo slot», dove un prezzo basso **è** la risposta. E
+filtrando, i conteggi («6 andati su 10») smetterebbero di essere veri. Dentro una fascia i PMA sono
+omogenei per costruzione, quindi in pratica i due insiemi coincidono.
+
+*Commit 5*
 
 - [ ] `scartoPerPartecipante(...)` — speso contro piano degli slot riempiti (§3.6)
-- [ ] `alternative(...)` — i tre gruppi con la regola asimmetrica (§4.2)
-- [ ] `andatiStessaFascia(...)` — i venduti della fascia **in ordine di lotto**, con lo scarto in
-      crediti e in percentuale, e l'allargamento alle fasce adiacenti sotto i 3 lotti (§5.1)
 **L'interfaccia**
 
 - [ ] `POSIZIONE_STATS` in un file suo, con le quattro forme scritte (§5.3)
