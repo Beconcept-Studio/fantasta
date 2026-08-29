@@ -277,6 +277,59 @@ describe.runIf(dbUp)("M18 §2 — la rosa è in ordine di estrazione", () => {
   });
 });
 
+describe.runIf(dbUp)("M22 §7.2 — `lotSeq` sulla riga di rosa", () => {
+  /**
+   * ⚠ **Le due asserzioni sono una sola proprietà, e vanno lette insieme**:
+   * `lotSeq` porta *due* fatti con un campo — il numero d'ordine del lotto e il
+   * fatto che quell'assegnazione venga da un lotto. Stats+ conta sul secondo per
+   * escludere le correzioni della regia dai rapporti (§3.4): un `manualAssign`
+   * è un prezzo deciso da chi conduce, non dal mercato, e mediarlo con gli altri
+   * direbbe che il tavolo ha pagato una cifra che nessuno ha offerto.
+   *
+   * Se un giorno qualcuno serializzasse anche `source`, questo test resterebbe
+   * verde e la seconda verità avrebbe due copie: è il caso in cui va tolto il
+   * campo nuovo, non aggiunta un'asserzione.
+   */
+  it("un lotto vinto porta il suo `seq`; un'assegnazione manuale porta `null`", async () => {
+    const game = await gameAuction();
+    const t0 = Date.now();
+
+    // ── Il lotto vero: il seat 0 chiama, due buste, il round si chiude.
+    unwrap(await startAuction(game.ownerId, game.auctionId, 0, t0));
+    const [gk] = await playersOfRole(game.auctionId, "P");
+    unwrap(await pickPlayer(game.userIds[0], game.auctionId, gk.id, t0 + 100));
+    unwrap(await placeBid(game.userIds[1], game.auctionId, 12, t0 + 200));
+    unwrap(await placeBid(game.userIds[2], game.auctionId, 30, t0 + 300));
+    // `bidSeconds: 3` e il pick a +100: il round chiude a +3.100, e un ADVANCE
+    // prima sarebbe un no-op guardato (I7) che lascerebbe il lotto aperto.
+    unwrap(await advancePhase(game.auctionId, t0 + 4_000));
+
+    // ── La correzione della regia, su un altro membro e un altro ruolo.
+    const [striker] = await playersOfRole(game.auctionId, "A");
+    unwrap(
+      await manualAssign(
+        game.ownerId,
+        game.auctionId,
+        { memberId: game.memberIds[3], playerId: striker.id, price: 30 },
+        t0 + 5_000,
+      ),
+    );
+
+    const snap = await snapshotOf(game.auctionId, null, t0 + 5_100);
+    const rosaVincitore = snap.members.find((m) => m.id === game.memberIds[2])!.roster;
+    const rosaManuale = snap.members.find((m) => m.id === game.memberIds[3])!.roster;
+
+    // Il primo lotto dell'asta è `seq = 1`, e la rosa lo dice.
+    expect(rosaVincitore.map((e) => [e.playerId, e.lotSeq])).toEqual([[gk.id, 1]]);
+    expect(rosaManuale.map((e) => [e.playerId, e.lotSeq])).toEqual([
+      [striker.id, null],
+    ]);
+    // ⚠ E i due prezzi sono **identici**: se `lotSeq` non distinguesse, niente
+    // altro nella riga lo farebbe. È il motivo per cui il manuale è a 30.
+    expect(rosaVincitore[0].price).toBe(rosaManuale[0].price);
+  });
+});
+
 describe.runIf(dbUp)("F4-02 — stateVersion", () => {
   it("§12.34 — due snapshot consecutivi hanno versione strettamente crescente", async () => {
     const game = await gameAuction();
@@ -314,7 +367,24 @@ describe.runIf(dbUp)("F4-09 — §12.33, niente fasi stantie", () => {
 
     // È il server a far scorrere il tempo: lo sweep dello scheduler, non il
     // client che chiede lo snapshot (regola 1).
-    const scheduler = createScheduler(advancePhase);
+    //
+    // ⚠ **L'`advance` è filtrato sull'asta di questo test, e non è pignoleria**:
+    // `sweep()` è globale — la query è «tutte le aste LIVE con la deadline
+    // scaduta» — e i file di test girano in parallelo. Con `advancePhase` nudo
+    // questo test faceva avanzare anche le aste degli altri file, e li vedeva
+    // rossi con «expected [] to include …»: il loro sweep trovava la propria
+    // asta già avanzata, quindi non più scaduta, quindi non più nella query.
+    //
+    // È lo stesso rimedio — e la stessa spiegazione — che `cancello.test.ts`
+    // aveva già scritto in `sweeperFor`. Qui mancava, e non si vedeva perché il
+    // rosso cadeva **negli altri due file**: chi lo trovava andava a cercare un
+    // bug dello scheduler, che è il posto sbagliato. M22 l'ha fatto emergere
+    // allungando questo file di un test, cioè spostando di qualche decina di
+    // millisecondi il momento in cui lo sweep incrocia i vicini — il che vuol
+    // dire che era latente e sarebbe toccato a qualcun altro.
+    const scheduler = createScheduler(async (id) => {
+      if (id === game.auctionId) await advancePhase(id);
+    });
     const swept = await scheduler.sweep();
     scheduler.stop();
     expect(swept).toContain(game.auctionId);

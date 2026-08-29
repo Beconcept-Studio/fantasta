@@ -186,8 +186,8 @@ describe("recap delle rose", () => {
     const me = member(ME, 0, {
       credits: 420,
       roster: [
-        { assignmentId: "a1", playerId: "p1", name: "Lautaro", role: "A", team: "Inter", price: 60 },
-        { assignmentId: "a2", playerId: "p2", name: "Sommer", role: "P", team: "Inter", price: 20 },
+        { assignmentId: "a1", playerId: "p1", name: "Lautaro", role: "A", team: "Inter", price: 60, lotSeq: 1 },
+        { assignmentId: "a2", playerId: "p2", name: "Sommer", role: "P", team: "Inter", price: 20, lotSeq: 2 },
       ],
     });
     expect(spentCredits(me)).toBe(80);
@@ -427,7 +427,7 @@ describe("assignablePlayers — chi si può assegnare a mano", () => {
     members: [
       member(ME, 0, {
         roster: [
-          { assignmentId: "a1", playerId: "p1", name: "Lautaro", role: "A", team: "Inter", price: 60 },
+          { assignmentId: "a1", playerId: "p1", name: "Lautaro", role: "A", team: "Inter", price: 60, lotSeq: 1 },
         ],
       }),
       member(OTHER, 1),

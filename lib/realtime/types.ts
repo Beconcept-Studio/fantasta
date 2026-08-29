@@ -84,6 +84,28 @@ export type SnapshotRosterEntry = {
   role: Role;
   team: string;
   price: number;
+  /**
+   * Il numero del lotto da cui questa assegnazione nasce, `null` se non nasce da
+   * un lotto (M22 §7.2).
+   *
+   * ⚠ **Non tocca I8**: un lotto risolto è già pubblico — è nel `reveal` che
+   * tutti hanno visto — e `seq` è il suo numero d'ordine. Da un progressivo non
+   * si deduce niente di nessuna busta, né l'importo né chi l'aveva consegnata.
+   *
+   * ⚠ **`null` è esattamente `source = "MANUAL"`, e non è una coincidenza da
+   * riverificare a ogni lettura**: tutti e tre i punti che scrivono
+   * un'assegnazione lo fanno coerentemente — `machine.ts:791` scrive
+   * `lotId: lot.id` con `source: "AUCTION"`, `override.ts:180` e `rules.ts:341`
+   * scrivono `lotId: null` con `source: "MANUAL"`. Un campo solo porta i due
+   * fatti, e serializzare anche `source` sarebbe una seconda copia della stessa
+   * verità: due copie della stessa verità divergono sempre.
+   *
+   * I tre usi in M22 sono **l'ordine** (lo scatto dentro il ruolo, §3.3),
+   * **l'esclusione delle assegnazioni manuali** dai rapporti — un `manualAssign`
+   * è una correzione della regia, non un prezzo di mercato — e il **«com'era
+   * prima»** di qualunque confronto temporale.
+   */
+  lotSeq: number | null;
 };
 
 export type SnapshotMember = {
