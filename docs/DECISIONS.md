@@ -3864,3 +3864,114 @@ misurato — mentre una favicon è quadrata per forza. Quindi:
 dal PNG. Rasterizzare l'SVG vorrebbe dire aggiungere una dipendenza (`cairosvg`, `rsvg-convert`) per un
 guadagno che a 16 pixel non esiste — e lo script tiene fuori le dipendenze di proposito, per la stessa
 ragione per cui non usa `sharp`.
+
+---
+
+## 2026-08-29 — M22, Stats+: di sola evidenza, e il flag che lo assegna
+
+**La terza stesura della spec, e le prime due sono archivio.** La prima costruiva un motore
+statistico di stima del prezzo, la seconda un indicatore di sola evidenza sui posti scoperti. Nessuna
+delle due è mai stata validata, e non poteva esserlo: nel database c'è **una sola asta, simulata, con
+37 lotti risolti**, e tre giri di simulazione hanno prodotto tre errori nel modello del comportamento
+umano, ognuno dei quali invalidava i numeri del giro precedente.
+
+Il perimetro definitivo, fissato dall'owner: **la temperatura dell'asta rispetto ai PMA, per ruolo e
+azzerata a ogni ruolo, più le alternative ancora libere del lotto in corso.** Niente stima di prezzo,
+niente valutazione del giocatore — *«il resto lo lascio come deduzione dell'utente»*.
+
+⚠ **La ragione per cui questo perimetro non ha bisogno di validazione, e le altre due sì**: un
+rapporto fra due cifre pagate e un conteggio di giocatori liberi sono **veri o falsi, non accurati o
+inaccurati**. L'unica cosa che si rivedrà dopo la prima asta vera sono le due soglie degli avvisi
+(0,25), guardando se hanno suonato quando serviva e taciuto quando no.
+
+### Il flag si assegna, e non è una difesa
+
+`users.stats_plus`, acceso da un amministratore utente per utente come `is_pro`. Tre cose vanno
+sapute, perché nessuna è ovvia e due sono controintuitive:
+
+1. **Vale solo insieme a `is_pro`, ed è forzato dai dati.** Senza il Pro la chiave `carmy` non arriva
+   affatto nel payload (M8 §6): niente PMA, niente da calcolare. Un `stats_plus` da solo sarebbe un
+   interruttore che promette e non fa — e a dirlo è il **pannello di amministrazione**, nel momento in
+   cui lo si accende, non l'utente scoprendo uno spazio vuoto.
+2. **L'amministratore NON lo ha implicito**, al contrario di `canSeeInsights`. Là l'implicito esiste
+   per una ragione scritta: chi importa i dati deve poterli guardare. Stats+ non ha quel bisogno, e
+   renderlo implicito costerebbe l'unica prova che serve — **aprire il portale senza Stats+**, che è
+   come lo vede quasi tutto il tavolo. ⚠ Conseguenza operativa: dopo il deploy Stats+ non lo vede
+   nemmeno chi ha deployato, finché non se lo accende in `/admin/users`.
+3. ⚠ **Non è una difesa, e va detto perché non venga difeso un giorno con un argomento che non ha.**
+   Un utente Pro senza il flag riceve comunque PMA e snapshot, cioè **tutti gli addendi**: il flag
+   decide che cosa l'applicazione *mostra*, non che cosa quel browser *può sapere*. La spec
+   archiviata concludeva l'opposto — «un gate lato client su un browser che ha tutti gli input è una
+   decorazione, quindi il calcolo va sul server» — e quell'argomento era **corretto quando il calcolo
+   era un motore statistico**, cioè quando il valore stava nel modello. Ora il calcolo è: contare
+   giocatori liberi, dividere crediti per crediti, ordinare per `lotSeq`. Metterlo sul server
+   vorrebbe dire serializzare un blocco per dodici viewer a ogni transizione **per nascondere
+   un'addizione a chi ha già gli addendi**.
+
+### Il fondamento misurato: il PMA è una ripartizione, non un prezzo
+
+Misurato su `fixtures/Classic Relative.xlsx`, 519 righe. **La somma di tutti i PMA fa 993%**, cioè
+dieci rose complete, e la massa si divide 10 / 20 / 30 / 40 fra P, D, C e A. Chi compila il foglio non
+prevede il prezzo di Bastoni: **divide il denaro del tavolo fra i reparti e poi lo spalma sui
+giocatori**. Da qui tre conseguenze che rendono possibile la macro — il budget è chiuso (quindi un
+reparto che spende poco lascia un residuo che uscirà altrove: è un'identità contabile, non una
+previsione), il piano si legge dal foglio caricato invece di essere una costante, e il rapporto
+`pagato ÷ PMA` è confrontabile fra ruoli.
+
+⚠ **E la trappola numero uno**: con 8 rose da 500 crediti ci sono 4.000 crediti e il listone ne vale
+4.965 ai prezzi del foglio. **Si paga strutturalmente sotto il PMA ovunque**, quindi un `−15%` non è
+uno sconto: è la norma. L'informazione sta nella differenza fra reparti e nel cambiamento nel tempo,
+mai nella distanza dal PMA nudo — e il pannello lo dichiara in testa, calcolandolo, perché «siete in 8
+su un foglio per 10» è vero per un tavolo e falso per un altro.
+
+### La lezione di metodo, che vale oltre questa macro
+
+⚠ **Prima di modellare una proprietà, guardare se il dato la dichiara già.** La domanda da cui la
+macro era nata — *«Dimarco merita un discorso a parte»* — aveva già una risposta **scritta a mano nel
+foglio**: Dimarco ha una fascia tutta sua, di una riga sola. La prima stesura aveva speso un'intera
+sezione a costruire un percentile statistico per dedurre ciò che il foglio dichiarava. E `Fascia` non
+è un'etichetta di prezzo: **è lo slot di rosa**, con dieci candidati per slot — uno per squadra —
+il che trasforma tre domande di modello in tre conteggi.
+
+⚠ **Un mock con numeri inventati non può contraddirsi, e per questo non serve a niente.** Calcolare i
+numeri dei mock invece di scriverli ha trovato **tre difetti prima del codice**: la scala dei PMA per
+slot non sommava a 100 (116,6% sul foglio vero, quindi *tutti* risultavano «sotto piano» del 17% e la
+tabella non distingueva nessuno), la regola delle alternative non copriva il gruppo più utile — «costa
+meno ma è titolare uguale», cioè l'occasione — e la riga del modale andava a capo rimettendo i 44px
+che M16 aveva restituito al campo.
+
+Scrivendo il codice la stessa disciplina ne ha trovati altri quattro, ed è la ragione per cui vale la
+pena scriverla qui: **§7.1 sbagliava il budget** (`credits + Σ prezzi` diverge per membro dopo un
+`adjustBudget`; si usa `budgetDefault`, che è anche il denominatore che `pmaCrediti` usa già altrove),
+**l'esempio di riga di §5.1 era di 49 caratteri** contro il limite di 45 che §5.1 stessa dichiara,
+**`overflow-y-auto` sulla colonna del modale non scorreva affatto** (vedi sotto), e **due stati di §8
+erano spuntati senza essere coperti**.
+
+### Il difetto che solo l'esecuzione poteva trovare
+
+⚠ **`overflow-y-auto` era scritto, sembrava giusto, e non scorreva.** Un elemento di griglia ha
+`min-height: auto`, quindi non può rimpicciolirsi sotto il proprio contenuto: l'overflow non ha niente
+da fare e la colonna deborda dalla card. E `min-h-0` sull'elemento **non basta**, perché la riga
+implicita della griglia è `auto` e cresce comunque. Servono tutte e due: `grid-rows-[minmax(0,1fr)]`
+sul contenitore **e** `min-h-0` sulle colonne.
+
+Misurato in Chrome headless su un banco statico (`fixtures/#22-banco-modale.html`), altezze da 913 a
+353px: prima del rimedio la colonna restava a 472px con `scrollHeight === clientHeight` — nessuno
+scorrimento, contenuto fuori dalla card — dopo si stringe a 439 / 379 / 319 e scorre. È lo stesso
+metodo di M20 e la stessa lezione: **un artefatto va eseguito, non ispezionato.** Sarebbe andato in
+produzione rotto, su un difetto visibile solo su schermi bassi, cioè proprio i portatili su cui la
+prova a mano l'avrebbe cercato.
+
+### Un difetto della suite di test, trovato per caso e chiuso
+
+⚠ **`sweep()` è globale e i file di test girano in parallelo.** Due file passavano allo scheduler un
+`advancePhase` non filtrato, quindi facevano avanzare le aste **degli altri file** — e, quando la
+suite gira sul database di sviluppo, anche **l'asta di prova di chi sta lavorando**. Le vittime
+vedevano rosso con «expected [] to include …», e chi trovava quel rosso andava a cercare un bug dello
+scheduler, che è il posto sbagliato.
+
+`cancello.test.ts` (M14) l'aveva già diagnosticato e si era difeso con una copia locale di
+`sweeperFor`; mancava in `snapshot.test.ts`, e si è poi scoperto che mancava **anche in
+`scheduler.test.ts`**, che dell'inconveniente era la vittima dichiarata e ne era pure una causa. Terzo
+chiamante, quindi l'helper vive in `tests/db/helpers.ts` con la regola scritta sopra: **se un test
+chiama `sweep()` o `bootRecovery()`, usa questo.**

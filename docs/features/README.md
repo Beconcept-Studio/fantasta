@@ -18,7 +18,8 @@ Nessuna.
 
 - **[M22 — Stats+](22-stats-plus.md)**: la temperatura dell'asta rispetto ai PMA, **per ruolo e
   azzerata a ogni ruolo**, più le alternative ancora libere del lotto in corso. Spec chiusa il
-  2026-08-29, **aperta lo stesso giorno** su `feature/22-stats-plus`.
+  2026-08-29, aperta lo stesso giorno su `feature/22-stats-plus`, **lavorata e pronta per la prova su
+  `dev`** (1057 test, da 971).
 
   ⚠ **Tocca lo schema**: `users.stats_plus`, un booleano che l'amministratore assegna utente per
   utente come `is_pro` (owner, 2026-08-29 — §6 è stato **riscritto all'apertura**, prima diceva

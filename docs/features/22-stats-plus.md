@@ -1039,8 +1039,12 @@ layout, non il contenuto vero né i caratteri veri.
 
 **Chiusura**
 
-- [ ] `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (il perimetro del 2026-08-29, il perché, e la
-      decisione sul flag con il suo statuto di §6.3)
+- [x] `docs/ARCHITECTURE.md` — il capitolo «Stats+: la temperatura dell'asta, e niente che assomigli a
+      un consiglio», scritto per chi lo leggerà fra sei mesi: **si apre da ciò che la funzione non
+      fa**, perché l'assenza dei prezzi consigliati è il pezzo di progetto più difficile da difendere
+      quando nessuno si ricorderà più dei due tentativi falliti
+- [x] `docs/DECISIONS.md` — il perimetro, lo statuto del flag, il fondamento misurato, e le due
+      lezioni di metodo (il dato che dichiara già la proprietà; il mock coi numeri calcolati)
 - [x] `docs/features/README.md` all'apertura · [ ] alla chiusura
 - [x] Togliere la richiesta da `docs/REQUESTS.md` — **solo** all'apertura della macro
 - [ ] `CHANGELOG.md` e `package.json` al merge su `main`
