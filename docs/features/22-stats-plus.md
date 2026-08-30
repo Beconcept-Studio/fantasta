@@ -1,8 +1,9 @@
 # M22 — Stats+: la temperatura dell'asta che stai giocando
 
-> **Stato:** **design**, non aperta. Nessun branch, nessun commit, nessuna riga di codice. Nasce
-> dalla richiesta «Analisi realtime offerta adatta» del quaderno del 2026-08-28, che resta in
-> `docs/REQUESTS.md` finché la macro non si apre davvero.
+> **Stato:** **lavorata**, su `feature/22-stats-plus`. Gate verde — `pnpm test` **1057/1057** (da
+> 971), `pnpm typecheck`, `pnpm build` — e **da provare a mano su `dev`** (§9.2). Nasce dalla
+> richiesta «Analisi realtime offerta adatta» del quaderno del 2026-08-28, tolta dal quaderno
+> all'apertura.
 >
 > ⚠ **Questa spec è la terza stesura, e le due precedenti sono archivio.** La prima costruiva un
 > motore statistico di stima del prezzo; la seconda un indicatore di sola evidenza sui posti scoperti.
@@ -917,10 +918,10 @@ pure, non sanno chi è l'utente.
 - [x] `pnpm db:push` in locale
 - [x] I test: le otto combinazioni del gate, i due casi scritti per nome, `setUserStatsPlus` sulla
       propria riga e senza Pro
-- [ ] ⚠ **Spostato al commit che lo legge** (era il decimo punto di §6.4): la prop verso `Portal` in
-      `app/auctions/[id]/play/page.tsx`. Aggiungerla qui avrebbe voluto dire una prop che nessuno
-      legge fino a tre commit dopo — cioè un'astrazione prima del primo chiamante, non del secondo
-      (regola 8). Il gate esiste ed è provato; il filo si tira quando c'è qualcosa da accendere
+- [x] ⚠ **Spostato al commit che lo legge, e arrivato in M22-06** (era il decimo punto di §6.4): la
+      prop verso `Portal`. Aggiungerla nel commit del flag avrebbe voluto dire una prop che nessuno
+      legge fino a quattro commit dopo — cioè un'astrazione prima del *primo* chiamante, non del
+      secondo (regola 8)
 
 **Il calcolo** — `lib/stats-plus.ts`, funzioni pure, nessun import di `lib/db`
 
@@ -1034,8 +1035,12 @@ layout, non il contenuto vero né i caratteri veri.
 - [x] Il reset per ruolo, il saldo solo sui ruoli chiusi
 - [x] Il filtro sull'ingresso, **e il caso che il rimedio archiviato sbagliava** (§9.1)
 - [x] Le due soglie sui casi limite (0,25 esatto, 4 lotti per parte)
-- [ ] L'asimmetria Bastoni / Bisseck, con i numeri veri
-- [ ] Le due soglie sui casi limite; il gate su tutte le combinazioni
+- [x] L'asimmetria Bastoni / Bisseck, con i numeri veri — e **provata nei due versi nella stessa
+      asserzione**, che è l'unica forma che una regola simmetrica non può soddisfare
+- [x] Le due soglie sui casi limite; il gate su **tutte e otto** le combinazioni
+- [x] ⚠ **La lunghezza della riga su oltre 5.000 combinazioni**, col test che verifica anche di
+      averle davvero generate: un refuso che riducesse la griglia a quattro casi lascerebbe il verde
+      e non proverebbe più niente
 
 **Chiusura**
 
