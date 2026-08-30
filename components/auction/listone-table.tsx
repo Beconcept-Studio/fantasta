@@ -8,6 +8,7 @@ import { ListoneImport } from "@/components/auction/listone-import";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { IconaObiettivo } from "@/components/auction/icona-obiettivo";
 import { ROLES, type Role, pmaCrediti } from "@/lib/domain";
 import { type ListoneGroup, listoneRows } from "@/lib/realtime/portal";
 import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
@@ -369,33 +370,6 @@ function ElencoStretto({
 }
 
 // ─── I pezzi piccoli ─────────────────────────────────────────────────────────
-
-/**
- * ⚠ **C'è su ogni riga, grigia o verde** (decisione dell'owner, fase di
- * progettazione del 2026-08-28). L'alternativa guardata era mostrarla solo sugli
- * obiettivi, con uno spazio vuoto altrove, ed è stata scartata: una colonna che a
- * volte c'è e a volte no si legge come un difetto di allineamento.
- */
-function IconaObiettivo({
-  obiettivo,
-  className,
-}: {
-  obiettivo: boolean;
-  className?: string;
-}) {
-  return (
-    <Bookmark
-      className={cn(
-        "size-4",
-        obiettivo
-          ? "fill-emerald-600 text-emerald-600"
-          : "text-muted-foreground/40",
-        className,
-      )}
-      aria-label={obiettivo ? "Obiettivo" : undefined}
-    />
-  );
-}
 
 /**
  * ⚠ **Il giocatore in asta adesso resta in tabella, con un badge.** Non è ancora

@@ -1,4 +1,9 @@
-import type { Snapshot, SnapshotLot, SnapshotMember } from "@/lib/realtime/types";
+import type {
+  Snapshot,
+  SnapshotLot,
+  SnapshotMember,
+  SnapshotRosterEntry,
+} from "@/lib/realtime/types";
 
 /**
  * Lo snapshot di prova, in una forma modificabile pezzo per pezzo.
@@ -36,6 +41,30 @@ export function member(
     slotsFilled: { P: 0, D: 0, C: 0, A: 0 },
     presence: "LIVE",
     roster: [],
+    ...patch,
+  };
+}
+
+/**
+ * Una riga di rosa, col default che serve quasi sempre: **un'assegnazione nata da
+ * un lotto**, non una correzione della regia.
+ *
+ * ⚠ **`lotSeq` è obbligatorio di proposito** (M22 §7.2). Il default nel tipo
+ * sarebbe stato `null`, cioè «assegnazione manuale», e una rosa di prova fatta
+ * tutta di assegnazioni manuali è invisibile al termometro di Stats+: i test
+ * passerebbero mostrando zero lotti informativi senza che nessuno capisca
+ * perché. Qui il numero si scrive, e chi vuole il caso manuale scrive `null`.
+ */
+export function rosterEntry(
+  patch: Partial<SnapshotRosterEntry> & Pick<SnapshotRosterEntry, "lotSeq">,
+): SnapshotRosterEntry {
+  return {
+    assignmentId: `a-${patch.playerId ?? patch.lotSeq}`,
+    playerId: "player-1",
+    name: "Lautaro",
+    role: "A",
+    team: "Inter",
+    price: 100,
     ...patch,
   };
 }

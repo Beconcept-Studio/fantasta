@@ -4044,6 +4044,203 @@ che si va a guardare quando qualcuno chiede «ma quel portiere a quanto era anda
 
 ---
 
+## Stats+: la temperatura dell'asta, e niente che assomigli a un consiglio
+
+C'è una domanda che chiunque abbia giocato un'asta si è fatto guardando il proprio listone: *«il
+foglio dice trentasei crediti — ma stasera, a questo tavolo, quanto vale davvero?»* Il foglio è
+scritto a luglio da qualcuno che non sa chi si siederà; l'asta è una stanza con otto persone che
+hanno budget, paure e rose diverse. Stats+ risponde a quella domanda, e la parte interessante è
+**quanto poco** fa per rispondere.
+
+### La cosa più importante è quello che non fa
+
+Stats+ non dice quanto offrire. Non c'è un prezzo consigliato, non c'è una banda, non c'è una soglia
+di uscita, non c'è nessun ordinamento «i migliori da prendere». Non è modestia: è la conclusione di
+due tentativi falliti, e vale la pena raccontarli perché la loro assenza è il pezzo di progetto più
+difficile da difendere fra sei mesi.
+
+Le prime due versioni di questa funzione erano motori di stima. Costruivano un modello del prezzo a
+partire dai lotti già chiusi e producevano un numero. Il problema non era la matematica: era che
+**quel numero non si poteva verificare**. Per verificarlo servirebbero aste vere, e ce n'è una sola,
+simulata. Le simulazioni fatte per validarlo hanno prodotto tre volte di seguito lo stesso genere di
+errore — non nel modello dei prezzi, ma nel modello del *comportamento umano* che generava i prezzi
+finti — e ogni giro invalidava i numeri del precedente.
+
+Un numero che nessuno può verificare, mostrato accanto a un campo dove si scrive un'offerta, non è
+un aiuto: è un'autorità inventata. Quindi il perimetro si è ristretto a ciò che è **vero o falso**
+invece che accurato o inaccurato: rapporti fra cifre già pagate, conteggi di giocatori ancora
+liberi. Nessuno di questi numeri ha bisogno di essere validato, perché nessuno di essi è una
+previsione.
+
+### Il PMA non è un prezzo: è una ripartizione del mercato
+
+Tutto il resto poggia su una misura fatta sul foglio vero, ed è controintuitiva. **La somma di tutti
+i PMA del listone fa 993%**, non 100: dieci rose complete. E si divide fra i reparti quasi
+esattamente 10 / 20 / 30 / 40 fra portieri, difensori, centrocampisti e attaccanti.
+
+Chi compila quel foglio, cioè, non sta prevedendo il prezzo di Bastoni. Sta **dividendo il denaro
+del tavolo fra i reparti** e poi spalmandolo sui giocatori. Questo cambia tutto, perché rende il
+budget una quantità chiusa: se la difesa assorbe il 14% della spesa contro un piano del 20%, quei
+crediti non sono spariti — sono in tasca a qualcuno, e usciranno da qualche altra parte. Non è una
+previsione, è un'identità contabile. Ed è ciò che permette al termometro di essere un fatto.
+
+C'è una seconda conseguenza, più sottile: il piano dei reparti si **legge dal foglio caricato**,
+non è una costante nel codice. Un foglio tarato diversamente porta con sé il proprio piano, e nessuno
+deve ricordarsi di aggiornare un numero.
+
+### Due orologi, non uno
+
+Il vincolo che ha dato forma al termometro viene dall'owner, e descrive come si gioca davvero:
+*«quando si parte sui portieri bisogna stringere il contesto a quel ruolo; quando si passa ai
+difensori la temperatura va resettata — un partecipante può puntare forte sui portieri, poco sui
+difensori, e ripuntare forte sui centrocampisti».*
+
+Quindi Stats+ tiene due orologi. **La temperatura si azzera a ogni cambio di ruolo**; **il vincolo —
+crediti spesi, slot riempiti, tetto d'offerta — si accumula.** Un termometro cumulativo direbbe
+«l'asta sta pagando il 10% sotto» proprio mentre i difensori schizzano del 30% sopra, perché i
+portieri andati a metà prezzo continuerebbero a pesare per sempre.
+
+E non è solo una scelta di prodotto: è la forma vera dell'asta. Il motore rifiuta la chiamata di un
+giocatore fuori dal ruolo corrente — *«in questo momento si chiamano i P, non i D»*. L'asta **è**
+sequenziale per ruolo, e il termometro segue quella sequenza invece di ignorarla.
+
+Il ponte fra i due orologi è il **saldo dei ruoli chiusi**: un ruolo che finisce non svanisce,
+consegna un residuo. «I portieri hanno preso il 6% del budget contro un piano del 10%: restano
+centosessanta crediti in più del previsto per quello che viene dopo.» ⚠ E si mostra **solo per i
+ruoli finiti**: a metà ruolo la spesa è un parziale, e confrontarla con l'intero piano direbbe
+sempre «avanza tantissimo». È un errore che si scrive da solo riusando la formula senza guardare
+quale ruolo si sta guardando, ed è per questo che il ruolo in corso non compare affatto invece di
+comparire con un numero che sembra vero.
+
+### Quali lotti parlano, e perché il filtro guarda l'ingresso
+
+Il 58% del listone vale un credito. Un lotto su un giocatore da un credito non porta informazione
+qualunque cifra faccia, quindi va escluso — e il **come** escluderlo è la parte che una versione
+precedente aveva sbagliato in modo istruttivo.
+
+Quella versione escludeva i **lotti chiusi al prezzo minimo**, avendo misurato che avvelenavano la
+stima. La diagnosi era giusta e il rimedio no: filtrare sul *prezzo pagato* scarta esattamente gli
+esiti bassi, e la temperatura risulta sistematicamente più calda del vero. È selezione sull'esito, ed
+è il genere di errore che si difende bene perché nasce da una misura corretta.
+
+Il filtro giusto guarda l'**ingresso**: entra nel termometro un lotto il cui *giocatore chiamato*
+vale almeno cinque crediti di PMA. È una proprietà nota prima che il lotto si apra, quindi non
+seleziona niente in base a come è finito. Un giocatore da trenta crediti chiuso a uno **entra** — e
+quel dato è la cosa più informativa della serata.
+
+⚠ E i lotti scartati non spariscono: diventano un fatto loro. «Nove dei dodici lotti del ruolo sono
+andati al minimo» è a sua volta una temperatura — dice che il tavolo non sta contendendo niente — e
+si mostra accanto, invece di essere nascosta dentro una media.
+
+### Punti osservati, non una media
+
+Con quattro lotti chiusi, una media è un numero con la stessa faccia sicura di una calcolata su
+quaranta, e chi legge non può distinguerle. Quindi Stats+ non mostra un valore: mostra il minimo, la
+mediana, il massimo **e quanti lotti li producono**. «Te lo dico su 4» e «te lo dico su 40» sono due
+affermazioni diverse, e chi legge ha diritto di distinguerle.
+
+Non c'è nessuna contrazione verso un valore atteso, nessun prior, nessuna costante di
+regolarizzazione. Erano nella prima versione, ed erano il punto esatto in cui l'evidenza diventava
+stima: con pochi dati producevano un numero addolcito che sembrava una misura. Qui con pochi dati il
+termometro dice «pochi dati».
+
+L'unica cosa che non sia aritmetica nuda sono **due avvisi**, e sono soglie su fatti: quando il ruolo
+in corso paga un quarto di PMA sopra o sotto quello precedente, e quando dentro lo stesso ruolo la
+seconda metà dei lotti sta un quarto sopra o sotto la prima. Il quarto è **scelto e non misurato**,
+ed è l'unico numero della funzione che andrà rivisto dopo la prima asta vera.
+
+### Le alternative, e la regola che non è simmetrica
+
+La seconda cosa che Stats+ fa è rispondere a *«se lo lascio andare, chi altro riempie questo slot?»*.
+
+La chiave è che nel foglio la **fascia non è un'etichetta di prezzo: è lo slot di rosa** — «primo
+slot relativo», «secondo», e così via, con dieci candidati per slot, uno per squadra. Questo
+trasforma una domanda di modello in un conteggio. È anche il posto in cui la versione precedente
+aveva sbagliato di più: aveva costruito un percentile statistico per dedurre che Dimarco è un caso a
+parte, mentre nel foglio **Dimarco ha una fascia tutta sua, di una riga sola, scritta a mano**. La
+lezione, che vale oltre questa funzione: prima di modellare una proprietà, guardare se il dato la
+dichiara già.
+
+Ma la fascia da sola mente, ed è la correzione che ha dato forma alla regola. Dentro la stessa fascia
+il giudizio di titolarità va da 3/5 a 5/5, e il prezzo lo spiega solo a metà. Bastoni è primo slot,
+5/5, `titolarissimo`; Bisseck è secondo slot e **3/5**, `subentrante`. Un catalogo costruito su
+fascia e prezzo direbbe che Bisseck sostituisce Bastoni.
+
+Quindi la regola è **asimmetrica sulla titolarità**, ed è il punto della funzione: se chiami un 5/5,
+un 3/5 **non** è un'alternativa; se chiami un 3/5, un 5/5 lo è eccome — costa solo di più. I gruppi
+sono tre: *pari livello* (stesso slot o adiacente, titolarità almeno pari), *costano meno* (due o tre
+slot più giù, titolarità almeno pari — è la risposta a «posso rischiare una puntata più bassa»), e
+*ripiego* (titolarità inferiore: ti riempie lo slot, non te lo risolve).
+
+Il ripiego vive nella tab e non nel modale d'offerta, ed è una decisione: è una cosa da leggere
+confrontando, non da decidere in venti secondi con la tastiera aperta.
+
+### Dove si vede, e la riga che non deve andare a capo
+
+Stats+ ha due case. Nel **modale d'offerta**, sotto il campo, c'è una riga sola — e da schermo largo
+in su il modale si allarga e le affianca una colonna con quattro riquadri. Nella **tab Stats+** del
+portale c'è tutto, ripiego e tabella dei partecipanti compresi.
+
+Due dettagli sono più vincolanti di quanto sembri. Il primo: la riga sta **sotto** il campo
+dell'offerta e non sopra. Sopra, un'informazione arriva *prima* della decisione e la sostituisce;
+sotto, l'ordine di lettura si inverte — prima vedi la cifra che stai scrivendo, poi il contesto. Chi
+lo vuole lo trova, chi ha già deciso ha già digitato.
+
+Il secondo: è **una riga sola**, e il limite è di caratteri, non di intenzioni. Oltre ~45 caratteri
+la riga va a capo, il blocco raddoppia d'altezza e rimette esattamente i quarantaquattro pixel che
+una macro precedente aveva restituito al campo — che con la tastiera aperta sono la risorsa scarsa.
+Per questo la riga non è una stringa scritta a mano ma una composizione che si misura: testa (il
+livello del ruolo, o i due regimi quando c'è uno scatto) più coda (il conteggio delle alternative), e
+**se non ci sta tutto cade la coda, mai la testa**.
+
+⚠ Sotto la larghezza in cui la colonna compare, il modale **non cambia di un pixel**: lì è un foglio
+che sale dal basso su uno schermo dove l'altezza è contesa dalla tastiera. La colonna di sinistra
+resta a 384px su qualunque schermo, identica al telefono; a cambiare è solo quanta aria ha quella
+destra.
+
+### Il gate è doppio, e solo metà è una difesa
+
+Stats+ lo vede chi ha **il Pro** e in più il flag **Stats+**, che un amministratore accende utente per
+utente. Le due metà sono di natura diversa, e confonderle sarebbe l'errore da non fare.
+
+Il Pro decide una **query**: a chi non ce l'ha, i giudizi del foglio non arrivano affatto nel payload.
+È una difesa vera, per costruzione. Il flag Stats+ invece decide che cosa l'applicazione **mostra** a
+chi quei dati li ha già ricevuti: un utente Pro senza il flag ha comunque in mano tutti gli addendi, e
+lo dice il commento sulla colonna, perché non venga difeso un giorno con un argomento che non ha.
+
+Spostare il calcolo sul server per «rafforzarlo» sarebbe il rimedio sbagliato, ed è esattamente ciò
+che la versione precedente proponeva: costerebbe un blocco calcolato e serializzato per dodici viewer
+a ogni transizione, per nascondere un'addizione a chi ha già gli addendi. L'argomento era corretto
+quando il calcolo era un motore statistico — lì il valore stava nel modello. Ora il calcolo è contare
+giocatori liberi e dividere crediti per crediti.
+
+⚠ **L'amministratore non ha il flag implicito**, al contrario di quanto succede col Pro. Là
+l'implicito serve perché chi importa i dati deve poterli guardare; qui non c'è niente da importare, e
+renderlo implicito toglierebbe l'unico modo di vedere il portale **senza** Stats+ — che è come lo vede
+quasi tutto il tavolo. La conseguenza operativa va conosciuta: subito dopo un rilascio, Stats+ non lo
+vede nessuno, nemmeno chi ha fatto il deploy, finché non se lo accende.
+
+### Perché il calcolo sta nel browser, e cosa costa
+
+Tutto Stats+ è un pugno di funzioni pure che prendono lo snapshot e il listone e restituiscono
+numeri. Non toccano il database, non aggiungono un solo campo al canale — tranne uno, il numero del
+lotto da cui nasce ogni riga di rosa, che serve a mettere i lotti in ordine e a distinguere un
+acquisto d'asta da una correzione della regia.
+
+Questo ha una conseguenza che vale I10 gratis: **il pannello è funzione pura dello stato corrente**,
+quindi chi ricarica la pagina a metà lotto vede esattamente gli stessi numeri di chi non si è mosso.
+Non c'è niente da aver ascoltato al momento giusto.
+
+E ha un invariante suo, che è I8 detto in un altro modo: **tutto ciò che Stats+ mostra si calcola da
+lotti risolti e da stato pubblico, mai dalle buste in corso.** Non è una promessa: è un test che
+costruisce uno stato con un lotto aperto, calcola tutto, poi cambia le offerte vive in ogni modo che
+lo snapshot possa rappresentare — un round in più, un idoneo in meno, una busta consegnata e
+ritirata, un pareggio annunciato — e pretende **lo stesso identico oggetto**. Serve perché il giorno
+in cui qualcuno «migliorerà» la temperatura usando chi è ancora idoneo a offrire, il numero
+continuerebbe ad avere la stessa faccia e nessuna schermata lo denuncerebbe.
+
+---
+
 ## Cosa non c'è ancora
 
 Con la Fase 8 l'applicazione era completa e viveva su un indirizzo pubblico. L'unico pezzo rimasto

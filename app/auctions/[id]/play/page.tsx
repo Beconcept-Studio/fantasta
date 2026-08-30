@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
-import { canSeeInsights } from "@/lib/domain";
+import { canSeeInsights, canSeeStatsPlus } from "@/lib/domain";
 import { getAuctionOverview, listPickPool } from "@/lib/engine/setup";
 import { userListoneStatus } from "@/lib/engine/user-listone";
 
@@ -65,6 +65,13 @@ export default async function PlayPage({
       // percentuale a cifra offribile nella lista di chiamata (M17). Prop e non
       // snapshot, per la stessa ragione delle altre due: non è stato di gioco.
       budget={overview.auction.budgetDefault}
+      // ⚠ **Il gate di Stats+ è un booleano, non una query** (M22 §6.3), e la
+      // differenza con `canSeeInsights` due prop più su va conosciuta: là il
+      // permesso decide **cosa il server manda**, qui decide **cosa l'app
+      // mostra** a chi quei dati li ha già ricevuti. Non è una difesa e non
+      // finge di esserlo — Stats+ si calcola da PMA e snapshot, che un utente
+      // Pro ha entrambi in mano.
+      statsPlus={canSeeStatsPlus(user)}
     />
   );
 }

@@ -116,7 +116,7 @@ function outcome(
 // ─── Il caso normale: solo ciò che è cambiato ────────────────────────────────
 
 suite("il salvataggio scrive solo i campi che gli arrivano", () => {
-  it("due campi su quattro: quelli sì, gli altri due non li tocca", async () => {
+  it("due campi su cinque: quelli sì, gli altri tre non li tocca", async () => {
     actor.id = await user("admin", { isAdmin: true });
     const target = await user("bersaglio");
 
@@ -133,8 +133,9 @@ suite("il salvataggio scrive solo i campi che gli arrivano", () => {
     const after = (await row(target))!;
     expect(after.displayName).toBe("Nome Corretto");
     expect(after.isPro).toBe(true);
-    // ⚠ I due che non erano nel form: nessuna `UPDATE` li ha sfiorati.
+    // ⚠ I tre che non erano nel form: nessuna `UPDATE` li ha sfiorati.
     expect(after.isAdmin).toBe(false);
+    expect(after.statsPlus).toBe(false);
     expect(after.emailVerifiedAt).toBeNull();
   });
 
@@ -182,13 +183,73 @@ suite("il salvataggio scrive solo i campi che gli arrivano", () => {
     actor.id = await user("admin", { isAdmin: true });
     const target = await user("bersaglio");
 
-    expect((await save({ userId: target, isAdmin: "true", isPro: "true" })).done).toBe(true);
+    expect(
+      (
+        await save({
+          userId: target,
+          isAdmin: "true",
+          isPro: "true",
+          statsPlus: "true",
+        })
+      ).done,
+    ).toBe(true);
     const acceso = (await row(target))!;
-    expect([acceso.isAdmin, acceso.isPro]).toEqual([true, true]);
+    expect([acceso.isAdmin, acceso.isPro, acceso.statsPlus]).toEqual([
+      true,
+      true,
+      true,
+    ]);
 
-    expect((await save({ userId: target, isAdmin: "false", isPro: "false" })).done).toBe(true);
+    expect(
+      (
+        await save({
+          userId: target,
+          isAdmin: "false",
+          isPro: "false",
+          statsPlus: "false",
+        })
+      ).done,
+    ).toBe(true);
     const spento = (await row(target))!;
-    expect([spento.isAdmin, spento.isPro]).toEqual([false, false]);
+    expect([spento.isAdmin, spento.isPro, spento.statsPlus]).toEqual([
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  /**
+   * M22 §6 — **`stats_plus` si scrive indipendentemente da `is_pro`**, e il test
+   * lo fissa perché la tentazione di legarli è forte e sbagliata.
+   *
+   * Legare le due scritture vorrebbe dire decidere che cosa succede al flag
+   * quando si spegne il Pro, e ogni risposta a quella domanda è una sorpresa per
+   * chi la subisce: spegnerlo perde un'assegnazione che nessuno ha revocato,
+   * lasciarlo acceso fa credere di averlo tolto. I due flag si combinano al
+   * momento della **lettura** (`canSeeStatsPlus`), non della scrittura.
+   */
+  it("⚠ Stats+ si accende anche senza Pro: è la lettura a metterli insieme, non la scrittura", async () => {
+    actor.id = await user("admin", { isAdmin: true });
+    const target = await user("bersaglio");
+
+    expect((await save({ userId: target, statsPlus: "true" })).done).toBe(true);
+    const after = (await row(target))!;
+    expect([after.isPro, after.statsPlus]).toEqual([false, true]);
+  });
+
+  /**
+   * ⚠ **La propria riga si può toccare, ed è il caso che sblocca il rilascio**
+   * (M22 §6.2): l'amministratore non ha Stats+ implicito, quindi se non potesse
+   * accenderselo non vedrebbe mai la funzione appena messa in produzione — e in
+   * un'installazione con un amministratore solo non potrebbe farlo nessun altro.
+   */
+  it("⚠ un amministratore accende Stats+ a se stesso", async () => {
+    actor.id = await user("admin", { isAdmin: true });
+
+    expect(
+      (await save({ userId: actor.id, statsPlus: "true" })).done,
+    ).toBe(true);
+    expect((await row(actor.id))!.statsPlus).toBe(true);
   });
 });
 

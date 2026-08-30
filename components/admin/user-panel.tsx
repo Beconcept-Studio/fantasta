@@ -85,6 +85,7 @@ export function UserPanel({
   const [verify, setVerify] = useState(user.verified);
   const [isAdmin, setIsAdmin] = useState(user.isAdmin);
   const [isPro, setIsPro] = useState(user.isPro);
+  const [statsPlus, setStatsPlus] = useState(user.statsPlus);
 
   // Ogni ritorno dell'azione scrive `done` oppure un `error`: l'assenza di entrambi
   // è lo stato iniziale di `useActionState`, cioè «nessuno ha ancora premuto Salva».
@@ -102,7 +103,9 @@ export function UserPanel({
   const verifyChanged = verify && !user.verified;
   const adminChanged = isAdmin !== user.isAdmin;
   const proChanged = isPro !== user.isPro;
-  const dirty = nameChanged || verifyChanged || adminChanged || proChanged;
+  const statsChanged = statsPlus !== user.statsPlus;
+  const dirty =
+    nameChanged || verifyChanged || adminChanged || proChanged || statsChanged;
 
   // Un bot non ha un nome da correggere né un indirizzo da verificare (§6): il
   // pannello è tutto recap, e lo dice invece di mostrare quattro comandi spenti.
@@ -261,6 +264,26 @@ export function UserPanel({
                   hint="Vede gli insight sul listone: titolarità, rigoristi, piazzati."
                 />
 
+                {/* ⚠ **L'interruttore resta acceso anche senza Pro, e la frase
+                    dice perché non basta.** Disabilitarlo imporrebbe un ordine
+                    fra i due — prima Pro, poi Stats+ — cioè una cosa in più da
+                    ricordare per una combinazione che non fa danno: `stats_plus`
+                    senza `is_pro` non mostra niente e non rompe niente
+                    (`canSeeStatsPlus`). Il posto giusto per dirlo è qui, nel
+                    momento in cui si accende, non il portale di chi lo riceve. */}
+                <FlagSwitch
+                  id="panel-stats-plus"
+                  label={USER_FIELD_LABELS.statsPlus}
+                  checked={statsPlus}
+                  onCheckedChange={setStatsPlus}
+                  disabled={saving}
+                  hint={
+                    isPro
+                      ? "Vede la temperatura dell'asta e le alternative del lotto in corso."
+                      : "Vede la temperatura dell'asta e le alternative del lotto in corso. ⚠ Senza Pro non ha i PMA, quindi non vedrà niente."
+                  }
+                />
+
                 {adminChanged && (
                   <input
                     type="hidden"
@@ -273,6 +296,13 @@ export function UserPanel({
                     type="hidden"
                     name="isPro"
                     value={isPro ? "true" : "false"}
+                  />
+                )}
+                {statsChanged && (
+                  <input
+                    type="hidden"
+                    name="statsPlus"
+                    value={statsPlus ? "true" : "false"}
                   />
                 )}
                 {verifyChanged && (

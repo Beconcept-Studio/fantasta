@@ -15,7 +15,6 @@ import {
 import { getAuctionLog } from "@/lib/engine/log";
 import { setBroadcastHook } from "@/lib/engine/mutate";
 import { manualAssign } from "@/lib/engine/override";
-import { createScheduler } from "@/lib/engine/scheduler";
 import { loadForSnapshot, serializeSnapshot } from "@/lib/engine/snapshot";
 import { resetBroadcast } from "@/lib/realtime/broadcast";
 import type { Snapshot } from "@/lib/realtime/types";
@@ -26,6 +25,7 @@ import {
   databaseAvailable,
   dropAuctions,
   dropUsers,
+  sweeperFor,
 } from "./helpers";
 
 /**
@@ -139,23 +139,6 @@ async function sealedAuction(now = Date.now()): Promise<Sealed> {
     winnerMemberId: game.memberIds[2],
     before,
   };
-}
-
-/**
- * Uno sweep vero, che però **fa avanzare solo l'asta di questo test**.
- *
- * ⚠ **`sweep()` è globale, e i file di test girano in parallelo.** La query è quella
- * vera — «tutte le aste `LIVE` con la deadline scaduta», che è il pezzo di boot
- * recovery da collaudare — ma passare `advancePhase` così com'è vorrebbe dire
- * mandare avanti anche le aste degli altri file: `tests/db/scheduler.test.ts` ha uno
- * sweep suo, e si è visto rosso da lì («expected [] to include …») per colpa di
- * questo file, non per un bug. Filtrando l'`advance` la query resta vera e il
- * vicinato resta in pace.
- */
-function sweeperFor(auctionId: string) {
-  return createScheduler(async (id) => {
-    if (id === auctionId) await advancePhase(id);
-  });
 }
 
 /** Lo snapshot come lo vedrebbe quel viewer, adesso. */
