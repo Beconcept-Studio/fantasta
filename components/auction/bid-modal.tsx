@@ -6,11 +6,18 @@ import { useEffect, useRef, useState } from "react";
 import { Campioncino } from "@/components/auction/campioncino";
 import { InsightsMacro } from "@/components/auction/insights";
 import { PrezzoConsigliato } from "@/components/auction/prezzo-consigliato";
+import { RigaStatsPlus } from "@/components/auction/stats-plus";
 import { Countdown, CountdownBar } from "@/components/auction/countdown";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
 import type { ActionResult } from "@/lib/realtime/action";
 import { bidBounds, checkAmount, parseAmount } from "@/lib/realtime/portal";
+import {
+  alternative,
+  lottiInformativi,
+  scatto,
+  temperatura,
+} from "@/lib/stats-plus";
 import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
 import { cn } from "@/lib/utils";
 
@@ -66,6 +73,8 @@ export function BidModal({
   onOpenChange,
   snapshot,
   pool,
+  budget,
+  statsPlus,
   myMemberId,
   offset,
   onBid,
@@ -83,6 +92,10 @@ export function BidModal({
    * quel viewer, e chi non ha il permesso ha ricevuto un pool senza insight.
    */
   pool: PoolPlayer[];
+  /** I crediti di partenza: il denominatore di ogni rapporto di Stats+ (M22 §7.1). */
+  budget: number;
+  /** Chi guarda vede Stats+ (M22 §6). */
+  statsPlus: boolean;
   myMemberId: string | null;
   offset: number;
   onBid: (amount: number) => Promise<ActionResult>;
@@ -102,6 +115,28 @@ export function BidModal({
   const poolRow = pool.find((p) => p.id === lot?.player.id);
   const insights = poolRow?.insights;
   const carmy = poolRow?.carmy;
+
+  // ⚠ **Stats+ è funzione pura di snapshot e pool** (M22 §7.3, I10): non c'è
+  // nessuno stato locale, nessun effetto, niente da ricordare fra uno snapshot e
+  // l'altro. Chi ricarica a metà lotto vede gli stessi numeri di chi non si è
+  // mosso.
+  //
+  // ⚠ **E non si memoizza**: `O(righe del pool)` per le alternative e
+  // `O(assegnazioni)` per il termometro sono cinquecento e duecento in un
+  // browser. Non si memoizza prima di aver misurato (regola 8) — e se un giorno
+  // servisse, il candidato è l'indice `fascia → giocatori`, che è immutabile per
+  // tutta l'asta.
+  const ruoloInCorso = snapshot.auction.currentRole;
+  const lottiRuolo =
+    statsPlus && ruoloInCorso !== null
+      ? lottiInformativi(snapshot, pool, budget, ruoloInCorso)
+      : [];
+  const temperaturaRuolo = statsPlus ? temperatura(lottiRuolo) : null;
+  const scattoRuolo = statsPlus ? scatto(lottiRuolo) : null;
+  const alternativeLotto =
+    statsPlus && lot !== null
+      ? alternative(snapshot, pool, budget, lot.player.id)
+      : null;
 
   const [raw, setRaw] = useState("");
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle" });
@@ -304,6 +339,30 @@ export function BidModal({
             nessuna condizione da tenere allineata (M10B §6).
           */}
           <PrezzoConsigliato carmy={carmy} dove="campo" />
+
+          {/*
+            ⚠ **Stats+ sta SOTTO il campo, ed è la risposta all'obiezione del
+            2026-08-12, non una scelta di layout** (M22 §5.3). Sopra il campo
+            un'informazione arriva **prima** della decisione e la sostituisce;
+            sotto, l'ordine di lettura si inverte — prima vedi la cifra che stai
+            scrivendo, poi il contesto.
+
+            ⚠ **E una riga sola.** Il commento qui sotto dice perché la riga dei
+            valori suggeriti è stata tolta: quei ~44px sono altezza restituita al
+            campo, e con la tastiera aperta sono la risorsa scarsa. Una seconda
+            riga li rimetterebbe, in mezzo fra il campo e il suo verdetto,
+            disfacendo una decisione presa apposta. Il budget di caratteri che
+            tiene la riga a una riga sola è misurato e provato in
+            `tests/stats-plus-riga.test.ts`.
+          */}
+          {statsPlus && (
+            <RigaStatsPlus
+              role={ruoloInCorso}
+              temperatura={temperaturaRuolo}
+              scatto={scattoRuolo}
+              alternative={alternativeLotto}
+            />
+          )}
 
           {/*
             ⚠ Qui stava la riga dei valori suggeriti — `+5`, `+10`, `+25` e un

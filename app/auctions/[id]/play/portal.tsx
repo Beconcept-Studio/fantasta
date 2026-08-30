@@ -80,6 +80,7 @@ export function Portal({
   viewerIsOwner,
   budget,
   listone,
+  statsPlus,
 }: {
   auctionId: string;
   /** Il listone dell'asta, letto una volta dal server: non viaggia nello snapshot. */
@@ -123,6 +124,18 @@ export function Portal({
    * che non c'è non si può desiderare.
    */
   listone: UserListoneStatus | null;
+  /**
+   * Chi guarda vede Stats+ (M22 §6): `canSeeInsights && users.stats_plus`.
+   *
+   * ⚠ **Prop e non snapshot**, come `budget` e `viewerIsOwner`: non è stato di
+   * gioco e non cambia durante la serata. E ⚠ **è un gate di prodotto, non una
+   * difesa**: chi non ce l'ha ha comunque ricevuto PMA e snapshot, cioè tutti
+   * gli addendi. Decide che cosa l'app mostra, non che cosa quel browser può
+   * sapere — `lib/domain.ts` lo scrive per esteso su `canSeeStatsPlus`, e il
+   * rimedio "forte" (il calcolo sul server) costerebbe un blocco serializzato
+   * per dodici viewer a ogni transizione per nascondere un'addizione.
+   */
+  statsPlus: boolean;
 }) {
   const { snapshot, connected, offset, deleted } = useAuctionStream(auctionId);
   useHeartbeat(auctionId);
@@ -482,6 +495,8 @@ export function Portal({
           onOpenChange={(open) => setDismissedLotId(open ? null : lot.id)}
           snapshot={snapshot}
           pool={pool}
+          budget={budget}
+          statsPlus={statsPlus}
           myMemberId={myMemberId}
           offset={offset}
           onBid={(amount) => sendAction(auctionId, { type: "BID", amount })}
