@@ -1,9 +1,17 @@
 # M22 — Stats+: la temperatura dell'asta che stai giocando
 
-> **Stato:** **lavorata**, su `feature/22-stats-plus`. Gate verde — `pnpm test` **1057/1057** (da
-> 971), `pnpm typecheck`, `pnpm build` — e **da provare a mano su `dev`** (§9.2). Nasce dalla
-> richiesta «Analisi realtime offerta adatta» del quaderno del 2026-08-28, tolta dal quaderno
-> all'apertura.
+> **Stato:** **in produzione da `v1.22.0`** (2026-08-30). Gate verde — `pnpm test` **1057/1057** (da
+> 971), `pnpm typecheck`, `pnpm build`. Nasce dalla richiesta «Analisi realtime offerta adatta» del
+> quaderno del 2026-08-28, tolta dal quaderno all'apertura.
+>
+> **Il rilascio, per intero, com'è andato**: push su `main` alle 08:54:24 UTC, il server ha fetchato
+> il commit giusto **sette secondi dopo** (nessuna corsa fra i due push), versione servita alle
+> 08:56:5x — **due minuti e mezzo**, il solito. Poi `pg_dump` (176K), `pnpm db:push` — un solo
+> `ALTER TABLE users ADD COLUMN stats_plus`, metadata-only — e `pm2 reload`. Log degli errori vuoto.
+>
+> ⚠ **Il flag è acceso a un solo account, l'owner.** Chi altro debba averlo è una decisione sulla
+> lega, e si prende da `/admin/users`. Gli altri tre Pro (Erik, Andrea gmail, Thomas) ce l'hanno
+> spento.
 >
 > ⚠ **Questa spec è la terza stesura, e le due precedenti sono archivio.** La prima costruiva un
 > motore statistico di stima del prezzo; la seconda un indicatore di sola evidenza sui posti scoperti.
@@ -1052,8 +1060,8 @@ layout, non il contenuto vero né i caratteri veri.
       lezioni di metodo (il dato che dichiara già la proprietà; il mock coi numeri calcolati)
 - [x] `docs/features/README.md` all'apertura · [ ] alla chiusura
 - [x] Togliere la richiesta da `docs/REQUESTS.md` — **solo** all'apertura della macro
-- [ ] `CHANGELOG.md` e `package.json` al merge su `main`
-- [ ] ⚠ **`pnpm db:push` a mano sul server**, con nessuna asta `LIVE` o `PAUSED`, poi
+- [x] `CHANGELOG.md` e `package.json` al merge su `main` — `v1.22.0`, 2026-08-30
+- [x] ⚠ **`pnpm db:push` a mano sul server** — fatto il 2026-08-30, con backup prima, con nessuna asta `LIVE` o `PAUSED`, poi
       `pm2 reload deploy/ecosystem.config.cjs --update-env`. Nessun backfill (l'intestazione dice
       perché), **ma il rilascio non è finito finché chi deve vedere Stats+ non ha il flag acceso in
       `/admin/users`** — e quello include chi ha fatto il deploy
