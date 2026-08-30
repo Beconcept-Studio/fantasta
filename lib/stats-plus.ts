@@ -811,3 +811,80 @@ export function scartoPerPartecipante(
     return { memberId: m.id, speso, piano, scarto: speso - piano, perRuolo };
   });
 }
+
+// ─── §2.2 e §3.4 — i due fatti che la tab dichiara in testa ──────────────────
+
+export type ScartoStrutturale = {
+  /** I crediti che il tavolo ha in tutto. */
+  budgetTavolo: number;
+  /** Quanto vale il listone ai prezzi del foglio, in crediti. */
+  valoreListone: number;
+  /** `budgetTavolo / valoreListone`: sotto 1 vuol dire che si paga sotto il PMA. */
+  copertura: number;
+};
+
+/**
+ * Quanto il tavolo può comprare di ciò che il foglio mette in vendita (§2.2).
+ *
+ * ⚠ **Questa non è un'occasione: è la nuova unità di misura, ed è la trappola
+ * numero uno del termometro.** Con 8 rose da 500 crediti ci sono 4.000 crediti e
+ * il listone ne vale ~4.965 ai prezzi del foglio, perché il foglio è tarato per
+ * **dieci** rose (§2: la somma di tutti i PMA fa 993%). Circa un quinto del
+ * valore non verrà comprato da nessuno, e in ogni fascia da dieci candidati ne
+ * avanzano due.
+ *
+ * Conseguenza: **con otto partecipanti si paga strutturalmente sotto il PMA
+ * ovunque**, quindi un `−15%` non è uno sconto, è la norma. L'informazione sta
+ * nella **differenza fra un reparto e l'altro** e nel **cambiamento nel tempo**,
+ * mai nella distanza dal PMA nudo. Il pannello lo dichiara in testa invece di
+ * lasciare che chi legge scambi lo scarto strutturale per un affare.
+ *
+ * ⚠ **Si calcola, non si scrive.** Il «siete in 8 su un foglio per 10» è vero
+ * per il tavolo di riferimento e falso per un altro: con dodici partecipanti il
+ * rapporto si rovescia, e una frase costante direbbe la cosa sbagliata proprio
+ * al tavolo che ne avrebbe più bisogno.
+ */
+export function scartoStrutturale(
+  snapshot: Snapshot,
+  pool: PoolPlayer[],
+  budget: number,
+): ScartoStrutturale {
+  const budgetTavolo = budget * snapshot.members.length;
+  const valoreListone = pool.reduce((somma, player) => {
+    const pma = player.carmy?.pma;
+    return pma === null || pma === undefined
+      ? somma
+      : somma + pmaCrediti(pma, budget);
+  }, 0);
+  return {
+    budgetTavolo,
+    valoreListone,
+    copertura: valoreListone === 0 ? 1 : budgetTavolo / valoreListone,
+  };
+}
+
+export type AlMinimo = { alMinimo: number; totale: number };
+
+/**
+ * Quanti lotti del ruolo sono andati **al prezzo minimo**.
+ *
+ * ⚠ **È il complemento del filtro di §3.4, e va mostrato accanto e non
+ * nascosto**: i lotti che il termometro scarta non spariscono, diventano un
+ * fatto loro. «Nove degli ultimi dodici sono andati al minimo» è a sua volta una
+ * temperatura — dice che il tavolo non sta contendendo niente — e chi legge un
+ * `−15%` su quattro lotti informativi ha diritto di sapere che gli altri dodici
+ * sono andati a un credito.
+ *
+ * ⚠ **Conta tutti i lotti del ruolo, informativi e no.** È deliberato: la
+ * domanda è «quanto si sta contendendo», e un lotto scartato dal termometro
+ * conta esattamente quanto gli altri per rispondere.
+ */
+export function lottiAlMinimo(snapshot: Snapshot, role: Role): AlMinimo {
+  const lotti = tutteLeRose(snapshot).filter(
+    (entry) => entry.role === role && entry.lotSeq !== null,
+  );
+  return {
+    alMinimo: lotti.filter((entry) => entry.price === 1).length,
+    totale: lotti.length,
+  };
+}

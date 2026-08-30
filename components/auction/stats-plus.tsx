@@ -4,10 +4,14 @@ import { IconaObiettivo } from "@/components/auction/icona-obiettivo";
 import { Badge } from "@/components/ui/badge";
 import { CARMY_SCALA_MAX, ROLE_LABELS, type Role } from "@/lib/domain";
 import type {
+  AlMinimo,
   Alternativa,
   Alternative,
   AndatiStessaFascia,
   Avviso,
+  Saldo,
+  ScartoPartecipante,
+  ScartoStrutturale,
   Scatto,
   Temperatura,
 } from "@/lib/stats-plus";
@@ -406,6 +410,203 @@ export function StatsPlusColonna({
           vuoto="Nessuno più economico con la stessa titolarità."
         />
       </div>
+    </div>
+  );
+}
+
+// ─── La tab Stats+ (§5.2) ────────────────────────────────────────────────────
+
+/**
+ * ⚠ **In testa, sempre, e non è un'introduzione: è la chiave di lettura.**
+ * Senza, il primo `−15%` verrà letto come un affare — mentre con otto
+ * partecipanti su un foglio tarato per dieci si paga strutturalmente sotto il
+ * PMA **ovunque** (§2.2). L'informazione sta nella differenza fra reparti e nel
+ * cambiamento nel tempo, mai nella distanza dal PMA nudo.
+ */
+function ScartoStrutturaleRiga({ s }: { s: ScartoStrutturale }) {
+  const percentuale = Math.round((1 - s.copertura) * 100);
+  return (
+    <p className="text-muted-foreground text-xs">
+      Al tavolo ci sono <strong>{s.budgetTavolo}</strong> crediti e il listone ne
+      vale <strong>{s.valoreListone}</strong> ai prezzi del foglio
+      {percentuale > 0 ? (
+        <>
+          : circa <strong>{percentuale}%</strong> del valore non lo comprerà
+          nessuno, quindi si paga sotto il PMA ovunque.{" "}
+          <strong>Guarda le differenze fra reparti</strong>, non la distanza dal
+          PMA.
+        </>
+      ) : (
+        <>. Il tavolo copre tutto il listone: qui il PMA non è un tetto.</>
+      )}
+    </p>
+  );
+}
+
+/**
+ * La tab Stats+ del portale: quattro blocchi, e il **ripiego** che nel modale
+ * non c'è (decisione 6 — è qui che vive, dove si confronta invece di decidere).
+ *
+ * ⚠ **Non è una rotta**, ed è scritto anche su `Tabs.Root`: due rotte
+ * smonterebbero `Portal`, quindi `useAuctionStream`, quindi la connessione SSE.
+ */
+export function StatsPlusTab({
+  role,
+  temperatura,
+  scatto,
+  alMinimo,
+  saldi,
+  partecipanti,
+  nomiMembri,
+  alternative,
+  avvisi,
+  strutturale,
+  lottoAperto,
+  posizione = POSIZIONE_STATS,
+}: {
+  role: Role | null;
+  temperatura: Temperatura | null;
+  scatto: Scatto | null;
+  alMinimo: AlMinimo;
+  saldi: Saldo[];
+  partecipanti: ScartoPartecipante[];
+  nomiMembri: Map<string, string>;
+  alternative: Alternative | null;
+  avvisi: Avviso[];
+  strutturale: ScartoStrutturale;
+  lottoAperto: boolean;
+  posizione?: PosizioneStats;
+}) {
+  if (posizione !== "tab" && posizione !== "entrambi") return null;
+
+  return (
+    <div className="space-y-3">
+      <ScartoStrutturaleRiga s={strutturale} />
+
+      <Riquadro titolo={role === null ? "Il ruolo in corso" : ROLE_LABELS[role]}>
+        {role === null || temperatura === null ? (
+          <Niente>
+            {role === null
+              ? "Nessun ruolo in corso."
+              : "Nessun lotto informativo ancora."}
+          </Niente>
+        ) : (
+          <>
+            <p className="text-sm tabular-nums">
+              <strong className="text-lg">{segnato(temperatura.mediana)}</strong>{" "}
+              <span className="text-muted-foreground">
+                sul PMA · da {segnato(temperatura.min)} a{" "}
+                {segnato(temperatura.max)}, su {temperatura.n}{" "}
+                {temperatura.n === 1 ? "lotto" : "lotti"}
+              </span>
+            </p>
+            {scatto !== null && (
+              <p className="text-muted-foreground mt-1 text-xs tabular-nums">
+                prima {segnato(scatto.prima)}, adesso {segnato(scatto.adesso)}
+              </p>
+            )}
+            {/* ⚠ I lotti che il termometro scarta non spariscono: diventano un
+                fatto loro (§3.4). «Nove su dodici al minimo» è a sua volta una
+                temperatura — dice che il tavolo non sta contendendo niente. */}
+            {alMinimo.totale > 0 && (
+              <p className="text-muted-foreground mt-1 text-xs tabular-nums">
+                {alMinimo.alMinimo} dei {alMinimo.totale} lotti del ruolo sono
+                andati al minimo
+              </p>
+            )}
+          </>
+        )}
+        <Avvisi avvisi={avvisi} />
+      </Riquadro>
+
+      <Riquadro titolo="Ruoli chiusi">
+        {saldi.length === 0 ? (
+          <Niente>Nessun ruolo è ancora finito.</Niente>
+        ) : (
+          <ul className="divide-y">
+            {saldi.map((s) => (
+              <li
+                key={s.role}
+                className="flex items-center gap-2 py-1 text-xs tabular-nums"
+              >
+                <span className="min-w-0 flex-1">{ROLE_LABELS[s.role]}</span>
+                <span className="text-muted-foreground">
+                  spesi {s.speso} sui {s.piano} del piano
+                </span>
+                <span className="w-24 text-right">
+                  {s.saldo >= 0 ? "restano " : "sforo "}
+                  <strong>{Math.abs(s.saldo)}</strong> cr
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Riquadro>
+
+      <Riquadro titolo="Partecipanti">
+        {/* ⚠ **Si mostra il numero e non l'intenzione** (§3.6). «Ha speso l'11%
+            in più del piano» è un fatto; «sta risparmiando per l'attacco» è una
+            lettura, e la fa chi guarda. */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs tabular-nums">
+            <thead className="text-muted-foreground text-left">
+              <tr>
+                <th className="py-1 pr-2 font-medium">Squadra</th>
+                <th className="py-1 pr-2 text-right font-medium">Speso</th>
+                <th className="py-1 pr-2 text-right font-medium">Piano</th>
+                <th className="py-1 text-right font-medium">Scarto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {partecipanti.map((x) => (
+                <tr key={x.memberId} className="border-t">
+                  <td className="max-w-[10rem] truncate py-1 pr-2">
+                    {nomiMembri.get(x.memberId) ?? "—"}
+                  </td>
+                  <td className="py-1 pr-2 text-right">{x.speso}</td>
+                  <td className="text-muted-foreground py-1 pr-2 text-right">
+                    {x.piano}
+                  </td>
+                  <td className="py-1 text-right">
+                    {x.scarto > 0 ? "+" : ""}
+                    {x.scarto}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Riquadro>
+
+      {/* ⚠ **Il blocco esiste solo con un lotto aperto**, e fuori da lì lo dice:
+          non è un errore da gestire, è uno stato normale (§5.2). */}
+      {lottoAperto ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <ListaAlternative
+            titolo="Pari livello"
+            righe={alternative?.pariLivello ?? []}
+            vuoto="Nessuno libero di pari livello."
+          />
+          <ListaAlternative
+            titolo="Costano meno"
+            righe={alternative?.costanoMeno ?? []}
+            vuoto="Nessuno più economico con la stessa titolarità."
+          />
+          {/* ⚠ **Il ripiego vive qui e non nel modale** (decisione 6): «ti
+              riempie lo slot, non te lo risolve» è una cosa da leggere
+              confrontando, non da decidere in venti secondi con la tastiera
+              aperta. */}
+          <ListaAlternative
+            titolo="Ripiego"
+            righe={alternative?.ripiego ?? []}
+            vuoto="Nessun ripiego libero."
+          />
+        </div>
+      ) : (
+        <Riquadro titolo="Alternative">
+          <Niente>Le alternative compaiono quando c&apos;è un lotto aperto.</Niente>
+        </Riquadro>
+      )}
     </div>
   );
 }

@@ -9,10 +9,12 @@ import {
   alternative,
   andatiStessaFascia,
   avvisi,
+  lottiAlMinimo,
   lottiInformativi,
   pct,
   pianoPerRuolo,
   saldoRuoliChiusi,
+  scartoStrutturale,
   scalaSlotPerRuolo,
   scartoPerPartecipante,
   scatto,
@@ -1247,5 +1249,86 @@ describe("§3.6 — quanto ha speso ciascuno rispetto al piano dei suoi slot", (
     expect(x.perRuolo.map((r) => r.role)).toEqual(["P", "D"]);
     expect(x.speso).toBe(310);
     expect(x.piano).toBe(x.perRuolo.reduce((s, r) => s + r.piano, 0));
+  });
+});
+
+// ─── §2.2 e §3.4 — i due fatti dichiarati in testa alla tab ──────────────────
+
+describe("§2.2 — lo scarto strutturale si calcola, non si scrive", () => {
+  const pool: PoolPlayer[] = [
+    p("a", { role: "A", pma: 40 }),
+    p("b", { role: "A", pma: 40 }),
+    p("c", { role: "D", pma: 20 }),
+  ];
+
+  function conMembri(n: number) {
+    return snapshot({
+      members: Array.from({ length: n }, (_, i) => member(`m${i}`, i)),
+    });
+  }
+
+  it("il listone vale la somma dei PMA in crediti, il tavolo il budget per i posti", () => {
+    // 40% + 40% + 20% di 500 = 200 + 200 + 100 = 500 crediti di listone.
+    const s = scartoStrutturale(conMembri(2), pool, BUDGET);
+    expect(s.valoreListone).toBe(500);
+    expect(s.budgetTavolo).toBe(1_000);
+    expect(s.copertura).toBe(2);
+  });
+
+  /**
+   * ⚠ **La frase «siete in 8 su un foglio tarato per 10» è vera per un tavolo e
+   * falsa per un altro**, e questo è il test che impedisce di scriverla come
+   * costante: con pochi partecipanti si compra meno del listone, con tanti di
+   * più, e una frase fissa direbbe la cosa sbagliata proprio al tavolo che ne
+   * avrebbe più bisogno.
+   */
+  it("con meno partecipanti la copertura scende: il numero segue il tavolo", () => {
+    expect(scartoStrutturale(conMembri(1), pool, BUDGET).copertura).toBe(1);
+    expect(scartoStrutturale(conMembri(4), pool, BUDGET).copertura).toBe(4);
+  });
+
+  it("un pool senza PMA non è una divisione per zero", () => {
+    expect(scartoStrutturale(conMembri(8), [p("x", { pma: null })], BUDGET))
+      .toMatchObject({ valoreListone: 0, copertura: 1 });
+  });
+});
+
+describe("§3.4 — i lotti al minimo sono un fatto loro, non un buco", () => {
+  const pool: PoolPlayer[] = [
+    p("caro1", { role: "D", pma: 6 }),
+    p("caro2", { role: "D", pma: 6 }),
+    p("misero", { role: "D", pma: 0.2 }),
+  ];
+
+  it("conta i lotti chiusi a 1 credito, informativi o no", () => {
+    const s = snapshot({
+      auction: { ...snapshot().auction, currentRole: "D" },
+      members: [
+        member(ME, 0, {
+          roster: rosaDi([
+            { playerId: "caro1", role: "D", price: 1, lotSeq: 1 },
+            { playerId: "caro2", role: "D", price: 30, lotSeq: 2 },
+            // ⚠ Scartato dal termometro (PMA da 1 credito) ma **contato qui**:
+            // la domanda è «quanto si sta contendendo», e a quella risponde.
+            { playerId: "misero", role: "D", price: 1, lotSeq: 3 },
+          ]),
+        }),
+      ],
+    });
+    expect(lottiAlMinimo(s, "D")).toEqual({ alMinimo: 2, totale: 3 });
+    // E il termometro ne vede due, non tre: i due insiemi sono diversi apposta.
+    expect(lottiInformativi(s, pool, BUDGET, "D")).toHaveLength(2);
+  });
+
+  it("le assegnazioni manuali non contano: non sono lotti", () => {
+    const s = snapshot({
+      auction: { ...snapshot().auction, currentRole: "D" },
+      members: [
+        member(ME, 0, {
+          roster: rosaDi([{ playerId: "caro1", role: "D", price: 1, lotSeq: null }]),
+        }),
+      ],
+    });
+    expect(lottiAlMinimo(s, "D")).toEqual({ alMinimo: 0, totale: 0 });
   });
 });

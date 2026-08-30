@@ -1004,9 +1004,22 @@ altezza e a ogni larghezza (900 / 1024 / 1440), e «Chiudi» resta dentro il vie
 
 ⚠ Resta comunque da guardare **su un portatile vero** (§9.2): il banco prova il meccanismo del
 layout, non il contenuto vero né i caratteri veri.
-- [ ] `<Linguetta value="stats">` in `PortalTabs` + `<Tabs.Content value="stats">` (§5.2)
-- [ ] I quattro blocchi della tab, con la riga dello scarto strutturale in testa
-- [ ] Gli stati di §8, ognuno con la sua frase e nessun `—` muto
+- [x] `<Linguetta value="stats">` in `PortalTabs` + `<Tabs.Content value="stats">` (§5.2)
+- [x] I quattro blocchi della tab, con la riga dello scarto strutturale in testa
+- [x] Gli stati di §8, ognuno con la sua frase e nessun `—` muto
+
+⚠ **Due scelte prese disegnando la tab:**
+
+1. **La linguetta non c'è affatto per chi non ha Stats+, e NON è `disabled`** — al contrario del
+   Listone, che resta visibile e spento con accanto scritto perché. La differenza è deliberata: il
+   Pro è una cosa che si può **chiedere**, quindi «una tab che non c'è non si può desiderare» (M21
+   §7); Stats+ invece lo **assegna un amministratore**, uno per uno, e una linguetta spenta sarebbe
+   una porta senza campanello. Chi non ce l'ha vede il portale di sempre, identico (§8).
+2. **La riga dello scarto strutturale si calcola, non si scrive.** «Siete in 8 su un foglio tarato
+   per 10» è vera per il tavolo di riferimento e falsa per un altro: con dodici partecipanti il
+   rapporto si rovescia. `scartoStrutturale` confronta i crediti del tavolo col valore del listone ai
+   prezzi del foglio, e c'è un test che lo prova al variare dei posti — perché una frase costante
+   direbbe la cosa sbagliata proprio al tavolo che ne avrebbe più bisogno.
 
 **Le prove**
 

@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { useDeletedRedirect } from "@/app/auctions/use-deleted-redirect";
 import { BidModal } from "@/components/auction/bid-modal";
+import { StatsPlusTab } from "@/components/auction/stats-plus";
 import { Countdown } from "@/components/auction/countdown";
 import { DeletedCurtain } from "@/components/auction/deleted-curtain";
 import { Identity } from "@/components/auction/identity";
@@ -39,13 +40,24 @@ import {
   turnKey,
   type Scene,
 } from "@/lib/realtime/portal";
+import {
+  alternative,
+  avvisi,
+  lottiAlMinimo,
+  lottiInformativi,
+  saldoRuoliChiusi,
+  scartoPerPartecipante,
+  scartoStrutturale,
+  scatto,
+  temperatura,
+} from "@/lib/stats-plus";
 import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
 import { useAuctionStream, useHeartbeat } from "@/lib/realtime/use-auction-stream";
 import type { UserListoneStatus } from "@/lib/engine/user-listone";
 import { cn } from "@/lib/utils";
 
 /** Le due metà della pagina. `asta` è quella di sempre, ed è attiva al caricamento. */
-type Tab = "asta" | "listone";
+type Tab = "asta" | "listone" | "stats";
 
 /**
  * Il portale del partecipante (F5-01): **una sola pagina, e nient'altro che lo
@@ -247,6 +259,40 @@ export function Portal({
   // niente: qui si legge l'assenza, non si ricalcola la regola.
   const canSeeListone = listone !== null;
 
+  // ⚠ **Stats+ è funzione pura di snapshot e pool** (§7.3, I10): nessuno stato
+  // locale, nessun effetto, niente da ricordare fra uno snapshot e l'altro. Chi
+  // ricarica a metà lotto vede gli stessi numeri di chi non si è mosso — che è
+  // la condizione di I10, non una conseguenza fortunata.
+  //
+  // ⚠ **E non si memoizza prima di aver misurato** (regola 8): `O(pool)` per le
+  // alternative e `O(assegnazioni)` per il resto sono cinquecento e duecento, in
+  // un browser. Se un giorno servisse, il candidato è l'indice
+  // `fascia → giocatori`, immutabile per tutta l'asta.
+  const ruoloInCorso = snapshot.auction.currentRole;
+  const lottiRuolo =
+    statsPlus && ruoloInCorso !== null
+      ? lottiInformativi(snapshot, pool, budget, ruoloInCorso)
+      : [];
+  const temperaturaRuolo = statsPlus ? temperatura(lottiRuolo) : null;
+  const scattoRuolo = statsPlus ? scatto(lottiRuolo) : null;
+  const alMinimoRuolo =
+    statsPlus && ruoloInCorso !== null
+      ? lottiAlMinimo(snapshot, ruoloInCorso)
+      : { alMinimo: 0, totale: 0 };
+  const saldi = statsPlus ? saldoRuoliChiusi(snapshot, pool, budget) : [];
+  const partecipanti = statsPlus
+    ? scartoPerPartecipante(snapshot, pool, budget)
+    : [];
+  const alternativeLotto =
+    statsPlus && lot !== null
+      ? alternative(snapshot, pool, budget, lot.player.id)
+      : null;
+  const avvisiRuolo = statsPlus ? avvisi(snapshot, pool, budget) : [];
+  const strutturale = scartoStrutturale(snapshot, pool, budget);
+  const nomiMembri = new Map(
+    snapshot.members.map((m) => [m.id, m.displayName ?? m.teamName]),
+  );
+
   const action = (
     <SceneAction
       scene={scene}
@@ -304,6 +350,7 @@ export function Portal({
         <PortalTabs
           tab={tab}
           canSeeListone={canSeeListone}
+          statsPlus={statsPlus}
           scene={scene}
           snapshot={snapshot}
           offset={offset}
@@ -450,6 +497,32 @@ export function Portal({
         sono l'unico stato, e sono una preferenza di chi guarda, non una schermata
         raggiungibile (regola 7).
       */}
+      {/*
+        ⚠ **Il contenuto è montato solo per chi ha il flag**, non nascosto: senza
+        `statsPlus` il calcolo non gira affatto — che non è una difesa (i dati
+        chi è Pro li ha già), ma è lavoro risparmiato a ogni snapshot per chi non
+        guarderà mai questo pannello.
+      */}
+      {statsPlus && (
+        <Tabs.Content value="stats">
+          <main className="mx-auto w-full max-w-6xl p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+            <StatsPlusTab
+              role={snapshot.auction.currentRole}
+              temperatura={temperaturaRuolo}
+              scatto={scattoRuolo}
+              alMinimo={alMinimoRuolo}
+              saldi={saldi}
+              partecipanti={partecipanti}
+              nomiMembri={nomiMembri}
+              alternative={alternativeLotto}
+              avvisi={avvisiRuolo}
+              strutturale={strutturale}
+              lottoAperto={lot !== null}
+            />
+          </main>
+        </Tabs.Content>
+      )}
+
       <Tabs.Content value="listone">
         <main className="mx-auto w-full max-w-6xl p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           {listone === null ? null : (
@@ -533,11 +606,13 @@ function PortalTabs({
   offset,
   frozen,
   myMemberId,
+  statsPlus,
   onOpenBid,
   onOpenPick,
 }: {
   tab: Tab;
   canSeeListone: boolean;
+  statsPlus: boolean;
   scene: Scene;
   snapshot: Snapshot;
   offset: number;
@@ -557,6 +632,20 @@ function PortalTabs({
           <Linguetta value="listone" disabled={!canSeeListone}>
             Listone
           </Linguetta>
+          {/*
+            ⚠ **La linguetta c'è solo per chi ha Stats+, e qui NON si usa
+            `disabled`** — al contrario del Listone due righe sopra. La
+            differenza è deliberata: là la tab spenta è visibile perché il Pro è
+            una cosa che si può chiedere, e «una tab che non c'è non si può
+            desiderare». Stats+ invece non si chiede: lo assegna un
+            amministratore, uno per uno. Una linguetta spenta con accanto «è per
+            chi ha Stats+» sarebbe una porta senza campanello.
+
+            ⚠ E chi non ce l'ha vede **il portale di sempre, identico** (§8):
+            nessuno spazio vuoto, nessuna traccia. È la stessa promessa che vale
+            per un Pro senza il flag e per un amministratore senza il flag.
+          */}
+          {statsPlus && <Linguetta value="stats">Stats+</Linguetta>}
         </Tabs.List>
 
         {/*
