@@ -974,14 +974,36 @@ omogenei per costruzione, quindi in pratica i due insiemi coincidono.
       *massa* — e sullo stesso stato la conclusione si rovescia di segno
 **L'interfaccia**
 
-- [ ] `POSIZIONE_STATS` in un file suo, con le quattro forme scritte (§5.3)
-- [ ] La riga nel modale, sotto l'input, dove oggi tace `PrezzoConsigliato dove="campo"` (§5.1)
-- [ ] Il modale a due colonne **solo da `sm:`**: `sm:w-96` → `sm:w-[46rem]` → `xl:w-[64rem]`,
+- [x] `POSIZIONE_STATS` in un file suo, con le quattro forme scritte (§5.3)
+- [x] La riga nel modale, sotto l'input, dove oggi tace `PrezzoConsigliato dove="campo"` (§5.1)
+- [x] Il modale a due colonne **solo da `sm:`**: `sm:w-96` → `sm:w-[46rem]` → `xl:w-[64rem]`,
       griglia `grid-cols-[384px_1fr]`, la colonna sinistra invariata a 384px (§5.1)
-- [ ] I quattro blocchi della colonna destra, **in griglia 2×2 da `xl:`** e in colonna sotto (§5.1)
-- [ ] Estrarre `IconaObiettivo` da `listone-table.tsx`: secondo chiamante, quindi si estrae (§5.1)
-- [ ] ⚠ La colonna destra **scorre da sé** (`overflow-y-auto`): non deve allungare la card e
-      spingere la conferma fuori dallo schermo su un portatile (§5.1)
+- [x] I quattro blocchi della colonna destra, **in griglia 2×2 da `xl:`** e in colonna sotto (§5.1)
+- [x] Estrarre `IconaObiettivo` da `listone-table.tsx`: secondo chiamante, quindi si estrae (§5.1)
+- [x] ⚠ La colonna destra **scorre da sé** — e qui il banco ha trovato un difetto vero, vedi sotto
+
+⚠ **`overflow-y-auto` da solo non funziona, ed è misurato e non dedotto.** Un elemento di griglia ha
+`min-height: auto`, quindi non può rimpicciolirsi sotto il proprio contenuto: l'`overflow` non ha
+niente da fare e la colonna **deborda**. E `min-h-0` sull'elemento non basta neanche lui, perché la
+*riga* implicita della griglia è `auto` e cresce comunque. Servono entrambe le cose:
+`sm:grid-rows-[minmax(0,1fr)]` sul contenitore e `min-h-0` sulle due colonne.
+
+Misurato con Chrome headless sul banco statico `fixtures/#22-banco-modale.html`, viewport da 913 a
+353px di altezza:
+
+| altezza viewport | card | colonna destra | contenuto | scorre? |
+|---|---|---|---|---|
+| 913 | 506 | 472 | 472 | non serve |
+| 473 | 473 | **472 → 439** | 472 | ❌ no → ✅ sì |
+| 413 | 413 | **472 → 379** | 472 | ❌ no → ✅ sì |
+| 353 | 353 | **472 → 319** | 472 | ❌ no → ✅ sì |
+
+Prima del rimedio la colonna restava a 472px con `scrollHeight === clientHeight`, cioè **non scorreva
+affatto** e il contenuto usciva dalla card. La colonna sinistra misura **384px esatti** a ogni
+altezza e a ogni larghezza (900 / 1024 / 1440), e «Chiudi» resta dentro il viewport in tutti i casi.
+
+⚠ Resta comunque da guardare **su un portatile vero** (§9.2): il banco prova il meccanismo del
+layout, non il contenuto vero né i caratteri veri.
 - [ ] `<Linguetta value="stats">` in `PortalTabs` + `<Tabs.Content value="stats">` (§5.2)
 - [ ] I quattro blocchi della tab, con la riga dello scarto strutturale in testa
 - [ ] Gli stati di §8, ognuno con la sua frase e nessun `—` muto

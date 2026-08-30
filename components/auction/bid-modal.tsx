@@ -6,7 +6,10 @@ import { useEffect, useRef, useState } from "react";
 import { Campioncino } from "@/components/auction/campioncino";
 import { InsightsMacro } from "@/components/auction/insights";
 import { PrezzoConsigliato } from "@/components/auction/prezzo-consigliato";
-import { RigaStatsPlus } from "@/components/auction/stats-plus";
+import {
+  RigaStatsPlus,
+  StatsPlusColonna,
+} from "@/components/auction/stats-plus";
 import { Countdown, CountdownBar } from "@/components/auction/countdown";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
@@ -14,6 +17,8 @@ import type { ActionResult } from "@/lib/realtime/action";
 import { bidBounds, checkAmount, parseAmount } from "@/lib/realtime/portal";
 import {
   alternative,
+  andatiStessaFascia,
+  avvisi,
   lottiInformativi,
   scatto,
   temperatura,
@@ -137,6 +142,16 @@ export function BidModal({
     statsPlus && lot !== null
       ? alternative(snapshot, pool, budget, lot.player.id)
       : null;
+  const andatiFascia =
+    statsPlus && lot !== null
+      ? andatiStessaFascia(snapshot, pool, budget, lot.player.id)
+      : null;
+  const avvisiRuolo = statsPlus ? avvisi(snapshot, pool, budget) : [];
+  // ⚠ **Somma degli scarti osservati, non il saldo di §3.2.** Quello si mostra
+  // solo per i ruoli chiusi, perché a metà ruolo confrontare un parziale con
+  // l'intero piano direbbe sempre «avanza tantissimo». Questo somma soltanto ciò
+  // che è già successo, quindi è vero anche a ruolo aperto.
+  const scartoRuolo = lottiRuolo.reduce((s, l) => s + (l.price - l.atteso), 0);
 
   const [raw, setRaw] = useState("");
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle" });
@@ -218,8 +233,18 @@ export function BidModal({
             field.focus();
             field.select();
           }}
-          className="bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-dvh flex-col gap-3 rounded-t-2xl border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl outline-none sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-96 sm:rounded-2xl sm:border"
+          className="bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-dvh flex-col gap-3 rounded-t-2xl border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl outline-none sm:inset-x-auto sm:right-4 sm:bottom-4 sm:grid sm:w-[46rem] sm:grid-cols-[384px_1fr] sm:grid-rows-[minmax(0,1fr)] sm:gap-4 sm:rounded-2xl sm:border xl:w-[64rem]"
         >
+          {/*
+            ⚠ **La colonna sinistra è il modale di sempre, ai pixel di sempre**
+            (M22 §5.1). `grid-cols-[384px_1fr]` la tiene a 384px su ogni
+            larghezza — identica al telefono — e a cambiare è solo quanta aria ha
+            quella destra. Sotto `sm:` la griglia non esiste affatto: lì il
+            modale è un foglio che sale dal basso su uno schermo dove l'altezza è
+            contesa dalla tastiera, e **non cambia niente**. È la ragione per cui
+            l'allargamento non contraddice M16.
+          */}
+          <div className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto">
           {/* ── Intestazione: sempre visibile, anche con la tastiera aperta ── */}
           <div className="flex items-start gap-3">
             {/*
@@ -408,6 +433,19 @@ export function BidModal({
               Chiudi
             </Button>
           </Dialog.Close>
+          </div>
+
+          {statsPlus && (
+            <StatsPlusColonna
+              role={ruoloInCorso}
+              temperatura={temperaturaRuolo}
+              scatto={scattoRuolo}
+              andati={andatiFascia}
+              alternative={alternativeLotto}
+              avvisi={avvisiRuolo}
+              scartoRuolo={scartoRuolo}
+            />
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
