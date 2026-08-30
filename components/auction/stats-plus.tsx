@@ -261,12 +261,22 @@ function ListaAlternative({
   vuoto,
 }: {
   titolo: string;
-  righe: Alternativa[];
+  /**
+   * ⚠ **`null` non è la lista vuota, ed è una distinzione che si perde in un
+   * attimo** (§8). Vuota vuol dire «non c'è nessuna alternativa libera», che è
+   * un'informazione; `null` vuol dire «questo giocatore non ha un PMA nel tuo
+   * foglio», cioè che non c'è **nessun criterio** per catalogarlo. Scriverle allo
+   * stesso modo direbbe a chi guarda che il campo è sgombro, quando invece non
+   * si è nemmeno guardato.
+   */
+  righe: Alternativa[] | null;
   vuoto: string;
 }) {
   return (
     <Riquadro titolo={titolo}>
-      {righe.length === 0 ? (
+      {righe === null ? (
+        <Niente>Questo giocatore non ha un PMA nel tuo foglio.</Niente>
+      ) : righe.length === 0 ? (
         <Niente>{vuoto}</Niente>
       ) : (
         <ul className="divide-y">
@@ -313,6 +323,7 @@ export function StatsPlusColonna({
   alternative,
   avvisi,
   scartoRuolo,
+  haPma,
   posizione = POSIZIONE_STATS,
 }: {
   role: Role | null;
@@ -323,10 +334,25 @@ export function StatsPlusColonna({
   avvisi: Avviso[];
   /** Σ (pagato − atteso) sui lotti informativi del ruolo, in crediti. */
   scartoRuolo: number;
+  /** Il foglio caricato ha dei PMA: senza, non c'è niente da calcolare (§8). */
+  haPma: boolean;
   posizione?: PosizioneStats;
 }) {
   if (posizione !== "campo" && posizione !== "entrambi") return null;
   if (role === null) return null;
+
+  // ⚠ **Uno stato che non passa da sé**, al contrario di «nessun lotto
+  // informativo ancora»: senza PMA non arriverà nessun numero per tutta l'asta,
+  // e dirlo è l'unica cosa utile che si può dire.
+  if (!haPma) {
+    return (
+      <div className="hidden min-h-0 min-w-0 overflow-y-auto sm:block">
+        <Riquadro titolo="Stats+">
+          <Niente>Serve un listone con i PMA.</Niente>
+        </Riquadro>
+      </div>
+    );
+  }
 
   return (
     <div className="hidden min-h-0 min-w-0 overflow-y-auto sm:block">
@@ -401,12 +427,12 @@ export function StatsPlusColonna({
 
         <ListaAlternative
           titolo="Pari livello"
-          righe={alternative?.pariLivello ?? []}
+          righe={alternative === null ? null : alternative.pariLivello}
           vuoto="Nessuno libero di pari livello."
         />
         <ListaAlternative
           titolo="Costano meno"
-          righe={alternative?.costanoMeno ?? []}
+          righe={alternative === null ? null : alternative.costanoMeno}
           vuoto="Nessuno più economico con la stessa titolarità."
         />
       </div>
@@ -462,6 +488,7 @@ export function StatsPlusTab({
   avvisi,
   strutturale,
   lottoAperto,
+  haPma,
   posizione = POSIZIONE_STATS,
 }: {
   role: Role | null;
@@ -475,9 +502,24 @@ export function StatsPlusTab({
   avvisi: Avviso[];
   strutturale: ScartoStrutturale;
   lottoAperto: boolean;
+  /** Il foglio caricato ha dei PMA: senza, non c'è niente da calcolare (§8). */
+  haPma: boolean;
   posizione?: PosizioneStats;
 }) {
   if (posizione !== "tab" && posizione !== "entrambi") return null;
+
+  // ⚠ Vedi `StatsPlusColonna`: è uno stato che non passa col tempo, e va
+  // distinto da quello che passa.
+  if (!haPma) {
+    return (
+      <Riquadro titolo="Stats+">
+        <Niente>
+          Serve un listone con i PMA: caricane uno tuo dalla tab Listone, oppure
+          chiedi che venga caricato quello globale.
+        </Niente>
+      </Riquadro>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -584,12 +626,12 @@ export function StatsPlusTab({
         <div className="grid gap-3 sm:grid-cols-3">
           <ListaAlternative
             titolo="Pari livello"
-            righe={alternative?.pariLivello ?? []}
+            righe={alternative === null ? null : alternative.pariLivello}
             vuoto="Nessuno libero di pari livello."
           />
           <ListaAlternative
             titolo="Costano meno"
-            righe={alternative?.costanoMeno ?? []}
+            righe={alternative === null ? null : alternative.costanoMeno}
             vuoto="Nessuno più economico con la stessa titolarità."
           />
           {/* ⚠ **Il ripiego vive qui e non nel modale** (decisione 6): «ti
@@ -598,7 +640,7 @@ export function StatsPlusTab({
               aperta. */}
           <ListaAlternative
             titolo="Ripiego"
-            righe={alternative?.ripiego ?? []}
+            righe={alternative === null ? null : alternative.ripiego}
             vuoto="Nessun ripiego libero."
           />
         </div>

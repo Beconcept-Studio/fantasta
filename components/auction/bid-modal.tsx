@@ -19,6 +19,7 @@ import {
   alternative,
   andatiStessaFascia,
   avvisi,
+  haPma,
   lottiInformativi,
   scatto,
   temperatura,
@@ -147,6 +148,7 @@ export function BidModal({
       ? andatiStessaFascia(snapshot, pool, budget, lot.player.id)
       : null;
   const avvisiRuolo = statsPlus ? avvisi(snapshot, pool, budget) : [];
+  const poolHaPma = haPma(pool);
   // ⚠ **Somma degli scarti osservati, non il saldo di §3.2.** Quello si mostra
   // solo per i ruoli chiusi, perché a metà ruolo confrontare un parziale con
   // l'intero piano direbbe sempre «avanza tantissimo». Questo somma soltanto ciò
@@ -444,6 +446,7 @@ export function BidModal({
               alternative={alternativeLotto}
               avvisi={avvisiRuolo}
               scartoRuolo={scartoRuolo}
+              haPma={poolHaPma}
             />
           )}
         </Dialog.Content>

@@ -173,6 +173,22 @@ export function pianoPerRuolo(pool: PoolPlayer[]): Record<Role, number> {
   };
 }
 
+/**
+ * Il foglio caricato dice **qualcosa** sui prezzi?
+ *
+ * ⚠ **Serve a distinguere due stati che si assomigliano e non sono la stessa
+ * cosa** (§8): «non c'è ancora nessun lotto informativo» — vero all'inizio di
+ * ogni ruolo, e destinato a passare da sé — e «non c'è nessun PMA», che non
+ * passa finché qualcuno non carica un listone. Con una frase sola per entrambi,
+ * chi è nel secondo caso aspetterebbe per tutta l'asta un numero che non
+ * arriverà.
+ */
+export function haPma(pool: PoolPlayer[]): boolean {
+  return pool.some(
+    (player) => player.carmy?.pma !== null && player.carmy?.pma !== undefined,
+  );
+}
+
 // ─── §3.4 — quali lotti parlano ──────────────────────────────────────────────
 
 /** Ogni riga di rosa del tavolo, con il membro che l'ha presa. */

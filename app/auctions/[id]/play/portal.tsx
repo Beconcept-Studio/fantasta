@@ -43,6 +43,7 @@ import {
 import {
   alternative,
   avvisi,
+  haPma,
   lottiAlMinimo,
   lottiInformativi,
   saldoRuoliChiusi,
@@ -289,6 +290,7 @@ export function Portal({
       : null;
   const avvisiRuolo = statsPlus ? avvisi(snapshot, pool, budget) : [];
   const strutturale = scartoStrutturale(snapshot, pool, budget);
+  const poolHaPma = haPma(pool);
   const nomiMembri = new Map(
     snapshot.members.map((m) => [m.id, m.displayName ?? m.teamName]),
   );
@@ -518,6 +520,7 @@ export function Portal({
               avvisi={avvisiRuolo}
               strutturale={strutturale}
               lottoAperto={lot !== null}
+              haPma={poolHaPma}
             />
           </main>
         </Tabs.Content>

@@ -9,6 +9,7 @@ import {
   alternative,
   andatiStessaFascia,
   avvisi,
+  haPma,
   lottiAlMinimo,
   lottiInformativi,
   pct,
@@ -1330,5 +1331,38 @@ describe("§3.4 — i lotti al minimo sono un fatto loro, non un buco", () => {
       ],
     });
     expect(lottiAlMinimo(s, "D")).toEqual({ alMinimo: 0, totale: 0 });
+  });
+});
+
+// ─── §8 — due stati che si assomigliano e non sono la stessa cosa ────────────
+
+describe("§8 — «ancora nessun lotto» e «serve un listone» sono stati diversi", () => {
+  /**
+   * ⚠ **Il primo passa da sé, il secondo no**, ed è tutta la differenza. A
+   * inizio ruolo non c'è ancora nessun lotto informativo, e fra dieci minuti ce
+   * ne saranno; senza PMA non ne arriverà **nessuno per tutta l'asta**. Con una
+   * frase sola per entrambi, chi è nel secondo caso aspetterebbe fino alla fine
+   * un numero che non può arrivare.
+   */
+  it("un pool con PMA lo dichiara, uno senza no", () => {
+    expect(haPma([p("x", { pma: 6 })])).toBe(true);
+    expect(haPma([p("x", { pma: null })])).toBe(false);
+    expect(haPma([])).toBe(false);
+  });
+
+  it("⚠ un pool senza PMA e un ruolo appena cominciato danno lo stesso `null`", () => {
+    // È la ragione per cui `haPma` esiste: la temperatura da sola non
+    // distingue i due casi, quindi la UI non potrebbe distinguerli.
+    const vuoto = snapshot({
+      auction: { ...snapshot().auction, currentRole: "D" },
+      members: [member(ME, 0)],
+    });
+    const conPma = [p("d1", { role: "D", pma: 6 })];
+    const senzaPma = [p("d1", { role: "D", pma: null })];
+
+    expect(temperatura(lottiInformativi(vuoto, conPma, BUDGET, "D"))).toBeNull();
+    expect(temperatura(lottiInformativi(vuoto, senzaPma, BUDGET, "D"))).toBeNull();
+    // Identici lì, distinguibili qui:
+    expect([haPma(conPma), haPma(senzaPma)]).toEqual([true, false]);
   });
 });
