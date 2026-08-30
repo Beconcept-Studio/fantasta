@@ -13,6 +13,11 @@
 > lega, e si prende da `/admin/users`. Gli altri tre Pro (Erik, Andrea gmail, Thomas) ce l'hanno
 > spento.
 >
+> **Le prove a mano di §9.2 sono state fatte dall'owner il 2026-08-30, a rilascio avvenuto**, e non
+> hanno trovato niente. Il database è chiuso: schema del server identico al codice
+> (`pnpm db:push` → «No changes detected»), 20 utenti valorizzati, nessun `null` residuo, nessun
+> backfill in sospeso.
+>
 > ⚠ **Questa spec è la terza stesura, e le due precedenti sono archivio.** La prima costruiva un
 > motore statistico di stima del prezzo; la seconda un indicatore di sola evidenza sui posti scoperti.
 > Il perimetro definitivo è stato fissato dall'owner il **2026-08-29**, in una sessione di R&D che ha
@@ -822,15 +827,22 @@ Nessuno di questi è un errore da gestire: sono stati normali, e ognuno ha la su
   nemmeno** (§6.1). Più `setUserStatsPlus`: rifiuta un non-amministratore, rifiuta un bot, e
   **accetta la propria riga**, che è ciò che rende accendibile il flag a chi fa il deploy.
 
-### 9.2 Le prove a mano su `dev`
+### 9.2 Le prove a mano — ✅ **fatte dall'owner il 2026-08-30**
 
-- Un'asta simulata dall'applicazione (M4) con un utente Pro e uno no, aperti fianco a fianco.
-- **La riga nel modale su un telefono vero, con la tastiera aperta**, che è l'unico posto in cui si
-  vede se ha rubato altezza al campo (§5.1).
-- **Il modale a due colonne su un portatile da 13″ con poca altezza**: è lì che si vede se la colonna
-  destra spinge la conferma fuori dallo schermo, e non su un monitor grande.
-- La tab a 1024px e a 390px.
-- La conferma di §5.1 guardando lo schermo: la riga sotto l'input, non sopra.
+- [x] Un'asta simulata dall'applicazione (M4) con un utente Pro e uno no, aperti fianco a fianco.
+- [x] **La riga nel modale su un telefono vero, con la tastiera aperta**, che è l'unico posto in cui
+      si vede se ha rubato altezza al campo (§5.1).
+- [x] **Il modale a due colonne su un portatile da 13″ con poca altezza**: è lì che si vede se la
+      colonna destra spinge la conferma fuori dallo schermo, e non su un monitor grande.
+- [x] La tab a 1024px e a 390px.
+- [x] La conferma di §5.1 guardando lo schermo: la riga sotto l'input, non sopra.
+
+⚠ **Fatte dopo il rilascio e non prima**, ed è bene che resti scritto invece di sembrare l'ordine
+normale: l'owner ha scelto di rilasciare sulla base del gate automatico e di guardare poi. È andata
+bene — nessuna delle cinque ha trovato niente — ma la cosa che rendeva la scelta ragionevole è che
+**il difetto più probabile del layout era già stato preso da un banco misurato** (§5.1,
+`fixtures/#22-banco-modale.html`): senza quella misura, l'unica rete sarebbe stata la prova a mano
+che qui veniva dopo.
 
 ### 9.3 Come si validerà davvero, e quando
 
