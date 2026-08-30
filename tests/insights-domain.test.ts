@@ -4,6 +4,7 @@ import {
   GIORNATE,
   SOGLIA_TITOLARE,
   canSeeInsights,
+  canSeeStatsPlus,
   minutiMedi,
   quotaTitolare,
   showableInsights,
@@ -160,5 +161,57 @@ describe("canSeeInsights", () => {
   it("nessuno e non-so sono no, non un'eccezione", () => {
     expect(canSeeInsights(null)).toBe(false);
     expect(canSeeInsights(undefined)).toBe(false);
+  });
+});
+
+/**
+ * M22 §6 — il gate di Stats+, su **tutte e otto** le combinazioni.
+ *
+ * Otto e non quattro perché le due metà del gate sono di natura diversa e vanno
+ * potute smentire una per volta: `canSeeInsights` decide una query — senza,
+ * `carmy` non arriva affatto — mentre `statsPlus` decide che cosa si mostra a
+ * chi quei PMA li ha già.
+ */
+describe("canSeeStatsPlus", () => {
+  const casi: Array<[boolean, boolean, boolean, boolean]> = [
+    // isPro, isAdmin, statsPlus → atteso
+    [true, false, true, true],
+    [true, true, true, true],
+    [false, true, true, true],
+    [false, false, true, false],
+    [true, false, false, false],
+    [true, true, false, false],
+    [false, true, false, false],
+    [false, false, false, false],
+  ];
+
+  for (const [isPro, isAdmin, statsPlus, atteso] of casi) {
+    it(`pro=${isPro} admin=${isAdmin} stats=${statsPlus} → ${atteso}`, () => {
+      expect(canSeeStatsPlus({ isPro, isAdmin, statsPlus })).toBe(atteso);
+    });
+  }
+
+  /**
+   * ⚠ **I due casi qui sotto sono già dentro la tabella, e si riscrivono lo
+   * stesso**, perché sono i due che qualcuno "uniformerà" in buona fede
+   * guardando `canSeeInsights` dieci righe più su. Una riga di tabella che
+   * cambia non dice a nessuno *cosa* si è perso; un test con un nome sì.
+   */
+  it("⚠ l'amministratore senza il flag NON vede Stats+, al contrario degli insight", () => {
+    const admin = { isPro: false, isAdmin: true, statsPlus: false };
+    // La differenza fra i due predicati sulla stessa identica riga: è tutta qui.
+    expect(canSeeInsights(admin)).toBe(true);
+    expect(canSeeStatsPlus(admin)).toBe(false);
+  });
+
+  it("⚠ il flag senza Pro non basta: senza `carmy` non ci sarebbe niente da calcolare", () => {
+    expect(
+      canSeeStatsPlus({ isPro: false, isAdmin: false, statsPlus: true }),
+    ).toBe(false);
+  });
+
+  it("nessuno e non-so sono no, non un'eccezione", () => {
+    expect(canSeeStatsPlus(null)).toBe(false);
+    expect(canSeeStatsPlus(undefined)).toBe(false);
   });
 });

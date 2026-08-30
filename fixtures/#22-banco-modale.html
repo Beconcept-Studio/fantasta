@@ -1,0 +1,53 @@
+<!doctype html><meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  /* Le utility che il modale usa davvero, scritte a mano perché il banco non
+     compila Tailwind: fixed, max-h-dvh, sm:grid grid-cols-[384px_1fr], gap-4. */
+  #card {
+    position: fixed; right: 16px; bottom: 16px;
+    max-height: 100dvh;
+    display: grid; grid-template-columns: 384px 1fr; grid-template-rows: minmax(0, 1fr); gap: 16px;
+    padding: 16px; border: 1px solid #ccc; background: #fff;
+    width: 64rem;
+  }
+  #sx { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; overflow-y: auto; }
+  #dx { min-width: 0; min-height: 0; overflow-y: auto; }
+  .blocco { background: #eee; border-radius: 8px; padding: 12px; height: 230px; }
+  #dx .griglia { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+</style>
+<div id="card">
+  <div id="sx">
+    <div class="blocco" style="height:80px">intestazione</div>
+    <div class="blocco" style="height:48px">campo</div>
+    <div class="blocco" style="height:20px">riga stats+</div>
+    <div class="blocco" style="height:44px">conferma</div>
+    <div class="blocco" style="height:44px" id="chiudi">chiudi</div>
+  </div>
+  <div id="dx">
+    <div class="griglia">
+      <div class="blocco"></div><div class="blocco"></div>
+      <div class="blocco"></div><div class="blocco"></div>
+    </div>
+  </div>
+</div>
+
+<pre id="out">…</pre>
+<script>
+addEventListener("load", () => {
+  const r = (el) => el.getBoundingClientRect();
+  const card = document.getElementById("card");
+  const sx = document.getElementById("sx");
+  const dx = document.getElementById("dx");
+  const chiudi = document.getElementById("chiudi");
+  document.getElementById("out").textContent = "MISURA " + JSON.stringify({
+    viewport: innerWidth + "x" + innerHeight,
+    cardH: Math.round(r(card).height),
+    sinistraW: Math.round(r(sx).width),
+    destraH: Math.round(r(dx).height),
+    destraScrollH: dx.scrollHeight,
+    destraScorre: dx.scrollHeight > dx.clientHeight,
+    cardDentroViewport: Math.round(r(card).bottom) <= innerHeight + 1,
+    chiudiVisibile: Math.round(r(chiudi).bottom) <= innerHeight + 1,
+  });
+});
+</script>

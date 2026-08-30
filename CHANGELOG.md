@@ -4,6 +4,46 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.22.0] — 2026-08-30
+
+**Arriva Stats+: la temperatura dell'asta che stai giocando.** Il tuo listone dice che quel difensore
+vale trentasei crediti, ma il foglio è scritto a luglio da qualcuno che non sa chi si siederà al
+tavolo. Stats+ risponde alla domanda che viene dopo: *stasera, a questo tavolo, quanto si sta
+pagando davvero?*
+
+**Due cose, e nessun'altra.** La prima è il **termometro del ruolo in corso**: quanto il tavolo sta
+pagando rispetto ai PMA, con quanti lotti lo dicono, e se il prezzo è cambiato dall'inizio del ruolo a
+adesso. La seconda sono le **alternative ancora libere** del giocatore chiamato: chi altro può
+riempire quello stesso slot, e quali dei tuoi obiettivi sono fra questi.
+
+**⚠ Quello che Stats+ non fa, ed è deliberato: non ti dice quanto offrire.** Nessun prezzo
+consigliato, nessuna banda, nessuna soglia, nessun «i migliori da prendere». Solo cose già successe —
+prezzi pagati, giocatori ancora liberi — e la deduzione resta tua. Le prime due versioni di questa
+funzione erano motori di stima, e sono state buttate: un numero che nessuno può verificare, messo
+accanto al campo dove scrivi un'offerta, non è un aiuto.
+
+**La temperatura si azzera a ogni ruolo.** Puoi puntare forte sui portieri, poco sui difensori e
+ripuntare forte sui centrocampisti: un indicatore cumulativo direbbe «l'asta paga sotto» proprio
+mentre i difensori schizzano. Quello che si accumula è il resto — i crediti spesi e quello che ogni
+reparto chiuso ha lasciato sul tavolo.
+
+**Dove si vede.** Una riga sotto il campo dell'offerta, nel modale — sotto e non sopra, così prima
+vedi la cifra che stai scrivendo e poi il contesto. Da schermo largo in su il modale si allarga e
+accanto compare una colonna con quattro riquadri: la temperatura, quanto è costato chi occupava lo
+stesso slot, e le due liste di alternative. E c'è una **terza linguetta, `Stats+`**, con tutto:
+i saldi dei ruoli chiusi, la tabella di quanto ha speso ciascuno rispetto al proprio piano, e i
+giocatori di ripiego.
+
+⚠ **Una cosa da sapere prima di leggere i numeri, e il pannello te la scrive in testa**: se siete in
+otto su un listone tarato per dieci rose, si paga strutturalmente sotto il PMA **ovunque**. Un `−15%`
+non è un affare: è la norma. Quello che conta è la differenza fra un reparto e l'altro, e come cambia
+durante la serata.
+
+⚠ **Stats+ si assegna, come il Pro.** Serve il Pro (senza, non ci sono i PMA e non c'è niente da
+calcolare) **più** il flag Stats+, che si accende dal pannello di amministrazione utente per utente.
+Chi non ce l'ha vede il portale esattamente com'era: nessuna linguetta spenta, nessuno spazio vuoto.
+**Anche l'amministratore deve accenderselo**: non è automatico.
+
 ## [1.21.1] — 2026-08-28
 
 **Cambia una cosa sola, e si vede nella linguetta del browser: l'icona.** Quella di prima era nata

@@ -107,6 +107,12 @@ export type AdminUserRow = {
   isAdmin: boolean;
   /** Vede gli insight sul listone (M8). Un amministratore li vede comunque. */
   isPro: boolean;
+  /**
+   * Vede Stats+ nel portale (M22). ⚠ **Vale solo con `isPro`, e l'amministratore
+   * *non* lo ha implicito** — le due differenze con la riga qui sopra, entrambe
+   * volute: `lib/domain.ts` le spiega su `canSeeStatsPlus`.
+   */
+  statsPlus: boolean;
   isBot: boolean;
   createdAt: Date;
   /** Aste possedute e aste giocate: è con questi due numeri che si capisce se
@@ -141,6 +147,7 @@ export async function listAdminUsers({
       emailVerifiedAt: users.emailVerifiedAt,
       isAdmin: users.isAdmin,
       isPro: users.isPro,
+      statsPlus: users.statsPlus,
       isBot: users.isBot,
       createdAt: users.createdAt,
     })
@@ -444,4 +451,53 @@ export async function setUserPro(
 
   await db.update(users).set({ isPro }).where(eq(users.id, target.id));
   return ok({ isPro });
+}
+
+/**
+ * Accende o spegne `stats_plus`, cioè chi vede Stats+ nel portale (M22 §6).
+ *
+ * ⚠ **La propria riga si può toccare, ed è deliberato come in `setUserPro`.** Le
+ * ragioni di là valgono qui e ce n'è una in più: l'amministratore **non** ha
+ * Stats+ implicito (`canSeeStatsPlus`), quindi se non potesse accendersi il flag
+ * non potrebbe vedere la funzione che ha appena messo in produzione, e nessun
+ * altro potrebbe accendergliela in un'installazione con un amministratore solo.
+ * Vietarlo qui non sarebbe una difesa: sarebbe un lucchetto sulla porta di casa
+ * propria, con la chiave dentro.
+ *
+ * ⚠ **Non controlla `is_pro`, e non è una dimenticanza.** `stats_plus` è un
+ * fatto suo, e i due flag si combinano al momento della lettura
+ * (`canSeeStatsPlus`), non della scrittura: legare le due scritture vorrebbe
+ * dire decidere cosa succede al flag quando si spegne il Pro — e ogni risposta a
+ * quella domanda è una sorpresa per chi la subisce. È il **pannello** a dire che
+ * senza Pro non si vede niente, nel momento in cui si accende.
+ *
+ * Su un bot è rifiutato per la stessa ragione di `setUserPro`: un bot non guarda
+ * nessuna schermata, e un'azione che accetta richieste senza senso non aiuta a
+ * capire cosa fa.
+ */
+export async function setUserStatsPlus(
+  actorUserId: string,
+  targetUserId: string,
+  statsPlus: unknown,
+): Promise<Result<{ statsPlus: boolean }>> {
+  const refused = await refuseNonAdmin<{ statsPlus: boolean }>(actorUserId);
+  if (refused) return refused;
+
+  if (typeof statsPlus !== "boolean") {
+    return fail<{ statsPlus: boolean }>("INVALID_REQUEST", "Richiesta non valida.");
+  }
+
+  const target = await findUser(targetUserId);
+  if (!target) {
+    return fail<{ statsPlus: boolean }>("NOT_FOUND", "Questo utente non esiste.");
+  }
+  if (target.isBot) {
+    return fail<{ statsPlus: boolean }>(
+      "FORBIDDEN",
+      "Un bot non guarda nessuna schermata: Stats+ non gli serve.",
+    );
+  }
+
+  await db.update(users).set({ statsPlus }).where(eq(users.id, target.id));
+  return ok({ statsPlus });
 }

@@ -414,7 +414,7 @@ describe("giocatori chiamabili", () => {
     members: [
       member(ME, 0, {
         roster: [
-          { assignmentId: "a2", playerId: "p2", name: "Vlahovic", role: "A", team: "Juventus", price: 80 },
+          { assignmentId: "a2", playerId: "p2", name: "Vlahovic", role: "A", team: "Juventus", price: 80, lotSeq: 1 },
         ],
       }),
       member(OTHER, 1),
@@ -598,6 +598,7 @@ describe("listoneRows — chi resta, raggruppato per fascia", () => {
               role: "A",
               team: "Inter",
               price: 50,
+              lotSeq: 1,
             },
           ],
         }),
@@ -812,6 +813,7 @@ describe("autoPickCandidate — chi comprerebbe il timer", () => {
               role: "A",
               team: "Inter",
               price: 80,
+              lotSeq: 1,
             },
           ],
         }),
@@ -1140,6 +1142,7 @@ describe("quotaPerRuolo — quanto budget è finito in ogni reparto", () => {
       role,
       team: "Inter",
       price,
+      lotSeq: i + 1,
     }));
   }
 

@@ -78,6 +78,14 @@ function serializeMembers(
   now: Millis,
 ): SnapshotMember[] {
   const { state, view } = loaded;
+  /**
+   * Il numero di lotto per id, costruito **una volta sola** e non con un `find`
+   * per assegnazione (M22 §7.2): a fine asta i lotti sono duecento e le
+   * assegnazioni altrettante, e un `find` annidato nel `map` per membro
+   * farebbe quarantamila confronti a ogni snapshot, per ogni viewer, per
+   * risolvere un intero.
+   */
+  const seqByLotId = new Map(state.lots.map((l) => [l.id, l.seq]));
   return [...state.members]
     .sort((a, b) => a.seatIndex - b.seatIndex)
     .map((m) => {
@@ -136,6 +144,7 @@ function serializeMembers(
               role: player.role,
               team: pv?.team ?? "",
               price: a.price,
+              lotSeq: a.lotId === null ? null : (seqByLotId.get(a.lotId) ?? null),
             };
           }),
       };

@@ -205,6 +205,7 @@ describe("decide — le chiamate", () => {
               role: "A",
               team: "Inter",
               price: 40,
+              lotSeq: 1,
             },
           ],
         }),

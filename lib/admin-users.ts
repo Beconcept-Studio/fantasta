@@ -61,8 +61,18 @@ export function filterUsers<T extends AdminUserSearchable>(
 // ─── L'esito del salvataggio, campo per campo ────────────────────────────────
 
 /**
- * I quattro campi che il pannello laterale sa scrivere, e sono quattro: la macro
- * **non aggiunge nessun potere** (decisione dell'owner del 2026-08-18).
+ * I campi che il pannello laterale sa scrivere.
+ *
+ * ⚠ **Erano quattro, e questo commento diceva «e sono quattro: la macro non
+ * aggiunge nessun potere (decisione dell'owner del 2026-08-18)».** Quella frase
+ * era di M18 e valeva per M18: era il modo di dire che *quella* macro si
+ * limitava a mostrare meglio poteri già esistenti. M22 ne aggiunge uno —
+ * `statsPlus` — su decisione dell'owner del 2026-08-29, che ha voluto Stats+
+ * assegnabile come il Pro e come l'Admin.
+ *
+ * La frase è riscritta invece che lasciata a dire il falso accanto a cinque
+ * campi: un commento che conta gli elementi di una lista sotto di sé è un
+ * commento che qualcuno un giorno legge senza contare.
  *
  * `verified` è la verifica dell'indirizzo, che vale solo in una direzione —
  * `forceVerifyEmail` sa scrivere `email_verified_at`, non cancellarlo.
@@ -72,6 +82,7 @@ export const USER_FIELDS = [
   "verified",
   "isAdmin",
   "isPro",
+  "statsPlus",
 ] as const;
 export type UserField = (typeof USER_FIELDS)[number];
 
@@ -81,6 +92,7 @@ export const USER_FIELD_LABELS: Record<UserField, string> = {
   verified: "Email verificata",
   isAdmin: "Admin",
   isPro: "Pro",
+  statsPlus: "Stats+",
 };
 
 export type UserFieldOutcome = {

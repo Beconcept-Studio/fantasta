@@ -6,11 +6,24 @@ import { useEffect, useRef, useState } from "react";
 import { Campioncino } from "@/components/auction/campioncino";
 import { InsightsMacro } from "@/components/auction/insights";
 import { PrezzoConsigliato } from "@/components/auction/prezzo-consigliato";
+import {
+  RigaStatsPlus,
+  StatsPlusColonna,
+} from "@/components/auction/stats-plus";
 import { Countdown, CountdownBar } from "@/components/auction/countdown";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
 import type { ActionResult } from "@/lib/realtime/action";
 import { bidBounds, checkAmount, parseAmount } from "@/lib/realtime/portal";
+import {
+  alternative,
+  andatiStessaFascia,
+  avvisi,
+  haPma,
+  lottiInformativi,
+  scatto,
+  temperatura,
+} from "@/lib/stats-plus";
 import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
 import { cn } from "@/lib/utils";
 
@@ -66,6 +79,8 @@ export function BidModal({
   onOpenChange,
   snapshot,
   pool,
+  budget,
+  statsPlus,
   myMemberId,
   offset,
   onBid,
@@ -83,6 +98,10 @@ export function BidModal({
    * quel viewer, e chi non ha il permesso ha ricevuto un pool senza insight.
    */
   pool: PoolPlayer[];
+  /** I crediti di partenza: il denominatore di ogni rapporto di Stats+ (M22 §7.1). */
+  budget: number;
+  /** Chi guarda vede Stats+ (M22 §6). */
+  statsPlus: boolean;
   myMemberId: string | null;
   offset: number;
   onBid: (amount: number) => Promise<ActionResult>;
@@ -102,6 +121,39 @@ export function BidModal({
   const poolRow = pool.find((p) => p.id === lot?.player.id);
   const insights = poolRow?.insights;
   const carmy = poolRow?.carmy;
+
+  // ⚠ **Stats+ è funzione pura di snapshot e pool** (M22 §7.3, I10): non c'è
+  // nessuno stato locale, nessun effetto, niente da ricordare fra uno snapshot e
+  // l'altro. Chi ricarica a metà lotto vede gli stessi numeri di chi non si è
+  // mosso.
+  //
+  // ⚠ **E non si memoizza**: `O(righe del pool)` per le alternative e
+  // `O(assegnazioni)` per il termometro sono cinquecento e duecento in un
+  // browser. Non si memoizza prima di aver misurato (regola 8) — e se un giorno
+  // servisse, il candidato è l'indice `fascia → giocatori`, che è immutabile per
+  // tutta l'asta.
+  const ruoloInCorso = snapshot.auction.currentRole;
+  const lottiRuolo =
+    statsPlus && ruoloInCorso !== null
+      ? lottiInformativi(snapshot, pool, budget, ruoloInCorso)
+      : [];
+  const temperaturaRuolo = statsPlus ? temperatura(lottiRuolo) : null;
+  const scattoRuolo = statsPlus ? scatto(lottiRuolo) : null;
+  const alternativeLotto =
+    statsPlus && lot !== null
+      ? alternative(snapshot, pool, budget, lot.player.id)
+      : null;
+  const andatiFascia =
+    statsPlus && lot !== null
+      ? andatiStessaFascia(snapshot, pool, budget, lot.player.id)
+      : null;
+  const avvisiRuolo = statsPlus ? avvisi(snapshot, pool, budget) : [];
+  const poolHaPma = haPma(pool);
+  // ⚠ **Somma degli scarti osservati, non il saldo di §3.2.** Quello si mostra
+  // solo per i ruoli chiusi, perché a metà ruolo confrontare un parziale con
+  // l'intero piano direbbe sempre «avanza tantissimo». Questo somma soltanto ciò
+  // che è già successo, quindi è vero anche a ruolo aperto.
+  const scartoRuolo = lottiRuolo.reduce((s, l) => s + (l.price - l.atteso), 0);
 
   const [raw, setRaw] = useState("");
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle" });
@@ -183,8 +235,18 @@ export function BidModal({
             field.focus();
             field.select();
           }}
-          className="bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-dvh flex-col gap-3 rounded-t-2xl border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl outline-none sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-96 sm:rounded-2xl sm:border"
+          className="bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-dvh flex-col gap-3 rounded-t-2xl border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl outline-none sm:inset-x-auto sm:right-4 sm:bottom-4 sm:grid sm:w-[46rem] sm:grid-cols-[384px_1fr] sm:grid-rows-[minmax(0,1fr)] sm:gap-4 sm:rounded-2xl sm:border xl:w-[64rem]"
         >
+          {/*
+            ⚠ **La colonna sinistra è il modale di sempre, ai pixel di sempre**
+            (M22 §5.1). `grid-cols-[384px_1fr]` la tiene a 384px su ogni
+            larghezza — identica al telefono — e a cambiare è solo quanta aria ha
+            quella destra. Sotto `sm:` la griglia non esiste affatto: lì il
+            modale è un foglio che sale dal basso su uno schermo dove l'altezza è
+            contesa dalla tastiera, e **non cambia niente**. È la ragione per cui
+            l'allargamento non contraddice M16.
+          */}
+          <div className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto">
           {/* ── Intestazione: sempre visibile, anche con la tastiera aperta ── */}
           <div className="flex items-start gap-3">
             {/*
@@ -306,6 +368,30 @@ export function BidModal({
           <PrezzoConsigliato carmy={carmy} dove="campo" />
 
           {/*
+            ⚠ **Stats+ sta SOTTO il campo, ed è la risposta all'obiezione del
+            2026-08-12, non una scelta di layout** (M22 §5.3). Sopra il campo
+            un'informazione arriva **prima** della decisione e la sostituisce;
+            sotto, l'ordine di lettura si inverte — prima vedi la cifra che stai
+            scrivendo, poi il contesto.
+
+            ⚠ **E una riga sola.** Il commento qui sotto dice perché la riga dei
+            valori suggeriti è stata tolta: quei ~44px sono altezza restituita al
+            campo, e con la tastiera aperta sono la risorsa scarsa. Una seconda
+            riga li rimetterebbe, in mezzo fra il campo e il suo verdetto,
+            disfacendo una decisione presa apposta. Il budget di caratteri che
+            tiene la riga a una riga sola è misurato e provato in
+            `tests/stats-plus-riga.test.ts`.
+          */}
+          {statsPlus && (
+            <RigaStatsPlus
+              role={ruoloInCorso}
+              temperatura={temperaturaRuolo}
+              scatto={scattoRuolo}
+              alternative={alternativeLotto}
+            />
+          )}
+
+          {/*
             ⚠ Qui stava la riga dei valori suggeriti — `+5`, `+10`, `+25` e un
             `max` che scriveva il tetto nel campo — e da M16 non c'è più: la
             cifra si scrive, non si sceglie fra quattro incrementi tondi. I
@@ -349,6 +435,20 @@ export function BidModal({
               Chiudi
             </Button>
           </Dialog.Close>
+          </div>
+
+          {statsPlus && (
+            <StatsPlusColonna
+              role={ruoloInCorso}
+              temperatura={temperaturaRuolo}
+              scatto={scattoRuolo}
+              andati={andatiFascia}
+              alternative={alternativeLotto}
+              avvisi={avvisiRuolo}
+              scartoRuolo={scartoRuolo}
+              haPma={poolHaPma}
+            />
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

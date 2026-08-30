@@ -16,6 +16,7 @@ import {
   setUserAdmin,
   setUserDisplayName,
   setUserPro,
+  setUserStatsPlus,
 } from "@/lib/engine/admin";
 import { recordSourceRun } from "@/lib/engine/insight-refresh";
 import {
@@ -180,6 +181,25 @@ export async function saveUserAction(
               : "non vede più gli insight sul listone.",
           }
         : { field: "isPro", ok: false, message: result.error.message },
+    );
+  }
+
+  if (form.get("statsPlus") !== null) {
+    const result = await setUserStatsPlus(
+      admin.id,
+      userId,
+      flag(form, "statsPlus"),
+    );
+    outcomes.push(
+      result.ok
+        ? {
+            field: "statsPlus",
+            ok: true,
+            message: result.value.statsPlus
+              ? "adesso vede Stats+ nel portale."
+              : "non vede più Stats+ nel portale.",
+          }
+        : { field: "statsPlus", ok: false, message: result.error.message },
     );
   }
 
