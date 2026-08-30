@@ -13,6 +13,8 @@ import {
   pct,
   pianoPerRuolo,
   saldoRuoliChiusi,
+  scalaSlotPerRuolo,
+  scartoPerPartecipante,
   scatto,
   temperatura,
 } from "@/lib/stats-plus";
@@ -992,5 +994,258 @@ describe("§5.1 — quanto è costato chi occupava lo stesso slot", () => {
     expect(
       andatiStessaFascia(stato([]), [...pool, senzaFascia], BUDGET, "Ignoto"),
     ).toBeNull();
+  });
+});
+
+// ─── §3.6 — la lettura per partecipante, e la normalizzazione ────────────────
+
+describe("§3.6 — quanto ha speso ciascuno rispetto al piano dei suoi slot", () => {
+  /** Un giocatore di ruolo `role`, nella fascia `rank`, con quel PMA. */
+  function q(id: string, role: Role, rank: number, pma: number): PoolPlayer {
+    return {
+      id,
+      name: id,
+      team: "Inter",
+      role,
+      fvm: 100,
+      quot: 10,
+      fasciaGruppo: `${rank + 1}° Slot`,
+      fasciaRank: rank,
+      carmy: {
+        extId: 1,
+        fascia: `${rank + 1}° Slot`,
+        prezzo: null,
+        pma,
+        titolarita: 4,
+        affidabilita: null,
+        integrita: null,
+        fmvExp: null,
+        tags: [],
+        commento: null,
+      },
+    };
+  }
+
+  /**
+   * ⚠ **Un pool costruito perché la scala grezza sia GONFIA**, come lo è quella
+   * vera: le tre fasce di D hanno mediana 30 ciascuna, cioè 90 punti di scala
+   * grezza, mentre la massa di D vale l'80% del foglio. Senza normalizzare,
+   * ognuno risulterebbe sotto piano di quella differenza.
+   */
+  const pool: PoolPlayer[] = [
+    // P: massa 20 punti → piano(P) = 20%.
+    q("p1", "P", 0, 10),
+    q("p2", "P", 0, 10),
+    // D: massa 180 punti su 200 → piano(D) = 90%... no: 180/200 = 90%.
+    q("d1", "D", 0, 30),
+    q("d2", "D", 0, 30),
+    q("d3", "D", 1, 30),
+    q("d4", "D", 1, 30),
+    q("d5", "D", 2, 30),
+    q("d6", "D", 2, 30),
+  ];
+
+  /**
+   * ⚠ **Il test che impedisce il ritorno del difetto per cui tutti risultavano
+   * «sotto piano» del 17%** (§9.1). È anche ciò che rende §3.6 incapace di
+   * contraddire §3.2: le due letture poggiano sullo stesso `piano(R)` per
+   * costruzione, non per coincidenza.
+   */
+  it("⚠ la somma delle quote di un ruolo fa esattamente `piano(R)`", () => {
+    const piano = pianoPerRuolo(pool);
+    const scala = scalaSlotPerRuolo(pool);
+    for (const role of ["P", "D", "C", "A"] as const) {
+      const somma = scala[role].quote.reduce((a, b) => a + b, 0);
+      // A e C non esistono nel foglio: quote vuote, somma 0, piano 0.
+      expect(somma).toBeCloseTo(piano[role], 10);
+    }
+  });
+
+  /**
+   * ⚠ **Il difetto, riprodotto invece che raccontato.** Serve un pool con fasce
+   * di **dimensione diversa**, che è come sono quelle vere: la scala grezza
+   * somma le *mediane* — una per slot — mentre il piano viene dalla *massa*, che
+   * conta tutti i candidati. Le due cose coincidono solo per coincidenza, e sul
+   * foglio di riferimento non coincidono affatto: **116,6% contro 100**.
+   *
+   * Il verso qui è l'opposto di quello del foglio vero, e non importa: quello
+   * che conta è che l'errore **sposta tutti nella stessa direzione**, cioè
+   * produce una tabella in cui l'intero tavolo sembra risparmiare (o spendere)
+   * e nessuno si distingue da nessuno. Una tabella così non dice niente.
+   */
+  it("⚠ senza normalizzare, la scala grezza dà un piano diverso — e sposta tutti insieme", () => {
+    // Fasce di dimensione diversa: la 1ª ha due giocatori, la 2ª ne ha quattro.
+    const sbilanciato: PoolPlayer[] = [
+      q("x1", "D", 0, 50),
+      q("x2", "D", 0, 50),
+      q("y1", "D", 1, 10),
+      q("y2", "D", 1, 10),
+      q("y3", "D", 1, 10),
+      q("y4", "D", 1, 10),
+    ];
+
+    const piano = pianoPerRuolo(sbilanciato);
+    const scala = scalaSlotPerRuolo(sbilanciato);
+
+    // La scala grezza — la somma delle due mediane — vale 60 punti, cioè 0,60
+    // del budget. Il piano di D vale 1,00, perché D è l'unico ruolo del foglio.
+    const grezza = (50 + 10) / 100;
+    expect(grezza).toBeCloseTo(0.6, 10);
+    expect(piano.D).toBeCloseTo(1, 10);
+    // ⚠ **Non coincidono**: è esattamente la condizione in cui il mock ha
+    // trovato tutti «sotto piano» del 17%.
+    expect(grezza).not.toBeCloseTo(piano.D, 2);
+
+    // Normalizzata, invece, la somma torna al piano — per costruzione.
+    expect(scala.D.quote.reduce((a, b) => a + b, 0)).toBeCloseTo(piano.D, 10);
+
+    // E la differenza è quella che si vedrebbe in tabella: chi ha riempito i due
+    // slot ha un piano di 500 crediti, non i 300 che la scala grezza darebbe.
+    const conDue = snapshot({
+      auction: { ...snapshot().auction, currentRole: "D" },
+      members: [
+        member(ME, 0, {
+          roster: rosaDi([
+            { playerId: "x1", role: "D", price: 250, lotSeq: 1 },
+            { playerId: "y1", role: "D", price: 150, lotSeq: 2 },
+          ]),
+        }),
+      ],
+    });
+    const x = scartoPerPartecipante(conDue, sbilanciato, BUDGET)[0];
+    expect(x.piano).toBe(500);
+    expect(x.scarto).toBe(-100);
+    // Con la scala grezza sarebbe stato piano 300 e scarto +100: segno opposto,
+    // cioè la conclusione rovesciata sullo stesso identico stato.
+    expect(Math.round(grezza * BUDGET)).toBe(300);
+  });
+
+  const stato = snapshot({
+    auction: { ...snapshot().auction, currentRole: "D" },
+    members: [
+      // Ha preso due difensori spendendo 400: il piano dei suoi due slot è
+      // (30+30)/90 × 0,90 × 500 = 300. Ha speso 100 in più.
+      member(ME, 0, {
+        roster: rosaDi([
+          { playerId: "d1", role: "D", price: 250, lotSeq: 1 },
+          { playerId: "d3", role: "D", price: 150, lotSeq: 3 },
+        ]),
+      }),
+      // Stessi due slot, 200 spesi: 100 in meno del piano.
+      member(OTHER, 1, {
+        roster: rosaDi([
+          { playerId: "d2", role: "D", price: 120, lotSeq: 2 },
+          { playerId: "d4", role: "D", price: 80, lotSeq: 4 },
+        ]),
+      }),
+      member(THIRD, 2),
+    ],
+  });
+
+  it("chi ha speso più del piano si distingue da chi ha speso meno", () => {
+    const scarti = scartoPerPartecipante(stato, pool, BUDGET);
+    const mio = scarti.find((x) => x.memberId === ME)!;
+    const altro = scarti.find((x) => x.memberId === OTHER)!;
+
+    expect(mio).toMatchObject({ speso: 400, piano: 300, scarto: 100 });
+    expect(altro).toMatchObject({ speso: 200, piano: 300, scarto: -100 });
+    // ⚠ **Lo spread è il punto**: senza normalizzazione entrambi sarebbero
+    // negativi e la tabella direbbe che tutti risparmiano, cioè niente.
+    expect(Math.sign(mio.scarto)).not.toBe(Math.sign(altro.scarto));
+  });
+
+  it("chi non ha comprato niente non ha né speso né piano: zero, non un negativo", () => {
+    const terzo = scartoPerPartecipante(stato, pool, BUDGET).find(
+      (x) => x.memberId === THIRD,
+    )!;
+    expect(terzo).toMatchObject({ speso: 0, piano: 0, scarto: 0, perRuolo: [] });
+  });
+
+  /**
+   * ⚠ **Gli acquisti si ordinano per prezzo decrescente**, non nell'ordine in
+   * cui li ha presi: è il modo in cui il foglio ordina gli slot. Le stesse due
+   * cifre in ordine inverso devono dare lo stesso piano — se il codice leggesse
+   * l'ordine di estrazione, un membro che ha preso prima il difensore da 150
+   * risulterebbe con un piano diverso a parità di rosa.
+   */
+  it("l'ordine di estrazione non cambia il piano: contano le cifre, non la cronologia", () => {
+    const alContrario = snapshot({
+      auction: { ...stato.auction },
+      members: [
+        member(ME, 0, {
+          roster: rosaDi([
+            { playerId: "d3", role: "D", price: 150, lotSeq: 1 },
+            { playerId: "d1", role: "D", price: 250, lotSeq: 3 },
+          ]),
+        }),
+      ],
+    });
+    expect(scartoPerPartecipante(alContrario, pool, BUDGET)[0].piano).toBe(300);
+  });
+
+  it("il piano cresce con gli slot riempiti, non col budget intero", () => {
+    // Un solo difensore: il piano è quello del 1° slot e basta.
+    const unoSolo = snapshot({
+      auction: { ...stato.auction },
+      members: [
+        member(ME, 0, {
+          roster: rosaDi([{ playerId: "d1", role: "D", price: 100, lotSeq: 1 }]),
+        }),
+      ],
+    });
+    // 30/90 × 0,90 × 500 = 150.
+    expect(scartoPerPartecipante(unoSolo, pool, BUDGET)[0].piano).toBe(150);
+  });
+
+  it("le assegnazioni manuali entrano: quei crediti li ha spesi davvero", () => {
+    const conManuale = snapshot({
+      auction: { ...stato.auction },
+      members: [
+        member(ME, 0, {
+          roster: rosaDi([
+            { playerId: "d1", role: "D", price: 250, lotSeq: null },
+          ]),
+        }),
+      ],
+    });
+    expect(scartoPerPartecipante(conManuale, pool, BUDGET)[0].speso).toBe(250);
+  });
+
+  it("più acquisti che fasce: gli slot in eccesso valgono zero, non una quota inventata", () => {
+    const quattro = snapshot({
+      auction: { ...stato.auction },
+      members: [
+        member(ME, 0, {
+          roster: rosaDi(
+            ["d1", "d2", "d3", "d4"].map((playerId, i) => ({
+              playerId,
+              role: "D" as Role,
+              price: 50,
+              lotSeq: i + 1,
+            })),
+          ),
+        }),
+      ],
+    });
+    // Tre fasce sole: il piano è la loro somma intera, cioè piano(D) × budget.
+    expect(scartoPerPartecipante(quattro, pool, BUDGET)[0].piano).toBe(450);
+  });
+
+  it("il totale è la somma dei ruoli, e i ruoli restano leggibili a parte", () => {
+    const misto = snapshot({
+      auction: { ...stato.auction },
+      members: [
+        member(ME, 0, {
+          roster: rosaDi([
+            { playerId: "p1", role: "P", price: 60, lotSeq: 1 },
+            { playerId: "d1", role: "D", price: 250, lotSeq: 2 },
+          ]),
+        }),
+      ],
+    });
+    const x = scartoPerPartecipante(misto, pool, BUDGET)[0];
+    expect(x.perRuolo.map((r) => r.role)).toEqual(["P", "D"]);
+    expect(x.speso).toBe(310);
+    expect(x.piano).toBe(x.perRuolo.reduce((s, r) => s + r.piano, 0));
   });
 });

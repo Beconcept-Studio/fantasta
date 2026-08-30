@@ -680,3 +680,134 @@ export function andatiStessaFascia(
     ).length,
   };
 }
+
+// ─── §3.6 — la lettura per partecipante ──────────────────────────────────────
+
+/** La scala degli slot di un ruolo: quanto budget vale il k-esimo, in frazione. */
+export type ScalaSlot = {
+  role: Role;
+  /** Per rank di fascia crescente: `[0]` è il 1° slot. */
+  quote: number[];
+};
+
+export type ScartoRuolo = {
+  role: Role;
+  presi: number;
+  speso: number;
+  /** In crediti. */
+  piano: number;
+  /** `speso − piano`: positivo = ha speso più del piano. */
+  scarto: number;
+};
+
+export type ScartoPartecipante = {
+  memberId: string;
+  speso: number;
+  piano: number;
+  scarto: number;
+  perRuolo: ScartoRuolo[];
+};
+
+/**
+ * Quanto budget vale ogni slot di rosa, ruolo per ruolo.
+ *
+ * La scala grezza è «il PMA mediano della 1ª fascia, poi della 2ª, ecc.» — e la
+ * fascia **è** lo slot (§2.1), quindi la domanda «quanto dovrebbe costargli il
+ * secondo difensore» è un conteggio e non una deduzione.
+ *
+ * ⚠ **La normalizzazione non è cosmesi, ed è un difetto trovato costruendo il
+ * mock il 2026-08-29.** La scala grezza **non somma a 100**: sul foglio di
+ * riferimento fa **116,6%**, e il gonfiaggio non è nemmeno distribuito (P +10,0
+ * punti, D +11,2, C −3,5, A −1,1). La ragione è strutturale: la scala assume che
+ * ognuno prenda il *mediano* di ogni fascia, ma **le fasce alte non hanno
+ * abbastanza giocatori per tutti** — cinque portieri `top` e due `semitop` per
+ * otto squadre.
+ *
+ * Senza normalizzare, **ogni partecipante risulta «sotto piano» del 17%** e la
+ * tabella dice che tutti stanno risparmiando, cioè non dice niente. Con la
+ * normalizzazione gli scarti misurati sullo stesso stato diventano
+ * `+17, −15, −26, −23, −39, −43, −40, −50`: uno spread leggibile, e chi ha speso
+ * più del piano si distingue da chi no.
+ *
+ * ⚠ **Si normalizza per ruolo e non globalmente**, così `Σₖ quote[k] = piano(R)`
+ * e §3.6 non può mai contraddire §3.2: le due letture poggiano sullo stesso
+ * numero **per costruzione** invece che per coincidenza.
+ */
+export function scalaSlotPerRuolo(pool: PoolPlayer[]): Record<Role, ScalaSlot> {
+  const piano = pianoPerRuolo(pool);
+  const scale = {} as Record<Role, ScalaSlot>;
+
+  for (const role of ROLES) {
+    // I PMA di ogni fascia del ruolo, per rank crescente.
+    const perFascia = new Map<number, number[]>();
+    for (const player of pool) {
+      if (player.role !== role) continue;
+      const rank = player.fasciaRank;
+      const pma = player.carmy?.pma;
+      if (rank === undefined || pma === null || pma === undefined) continue;
+      perFascia.set(rank, [...(perFascia.get(rank) ?? []), pma]);
+    }
+    const ranks = [...perFascia.keys()].sort((a, b) => a - b);
+    const grezza = ranks.map((rank) => mediana(perFascia.get(rank)!));
+    const somma = grezza.reduce((a, b) => a + b, 0);
+    scale[role] = {
+      role,
+      // `somma === 0` è un ruolo senza fasce: nessuno slot, nessuna quota. Non
+      // è un errore — è un foglio che quel ruolo non lo descrive.
+      quote: somma === 0 ? [] : grezza.map((g) => (g / somma) * piano[role]),
+    };
+  }
+  return scale;
+}
+
+/**
+ * Chi ha speso più del proprio piano e chi meno, ruolo per ruolo e in totale.
+ *
+ * ⚠ **Gli acquisti si ordinano per prezzo decrescente** e si confrontano con la
+ * scala delle fasce dal 1° slot in giù. Non è una deduzione su cosa avesse in
+ * testa: è il modo in cui il foglio stesso ordina gli slot, applicato a ciò che
+ * ha davvero comprato.
+ *
+ * ⚠ **Si mostra il numero e non l'intenzione.** «Ha speso l'11% in più del
+ * piano» è un fatto; «sta risparmiando per l'attacco» è una lettura, e la fa chi
+ * guarda. È la frase dell'owner: *«il resto lo lascio come deduzione
+ * dell'utente»* — e la ragione per cui questa funzione restituisce crediti e non
+ * aggettivi.
+ *
+ * ⚠ **Le assegnazioni manuali entrano**, come in `saldoRuoliChiusi` e al
+ * contrario di `lottiInformativi`: qui si guarda quanto uno **ha speso**, e un
+ * `manualAssign` gli ha tolto crediti come qualunque altro acquisto.
+ */
+export function scartoPerPartecipante(
+  snapshot: Snapshot,
+  pool: PoolPlayer[],
+  budget: number,
+): ScartoPartecipante[] {
+  const scale = scalaSlotPerRuolo(pool);
+
+  return snapshot.members.map((m) => {
+    const perRuolo: ScartoRuolo[] = [];
+    for (const role of ROLES) {
+      const presi = m.roster
+        .filter((entry) => entry.role === role)
+        // Dal più caro al meno caro: è la scala delle fasce letta dall'alto.
+        .sort((a, b) => b.price - a.price);
+      if (presi.length === 0) continue;
+
+      const speso = presi.reduce((somma, entry) => somma + entry.price, 0);
+      // ⚠ **Se ha preso più giocatori che fasce, gli slot in eccesso valgono
+      // zero.** Capita solo con un foglio che descrive meno slot di quanti il
+      // regolamento ne dia, ed è la scelta prudente: attribuirgli una quota
+      // inventata gonfierebbe il suo piano e lo farebbe sembrare parsimonioso.
+      const quote = scale[role].quote;
+      const piano = Math.round(
+        presi.reduce((somma, _entry, k) => somma + (quote[k] ?? 0), 0) * budget,
+      );
+      perRuolo.push({ role, presi: presi.length, speso, piano, scarto: speso - piano });
+    }
+
+    const speso = perRuolo.reduce((s, r) => s + r.speso, 0);
+    const piano = perRuolo.reduce((s, r) => s + r.piano, 0);
+    return { memberId: m.id, speso, piano, scarto: speso - piano, perRuolo };
+  });
+}

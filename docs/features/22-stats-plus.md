@@ -963,9 +963,15 @@ questo blocco a «cosa è costato chi occupava lo slot», dove un prezzo basso *
 filtrando, i conteggi («6 andati su 10») smetterebbero di essere veri. Dentro una fascia i PMA sono
 omogenei per costruzione, quindi in pratica i due insiemi coincidono.
 
-*Commit 5*
+*Commit 5 — i partecipanti* ✅
 
-- [ ] `scartoPerPartecipante(...)` — speso contro piano degli slot riempiti (§3.6)
+- [x] `scalaSlotPerRuolo(pool)` — la scala delle fasce **normalizzata per ruolo**, così
+      `Σₖ quote[k] = piano(R)` e §3.6 non può contraddire §3.2 (§3.6)
+- [x] `scartoPerPartecipante(...)` — speso contro piano degli slot riempiti, acquisti ordinati per
+      prezzo decrescente
+- [x] Il test della normalizzazione, **col difetto riprodotto invece che raccontato**: serve un pool
+      con fasce di dimensione diversa — la scala grezza somma le *mediane*, il piano viene dalla
+      *massa* — e sullo stesso stato la conclusione si rovescia di segno
 **L'interfaccia**
 
 - [ ] `POSIZIONE_STATS` in un file suo, con le quattro forme scritte (§5.3)
