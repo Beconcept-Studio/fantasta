@@ -4273,6 +4273,26 @@ che sale dal basso su uno schermo dove l'altezza è contesa dalla tastiera. La c
 resta a 384px su qualunque schermo, identica al telefono; a cambiare è solo quanta aria ha quella
 destra.
 
+### Le larghezze del modale, e l'aritmetica che le decide
+
+Il modale non è largo un numero fisso: è largo **`min(46rem, 85% della finestra)`**, e da 1280px in su
+**`min(85%, 80rem)`**. Le due percentuali sono la richiesta dell'owner («che si veda bene anche su
+schermi piccoli, ma comunque desktop»), e l'80rem in cima è il freno che le impedisce di diventare
+assurde: senza, su un monitor da 2560 il modale sarebbe largo 2176px con la colonna dell'offerta
+ferma a 384.
+
+**La soglia delle due colonne è più alta della soglia della card, e la differenza è aritmetica.** La
+card flottante compare a 640px; la griglia a due colonne solo a **768**. Perché la colonna sinistra è
+fissa a 384px: a 640px di schermo il modale è largo 544, e alla destra resterebbero **112px** — meno
+di quanto serve alle sole colonne dei «già andati». A 768 ne restano 219, e quelle colonne ci stanno.
+Misurato, non stimato: 640 → una colonna sola; 768 → 219px; 1024 → 302; 1280 → 654; 1920 → 846.
+
+⚠ **Prima del tetto in percentuale quel caso non si vedeva, e non perché andasse bene**: a 640px il
+modale chiedeva 736px su una finestra da 640, ancorato a destra, quindi non era stretto — era
+**tagliato fuori dallo schermo** dal lato sinistro, cioè dalla parte dove c'è il campo dell'offerta.
+Un tetto in percentuale non ha solo reso il modale più educato sui monitor grandi: ha scoperto un
+difetto che una larghezza fissa nascondeva.
+
 ### Il gate è doppio, e solo metà è una difesa
 
 Stats+ lo vede chi ha **il Pro** e in più il flag **Stats+**, che un amministratore accende utente per

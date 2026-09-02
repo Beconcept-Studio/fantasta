@@ -351,7 +351,7 @@ function ListaAlternative({
 }
 
 /**
- * La sezione Stats+ del modale, da `sm:` in su.
+ * La sezione Stats+ del modale, da `md:` in su (M23: era `sm:`, vedi il perché in `bid-modal.tsx`).
  *
  * ⚠ **La griglia 2×2 da `xl:` accoppia i blocchi che si leggono insieme, e
  * l'accoppiamento è il punto** (owner, 2026-08-29): **temperatura accanto ai già
@@ -371,7 +371,7 @@ function ListaAlternative({
  * il proprio contenuto: l'`overflow` non ha niente da fare e la colonna deborda.
  * E `min-h-0` sull'elemento **non basta neanche lui**, perché la *riga* implicita
  * della griglia è `auto` e cresce comunque. Servono tutte e due le cose:
- * `sm:grid-rows-[minmax(0,1fr)]` sul contenitore in `bid-modal.tsx` e `min-h-0`
+ * `md:grid-rows-[minmax(0,1fr)]` sul contenitore in `bid-modal.tsx` e `min-h-0`
  * qui. Misurato in Chrome headless su viewport da 913 a 353px di altezza: senza
  * la riga vincolata la colonna resta a 472px e `scrollHeight === clientHeight`,
  * cioè non scorre affatto; con, si stringe a 439/379/319 e scorre.
@@ -402,7 +402,7 @@ export function StatsPlusColonna({
   // e dirlo è l'unica cosa utile che si può dire.
   if (!haPma) {
     return (
-      <div className="hidden min-h-0 min-w-0 overflow-y-auto sm:block">
+      <div className="hidden min-h-0 min-w-0 overflow-y-auto md:block">
         <Riquadro titolo="Stats+">
           <Niente>Serve un listone con i PMA.</Niente>
         </Riquadro>
@@ -411,7 +411,7 @@ export function StatsPlusColonna({
   }
 
   return (
-    <div className="hidden min-h-0 min-w-0 overflow-y-auto sm:block">
+    <div className="hidden min-h-0 min-w-0 overflow-y-auto md:block">
       <div className="grid min-w-0 gap-3 xl:grid-cols-2">
         <Riquadro titolo="Temperatura">
           <TabellaTemperature

@@ -292,3 +292,51 @@ assenze.
       verificare in locale è stato verificato: le classi Tailwind contro il CSS compilato da
       `pnpm build`, ed è lì che sono usciti i due difetti di §3.1
 - [x] `CHANGELOG.md` datato e `package.json` a `1.23.0`, sulla `dev` prima del merge
+
+---
+
+## §7 — Le larghezze del modale (aggiunta del 2026-09-02, dopo il rilascio)
+
+Richiesta dell'owner a rilascio avvenuto: *«ora si blocca a 64rem, vorrei che la max-w fosse all'85%
+per xl, così mi assicuro che il modale venga visto bene anche su schermi piccoli, ma comunque
+desktop»*.
+
+⚠ **La richiesta letterale era CSS morto, e va scritto perché non venga riproposta.** Aggiungere
+`xl:max-w-[85%]` accanto a `xl:w-[64rem]` non cambia niente su nessuno schermo: `xl` comincia a
+1280px, dove l'85% fa 1088px e il modale ne chiede 1024. Il tetto non morde mai. L'aritmetica è stata
+mostrata all'owner in tabella **prima** di scrivere la classe, e la forma scelta è un'altra.
+
+**Quello che è stato fatto**, sulla `Dialog.Content` di `bid-modal.tsx`:
+
+```
+sm:w-[46rem] sm:max-w-[85%]                 la card: min(46rem, 85%)
+md:grid md:grid-cols-[384px_1fr] …          le due colonne, da 768 e non da 640
+xl:w-[85%] xl:max-w-7xl                     da 1280: min(85%, 80rem)
+```
+
+**Il tetto ha scoperto un difetto che la larghezza fissa nascondeva.** Con `sm:w-[46rem]` e
+`sm:right-4`, a 640px di finestra il modale chiedeva **736px**: non era stretto, era **tagliato fuori
+dallo schermo dal lato sinistro** — cioè dalla parte dove c'è il campo dell'offerta. Il tetto all'85%
+lo riporta a 544px e niente esce più.
+
+⚠ **E la griglia è salita da `sm:` a `md:` per aritmetica, non per gusto**: la colonna sinistra è
+fissa a 384px, quindi con il modale a 544px alla destra resterebbero **112px**, meno di quanto
+serve alle sole colonne dei «già andati» (86 + 54 + 50). A 768 ne restano 219 e ci stanno. Sotto la
+soglia il modale è una card a una colonna: la parte dell'offerta resta identica al telefono, che è la
+promessa di M22 §5.1. **Fra 640 e 768 si perde Stats+ nel modale** — resta nella tab — ed è il prezzo
+accettato per non mostrare una colonna inusabile.
+
+**Misurato col CSS compilato da `pnpm build`**, otto larghezze, nessuna che sfora e nessun debordo
+orizzontale della tabella dei già andati:
+
+| viewport | 640 | 768 | 1024 | 1280 | 1440 | 1920 | 2560 |
+|---|---|---|---|---|---|---|---|
+| modale | 544 | 653 | 736 | 1088 | 1224 | 1280 | 1280 |
+| colonna destra | — | 219 | 302 | 654 | 846 | 846 | 846 |
+
+⚠ **Sotto i ~500px non è stato possibile misurare**: Chrome headless su macOS non scende sotto quella
+larghezza di finestra. Non è un buco nella prova, perché sotto `sm:` **nessuna** di queste classi si
+applica: lì il modale è `inset-x-0`, cioè larghezza piena, e questa modifica non lo tocca.
+
+⚠ **`pick-panel.tsx` non è stato toccato**, e la ragione è che non ne ha bisogno: è `sm:w-96`, cioè
+384px, che non sfora nemmeno a 640.
