@@ -228,16 +228,24 @@ export function BidModal({
             field.focus();
             field.select();
           }}
-          className="bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-dvh flex-col gap-3 rounded-t-2xl border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none sm:inset-x-auto sm:right-4 sm:bottom-4 sm:grid sm:w-[46rem] sm:grid-cols-[384px_1fr] sm:grid-rows-[minmax(0,1fr)] sm:gap-4 sm:rounded-2xl sm:border xl:w-[64rem]"
+          className="bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-dvh flex-col gap-3 rounded-t-2xl border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-[46rem] sm:max-w-[85%] sm:rounded-2xl sm:border md:grid md:grid-cols-[384px_1fr] md:grid-rows-[minmax(0,1fr)] md:gap-4 xl:w-[85%] xl:max-w-7xl"
         >
           {/*
             ⚠ **La colonna sinistra è il modale di sempre, ai pixel di sempre**
             (M22 §5.1). `grid-cols-[384px_1fr]` la tiene a 384px su ogni
             larghezza — identica al telefono — e a cambiare è solo quanta aria ha
-            quella destra. Sotto `sm:` la griglia non esiste affatto: lì il
-            modale è un foglio che sale dal basso su uno schermo dove l'altezza è
-            contesa dalla tastiera, e **non cambia niente**. È la ragione per cui
-            l'allargamento non contraddice M16.
+            quella destra. Sotto `md:` la griglia non esiste affatto: lì il
+            modale è un foglio (o, da `sm:`, una card flottante) con una colonna
+            sola, e la parte dell'offerta **non cambia di un pixel**. È la
+            ragione per cui l'allargamento non contraddice M16.
+
+            ⚠ **La griglia parte da `md:` e non da `sm:`, ed è aritmetica** (M23,
+            owner): il modale è largo `min(46rem, 85%)` e la colonna sinistra è
+            fissa a 384px, quindi a 640px di schermo alla destra resterebbero
+            **112px** — meno di quanto serve alle sole colonne dei «già andati».
+            A 768 ne restano 221, che ci stanno. Prima del tetto quel caso non si
+            vedeva perché il modale era largo 736px su uno schermo da 640: non
+            era stretto, era **tagliato fuori dallo schermo**.
           */}
           <div className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto">
           {/* ── Intestazione: sempre visibile, anche con la tastiera aperta ── */}
