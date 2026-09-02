@@ -4,6 +4,23 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.23.1] — 2026-09-02
+
+**Il modale d'offerta si adatta allo schermo invece di fermarsi a una misura fissa.** Prima era largo
+1024px da 1280px di schermo in su, sempre: su un monitor grande restava un francobollo in basso a
+destra, e su una finestra piccola non ci stava. Ora è largo l'**85% della finestra**, con due freni:
+non supera i 1280px — sennò su un monitor da 2560 la colonna dell'offerta resterebbe di 384px in
+mezzo a un deserto — e su una finestra strettina non sfora.
+
+**E lì c'era un difetto che nessuno aveva visto.** Con una finestra da 640px il modale chiedeva 736px
+appoggiato al bordo destro: non era stretto, era **tagliato fuori dallo schermo dal lato sinistro** —
+cioè dalla parte in cui si scrive l'offerta. Adesso rientra.
+
+⚠ **Fra 640 e 768px di finestra la colonna Stats+ non compare più nel modale**, e resta nella tab. È
+voluto: la parte dell'offerta occupa 384px fissi, quindi a quelle larghezze alla colonna resterebbero
+un centinaio di pixel, che non bastano nemmeno a incolonnare i «già andati». Meglio non mostrarla che
+mostrarla illeggibile. Da 768 in su c'è come prima.
+
 ## [1.23.0] — 2026-09-02
 
 **La temperatura di Stats+ è rifatta, perché il numero di prima rispondeva a un'altra domanda.**
