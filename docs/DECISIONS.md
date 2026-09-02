@@ -4080,3 +4080,75 @@ menzionavano vanno riportati sulle nuove, non solo fatti compilare.
 l'aritmetica dava `−15%`: con dodici lotti consegnati al contrario, la coda per `lotSeq` è **mista** —
 quattro caldi e quattro freddi — non tutta fredda. Il codice era giusto. L'attesa corretta rende
 comunque il test una prova, perché i due ordini danno `−15%` e `+20%`.
+
+---
+
+## 2026-09-02 — Quanto regge la VPS: otto persone misurate, non stimate
+
+Domanda dell'owner tre giorni prima della prima asta vera: *«ci saranno 8 persone collegate, la VPS
+attuale mi basta?»*. **Sì, con un margine largo**, e i numeri stanno qui perché la prossima volta la
+risposta sia una lettura e non un ragionamento. Misurati **in produzione**, con un'asta simulata a 8
+membri (7 bot + owner) viva e il tick in-app che la muoveva.
+
+| Misura | Valore |
+|---|---|
+| Macchina | 2 vCPU · 3.814 MB RAM · 15 GB su 38 di disco · swap 4,7 GB mai toccata |
+| Carico a riposo | 0,07 / 0,33 / 0,27 — e **mai sopra 0,6** in tutta la sessione |
+| Processo `asta` a riposo | **~185 MB** di RSS (151 MB appena riavviato) |
+| Con **24 stream SSE** aperti | **278 MB**, cioè **~3,9 MB per connessione** |
+| Picco di sessione | **290 MB**, contro il tetto `pm2` di **512 MB** |
+| 24 stream per 2 minuti | 0 errori, 0 cadute, primo snapshot mediana **1,09s** |
+| Traffico per client | ~**2 KB/s** (257 KB per stream in 2 minuti) |
+| 8 aperture del portale in parallelo | tutte `200`, mediana **1.201ms**, peggiore 1.279ms |
+| 200 richieste a `/signin`, concorrenza 20 | mediana 417ms · p95 596ms · peggiore 909ms |
+| Postgres | `max_connections` 100, e l'app ne usa **un pool solo** da un processo solo |
+| nginx | 2 worker × 1024 = 2.048 connessioni |
+
+**Il collo di bottiglia non è nessuno di questi: è il `max_memory_restart` di `pm2`, a 512 MB.** È
+l'unico limite configurato che possa scattare durante una serata, e la domanda vera non era «quanta
+memoria serve» ma «**la memoria torna indietro**». Dopo la prima sonda l'RSS era rimasto a 278 MB con
+zero connessioni aperte, che è il profilo di una perdita.
+
+⚠ **Non lo era, e il modo di distinguerlo è ripetere la stessa sonda**: la seconda passata di 24
+stream ha portato l'RSS da 281 a **287 MB**, non a 370. I +93 MB della prima erano **V8 che allarga
+l'heap e lo tiene**, e la seconda passata ci è entrata dentro. Un RSS che non scende non è una perdita
+finché non **cresce di nuovo sotto lo stesso carico**.
+
+**Estrapolazione per giovedì**: 8 telefoni + la TV + la regia ≈ 12 connessioni ≈ **~232 MB**, cioè
+meno della metà del tetto, con 24 stream (tre volte tanto) già provati senza una caduta.
+
+### La prova che valeva più di tutte: il riavvio a metà asta
+
+C'è **un processo solo**, quindi un riavvio scollega tutti insieme. I10 promette che ogni schermata è
+funzione pura dello snapshot e che `bootRecovery` riprende l'asta: era una promessa **mai provata con
+otto client attaccati**. Provata con `pm2 restart asta` in fase `LOT_SEALED`, con otto stream
+osservatori che si riconnettono come fa `EventSource`:
+
+- **8/8 hanno ripreso a ricevere**, con **una** riconnessione ciascuno;
+- il riavvio del processo è durato **2 secondi**;
+- ⚠ **il buco più lungo visto da un client (10,1s) non era quello del riavvio**, ma un silenzio
+  normale dell'asta ottanta secondi dopo — il server manda uno snapshot solo alle transizioni. Cioè
+  **un riavvio a freddo è indistinguibile da un momento tranquillo**;
+- stato integro: `assignments` = `lots` = 33 esatti prima e dopo, nessuna offerta persa (224 → 247
+  mentre l'asta proseguiva), fase `WAITING_PICK`, `status` `LIVE`, **log degli errori vuoto**.
+
+### Due cose trovate per caso, che valgono più della risposta
+
+⚠ **La pagina del portale di un umano pesa 27 volte quella di un bot**: 378 KB di HTML contro 14 KB.
+Il listone con PMA, insight e obiettivi viaggia **dentro l'HTML** della pagina, e si rimanda a ogni
+ricarico. Non è un problema di banda — 8 × 378 KB all'apertura sono 3 MB — ma è la ragione degli 1,2
+secondi di caricamento, e va saputo prima di aggiungere colonne al pool.
+
+⚠ **Il tick dei bot muove le simulate `READY` e `LIVE`, non le `PAUSED`.** È scritto in
+`lib/engine/bots.ts` e spiega un comportamento che di fuori sembra un guasto: un'asta simulata messa
+in pausa **si congela e non riparte da sé**. Riprenderla la rimette in moto senza che nessuno tocchi
+i bot.
+
+### Il metodo, perché è quello a essere riusabile
+
+Le sonde erano tre file `.mts` usa-e-getta lanciati **sul server** con il `tsx` del repo, cancellati
+alla fine (`git status` pulito). Sul server e non da fuori per una ragione precisa: **firmano un
+cookie di sessione con `AUTH_SECRET`**, come fa `scripts/bots.ts`, e così il segreto di produzione
+non si è mosso dalla macchina. Le due sonde di lettura (stream e aperture) **non mandano nessuna
+azione**: girano accanto al tick in-app senza contendergli le decisioni dei bot, che altrimenti
+avrebbero prodotto rifiuti indistinguibili da un errore vero.
