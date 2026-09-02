@@ -67,7 +67,7 @@ export function AuctionSettingsFields({
               onClick={() => setSeats(option)}
               className={`min-w-16 rounded px-4 py-2 text-sm font-medium transition disabled:opacity-50 ${
                 seats === option
-                  ? "bg-background shadow-sm"
+                  ? "bg-background"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >

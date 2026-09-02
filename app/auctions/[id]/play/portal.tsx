@@ -41,16 +41,12 @@ import {
   type Scene,
 } from "@/lib/realtime/portal";
 import {
+  TEMPERATURE_VUOTE,
   alternative,
-  avvisi,
   haPma,
-  lottiAlMinimo,
-  lottiInformativi,
-  saldoRuoliChiusi,
   scartoPerPartecipante,
   scartoStrutturale,
-  scatto,
-  temperatura,
+  temperaturaPerRuolo,
 } from "@/lib/stats-plus";
 import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
 import { useAuctionStream, useHeartbeat } from "@/lib/realtime/use-auction-stream";
@@ -270,17 +266,9 @@ export function Portal({
   // un browser. Se un giorno servisse, il candidato è l'indice
   // `fascia → giocatori`, immutabile per tutta l'asta.
   const ruoloInCorso = snapshot.auction.currentRole;
-  const lottiRuolo =
-    statsPlus && ruoloInCorso !== null
-      ? lottiInformativi(snapshot, pool, budget, ruoloInCorso)
-      : [];
-  const temperaturaRuolo = statsPlus ? temperatura(lottiRuolo) : null;
-  const scattoRuolo = statsPlus ? scatto(lottiRuolo) : null;
-  const alMinimoRuolo =
-    statsPlus && ruoloInCorso !== null
-      ? lottiAlMinimo(snapshot, ruoloInCorso)
-      : { alMinimo: 0, totale: 0 };
-  const saldi = statsPlus ? saldoRuoliChiusi(snapshot, pool, budget) : [];
+  const temperature = statsPlus
+    ? temperaturaPerRuolo(snapshot, pool, budget)
+    : TEMPERATURE_VUOTE;
   const partecipanti = statsPlus
     ? scartoPerPartecipante(snapshot, pool, budget)
     : [];
@@ -288,7 +276,6 @@ export function Portal({
     statsPlus && lot !== null
       ? alternative(snapshot, pool, budget, lot.player.id)
       : null;
-  const avvisiRuolo = statsPlus ? avvisi(snapshot, pool, budget) : [];
   const strutturale = scartoStrutturale(snapshot, pool, budget);
   const poolHaPma = haPma(pool);
   const nomiMembri = new Map(
@@ -430,7 +417,7 @@ export function Portal({
           {/* ── Colonna 1: la rosa, con l'identità inglobata in testa ── */}
           {me !== null && (
             <section
-              className="bg-card min-w-0 overflow-hidden rounded-xl border shadow-sm lg:order-1"
+              className="bg-card min-w-0 overflow-hidden rounded-xl border lg:order-1"
               aria-label="La tua rosa"
             >
               {/*
@@ -482,7 +469,7 @@ export function Portal({
 
           {/* ── Colonna 2: gli altri ── */}
           <section
-            className="bg-card min-w-0 space-y-2 rounded-xl border p-4 shadow-sm lg:order-2"
+            className="bg-card min-w-0 space-y-2 rounded-xl border p-4 lg:order-2"
             aria-label="Gli altri partecipanti"
           >
             <h2 className="font-semibold">Gli altri</h2>
@@ -510,14 +497,11 @@ export function Portal({
           <main className="mx-auto w-full max-w-6xl p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
             <StatsPlusTab
               role={snapshot.auction.currentRole}
-              temperatura={temperaturaRuolo}
-              scatto={scattoRuolo}
-              alMinimo={alMinimoRuolo}
-              saldi={saldi}
+              temperature={temperature}
+              roleOrder={snapshot.auction.roleOrder}
               partecipanti={partecipanti}
               nomiMembri={nomiMembri}
               alternative={alternativeLotto}
-              avvisi={avvisiRuolo}
               strutturale={strutturale}
               lottoAperto={lot !== null}
               haPma={poolHaPma}
@@ -731,7 +715,7 @@ function Linguetta({
       disabled={disabled}
       className={cn(
         "rounded-md px-3 py-1.5 text-sm font-medium",
-        "data-[state=active]:bg-background data-[state=active]:shadow-sm",
+        "data-[state=active]:bg-background",
         "data-[state=inactive]:text-muted-foreground",
         disabled && "opacity-50",
       )}

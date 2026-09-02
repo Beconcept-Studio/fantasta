@@ -4104,13 +4104,23 @@ E non è solo una scelta di prodotto: è la forma vera dell'asta. Il motore rifi
 giocatore fuori dal ruolo corrente — *«in questo momento si chiamano i P, non i D»*. L'asta **è**
 sequenziale per ruolo, e il termometro segue quella sequenza invece di ignorarla.
 
-Il ponte fra i due orologi è il **saldo dei ruoli chiusi**: un ruolo che finisce non svanisce,
-consegna un residuo. «I portieri hanno preso il 6% del budget contro un piano del 10%: restano
-centosessanta crediti in più del previsto per quello che viene dopo.» ⚠ E si mostra **solo per i
-ruoli finiti**: a metà ruolo la spesa è un parziale, e confrontarla con l'intero piano direbbe
-sempre «avanza tantissimo». È un errore che si scrive da solo riusando la formula senza guardare
-quale ruolo si sta guardando, ed è per questo che il ruolo in corso non compare affatto invece di
-comparire con un numero che sembra vero.
+Il reset però non vuol dire che i ruoli chiusi spariscano dallo schermo: **stanno tutti in tabella,
+una riga per ciascuno**, e in fondo, staccato, il totale dell'asta. È la seconda forma di questo
+pannello, e nasce da una revisione dell'owner sulla prima: quando la temperatura era **un numero
+solo**, quello del ruolo in corso, il reset si vedeva come una cifra che a un certo punto della
+serata ricominciava da capo senza che niente lo dicesse. Con quattro righe una sotto l'altra, il
+reset *è* la tabella.
+
+⚠ **E il totale non contraddice le righe, per costruzione**: è la somma degli stessi lotti, non una
+seconda statistica. Con una mediana per ruolo, «il totale» e «la media dei ruoli» sarebbero stati due
+numeri diversi nella stessa colonna senza che niente lo spiegasse — è una delle ragioni per cui il
+numero è cambiato (vedi la sezione seguente). Un ruolo non ancora cominciato dice **`N/A`** e non
+`0%`: uno zero vorrebbe dire «si paga esattamente il PMA», che è un'affermazione, e qui non è stato
+chiuso ancora niente.
+
+La prima versione aveva anche un *saldo dei ruoli chiusi* — «i portieri hanno preso il 6% del budget
+contro un piano del 10%: restano centosessanta crediti» — e non c'è più: diceva la stessa direzione
+delle righe della tabella in un'unità diversa, a due centimetri da loro.
 
 ### Quali lotti parlano, e perché il filtro guarda l'ingresso
 
@@ -4128,26 +4138,64 @@ vale almeno cinque crediti di PMA. È una proprietà nota prima che il lotto si 
 seleziona niente in base a come è finito. Un giocatore da trenta crediti chiuso a uno **entra** — e
 quel dato è la cosa più informativa della serata.
 
-⚠ E i lotti scartati non spariscono: diventano un fatto loro. «Nove dei dodici lotti del ruolo sono
-andati al minimo» è a sua volta una temperatura — dice che il tavolo non sta contendendo niente — e
-si mostra accanto, invece di essere nascosta dentro una media.
+⚠ **Misurato dopo, e va detto perché ridimensiona tutta questa sezione**: da quando il numero è un
+rapporto fra somme, tenere o togliere il filtro sposta la temperatura di **al massimo un punto**
+(−45% contro −44%), perché i lotti che esclude valgono il **2% dei crediti** usciti dal tavolo. Il
+filtro non protegge più da niente — il peso lo fa già l'aritmetica — e resta perché non fa danno. La
+sua unica conseguenza va conosciuta: **la somma delle righe non è la spesa reale del tavolo**, e lo
+scarto è quel 2%.
 
-### Punti osservati, non una media
+### Un rapporto fra somme, non una mediana di rapporti
 
-Con quattro lotti chiusi, una media è un numero con la stessa faccia sicura di una calcolata su
-quaranta, e chi legge non può distinguerle. Quindi Stats+ non mostra un valore: mostra il minimo, la
-mediana, il massimo **e quanti lotti li producono**. «Te lo dico su 4» e «te lo dico su 40» sono due
-affermazioni diverse, e chi legge ha diritto di distinguerle.
+Questo è il cuore del pannello e **la sua seconda versione**, perché la prima si era misurata su un
+paio di lotti e si è vista sbagliare di segno.
+
+La prima teneva il minimo, la mediana e il massimo dei rapporti **lotto per lotto**. Lì un lotto da
+dieci crediti pesava quanto uno da cinquanta, e la mediana rispondeva a *«com'è andato il lotto
+tipico»* — mentre la domanda di chi guarda è *«quanti crediti sono usciti dal tavolo rispetto a
+quanti il foglio ne chiedeva»*. Non sono la stessa domanda, e **le due risposte possono avere segno
+opposto**: due lotti, uno da 50 crediti pagato 25 e uno da 10 pagato 20, danno **+25%** di mediana e
+**−25%** di rapporto fra le somme. È il caso che il primo test della funzione tiene fermo, ed è la
+giustificazione del cambio.
+
+Quindi la temperatura è `Σ pagato ÷ Σ atteso`, e il peso lo fa il budget invece del conteggio. Con
+la percentuale viaggiano sempre **i suoi addendi e il numero di lotti**: `pagato` e `atteso` rendono
+il numero verificabile a mano, e `n` distingue «te lo dico su 4» da «te lo dico su 40» — che era
+già il principio della prima versione, e resta.
 
 Non c'è nessuna contrazione verso un valore atteso, nessun prior, nessuna costante di
-regolarizzazione. Erano nella prima versione, ed erano il punto esatto in cui l'evidenza diventava
-stima: con pochi dati producevano un numero addolcito che sembrava una misura. Qui con pochi dati il
-termometro dice «pochi dati».
+regolarizzazione: erano nella versione più vecchia, ed erano il punto esatto in cui l'evidenza
+diventava stima. Con pochi dati il termometro dice «pochi dati».
 
-L'unica cosa che non sia aritmetica nuda sono **due avvisi**, e sono soglie su fatti: quando il ruolo
-in corso paga un quarto di PMA sopra o sotto quello precedente, e quando dentro lo stesso ruolo la
-seconda metà dei lotti sta un quarto sopra o sotto la prima. Il quarto è **scelto e non misurato**,
-ed è l'unico numero della funzione che andrà rivisto dopo la prima asta vera.
+### Il ruolo dall'inizio, e il ruolo adesso
+
+Una temperatura di ruolo su quaranta lotti risponde a com'è andato il reparto, non a **come si sta
+pagando in questo momento**. La prima versione lo diceva confrontando le due metà del ruolo — «prima
+−20%, adesso −1%» — e quella forma è stata bocciata da chi la usava, con la frase che conta:
+*«il prima/adesso non riesco a capire cosa sia»*. Aveva ragione: due percentuali accostate, senza
+niente che dicesse che una è il passato dello stesso reparto, si leggono come un intervallo o come un
+errore.
+
+La domanda però era buona, e torna in una forma che si legge da sé: **gli ultimi otto lotti del
+ruolo**, otto perché è un giro di tavolo. Non come percentuale accanto a un'altra percentuale, ma
+come **cifra in crediti sul giocatore che hai davanti** (vedi la sezione sui tre badge). Sotto gli
+otto lotti non esiste e lo dice: con sette chiusi «gli ultimi otto» sarebbero il ruolo intero, cioè
+lo stesso numero due volte.
+
+⚠ **Sono gli ultimi otto lotti di *quel ruolo*, non dell'asta**: subito dopo un cambio di ruolo, gli
+ultimi otto dell'asta sarebbero ancora del reparto precedente, e il numero direbbe come si pagavano i
+portieri a chi sta offrendo per un difensore.
+
+⚠ **E una finestra corta è pochi crediti, cosa che il numero non dichiara.** I lotti tardi di un
+ruolo sono strutturalmente i più piccoli, perché i giocatori si chiamano dal più caro in giù: in una
+misura sul foglio di riferimento gli ultimi cinque difensori facevano 29 crediti pagati su 26
+attesi, e quel +12% veniva poi moltiplicato per un giocatore da 44. Non è un difetto da correggere
+con una formula — è la natura di una finestra corta — ed è la ragione per cui quel numero **non sta
+mai da solo**, ma accanto al PMA del foglio e alla temperatura del ruolo.
+
+Con questa forma sono usciti anche i **due avvisi** della prima versione, e la soglia del quarto di
+PMA con loro: il «cambio d'aria» ripeteva a parole una differenza fra due righe adiacenti della
+tabella, e lo «scatto» era il prima/adesso che non si leggeva.
 
 ### Le alternative, e la regola che non è simmetrica
 
@@ -4175,23 +4223,50 @@ slot più giù, titolarità almeno pari — è la risposta a «posso rischiare u
 Il ripiego vive nella tab e non nel modale d'offerta, ed è una decisione: è una cosa da leggere
 confrontando, non da decidere in venti secondi con la tastiera aperta.
 
-### Dove si vede, e la riga che non deve andare a capo
+### Dove si vede: tre cifre in crediti sotto il campo
 
-Stats+ ha due case. Nel **modale d'offerta**, sotto il campo, c'è una riga sola — e da schermo largo
-in su il modale si allarga e le affianca una colonna con quattro riquadri. Nella **tab Stats+** del
-portale c'è tutto, ripiego e tabella dei partecipanti compresi.
+Stats+ ha due case. Nel **modale d'offerta**, sotto il campo, ci sono **tre badge** — e da schermo
+largo in su il modale si allarga e affianca una colonna con quattro riquadri. Nella **tab Stats+**
+del portale c'è tutto, ripiego e tabella dei partecipanti compresi.
 
-Due dettagli sono più vincolanti di quanto sembri. Il primo: la riga sta **sotto** il campo
-dell'offerta e non sopra. Sopra, un'informazione arriva *prima* della decisione e la sostituisce;
-sotto, l'ordine di lettura si inverte — prima vedi la cifra che stai scrivendo, poi il contesto. Chi
-lo vuole lo trova, chi ha già deciso ha già digitato.
+I tre badge sono lo stesso PMA letto tre volte, **in crediti e non in percentuale**:
 
-Il secondo: è **una riga sola**, e il limite è di caratteri, non di intenzioni. Oltre ~45 caratteri
-la riga va a capo, il blocco raddoppia d'altezza e rimette esattamente i quarantaquattro pixel che
-una macro precedente aveva restituito al campo — che con la tastiera aperta sono la risorsa scarsa.
-Per questo la riga non è una stringa scritta a mano ma una composizione che si misura: testa (il
-livello del ruolo, o i due regimi quando c'è uno scatto) più coda (il conteggio delle alternative), e
-**se non ci sta tutto cade la coda, mai la testa**.
+```
+PMA: 44                    PMA Ruolo: 37   PMA Last 8: 49
+```
+
+quanto dice il foglio; quanto vale con la temperatura del reparto dall'inizio; quanto vale con quella
+degli ultimi otto lotti. Il senso di darne tre invece di uno è che **nessuno dei tre è il numero
+giusto**: la loro distanza è l'informazione, e la decisione la prende chi offre. Per la stessa ragione
+sono **tutti dello stesso grigio** — un badge in pieno direbbe «segui questo» — e **nessuno porta una
+percentuale**: la differenza fra 44 e 37 è già visibile, e una percentuale accanto chiederebbe una
+moltiplicazione a chi ha venti secondi di countdown. Le percentuali stanno nella tabella, dove si
+guarda il quadro invece di decidere un importo.
+
+⚠ **Questa è la parte scomoda del pannello, e va scritta.** Una cifra offribile accanto al campo
+dell'offerta è esattamente ciò che una decisione precedente aveva **tolto**, con la ragione che «un
+numero suggerito a due centimetri dal numero da scrivere è un suggerimento che qualcuno segue senza
+pensarci». La differenza è che questi nascono dall'asta viva e non dal foglio, quindi non possono
+diventare un prezzo di listino che otto persone leggono uguale — ma restano cifre da offrire, ed è
+una scelta dell'owner fatta guardando il mock, non una conseguenza entrata di contrabbando.
+
+Due dettagli di forma sono più vincolanti di quanto sembri. Il primo: i badge stanno **sotto** il
+campo e non sopra. Sopra, un'informazione arriva *prima* della decisione e la sostituisce; sotto,
+l'ordine di lettura si inverte — prima vedi la cifra che stai scrivendo, poi il contesto.
+
+Il secondo: **una riga sola, e il limite è misurato**. Il blocco pesa 29px contro i 27 della riga di
+testo che ha sostituito, e i tre badge occupano 268px dei 361 disponibili su uno schermo da 393:
+nessun ritorno a capo, e i quarantaquattro pixel che una macro precedente aveva restituito al campo
+restano dov'erano. Non è una stima: due forme alternative sono state scartate proprio su quella
+misura — tre valori incolonnati costavano **+43px**, cioè quei quarantaquattro pixel ricomprati senza
+accorgersene.
+
+⚠ E **niente `box-shadow` in nessuno dei due posti**, che da questa macro vale per tutta
+l'applicazione: la profondità la fanno bordi e fondi. Il ruolo in corso nella tabella si segna con un
+bordo sinistro da 2px, il totale con una riga più marcata. L'unica ombra che stava *facendo* un
+lavoro — quella che diceva «questa riga è sollevata» mentre si trascina l'ordine dei ruoli — è
+diventata un bordo colorato, non è stata semplicemente cancellata. I contorni di focus da tastiera
+non si toccano: Tailwind li implementa con un `box-shadow`, ma sono accessibilità, non decorazione.
 
 ⚠ Sotto la larghezza in cui la colonna compare, il modale **non cambia di un pixel**: lì è un foglio
 che sale dal basso su uno schermo dove l'altezza è contesa dalla tastiera. La colonna di sinistra

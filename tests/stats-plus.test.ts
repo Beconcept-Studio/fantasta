@@ -2,24 +2,22 @@ import { describe, expect, it } from "vitest";
 
 import type { Role } from "@/lib/domain";
 import {
+  FINESTRA_RECENTE,
   MIN_ANDATI_PRIMA_DI_ALLARGARE,
-  MIN_LOTTI_PER_PARTE,
-  SOGLIA_AVVISO,
   SOGLIA_LOTTO_INFORMATIVO,
   alternative,
   andatiStessaFascia,
-  avvisi,
   haPma,
-  lottiAlMinimo,
   lottiInformativi,
   pct,
   pianoPerRuolo,
-  saldoRuoliChiusi,
-  scartoStrutturale,
+  pmaAsta,
   scalaSlotPerRuolo,
   scartoPerPartecipante,
-  scatto,
+  scartoStrutturale,
   temperatura,
+  temperaturaPerRuolo,
+  temperaturaRecente,
 } from "@/lib/stats-plus";
 import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
 
@@ -153,9 +151,13 @@ describe("§7.3 — cambiare le buste vive non cambia un solo numero", () => {
       piano: pianoPerRuolo(pool),
       lotti,
       temperatura: temperatura(lotti),
-      saldo: saldoRuoliChiusi(s, pool, BUDGET),
-      scatto: scatto(lotti),
-      avvisi: avvisi(s, pool, BUDGET),
+      temperature: temperaturaPerRuolo(s, pool, BUDGET),
+      // Con una finestra di 2 la coda esiste anche in questo stato: passarle
+      // `FINESTRA_RECENTE` qui darebbe `null` in entrambi gli stati, cioè un
+      // confronto fra due assenze.
+      recente: temperaturaRecente(lotti, 2),
+      partecipanti: scartoPerPartecipante(s, pool, BUDGET),
+      strutturale: scartoStrutturale(s, pool, BUDGET),
     };
   }
 
@@ -283,229 +285,6 @@ describe("§3.4 — informativo si decide dal PMA del chiamato, non da come è f
   });
 });
 
-// ─── §3.1 e §3.3 — la temperatura del ruolo in corso ─────────────────────────
-
-describe("§3.1 — la temperatura si azzera a ogni ruolo", () => {
-  const pool: PoolPlayer[] = [
-    p("gk1", { role: "P", pma: 10 }),
-    p("gk2", { role: "P", pma: 10 }),
-    p("d1", { role: "D", pma: 10 }),
-    p("d2", { role: "D", pma: 10 }),
-    p("d3", { role: "D", pma: 10 }),
-  ];
-
-  // Portieri a metà prezzo (50 su 50 attesi × 0,5), difensori a 1,2×.
-  const s = snapshot({
-    auction: { ...snapshot().auction, currentRole: "D", roleOrder: ["P", "D", "C", "A"] },
-    members: [
-      member(ME, 0, {
-        roster: rosaDi([
-          { playerId: "gk1", role: "P", price: 25, lotSeq: 1 },
-          { playerId: "d1", role: "D", price: 60, lotSeq: 3 },
-        ]),
-      }),
-      member(OTHER, 1, {
-        roster: rosaDi([
-          { playerId: "gk2", role: "P", price: 25, lotSeq: 2 },
-          { playerId: "d2", role: "D", price: 60, lotSeq: 4 },
-        ]),
-      }),
-      member(THIRD, 2, {
-        roster: rosaDi([{ playerId: "d3", role: "D", price: 60, lotSeq: 5 }]),
-      }),
-    ],
-  });
-
-  it("i portieri a 0,5× non raffreddano i difensori a 1,2×", () => {
-    const d = temperatura(lottiInformativi(s, pool, BUDGET, "D"));
-    expect(d).not.toBeNull();
-    // 60 crediti su 50 attesi = 1,2×, cioè +20%.
-    expect(pct(d!.mediana)).toBe(20);
-    // ⚠ La media dei due ruoli sarebbe 0,85×: è il numero che un termometro
-    // cumulativo mostrerebbe mentre i difensori schizzano.
-    expect(pct(d!.mediana)).not.toBe(-15);
-  });
-
-  it("i portieri restano leggibili per conto loro, con il loro numero di lotti", () => {
-    const gk = temperatura(lottiInformativi(s, pool, BUDGET, "P"));
-    expect(pct(gk!.mediana)).toBe(-50);
-    expect(gk!.n).toBe(2);
-  });
-
-  it("«su quanti» viaggia col numero: «te lo dico su 2» e «su 40» sono due affermazioni diverse", () => {
-    expect(temperatura(lottiInformativi(s, pool, BUDGET, "D"))!.n).toBe(3);
-  });
-
-  it("nessun lotto informativo non è uno zero, è un `null` che la UI traduce in una frase", () => {
-    expect(temperatura(lottiInformativi(s, pool, BUDGET, "A"))).toBeNull();
-  });
-});
-
-describe("§3.3 — lo scatto non si calcola sotto gli 8 lotti informativi", () => {
-  const pool = Array.from({ length: 10 }, (_, i) =>
-    p(`d${i}`, { role: "D", pma: 10 }),
-  );
-
-  /** `n` lotti nel ruolo D, coi prezzi dati, in ordine di `lotSeq`. */
-  function statoConPrezzi(prezzi: number[]) {
-    return snapshot({
-      auction: { ...snapshot().auction, currentRole: "D" },
-      members: [
-        member(ME, 0, {
-          roster: rosaDi(
-            prezzi.map((price, i) => ({
-              playerId: `d${i}`,
-              role: "D" as Role,
-              price,
-              lotSeq: i + 1,
-            })),
-          ),
-        }),
-        member(OTHER, 1),
-      ],
-    });
-  }
-
-  it("con 6 lotti restano i punti osservati e nessuno scatto", () => {
-    const lotti = lottiInformativi(statoConPrezzi([25, 25, 25, 60, 60, 60]), pool, BUDGET, "D");
-    expect(lotti).toHaveLength(6);
-    expect(scatto(lotti)).toBeNull();
-  });
-
-  it("con 8 si calcola: prima metà contro seconda, in ordine di lotto", () => {
-    // Primi 4 a 25 su 50 = 0,5× ; ultimi 4 a 60 su 50 = 1,2×.
-    const lotti = lottiInformativi(
-      statoConPrezzi([25, 25, 25, 25, 60, 60, 60, 60]),
-      pool,
-      BUDGET,
-      "D",
-    );
-    const s = scatto(lotti);
-    expect(s).not.toBeNull();
-    expect(pct(s!.prima)).toBe(-50);
-    expect(pct(s!.adesso)).toBe(20);
-  });
-
-  it("⚠ ordina per `lotSeq` e non per l'ordine in cui le rose lo consegnano", () => {
-    // Le stesse cifre, ma la rosa le porta al contrario: se lo scatto leggesse
-    // l'ordine dell'array invece di `lotSeq`, prima e adesso si scambierebbero.
-    const alContrario = snapshot({
-      auction: { ...snapshot().auction, currentRole: "D" },
-      members: [
-        member(ME, 0, {
-          roster: rosaDi(
-            [60, 60, 60, 60, 25, 25, 25, 25].map((price, i) => ({
-              playerId: `d${i}`,
-              role: "D" as Role,
-              price,
-              // `lotSeq` decrescente: il lotto 8 è consegnato per primo.
-              lotSeq: 8 - i,
-            })),
-          ),
-        }),
-        member(OTHER, 1),
-      ],
-    });
-    const s = scatto(lottiInformativi(alContrario, pool, BUDGET, "D"));
-    expect(pct(s!.prima)).toBe(-50);
-    expect(pct(s!.adesso)).toBe(20);
-  });
-});
-
-// ─── §3.2 — il saldo, solo sui ruoli finiti ──────────────────────────────────
-
-describe("§3.2 — il saldo si mostra solo per i ruoli chiusi", () => {
-  // Piano: P vale 20 punti su 100 totali = 20%; D vale 80 = 80%.
-  const pool: PoolPlayer[] = [
-    p("gk1", { role: "P", pma: 10 }),
-    p("gk2", { role: "P", pma: 10 }),
-    p("d1", { role: "D", pma: 40 }),
-    p("d2", { role: "D", pma: 40 }),
-  ];
-
-  const s = snapshot({
-    auction: { ...snapshot().auction, currentRole: "D", roleOrder: ["P", "D", "C", "A"] },
-    members: [
-      member(ME, 0, {
-        roster: rosaDi([
-          { playerId: "gk1", role: "P", price: 30, lotSeq: 1 },
-          { playerId: "d1", role: "D", price: 100, lotSeq: 3 },
-        ]),
-      }),
-      member(OTHER, 1, {
-        roster: rosaDi([{ playerId: "gk2", role: "P", price: 20, lotSeq: 2 }]),
-      }),
-    ],
-  });
-
-  it("il ruolo chiuso consegna il suo residuo", () => {
-    const saldi = saldoRuoliChiusi(s, pool, BUDGET);
-    expect(saldi.map((x) => x.role)).toEqual(["P"]);
-    // Piano P = 20% di (500 × 2 membri) = 200. Speso = 50. Restano 150.
-    expect(saldi[0]).toMatchObject({ piano: 200, speso: 50, saldo: 150 });
-  });
-
-  /**
-   * ⚠ **A metà ruolo `speso(R)` è un parziale, e confrontarlo con l'intero
-   * `piano(R)` direbbe sempre «avanza tantissimo»** (§3.2). È un errore che si
-   * scrive da solo riusando la formula senza guardare quale ruolo si sta
-   * guardando, ed è per questo che il ruolo in corso non compare **affatto**
-   * invece di comparire con un numero che sembra vero.
-   */
-  it("il ruolo in corso non produce nessun saldo, nemmeno uno sbagliato", () => {
-    expect(saldoRuoliChiusi(s, pool, BUDGET).map((x) => x.role)).not.toContain("D");
-  });
-
-  it("nel saldo entra anche il manuale: quei crediti sono stati spesi davvero", () => {
-    // Il saldo è contabilità, non temperatura: un `manualAssign` toglie crediti
-    // dal tavolo come qualunque altro. È la distinzione con `lottiInformativi`,
-    // che invece lo scarta perché non è un prezzo di mercato.
-    const conManuale = snapshot({
-      auction: { ...s.auction },
-      members: [
-        member(ME, 0, {
-          roster: rosaDi([{ playerId: "gk1", role: "P", price: 30, lotSeq: null }]),
-        }),
-        member(OTHER, 1),
-      ],
-    });
-    expect(saldoRuoliChiusi(conManuale, pool, BUDGET)[0].speso).toBe(30);
-  });
-
-  /**
-   * ⚠ **Tutti e quattro, non solo quelli in cui qualcuno ha comprato** (§8): ad
-   * asta finita nessun ruolo è «in corso», quindi per nessuno vale la ragione
-   * per cui il saldo si tace. Un ruolo senza acquisti esce con `speso: 0` e il
-   * suo piano intero — che in un'asta vera non capita, e in una interrotta a
-   * metà è la cosa giusta da leggere.
-   */
-  it("ad asta COMPLETED sono chiusi tutti i ruoli dell'ordine", () => {
-    const finita = snapshot({
-      auction: { ...s.auction, status: "COMPLETED", currentRole: null },
-      members: s.members,
-    });
-    const saldi = saldoRuoliChiusi(finita, pool, BUDGET);
-    expect(saldi.map((x) => x.role)).toEqual(["P", "D", "C", "A"]);
-    // D adesso c'è, ed è il ruolo che a metà asta veniva taciuto.
-    expect(saldi.find((x) => x.role === "D")).toMatchObject({ speso: 100 });
-  });
-
-  /**
-   * ⚠ **Ad asta non ancora partita non c'è nessun saldo**, e non è lo stesso
-   * caso di sopra malgrado `currentRole` sia `null` in entrambi: qui i ruoli non
-   * sono chiusi, semplicemente non sono ancora cominciati. È la distinzione che
-   * `ruoliChiusi` fa guardando `status`, e senza la quale un'asta in setup
-   * mostrerebbe quattro saldi pieni come se il tavolo avesse risparmiato tutto.
-   */
-  it("ad asta non ancora partita non c'è nessun saldo, che è un caso diverso", () => {
-    const inSetup = snapshot({
-      auction: { ...s.auction, status: "READY", currentRole: null },
-      members: s.members,
-    });
-    expect(saldoRuoliChiusi(inSetup, pool, BUDGET)).toEqual([]);
-  });
-});
-
 // ─── §2 — il piano si legge dal foglio, non è una costante ───────────────────
 
 describe("§2 — la quota di piano viene dal foglio caricato", () => {
@@ -536,105 +315,6 @@ describe("§2 — la quota di piano viene dal foglio caricato", () => {
       C: 0,
       A: 0,
     });
-  });
-});
-
-// ─── §3.5 — le due soglie, sui casi limite ───────────────────────────────────
-
-describe("§3.5 — le soglie sono dichiarate, e i casi limite le fissano", () => {
-  const pool = Array.from({ length: 20 }, (_, i) =>
-    p(`d${i}`, { role: "D", pma: 10 }),
-  );
-  const poolConP = [
-    ...pool,
-    ...Array.from({ length: 8 }, (_, i) => p(`gk${i}`, { role: "P", pma: 10 })),
-  ];
-
-  /** Prezzi nel ruolo D (e opzionalmente in P), in ordine di lotto. */
-  function stato(d: number[], gk: number[] = []) {
-    return snapshot({
-      auction: { ...snapshot().auction, currentRole: "D", roleOrder: ["P", "D", "C", "A"] },
-      members: [
-        member(ME, 0, {
-          roster: rosaDi([
-            ...gk.map((price, i) => ({
-              playerId: `gk${i}`,
-              role: "P" as Role,
-              price,
-              lotSeq: i + 1,
-            })),
-            ...d.map((price, i) => ({
-              playerId: `d${i}`,
-              role: "D" as Role,
-              price,
-              lotSeq: gk.length + i + 1,
-            })),
-          ]),
-        }),
-        member(OTHER, 1),
-      ],
-    });
-  }
-
-  it("la soglia è 0,25 e sta scritta, non sparsa", () => {
-    expect(SOGLIA_AVVISO).toBe(0.25);
-    expect(MIN_LOTTI_PER_PARTE).toBe(4);
-  });
-
-  it("esattamente 0,25 di scatto suona: la soglia è inclusiva", () => {
-    // Primi 4 a 50 su 50 = 1,00× ; ultimi 4 a 62,5 → 1,25×. Differenza: 0,25.
-    const s = stato([50, 50, 50, 50, 62.5, 62.5, 62.5, 62.5]);
-    expect(avvisi(s, poolConP, BUDGET).map((a) => a.tipo)).toContain("SCATTO");
-  });
-
-  it("appena sotto non suona, e non si inventa un terzo stato per riempire lo spazio", () => {
-    // Ultimi 4 a 62 → 1,24×. Differenza: 0,24.
-    const s = stato([50, 50, 50, 50, 62, 62, 62, 62]);
-    expect(avvisi(s, poolConP, BUDGET)).toEqual([]);
-  });
-
-  it("con 3 lotti per parte non suona nemmeno con uno scatto enorme", () => {
-    const s = stato([10, 10, 10, 100, 100, 100]);
-    expect(avvisi(s, poolConP, BUDGET)).toEqual([]);
-  });
-
-  it("il cambio d'aria confronta il ruolo in corso col precedente", () => {
-    // Portieri a 25/50 = 0,5× ; difensori a 50/50 = 1,0×. Differenza: 0,50.
-    const s = stato([50, 50, 50, 50], [25, 25, 25, 25]);
-    expect(avvisi(s, poolConP, BUDGET).map((a) => a.tipo)).toContain("CAMBIO_ARIA");
-  });
-
-  it("col ruolo precedente sotto i 4 lotti informativi non si confronta niente", () => {
-    const s = stato([50, 50, 50, 50], [25, 25, 25]);
-    expect(avvisi(s, poolConP, BUDGET).map((a) => a.tipo)).not.toContain(
-      "CAMBIO_ARIA",
-    );
-  });
-
-  it("sul primo ruolo dell'ordine non c'è nessun cambio d'aria da annunciare", () => {
-    const primoRuolo = snapshot({
-      auction: {
-        ...snapshot().auction,
-        currentRole: "P",
-        roleOrder: ["P", "D", "C", "A"],
-      },
-      members: [
-        member(ME, 0, {
-          roster: rosaDi(
-            [10, 10, 10, 10].map((price, i) => ({
-              playerId: `gk${i}`,
-              role: "P" as Role,
-              price,
-              lotSeq: i + 1,
-            })),
-          ),
-        }),
-        member(OTHER, 1),
-      ],
-    });
-    expect(avvisi(primoRuolo, poolConP, BUDGET).map((a) => a.tipo)).not.toContain(
-      "CAMBIO_ARIA",
-    );
   });
 });
 
@@ -1294,46 +974,6 @@ describe("§2.2 — lo scarto strutturale si calcola, non si scrive", () => {
   });
 });
 
-describe("§3.4 — i lotti al minimo sono un fatto loro, non un buco", () => {
-  const pool: PoolPlayer[] = [
-    p("caro1", { role: "D", pma: 6 }),
-    p("caro2", { role: "D", pma: 6 }),
-    p("misero", { role: "D", pma: 0.2 }),
-  ];
-
-  it("conta i lotti chiusi a 1 credito, informativi o no", () => {
-    const s = snapshot({
-      auction: { ...snapshot().auction, currentRole: "D" },
-      members: [
-        member(ME, 0, {
-          roster: rosaDi([
-            { playerId: "caro1", role: "D", price: 1, lotSeq: 1 },
-            { playerId: "caro2", role: "D", price: 30, lotSeq: 2 },
-            // ⚠ Scartato dal termometro (PMA da 1 credito) ma **contato qui**:
-            // la domanda è «quanto si sta contendendo», e a quella risponde.
-            { playerId: "misero", role: "D", price: 1, lotSeq: 3 },
-          ]),
-        }),
-      ],
-    });
-    expect(lottiAlMinimo(s, "D")).toEqual({ alMinimo: 2, totale: 3 });
-    // E il termometro ne vede due, non tre: i due insiemi sono diversi apposta.
-    expect(lottiInformativi(s, pool, BUDGET, "D")).toHaveLength(2);
-  });
-
-  it("le assegnazioni manuali non contano: non sono lotti", () => {
-    const s = snapshot({
-      auction: { ...snapshot().auction, currentRole: "D" },
-      members: [
-        member(ME, 0, {
-          roster: rosaDi([{ playerId: "caro1", role: "D", price: 1, lotSeq: null }]),
-        }),
-      ],
-    });
-    expect(lottiAlMinimo(s, "D")).toEqual({ alMinimo: 0, totale: 0 });
-  });
-});
-
 // ─── §8 — due stati che si assomigliano e non sono la stessa cosa ────────────
 
 describe("§8 — «ancora nessun lotto» e «serve un listone» sono stati diversi", () => {
@@ -1364,5 +1004,221 @@ describe("§8 — «ancora nessun lotto» e «serve un listone» sono stati dive
     expect(temperatura(lottiInformativi(vuoto, senzaPma, BUDGET, "D"))).toBeNull();
     // Identici lì, distinguibili qui:
     expect([haPma(conPma), haPma(senzaPma)]).toEqual([true, false]);
+  });
+});
+
+// ─── M23 — la temperatura è un rapporto fra somme ────────────────────────────
+
+describe("la temperatura è Σ pagato ÷ Σ atteso, non la mediana dei rapporti", () => {
+  /**
+   * ⚠ **Il caso è costruito perché le due statistiche diano risposte
+   * opposte**, altrimenti il test non direbbe niente. Due lotti: uno grosso
+   * pagato metà, uno piccolo pagato il doppio.
+   *
+   * - mediana dei rapporti: (0,5 + 2,0) / 2 = **1,25×**, cioè «+25%»
+   * - rapporto fra le somme: 45 / 60 = **0,75×**, cioè «−25%»
+   *
+   * La seconda è quella vera per il budget: dal tavolo sono usciti 45 crediti
+   * dove il foglio ne chiedeva 60. La prima dà lo stesso peso a un lotto da 50
+   * crediti e a uno da 10.
+   */
+  const pool: PoolPlayer[] = [
+    p("grosso", { role: "D", pma: 10 }), // 50 crediti attesi
+    p("piccolo", { role: "D", pma: 2 }), // 10 crediti attesi
+  ];
+  const s = snapshot({
+    auction: { ...snapshot().auction, currentRole: "D" },
+    members: [
+      member(ME, 0, {
+        roster: rosaDi([
+          { playerId: "grosso", role: "D", price: 25, lotSeq: 1 },
+          { playerId: "piccolo", role: "D", price: 20, lotSeq: 2 },
+        ]),
+      }),
+      member(OTHER, 1),
+    ],
+  });
+
+  it("un lotto da 50 crediti pesa più di uno da 10", () => {
+    const t = temperatura(lottiInformativi(s, pool, BUDGET, "D"));
+    expect(t).not.toBeNull();
+    expect(pct(t!.rapporto)).toBe(-25);
+    // ⚠ La mediana dei rapporti direbbe il contrario, col segno sbagliato.
+    expect(pct(t!.rapporto)).not.toBe(25);
+  });
+
+  it("porta i suoi addendi, non solo il rapporto: il numero resta verificabile", () => {
+    const t = temperatura(lottiInformativi(s, pool, BUDGET, "D"))!;
+    expect({ n: t.n, pagato: t.pagato, atteso: t.atteso }).toEqual({
+      n: 2,
+      pagato: 45,
+      atteso: 60,
+    });
+  });
+
+  it("nessun lotto informativo resta `null`, non uno zero", () => {
+    expect(temperatura(lottiInformativi(s, pool, BUDGET, "A"))).toBeNull();
+  });
+});
+
+describe("una riga per ruolo più il totale, e il totale è la somma dei ruoli", () => {
+  const pool: PoolPlayer[] = [
+    p("gk1", { role: "P", pma: 10 }),
+    p("gk2", { role: "P", pma: 10 }),
+    p("d1", { role: "D", pma: 10 }),
+    p("d2", { role: "D", pma: 10 }),
+  ];
+  // Portieri a 0,5× (25 su 50), difensori a 1,2× (60 su 50).
+  const s = snapshot({
+    auction: { ...snapshot().auction, currentRole: "D", roleOrder: ["P", "D", "C", "A"] },
+    members: [
+      member(ME, 0, {
+        roster: rosaDi([
+          { playerId: "gk1", role: "P", price: 25, lotSeq: 1 },
+          { playerId: "d1", role: "D", price: 60, lotSeq: 3 },
+        ]),
+      }),
+      member(OTHER, 1, {
+        roster: rosaDi([
+          { playerId: "gk2", role: "P", price: 25, lotSeq: 2 },
+          { playerId: "d2", role: "D", price: 60, lotSeq: 4 },
+        ]),
+      }),
+    ],
+  });
+
+  it("ogni ruolo ha il suo numero, e i portieri non raffreddano i difensori", () => {
+    const { perRuolo } = temperaturaPerRuolo(s, pool, BUDGET);
+    expect(pct(perRuolo.P!.rapporto)).toBe(-50);
+    expect(pct(perRuolo.D!.rapporto)).toBe(20);
+  });
+
+  it("un ruolo non ancora iniziato è `null`, che la tabella scrive N/A", () => {
+    const { perRuolo } = temperaturaPerRuolo(s, pool, BUDGET);
+    expect(perRuolo.C).toBeNull();
+    expect(perRuolo.A).toBeNull();
+  });
+
+  /**
+   * ⚠ **È l'invariante che la mediana non poteva avere**, e la ragione per cui
+   * il totale può stare nella stessa tabella dei ruoli: sono gli stessi lotti
+   * sommati una volta in più. Con due mediane, «il totale» e «la media dei
+   * ruoli» sarebbero stati due numeri diversi senza che nessuno lo dicesse.
+   */
+  it("il totale è esattamente la somma dei ruoli, per costruzione", () => {
+    const { perRuolo, totale } = temperaturaPerRuolo(s, pool, BUDGET);
+    const righe = [perRuolo.P, perRuolo.D, perRuolo.C, perRuolo.A].filter(
+      (x) => x !== null,
+    );
+    expect(totale!.pagato).toBe(righe.reduce((somma, r) => somma + r!.pagato, 0));
+    expect(totale!.atteso).toBe(righe.reduce((somma, r) => somma + r!.atteso, 0));
+    expect(totale!.n).toBe(righe.reduce((somma, r) => somma + r!.n, 0));
+    // 170 pagati su 200 attesi.
+    expect(pct(totale!.rapporto)).toBe(-15);
+  });
+
+  it("ad asta senza nessun lotto chiuso anche il totale è `null`", () => {
+    const vuoto = snapshot({
+      auction: { ...snapshot().auction, currentRole: "P" },
+      members: [member(ME, 0), member(OTHER, 1)],
+    });
+    expect(temperaturaPerRuolo(vuoto, pool, BUDGET).totale).toBeNull();
+  });
+});
+
+describe("la finestra recente: gli ultimi lotti del ruolo, o niente", () => {
+  const pool = Array.from({ length: 14 }, (_, i) => p(`d${i}`, { role: "D", pma: 10 }));
+
+  /** `n` lotti del ruolo D coi prezzi dati, in ordine di `lotSeq`. */
+  function conPrezzi(prezzi: number[]) {
+    return snapshot({
+      auction: { ...snapshot().auction, currentRole: "D" },
+      members: [
+        member(ME, 0, {
+          roster: rosaDi(
+            prezzi.map((price, i) => ({
+              playerId: `d${i}`,
+              role: "D" as Role,
+              price,
+              lotSeq: i + 1,
+            })),
+          ),
+        }),
+        member(OTHER, 1),
+      ],
+    });
+  }
+
+  it("la finestra è 8: un lotto per partecipante", () => {
+    expect(FINESTRA_RECENTE).toBe(8);
+  });
+
+  it("sotto la finestra è `null`: con 7 lotti «gli ultimi 8» sarebbero il ruolo intero", () => {
+    const lotti = lottiInformativi(conPrezzi([25, 25, 25, 25, 25, 25, 25]), pool, BUDGET, "D");
+    expect(lotti).toHaveLength(7);
+    expect(temperaturaRecente(lotti)).toBeNull();
+  });
+
+  it("con la finestra piena guarda solo la coda, e ignora com'era partito il ruolo", () => {
+    // 4 lotti freddi (25 su 50) e 8 caldi (60 su 50): il ruolo intero sta in
+    // mezzo, la finestra vede solo i caldi.
+    const lotti = lottiInformativi(
+      conPrezzi([25, 25, 25, 25, 60, 60, 60, 60, 60, 60, 60, 60]),
+      pool,
+      BUDGET,
+      "D",
+    );
+    expect(pct(temperatura(lotti)!.rapporto)).toBe(-3);
+    expect(pct(temperaturaRecente(lotti)!.rapporto)).toBe(20);
+  });
+
+  it("⚠ prende la coda per `lotSeq`, non l'ordine in cui le rose consegnano", () => {
+    // Le stesse cifre di sopra, ma consegnate al contrario: `lotSeq` 12 sul
+    // primo elemento dell'array e 1 sull'ultimo.
+    //
+    // ⚠ **I due ordini danno due risposte diverse, ed è questo che rende il
+    // test una prova.** Leggendo l'array, `slice(-8)` prenderebbe gli otto 60
+    // e direbbe +20%. Leggendo `lotSeq`, la coda sono i lotti dal 5° al 12°,
+    // cioè quattro 60 e quattro 25: 340 pagati su 400 attesi, −15%.
+    const alContrario = snapshot({
+      auction: { ...snapshot().auction, currentRole: "D" },
+      members: [
+        member(ME, 0, {
+          roster: rosaDi(
+            [25, 25, 25, 25, 60, 60, 60, 60, 60, 60, 60, 60].map((price, i) => ({
+              playerId: `d${i}`,
+              role: "D" as Role,
+              price,
+              lotSeq: 12 - i,
+            })),
+          ),
+        }),
+        member(OTHER, 1),
+      ],
+    });
+    const lotti = lottiInformativi(alContrario, pool, BUDGET, "D");
+    expect(pct(temperaturaRecente(lotti)!.rapporto)).toBe(-15);
+    expect(pct(temperaturaRecente(lotti)!.rapporto)).not.toBe(20);
+  });
+});
+
+describe("`pmaAsta`: il PMA in crediti, corretto per la temperatura", () => {
+  it("un ruolo che paga sotto il foglio abbassa la cifra", () => {
+    // PMA 8,8% su 500 = 44 crediti; a −15% fa 37.
+    expect(pmaAsta(8.8, BUDGET, 560 / 660)).toBe(37);
+  });
+
+  it("un ruolo che paga sopra il foglio la alza", () => {
+    expect(pmaAsta(8.8, BUDGET, 29 / 26)).toBe(49);
+  });
+
+  /**
+   * ⚠ **Zero non è un'offerta valida**, e un arrotondamento a zero metterebbe
+   * accanto al campo una cifra che il server rifiuterebbe. `pmaCrediti` ha già
+   * il suo pavimento a 1 per la stessa ragione; qui serve di nuovo, perché la
+   * moltiplicazione può scendere sotto mezzo credito.
+   */
+  it("non scende sotto un credito, nemmeno su un giocatore da niente", () => {
+    expect(pmaAsta(0.2, BUDGET, 0.4)).toBe(1);
   });
 });

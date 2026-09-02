@@ -131,7 +131,7 @@ function SortableRole({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`bg-card flex items-center gap-3 rounded-md border p-2 ${
-        isDragging ? "z-10 shadow-lg" : ""
+        isDragging ? "border-primary z-10" : ""
       }`}
     >
       <button

@@ -2,20 +2,17 @@
 
 import { IconaObiettivo } from "@/components/auction/icona-obiettivo";
 import { Badge } from "@/components/ui/badge";
-import { CARMY_SCALA_MAX, ROLE_LABELS, type Role } from "@/lib/domain";
+import { CARMY_SCALA_MAX, ROLE_LABELS, pmaCrediti, type Role } from "@/lib/domain";
 import type {
-  AlMinimo,
   Alternativa,
   Alternative,
   AndatiStessaFascia,
-  Avviso,
-  Saldo,
   ScartoPartecipante,
   ScartoStrutturale,
-  Scatto,
   Temperatura,
+  TemperaturePerRuolo,
 } from "@/lib/stats-plus";
-import { pct } from "@/lib/stats-plus";
+import { FINESTRA_RECENTE, pct, pmaAsta } from "@/lib/stats-plus";
 
 /**
  * Stats+ nel modale d'offerta: **una riga sola**, sotto il campo (M22 §5.1).
@@ -51,22 +48,6 @@ export type PosizioneStats = (typeof POSIZIONI_STATS)[number];
  */
 export const POSIZIONE_STATS: PosizioneStats = "entrambi";
 
-/**
- * ⚠ **Il budget di caratteri della riga, e non è un'intenzione: è misurato**
- * (mock del 2026-08-29). A 384px, con `text-xs`, oltre ~45 caratteri la riga va
- * a capo e il blocco passa da **31px a 49px** — cioè rimette esattamente i 44px
- * che M16 aveva restituito al campo, senza che nessuno l'abbia deciso.
- *
- * ⚠ **E l'esempio scritto in §5.1 non ci stava**: «Scatto: D da −25% a +14% · 5
- * pari livello, 2 tuoi» sono **49 caratteri**, cioè quattro oltre il limite che
- * la spec misura cinque righe più sotto. Trovato scrivendo il codice, ed è lo
- * stesso genere di difetto che i mock avevano già trovato tre volte: una forma
- * *scritta a mano* non si contraddice da sé, va **contata**. Per questo la riga
- * qui non è una stringa ma una **composizione che si misura** — e il test di
- * §9.1 la conta su tutte le combinazioni, non su una.
- */
-export const MAX_CARATTERI_RIGA = 45;
-
 /** `−25%` / `+14%`, col segno sempre: senza, `14%` si legge come un livello. */
 function segnato(rapporto: number): string {
   const n = pct(rapporto);
@@ -74,92 +55,204 @@ function segnato(rapporto: number): string {
 }
 
 /**
- * La riga del modale, o `null` se non c'è niente da dire.
+ * I tre badge sotto il campo dell'offerta (M23 §1): il PMA del foglio a
+ * sinistra, e a destra lo stesso PMA corretto per come il tavolo sta pagando —
+ * il **ruolo** dal suo inizio e gli **ultimi lotti**.
  *
- * ⚠ **Si compone dal più informativo al meno, e si tiene la prima forma che
- * sta nel budget.** Non è una furbizia: i nomi dei ruoli hanno lunghezze diverse
- * — `Portieri` sono 8 caratteri e `Centrocampisti` 14 — e una forma sola andrebbe
- * a capo su un ruolo e non sugli altri. Il caso peggiore è quello che decide, e
- * il caso peggiore non è quello che si guarda scrivendo la spec.
+ * ⚠ **Tutti e tre dello stesso grigio, ed è una decisione dell'owner**: nessuno
+ * dei tre ha la precedenza. Un badge in pieno direbbe «segui questo», e qual
+ * numero seguire è la deduzione che questa macro lascia a chi gioca.
+ *
+ * ⚠ **Nessuna percentuale qui dentro.** Il `−15%` è il ponte fra le cifre, non
+ * una cifra in più: la differenza fra 44 e 37 è già visibile, e una percentuale
+ * accanto chiederebbe una moltiplicazione a chi ha venti secondi. Le percentuali
+ * stanno nella tabella, dove si guarda il quadro invece di decidere un importo.
+ *
+ * ⚠ **Sotto l'input e non sopra, ed è la risposta all'obiezione del 2026-08-12**
+ * (§5.3): sopra il campo un'informazione arriva **prima** della decisione e la
+ * sostituisce; sotto, prima vedi la cifra che stai scrivendo e poi il contesto.
+ *
+ * ⚠ **Una riga sola, e misurata**: 29px contro i 27 della riga di testo che
+ * questo blocco sostituisce, e 274px di larghezza sui 361 disponibili a 393px di
+ * schermo. È il vincolo di M16 — *«i ~44px che la riga occupava sono altezza
+ * restituita al campo, che con la tastiera aperta è la risorsa scarsa»* — e
+ * questa forma non li rimette. Una seconda riga sì: non aggiungerne.
  */
-export function rigaStatsPlus({
-  role,
-  temperatura,
-  scatto,
-  alternative,
-}: {
-  role: Role;
-  temperatura: Temperatura | null;
-  scatto: Scatto | null;
-  alternative: Alternative | null;
-}): string | null {
-  const ruolo = ROLE_LABELS[role];
-
-  if (temperatura === null) {
-    // Uno stato normale con la sua frase, non un `—` muto (§8).
-    return `${ruolo}: ancora nessun lotto`;
-  }
-
-  // La testa dice il livello, e lo scatto quando c'è: due regimi valgono più di
-  // un livello solo, perché è il cambiamento a decidere.
-  const testa =
-    scatto === null
-      ? `${ruolo} ${segnato(temperatura.mediana)} su ${temperatura.n}`
-      : `${ruolo}: da ${segnato(scatto.prima)} a ${segnato(scatto.adesso)}`;
-
-  // La coda conta chi resta, e i propri obiettivi dentro quel conto: è la
-  // domanda «posso lasciarlo andare?» ridotta a due numeri.
-  const pari = alternative?.pariLivello ?? [];
-  const coda =
-    pari.length === 0
-      ? ""
-      : ` · ${pari.length} pari, ${pari.filter((x) => x.obiettivo).length} tuoi`;
-
-  const intera = `${testa}${coda}`;
-  return intera.length <= MAX_CARATTERI_RIGA ? intera : testa;
-}
-
-/**
- * La riga, disegnata. `null` quando `POSIZIONE_STATS` non la vuole qui.
- *
- * ⚠ **Sotto l'input e non sopra, e non è layout: è la risposta all'obiezione del
- * 2026-08-12** (§5.3). Sopra il campo, un'informazione arriva **prima** della
- * decisione e la sostituisce; sotto, l'ordine di lettura si inverte — prima vedi
- * la cifra che stai scrivendo, poi il contesto. Chi lo vuole lo trova, chi ha
- * già deciso ha già digitato.
- *
- * ⚠ **E una riga sola, non due.** Il commento di M16 in `bid-modal.tsx` dice
- * perché la riga dei valori suggeriti è stata tolta: *«i ~44px che la riga
- * occupava sono altezza restituita al campo, che con la tastiera aperta è la
- * risorsa scarsa»*. Una seconda riga rimetterebbe quell'altezza, in mezzo fra il
- * campo e il suo verdetto, disfacendo una decisione presa apposta.
- */
-export function RigaStatsPlus({
-  role,
-  temperatura,
-  scatto,
-  alternative,
+export function BadgePma({
+  pma,
+  budget,
+  ruolo,
+  recente,
+  finestra = FINESTRA_RECENTE,
   posizione = POSIZIONE_STATS,
 }: {
-  role: Role | null;
-  temperatura: Temperatura | null;
-  scatto: Scatto | null;
-  alternative: Alternative | null;
-  /**
-   * L'override esiste solo per guardare le forme una accanto all'altra. In
-   * applicazione non si passa: la posizione la decide `POSIZIONE_STATS`, in un
-   * posto solo.
-   */
+  /** Il PMA del chiamato in punti, `null`/`undefined` se il foglio non ne ha uno. */
+  pma: number | null | undefined;
+  budget: number;
+  /** La temperatura del ruolo in corso, `null` se non ha ancora lotti chiusi. */
+  ruolo: Temperatura | null;
+  /** La temperatura degli ultimi `finestra` lotti, `null` sotto quel numero. */
+  recente: Temperatura | null;
+  finestra?: number;
   posizione?: PosizioneStats;
 }) {
   if (posizione !== "campo" && posizione !== "entrambi") return null;
-  if (role === null) return null;
-
-  const testo = rigaStatsPlus({ role, temperatura, scatto, alternative });
-  if (testo === null) return null;
+  // ⚠ Senza PMA non c'è nessuno dei tre numeri, nemmeno il primo: il blocco
+  // tace del tutto invece di mostrare due `N/A` e un `—`.
+  if (pma === null || pma === undefined) return null;
 
   return (
-    <p className="text-muted-foreground text-xs tabular-nums">{testo}</p>
+    <div className="flex items-center justify-between gap-1.5 text-xs tabular-nums">
+      <span className="bg-muted rounded-md px-2 py-0.5">
+        PMA: <strong className="font-semibold">{pmaCrediti(pma, budget)}</strong>
+      </span>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <Derivato etichetta="PMA Ruolo" pma={pma} budget={budget} t={ruolo} />
+        <Derivato
+          etichetta={`PMA Last ${finestra}`}
+          pma={pma}
+          budget={budget}
+          t={recente}
+        />
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Un badge derivato, o lo stesso badge con `N/A`.
+ *
+ * ⚠ **`N/A` e non un badge che sparisce**: una casella che a volte c'è e a volte
+ * no si legge come un difetto di allineamento — è la stessa decisione del
+ * segnalibro sulle righe del listone (owner, 2026-08-28).
+ */
+function Derivato({
+  etichetta,
+  pma,
+  budget,
+  t,
+}: {
+  etichetta: string;
+  pma: number;
+  budget: number;
+  t: Temperatura | null;
+}) {
+  return (
+    <span
+      className={`bg-muted rounded-md px-2 py-0.5 ${t === null ? "text-muted-foreground" : ""}`}
+    >
+      {etichetta}:{" "}
+      <strong className="font-semibold">
+        {t === null ? "N/A" : pmaAsta(pma, budget, t.rapporto)}
+      </strong>
+    </span>
+  );
+}
+
+/**
+ * La tabella della temperatura: **una riga per ruolo, e il totale staccato in
+ * fondo** (M23 §2).
+ *
+ * ⚠ **Il reset al cambio di ruolo si vede perché i ruoli stanno uno sotto
+ * l'altro.** Prima era un numero solo, quello del ruolo in corso, che a un certo
+ * punto dell'asta ricominciava da capo senza che niente lo dicesse.
+ *
+ * ⚠ **`N/A` per i ruoli non ancora cominciati, e non `0%`**: uno zero vorrebbe
+ * dire «si paga esattamente il PMA», che è un'affermazione. Qui non è stato
+ * chiuso ancora niente, ed è un'altra cosa.
+ *
+ * ⚠ **Il numero di lotti sta accanto alla percentuale**, in 11px: «−45% su 13
+ * lotti» e «−45% su 40» non sono la stessa affermazione, e la differenza non si
+ * vede dal numero.
+ *
+ * ⚠ **Nessun `box-shadow` e nessun badge in pieno** (owner, M23): il ruolo in
+ * corso si segna con `border-l-2`, il totale con una riga più marcata. Un'ombra
+ * o un fondo scuro sarebbero una priorità, e qui nessun numero ce l'ha.
+ */
+export function TabellaTemperature({
+  temperature,
+  roleOrder,
+  currentRole,
+}: {
+  temperature: TemperaturePerRuolo;
+  roleOrder: Role[];
+  currentRole: Role | null;
+}) {
+  const indiceCorrente = currentRole === null ? -1 : roleOrder.indexOf(currentRole);
+
+  return (
+    <div className="flex flex-col">
+      {roleOrder.map((role, i) => {
+        const t = temperature.perRuolo[role];
+        const inCorso = role === currentRole;
+        // Chiuso = sta prima del corrente nell'ordine; ad asta finita
+        // (`currentRole === null`) lo sono tutti quelli che hanno dei lotti.
+        const chiuso = indiceCorrente === -1 ? t !== null : i < indiceCorrente;
+        return (
+          <div
+            key={role}
+            className={`flex items-center justify-between gap-2 px-2 py-1.5 ${
+              i > 0 ? "border-t" : ""
+            } ${
+              // ⚠ **`rounded-r-md` e non `rounded-md`**: con l'angolo arrotondato
+              // anche a sinistra, il bordo da 2px si curva e la riga si legge
+              // come una parentesi quadra invece che come un binario. Visto sul
+              // banco col CSS vero, non dedotto.
+              inCorso
+                ? "bg-background border-primary border-t-transparent border-l-2 rounded-r-md pl-1.5"
+                : "rounded-md"
+            } ${!inCorso && !chiuso ? "text-muted-foreground" : ""}`}
+          >
+            <span className="flex min-w-0 items-baseline gap-1.5 text-sm font-medium">
+              {ROLE_LABELS[role]}
+              {(inCorso || chiuso) && (
+                <span className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+                  {inCorso ? "in corso" : "chiuso"}
+                </span>
+              )}
+            </span>
+            <RigaValore t={t} />
+          </div>
+        );
+      })}
+
+      <div className="border-muted-foreground mt-2 flex items-center justify-between gap-2 border-t px-2 pt-2.5">
+        <span className="text-sm font-medium">Tutta l&apos;asta</span>
+        <RigaValore t={temperature.totale} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * La percentuale in badge col suo numero di lotti accanto, oppure `N/A`.
+ *
+ * ⚠ **Il badge ha un bordo e nessun fondo suo, e non è una preferenza: con un
+ * fondo era invisibile.** Questa tabella sta dentro un `Riquadro`, che è
+ * `bg-muted`, e nel tema dell'app `--muted`, `--secondary` e `--accent` valgono
+ * tutti `oklch(0.97)`: un badge `secondary` lì è lo stesso grigio su se stesso.
+ * E **`bg-background` non risolve**, perché la riga del ruolo in corso è già
+ * bianca — un badge bianco sparirebbe proprio sulla riga che conta. Un bordo si
+ * vede su tutti e due i fondi, resta neutro (nessun colore, nessuna ombra) ed è
+ * il `variant="outline"` che shadcn usa per la stessa ragione.
+ *
+ * ⚠ **Trovato guardando il banco col CSS compilato dell'app**: nel mock i due
+ * grigi erano token distinti e il difetto non si vedeva. È la ragione per cui il
+ * banco esiste.
+ */
+function RigaValore({ t }: { t: Temperatura | null }) {
+  if (t === null) {
+    return <span className="text-muted-foreground text-xs tabular-nums">N/A</span>;
+  }
+  return (
+    <span className="flex shrink-0 items-center gap-1.5 tabular-nums">
+      <span className="text-muted-foreground text-[11px]">
+        {t.n} {t.n === 1 ? "lotto" : "lotti"}
+      </span>
+      <span className="rounded-md border px-1.5 py-0.5 text-xs font-medium">
+        {segnato(t.rapporto)}
+      </span>
+    </span>
   );
 }
 
@@ -192,38 +285,6 @@ function Riquadro({
 /** Una frase al posto di un `—` muto: ogni stato normale ha la sua (§8). */
 function Niente({ children }: { children: React.ReactNode }) {
   return <p className="text-muted-foreground text-xs">{children}</p>;
-}
-
-/**
- * L'avviso, e **l'unico posto di Stats+ in cui il colore è informazione**
- * (§5.1): proprio perché tutto il resto è neutro, qui si vede. `amber` è già il
- * vocabolario di `FeedbackLine` per «guarda questo».
- */
-function Avvisi({ avvisi }: { avvisi: Avviso[] }) {
-  if (avvisi.length === 0) return null;
-  return (
-    <ul className="mt-2 space-y-1">
-      {avvisi.map((a) => (
-        <li
-          key={a.tipo}
-          className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs"
-        >
-          {a.tipo === "SCATTO" ? (
-            <>
-              <strong>Scatto</strong> — da {segnato(a.prima)} a{" "}
-              {segnato(a.adesso)} dentro il ruolo.
-            </>
-          ) : (
-            <>
-              <strong>Cambio d&apos;aria</strong> — {ROLE_LABELS[a.precedente]}{" "}
-              {segnato(a.da)}, {ROLE_LABELS[a.role].toLowerCase()}{" "}
-              {segnato(a.a)}.
-            </>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
 }
 
 /** Una riga di alternativa: i fatti che discriminano, in ordine di decisione (§4.3). */
@@ -317,23 +378,18 @@ function ListaAlternative({
  */
 export function StatsPlusColonna({
   role,
-  temperatura,
-  scatto,
+  temperature,
+  roleOrder,
   andati,
   alternative,
-  avvisi,
-  scartoRuolo,
   haPma,
   posizione = POSIZIONE_STATS,
 }: {
   role: Role | null;
-  temperatura: Temperatura | null;
-  scatto: Scatto | null;
+  temperature: TemperaturePerRuolo;
+  roleOrder: Role[];
   andati: AndatiStessaFascia | null;
   alternative: Alternative | null;
-  avvisi: Avviso[];
-  /** Σ (pagato − atteso) sui lotti informativi del ruolo, in crediti. */
-  scartoRuolo: number;
   /** Il foglio caricato ha dei PMA: senza, non c'è niente da calcolare (§8). */
   haPma: boolean;
   posizione?: PosizioneStats;
@@ -358,37 +414,11 @@ export function StatsPlusColonna({
     <div className="hidden min-h-0 min-w-0 overflow-y-auto sm:block">
       <div className="grid min-w-0 gap-3 xl:grid-cols-2">
         <Riquadro titolo="Temperatura">
-          {temperatura === null ? (
-            <Niente>Nessun lotto informativo ancora.</Niente>
-          ) : (
-            <>
-              <p className="text-sm tabular-nums">
-                <strong className="text-lg">{segnato(temperatura.mediana)}</strong>{" "}
-                <span className="text-muted-foreground">
-                  sul PMA · {ROLE_LABELS[role].toLowerCase()}, {temperatura.n}{" "}
-                  {temperatura.n === 1 ? "lotto" : "lotti"}
-                </span>
-              </p>
-              <p className="text-muted-foreground mt-1 text-xs tabular-nums">
-                {scatto !== null && (
-                  <>
-                    prima {segnato(scatto.prima)}, adesso {segnato(scatto.adesso)} ·{" "}
-                  </>
-                )}
-                {/* ⚠ Somma degli scarti osservati, **non** il saldo di §3.2: quello
-                    si mostra solo per i ruoli chiusi, perché a metà ruolo il
-                    confronto con l'intero piano direbbe sempre «avanza
-                    tantissimo». Qui si somma solo ciò che è già successo. */}
-                sul totale il ruolo ha speso{" "}
-                <strong>{Math.abs(scartoRuolo)} crediti</strong>{" "}
-                {scartoRuolo <= 0 ? "in meno" : "in più"} del foglio
-              </p>
-              <p className="text-muted-foreground mt-1 text-[11px] tabular-nums">
-                da {segnato(temperatura.min)} a {segnato(temperatura.max)}
-              </p>
-            </>
-          )}
-          <Avvisi avvisi={avvisi} />
+          <TabellaTemperature
+            temperature={temperature}
+            roleOrder={roleOrder}
+            currentRole={role}
+          />
         </Riquadro>
 
         <Riquadro titolo="Già andati della stessa fascia">
@@ -478,28 +508,22 @@ function ScartoStrutturaleRiga({ s }: { s: ScartoStrutturale }) {
  */
 export function StatsPlusTab({
   role,
-  temperatura,
-  scatto,
-  alMinimo,
-  saldi,
+  temperature,
+  roleOrder,
   partecipanti,
   nomiMembri,
   alternative,
-  avvisi,
   strutturale,
   lottoAperto,
   haPma,
   posizione = POSIZIONE_STATS,
 }: {
   role: Role | null;
-  temperatura: Temperatura | null;
-  scatto: Scatto | null;
-  alMinimo: AlMinimo;
-  saldi: Saldo[];
+  temperature: TemperaturePerRuolo;
+  roleOrder: Role[];
   partecipanti: ScartoPartecipante[];
   nomiMembri: Map<string, string>;
   alternative: Alternative | null;
-  avvisi: Avviso[];
   strutturale: ScartoStrutturale;
   lottoAperto: boolean;
   /** Il foglio caricato ha dei PMA: senza, non c'è niente da calcolare (§8). */
@@ -525,64 +549,12 @@ export function StatsPlusTab({
     <div className="space-y-3">
       <ScartoStrutturaleRiga s={strutturale} />
 
-      <Riquadro titolo={role === null ? "Il ruolo in corso" : ROLE_LABELS[role]}>
-        {role === null || temperatura === null ? (
-          <Niente>
-            {role === null
-              ? "Nessun ruolo in corso."
-              : "Nessun lotto informativo ancora."}
-          </Niente>
-        ) : (
-          <>
-            <p className="text-sm tabular-nums">
-              <strong className="text-lg">{segnato(temperatura.mediana)}</strong>{" "}
-              <span className="text-muted-foreground">
-                sul PMA · da {segnato(temperatura.min)} a{" "}
-                {segnato(temperatura.max)}, su {temperatura.n}{" "}
-                {temperatura.n === 1 ? "lotto" : "lotti"}
-              </span>
-            </p>
-            {scatto !== null && (
-              <p className="text-muted-foreground mt-1 text-xs tabular-nums">
-                prima {segnato(scatto.prima)}, adesso {segnato(scatto.adesso)}
-              </p>
-            )}
-            {/* ⚠ I lotti che il termometro scarta non spariscono: diventano un
-                fatto loro (§3.4). «Nove su dodici al minimo» è a sua volta una
-                temperatura — dice che il tavolo non sta contendendo niente. */}
-            {alMinimo.totale > 0 && (
-              <p className="text-muted-foreground mt-1 text-xs tabular-nums">
-                {alMinimo.alMinimo} dei {alMinimo.totale} lotti del ruolo sono
-                andati al minimo
-              </p>
-            )}
-          </>
-        )}
-        <Avvisi avvisi={avvisi} />
-      </Riquadro>
-
-      <Riquadro titolo="Ruoli chiusi">
-        {saldi.length === 0 ? (
-          <Niente>Nessun ruolo è ancora finito.</Niente>
-        ) : (
-          <ul className="divide-y">
-            {saldi.map((s) => (
-              <li
-                key={s.role}
-                className="flex items-center gap-2 py-1 text-xs tabular-nums"
-              >
-                <span className="min-w-0 flex-1">{ROLE_LABELS[s.role]}</span>
-                <span className="text-muted-foreground">
-                  spesi {s.speso} sui {s.piano} del piano
-                </span>
-                <span className="w-24 text-right">
-                  {s.saldo >= 0 ? "restano " : "sforo "}
-                  <strong>{Math.abs(s.saldo)}</strong> cr
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+      <Riquadro titolo="Temperatura">
+        <TabellaTemperature
+          temperature={temperature}
+          roleOrder={roleOrder}
+          currentRole={role}
+        />
       </Riquadro>
 
       <Riquadro titolo="Partecipanti">

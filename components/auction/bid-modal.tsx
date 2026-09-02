@@ -6,23 +6,20 @@ import { useEffect, useRef, useState } from "react";
 import { Campioncino } from "@/components/auction/campioncino";
 import { InsightsMacro } from "@/components/auction/insights";
 import { PrezzoConsigliato } from "@/components/auction/prezzo-consigliato";
-import {
-  RigaStatsPlus,
-  StatsPlusColonna,
-} from "@/components/auction/stats-plus";
+import { BadgePma, StatsPlusColonna } from "@/components/auction/stats-plus";
 import { Countdown, CountdownBar } from "@/components/auction/countdown";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/domain";
 import type { ActionResult } from "@/lib/realtime/action";
 import { bidBounds, checkAmount, parseAmount } from "@/lib/realtime/portal";
 import {
+  TEMPERATURE_VUOTE,
   alternative,
   andatiStessaFascia,
-  avvisi,
   haPma,
   lottiInformativi,
-  scatto,
-  temperatura,
+  temperaturaPerRuolo,
+  temperaturaRecente,
 } from "@/lib/stats-plus";
 import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
 import { cn } from "@/lib/utils";
@@ -137,8 +134,10 @@ export function BidModal({
     statsPlus && ruoloInCorso !== null
       ? lottiInformativi(snapshot, pool, budget, ruoloInCorso)
       : [];
-  const temperaturaRuolo = statsPlus ? temperatura(lottiRuolo) : null;
-  const scattoRuolo = statsPlus ? scatto(lottiRuolo) : null;
+  const temperature = statsPlus
+    ? temperaturaPerRuolo(snapshot, pool, budget)
+    : TEMPERATURE_VUOTE;
+  const recente = statsPlus ? temperaturaRecente(lottiRuolo) : null;
   const alternativeLotto =
     statsPlus && lot !== null
       ? alternative(snapshot, pool, budget, lot.player.id)
@@ -147,13 +146,7 @@ export function BidModal({
     statsPlus && lot !== null
       ? andatiStessaFascia(snapshot, pool, budget, lot.player.id)
       : null;
-  const avvisiRuolo = statsPlus ? avvisi(snapshot, pool, budget) : [];
   const poolHaPma = haPma(pool);
-  // ⚠ **Somma degli scarti osservati, non il saldo di §3.2.** Quello si mostra
-  // solo per i ruoli chiusi, perché a metà ruolo confrontare un parziale con
-  // l'intero piano direbbe sempre «avanza tantissimo». Questo somma soltanto ciò
-  // che è già successo, quindi è vero anche a ruolo aperto.
-  const scartoRuolo = lottiRuolo.reduce((s, l) => s + (l.price - l.atteso), 0);
 
   const [raw, setRaw] = useState("");
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle" });
@@ -235,7 +228,7 @@ export function BidModal({
             field.focus();
             field.select();
           }}
-          className="bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-dvh flex-col gap-3 rounded-t-2xl border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl outline-none sm:inset-x-auto sm:right-4 sm:bottom-4 sm:grid sm:w-[46rem] sm:grid-cols-[384px_1fr] sm:grid-rows-[minmax(0,1fr)] sm:gap-4 sm:rounded-2xl sm:border xl:w-[64rem]"
+          className="bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-dvh flex-col gap-3 rounded-t-2xl border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none sm:inset-x-auto sm:right-4 sm:bottom-4 sm:grid sm:w-[46rem] sm:grid-cols-[384px_1fr] sm:grid-rows-[minmax(0,1fr)] sm:gap-4 sm:rounded-2xl sm:border xl:w-[64rem]"
         >
           {/*
             ⚠ **La colonna sinistra è il modale di sempre, ai pixel di sempre**
@@ -378,16 +371,18 @@ export function BidModal({
             valori suggeriti è stata tolta: quei ~44px sono altezza restituita al
             campo, e con la tastiera aperta sono la risorsa scarsa. Una seconda
             riga li rimetterebbe, in mezzo fra il campo e il suo verdetto,
-            disfacendo una decisione presa apposta. Il budget di caratteri che
-            tiene la riga a una riga sola è misurato e provato in
-            `tests/stats-plus-riga.test.ts`.
+            disfacendo una decisione presa apposta. I tre badge di M23 pesano
+            29px, cioè quanto la riga di testo che hanno sostituito: sono dentro
+            quel vincolo, non un'eccezione.
           */}
           {statsPlus && (
-            <RigaStatsPlus
-              role={ruoloInCorso}
-              temperatura={temperaturaRuolo}
-              scatto={scattoRuolo}
-              alternative={alternativeLotto}
+            <BadgePma
+              pma={carmy?.pma}
+              budget={budget}
+              ruolo={
+                ruoloInCorso === null ? null : temperature.perRuolo[ruoloInCorso]
+              }
+              recente={recente}
             />
           )}
 
@@ -440,12 +435,10 @@ export function BidModal({
           {statsPlus && (
             <StatsPlusColonna
               role={ruoloInCorso}
-              temperatura={temperaturaRuolo}
-              scatto={scattoRuolo}
+              temperature={temperature}
+              roleOrder={snapshot.auction.roleOrder}
               andati={andatiFascia}
               alternative={alternativeLotto}
-              avvisi={avvisiRuolo}
-              scartoRuolo={scartoRuolo}
               haPma={poolHaPma}
             />
           )}

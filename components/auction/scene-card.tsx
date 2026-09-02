@@ -58,7 +58,7 @@ export function SceneCard({
   children?: ReactNode;
 }) {
   return (
-    <section className="bg-card overflow-hidden rounded-xl border shadow-sm">
+    <section className="bg-card overflow-hidden rounded-xl border">
       <Fascia tone={tone} />
 
       <div className="flex flex-col gap-3 p-4">

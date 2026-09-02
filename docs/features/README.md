@@ -16,29 +16,57 @@ Nessuna.
 
 ## In corso
 
-- **[M22 — Stats+](22-stats-plus.md)**: la temperatura dell'asta rispetto ai PMA, **per ruolo e
-  azzerata a ogni ruolo**, più le alternative ancora libere del lotto in corso. Spec chiusa il
-  2026-08-29, aperta lo stesso giorno su `feature/22-stats-plus`, **lavorata e pronta per la prova su
-  `dev`** (1057 test, da 971).
+Nessuna.
 
-  ⚠ **Tocca lo schema**: `users.stats_plus`, un booleano che l'amministratore assegna utente per
-  utente come `is_pro` (owner, 2026-08-29 — §6 è stato **riscritto all'apertura**, prima diceva
-  «nessuna colonna»). Quindi **il merge su `main` non basta**: serve `pnpm db:push` a mano sul
-  server. Nessun backfill — `false` per tutti *è* lo stato giusto — ma ⚠ **l'amministratore non è
-  implicito**, quindi dopo il deploy Stats+ non lo vede nemmeno chi ha deployato finché non se lo
-  accende in `/admin/users`. Al motore aggiunge **un campo**, `lotSeq` su `SnapshotRosterEntry`.
+---
 
-  ⚠ **È la terza stesura, e le prime due sono archivio** — `fixtures/#22-spec-abbandonata.md` e
+**[M23](23-temperatura-aggregata.md) è in produzione da `v1.23.0`** (2026-09-02).
+
+⚠ **Senza branch di feature**, per scelta dell'owner: commit diretti su `dev`, poi `merge --no-ff` su
+`main`. Il punto di rollback non è un merge commit di macro, è il **tag `v1.23.0`**.
+
+Nasce da una revisione di M22 in produzione — *«non sono molto sicuro del dato visualizzato»* — e
+cambia il numero: la temperatura passa dalla **mediana dei rapporti lotto per lotto** al **rapporto
+fra le somme** (`Σ pagato ÷ Σ atteso`), esiste per **tutti i ruoli più il totale** invece che per il
+solo ruolo in corso, e sotto il campo dell'offerta compaiono tre badge in crediti — `PMA`,
+`PMA Ruolo`, `PMA Last 8`. Via il prima/adesso, gli avvisi, il saldo dei ruoli chiusi e la riga di
+testo. **Non tocca schema né motore**: il rilascio è il merge e basta. 1044 test.
+
+⚠ **La differenza fra le due statistiche non è di raffinatezza, è di segno**: sullo stesso paio di
+lotti la mediana dice `+25%` e l'aggregato `−25%`. Il test che tiene quel caso è la giustificazione
+della macro.
+
+⚠ **Tolte tutte e 12 le ombre del nostro codice** (owner). Una delle dodici stava facendo un lavoro
+— diceva «questa riga è sollevata» durante il trascinamento dell'ordine dei ruoli — ed è diventata
+un bordo. I `ring-*` non si toccano: sono il focus da tastiera.
+
+⚠ **La lezione trasferibile è in §3.1**: nel tema dell'app `--muted`, `--secondary` e `--accent`
+valgono **tutti** `oklch(0.97)`. Un badge grigio dentro un riquadro grigio è invisibile, e nessun
+mock con token propri può accorgersene — il banco va montato col CSS compilato da `pnpm build`.
+
+---
+
+**M22 è in produzione da `v1.22.0`** (2026-08-30): la temperatura dell'asta rispetto ai PMA, **per
+ruolo e azzerata a ogni ruolo**, più le alternative ancora libere del lotto in corso. Baseline 971
+test, chiusa a **1057**.
+
+⚠ **Ha toccato lo schema**: `users.stats_plus`, un booleano che l'amministratore assegna utente per
+utente come `is_pro` (owner, 2026-08-29 — §6 è stato **riscritto all'apertura**, prima diceva
+«nessuna colonna»). Il `pnpm db:push` è stato dato il 2026-08-30 col backup prima. ⚠
+**L'amministratore non ha il flag implicito**, quindi dopo il deploy Stats+ non lo vedeva nemmeno chi
+aveva deployato: va acceso in `/admin/users`, ed è la parte del rilascio che nessun comando ricorda.
+
+⚠ **È la terza stesura, e le prime due sono archivio** — `fixtures/#22-spec-abbandonata.md` e
   `fixtures/#22-lezioni-stats+.md`. Le prime due costruivano una **stima di prezzo** che tre giri di
   simulazione non hanno mai validato; il perimetro definitivo è **di sola evidenza**. Chi riapre il
   tema legga §10 prima di riproporre un motore statistico.
 
-  ⚠ **La lezione trasferibile è in §2.1**: la prima spec aveva speso un'intera sezione a costruire un
+⚠ **La lezione trasferibile è in §2.1**: la prima spec aveva speso un'intera sezione a costruire un
   percentile statistico per dedurre che Dimarco è un caso a parte — e nel foglio Dimarco ha **una
   fascia tutta sua, scritta a mano**. `Fascia` non è un'etichetta di prezzo, è **lo slot di rosa**.
   *Prima di modellare una proprietà, guardare se il dato la dichiara già.*
 
-  ⚠ **E i mock hanno trovato tre difetti prima del codice**, perché i loro numeri sono **calcolati**
+⚠ **E i mock hanno trovato tre difetti prima del codice**, perché i loro numeri sono **calcolati**
   e non scritti a mano: la scala dei PMA per slot non sommava a 100 (§3.6), la regola delle
   alternative non copriva il gruppo più utile (§4.2), e la riga del modale andava a capo rimettendo i
   44px che M16 aveva restituito al campo (§5.1). *Un mock con numeri inventati non può contraddirsi,

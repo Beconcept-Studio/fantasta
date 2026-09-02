@@ -3975,3 +3975,108 @@ scheduler, che è il posto sbagliato.
 `scheduler.test.ts`**, che dell'inconveniente era la vittima dichiarata e ne era pure una causa. Terzo
 chiamante, quindi l'helper vive in `tests/db/helpers.ts` con la regola scritta sopra: **se un test
 chiama `sweep()` o `bootRecovery()`, usa questo.**
+
+---
+
+## 2026-09-02 — M23: la temperatura è un rapporto fra somme, e le ombre vanno via
+
+**La mediana dei rapporti è stata sostituita da `Σ pagato ÷ Σ atteso`**, e la ragione non è di
+raffinatezza: **le due statistiche possono avere segno opposto sullo stesso stato**. Misurato su due
+lotti — uno da 50 crediti pagato 25, uno da 10 pagato 20 — la mediana dei rapporti dà `+25%` e il
+rapporto fra le somme `−25%`. La prima risponde a «com'è andato il lotto tipico», la seconda a
+«quanti crediti sono usciti dal tavolo», e la domanda di chi guarda è la seconda. Il caso è il primo
+test della funzione: senza un caso *costruito* perché le due divergano, un test sull'aggregato
+sarebbe verde anche con la mediana.
+
+Conseguenza che va con la scelta: **il totale dell'asta è ora la somma degli stessi lotti**, quindi
+non può contraddire le righe per ruolo. Con due mediane, «il totale» e «la media dei ruoli» sarebbero
+stati due numeri diversi nella stessa tabella senza che niente lo dicesse — ed è la ragione per cui
+prima il totale non c'era.
+
+**La temperatura esiste per tutti i ruoli, non per il solo ruolo in corso.** Il reset a ogni ruolo
+era la richiesta centrale di M22 e si vedeva come **un numero solo che a un certo punto ricominciava
+da capo**: con quattro righe una sotto l'altra e `N/A` sui ruoli non iniziati, il reset *è* la
+tabella. `N/A` e non `0%`, perché uno zero vorrebbe dire «si paga esattamente il PMA».
+
+**Il filtro dei 5 crediti resta, e ora si sa quanto costa.** Decisione dell'owner. Misurato: tenerlo
+o toglierlo sposta la temperatura di **al massimo un punto** (−45% contro −44%), perché i lotti che
+esclude valgono il **2% dei crediti**. Con l'aggregato non protegge più da niente — il peso lo fa
+l'aritmetica — ma non fa danno. L'unica conseguenza è che **la somma delle righe non è la spesa reale
+del tavolo**, e lo scarto è quel 2%.
+
+**Il «prima/adesso» è stato tolto perché non si leggeva, e la sua domanda è tornata in crediti.** La
+frase dell'owner: *«il prima/adesso non riesco a capire cosa sia»*. Due percentuali accostate, senza
+niente che dicesse che una è il passato dello stesso reparto, si leggono come un intervallo. La
+domanda era buona e torna come **`PMA Last 8`**: gli ultimi otto lotti del ruolo, **otto perché è un
+giro di tavolo**, mostrati come cifra in crediti sul giocatore chiamato invece che come percentuale
+accanto a un'altra percentuale. Con lo scatto sono usciti anche i due avvisi ambra e la soglia del
+quarto di PMA: il «cambio d'aria» ripeteva a parole due righe adiacenti della tabella.
+
+⚠ **La finestra è una costante (8), non `snapshot.members.length`, e la scelta è dichiarata**: la
+*ragione* del numero è «un giro di tavolo», quindi a un tavolo da dodici la finestra coerente con
+quella ragione sarebbe dodici. Resta fissa perché un numero che cambia col tavolo cambierebbe anche
+l'etichetta a schermo (`PMA Last 8` / `PMA Last 12`) e renderebbe due aste non confrontabili. Il
+parametro esiste per legarla al tavolo in una riga, il giorno che si volesse.
+
+⚠ **E una finestra corta è pochi crediti, cosa che il badge non dichiara.** I lotti tardi di un ruolo
+sono strutturalmente i più piccoli, perché si chiama dal più caro in giù: nella misura sul foglio di
+riferimento gli ultimi cinque difensori facevano 29 crediti pagati su 26 attesi, e quel `+12%` veniva
+moltiplicato per un giocatore da 44. È la natura di una finestra corta, non un difetto da correggere
+con una formula, ed è la ragione per cui quel numero **non sta mai da solo** ma accanto al PMA e alla
+temperatura del ruolo. È anche perché la finestra è passata da 5 a 8 prima di scrivere il codice.
+
+**Tre badge in crediti sotto il campo, tutti dello stesso grigio.** `PMA` · `PMA Ruolo` ·
+`PMA Last 8`. Grigi uguali perché **nessuno dei tre è il numero giusto**: la loro distanza è
+l'informazione, e un badge in pieno direbbe «segui questo». Nessuna percentuale dentro i badge: la
+differenza fra 44 e 37 è già visibile, e una percentuale chiederebbe una moltiplicazione a chi ha
+venti secondi.
+
+⚠ **Va scritto che questo contraddice in parte la decisione del 2026-08-12**, quella che ha messo
+`POSIZIONE_PREZZO = "macro"` per togliere una cifra offribile da accanto al campo. Qui una cifra
+offribile ci torna. Le due ragioni di allora: *«un suggerimento che qualcuno segue senza pensarci»* —
+si applica, e l'owner l'ha accettata guardando il mock; *«con il file in mano a tutti diventa un
+prezzo di listino»* — non si applica, perché il numero nasce dall'asta viva e due persone con rose
+diverse leggono cifre diverse. **La differenza è che stavolta è una decisione presa, non una
+conseguenza entrata di contrabbando.**
+
+**L'altezza è stata misurata, e ha ribaltato la raccomandazione che avevo scritto.** Delle tre forme
+proposte per quel blocco, avevo dato i «tre valori incolonnati» per «qualche pixel in più» e il
+«righello» per «il doppio». Misurato dal browser: riga 27px, righello 67px, tre valori **70px** —
+cioè `+43px`, **esattamente i ~44px che M16 aveva restituito al campo**. La forma scelta pesa 29px, e
+i tre badge occupano 268px dei 361 disponibili a 393px di schermo. **Una forma scritta a mano non si
+contraddice da sé: va contata.**
+
+**Nessun `box-shadow` nel nostro codice, e vale per tutta l'applicazione** (richiesta dell'owner).
+Tolte tutte e **12** le occorrenze in 9 file. Tre cose da sapere:
+
+1. ⚠ **Una delle dodici stava facendo un lavoro**: in `role-order-picker.tsx` lo `shadow-lg`
+   compariva **solo durante il trascinamento** ed era l'unica cosa che diceva «questa riga è
+   sollevata». È diventata `border-primary`, non è stata cancellata.
+2. ⚠ **`components/ui/**` non ne aveva nessuna.** In sessione ho affermato il contrario prima di
+   verificarlo: le ombre dell'app erano **tutte nostre**. La verifica è un `grep`, e va fatta prima
+   di scrivere la frase.
+3. ⚠ **I `ring-*` non si toccano.** Tailwind li implementa con un `box-shadow`, ma sono lo stato di
+   focus da tastiera: togliere quelli è togliere accessibilità.
+
+**Il banco col CSS compilato ha trovato due difetti che quattro giri di mock non potevano vedere**, e
+la lezione è sulla tavolozza. Nel tema dell'app **`--muted`, `--secondary` e `--accent` valgono tutti
+`oklch(0.97)`**: un badge `secondary` dentro un riquadro `bg-muted` è lo stesso grigio su se stesso,
+cioè invisibile. E `bg-background` non risolveva, perché la riga del ruolo in corso è già bianca — il
+badge sarebbe sparito **proprio sulla riga che conta**. Sono diventati badge con un bordo e nessun
+fondo. Il secondo difetto: `rounded-md` curvava anche il `border-l-2` del ruolo in corso, che si
+leggeva come una parentesi quadra invece che come un binario (`rounded-r-md`).
+
+**Quindi la procedura**: un mock su artefatto serve a decidere *cosa* mostrare, ma le classi Tailwind
+si guardano contro il CSS di `pnpm build`, montando **le stringhe copiate verbatim dai componenti**.
+Un mock con token propri non può accorgersi che tre token dell'app hanno lo stesso valore.
+
+⚠ **Il test di I8 è stato aggiornato, non lasciato dov'era**, e questa è la nota che vale oltre M23:
+confrontava un oggetto contenente `saldo`, `scatto` e `avvisi`. Con quelle funzioni rimosse sarebbe
+restato **verde continuando a sorvegliare tre cose che non esistono più** — cioè la forma peggiore di
+test, quella che dà fiducia senza coprire niente. Quando si tolgono funzioni, i test che le
+menzionavano vanno riportati sulle nuove, non solo fatti compilare.
+
+⚠ **Un test l'ho scritto sbagliato, e la prima cosa è stata guardare il test.** Attendevo `−50%` dove
+l'aritmetica dava `−15%`: con dodici lotti consegnati al contrario, la coda per `lotSeq` è **mista** —
+quattro caldi e quattro freddi — non tutta fredda. Il codice era giusto. L'attesa corretta rende
+comunque il test una prova, perché i due ordini danno `−15%` e `+20%`.
