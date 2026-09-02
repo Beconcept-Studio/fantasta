@@ -4,6 +4,46 @@ Una sezione per versione, scritta al momento del merge su `main`. Le macro-featu
 minor, gli hotfix una patch. Il dettaglio di cosa doveva fare una feature sta nel suo file in
 `docs/features/`; qui c'è solo cosa è cambiato per chi usa l'app.
 
+## [1.23.0] — 2026-09-02
+
+**La temperatura di Stats+ è rifatta, perché il numero di prima rispondeva a un'altra domanda.**
+Prima era la mediana dei rapporti lotto per lotto: un giocatore da dieci crediti pesava quanto uno da
+cinquanta, e il risultato diceva «com'è andato il lotto tipico». Ora è il **rapporto fra le somme** —
+i crediti davvero usciti dal tavolo contro quelli che il foglio chiedeva — e dice quanto stai pagando
+il reparto. Non è una rifinitura: sugli stessi lotti le due strade possono dare **`+25%` e `−25%`**.
+
+**E adesso ci sono tutti i ruoli, non solo quello in corso.** Una riga per reparto con la sua
+temperatura e il numero di lotti che la producono, `N/A` finché un ruolo non è iniziato, e in fondo —
+staccato — **il totale dell'asta**, che è la somma esatta delle righe sopra. Il fatto che la
+temperatura si azzeri a ogni ruolo ora si *vede*: prima era un numero solo che a un certo punto
+della serata ricominciava da capo, senza niente che lo dicesse.
+
+**Sotto il campo dell'offerta, tre cifre in crediti al posto della riga di testo.**
+
+- **PMA** — quanto dice il tuo foglio.
+- **PMA Ruolo** — lo stesso PMA con la temperatura del reparto dall'inizio.
+- **PMA Last 8** — con quella degli **ultimi otto lotti**, cioè un giro di tavolo: come si sta
+  pagando *adesso*.
+
+Sono tutti dello stesso grigio di proposito: **nessuno dei tre è il numero giusto**, la loro distanza
+è l'informazione, e la decisione resta tua. Sotto gli otto lotti chiusi il terzo dice `N/A`, perché
+con sette «gli ultimi otto» sarebbero il ruolo intero — lo stesso numero scritto due volte.
+
+**Cosa è sparito, e perché.** Il **prima/adesso** («prima −20%, adesso −1%»): la domanda era giusta,
+la forma no — due percentuali accostate, senza niente che dicesse che una era il passato dello stesso
+reparto. La stessa domanda è ora `PMA Last 8`, in crediti e sul giocatore che hai davanti. Con lui
+sono usciti i **due avvisi** in ambra — il «cambio d'aria» ripeteva a parole la differenza fra due
+righe che sono già una sopra l'altra — il **saldo dei ruoli chiusi**, che diceva la stessa direzione
+in un'altra unità, e il minimo/massimo per lotto.
+
+**Le ombre non ci sono più, in tutta l'applicazione.** Modali, pannelli del portale, linguetta
+attiva, card, toast: la profondità la fanno bordi e fondi. L'unica ombra che stava *facendo* un
+lavoro — quella che diceva «questa riga è sollevata» mentre trascini l'ordine dei ruoli — è diventata
+un bordo colorato. I contorni che compaiono navigando da tastiera restano: quelli sono accessibilità.
+
+**Niente da fare al rilascio**: nessuna colonna nuova, nessuno schema toccato, nessun comando a mano.
+Chi vede Stats+ resta chi ce l'ha assegnato dal pannello di amministrazione.
+
 ## [1.22.0] — 2026-08-30
 
 **Arriva Stats+: la temperatura dell'asta che stai giocando.** Il tuo listone dice che quel difensore
