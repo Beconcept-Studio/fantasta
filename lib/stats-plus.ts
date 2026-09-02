@@ -42,21 +42,23 @@ import type { PoolPlayer, Snapshot } from "@/lib/realtime/types";
 export const SOGLIA_LOTTO_INFORMATIVO = 5;
 
 /**
- * Quanto deve cambiare un rapporto perché valga un avviso (§3.5).
+ * Quanti lotti guarda la finestra «recente»: **uno per partecipante** al tavolo
+ * di riferimento (owner, M23).
  *
- * ⚠ **0,25 è scelto, non misurato, e va detto.** È un quarto di PMA: su un
- * giocatore da 40 crediti, una differenza di dieci — la soglia sotto la quale un
- * cambiamento non cambia una decisione. **È l'unico numero di questa macro che
- * vada rivisto dopo la prima asta vera**, guardando se ha suonato quando serviva
- * e taciuto quando no.
+ * ⚠ **È una costante, non `snapshot.members.length`**, e la differenza va
+ * saputa: la ragione del numero è «un giro di tavolo», quindi a un tavolo da
+ * dodici la finestra *coerente con quella ragione* sarebbe dodici. Resta fissa
+ * perché è la lettura più prudente — un numero che cambia con il tavolo
+ * cambierebbe anche l'etichetta a schermo (`PMA Last 8` / `PMA Last 12`) e
+ * renderebbe due aste non confrontabili fra loro. Per legarla al tavolo basta
+ * passare `snapshot.members.length` come secondo argomento di
+ * {@link temperaturaRecente}: il parametro esiste per quello.
+ *
+ * ⚠ **Sotto questo numero di lotti la finestra non esiste** e vale `null`, non
+ * «il ruolo intero»: con sette lotti chiusi «gli ultimi otto» sarebbero il ruolo
+ * stesso, cioè lo stesso numero scritto due volte in due badge diversi.
  */
-export const SOGLIA_AVVISO = 0.25;
-
-/**
- * Quanti lotti informativi servono **per parte** perché due mediane siano un
- * confronto invece che due aneddoti (§3.3, §3.5).
- */
-export const MIN_LOTTI_PER_PARTE = 4;
+export const FINESTRA_RECENTE = 8;
 
 // ─── I tipi che escono di qui ────────────────────────────────────────────────
 
@@ -76,36 +78,50 @@ export type LottoInformativo = {
 };
 
 /**
- * I punti osservati di un ruolo, **e quanti sono**.
+ * Quanto un insieme di lotti ha pagato rispetto al foglio: **un rapporto fra
+ * due somme**, coi suoi addendi accanto.
  *
- * ⚠ **Punti, non una media** (§3.1). Con quattro lotti chiusi una media ha la
- * stessa faccia sicura di una calcolata su quaranta, e chi legge non può
- * distinguerle. «Te lo dico su 4» e «su 40» sono due affermazioni diverse, e chi
- * legge ha diritto di distinguerle: per questo `n` viaggia sempre col resto e
- * non è un dettaglio che la UI può decidere di non mostrare.
+ * ⚠ **Fra somme, non fra rapporti, e la differenza cambia il segno** (M23). La
+ * prima stesura teneva minimo, mediana e massimo dei rapporti lotto per lotto:
+ * lì un lotto da 10 crediti pesava quanto uno da 50, e la mediana rispondeva a
+ * «com'è andato il lotto tipico» mentre la domanda era «quanti crediti sono
+ * usciti dal tavolo». Misurato su due lotti — uno da 50 crediti pagato 25, uno
+ * da 10 pagato 20 — la mediana dei rapporti dà **+25%** e il rapporto fra le
+ * somme **−25%**: due risposte opposte alla stessa domanda, ed è la seconda
+ * quella vera per il budget. `tests/stats-plus.test.ts` tiene quel caso.
+ *
+ * ⚠ **`pagato` e `atteso` viaggiano col rapporto**, e non sono un dettaglio che
+ * la UI può decidere di buttare: sono ciò che rende il numero verificabile, e
+ * `n` è ciò che distingue «te lo dico su 4» da «su 40».
  */
 export type Temperatura = {
   n: number;
-  min: number;
-  mediana: number;
-  max: number;
+  /** I crediti davvero usciti dal tavolo su questi lotti. */
+  pagato: number;
+  /** Quanti ne chiedeva il foglio: la somma dei PMA in crediti. */
+  atteso: number;
+  /** `pagato / atteso`. `1` è «esattamente il PMA». */
+  rapporto: number;
 };
 
-export type Saldo = {
-  role: Role;
-  /** `piano(R) × budget × membri`, in crediti. */
-  piano: number;
-  /** Quanto il tavolo ha speso davvero in quel ruolo, manuali compresi. */
-  speso: number;
-  /** `piano − speso`: positivo vuol dire che restano crediti oltre il previsto. */
-  saldo: number;
+/** Una riga per ruolo, più la somma di tutte (M23 §2). */
+export type TemperaturePerRuolo = {
+  perRuolo: Record<Role, Temperatura | null>;
+  totale: Temperatura | null;
 };
 
-export type Scatto = { prima: number; adesso: number };
-
-export type Avviso =
-  | { tipo: "SCATTO"; prima: number; adesso: number }
-  | { tipo: "CAMBIO_ARIA"; role: Role; precedente: Role; da: number; a: number };
+/**
+ * Tutte a `null`: quello che i chiamanti passano **quando Stats+ è spento**.
+ *
+ * ⚠ **Esiste perché il gate sta nel componente padre, non qui.** `portal.tsx` e
+ * `bid-modal.tsx` calcolano dentro un `statsPlus ? … : …`, quindi il ramo falso
+ * ha bisogno di un valore della forma giusta — e la stessa costante in due file
+ * sarebbe due oggetti da tenere allineati a mano il giorno che il tipo cresce.
+ */
+export const TEMPERATURE_VUOTE: TemperaturePerRuolo = {
+  perRuolo: { P: null, D: null, C: null, A: null },
+  totale: null,
+};
 
 // ─── Aritmetica di base ──────────────────────────────────────────────────────
 
@@ -257,170 +273,99 @@ export function lottiInformativi(
 // ─── §3.1 — la temperatura del ruolo ─────────────────────────────────────────
 
 /**
- * I punti osservati di un ruolo: minimo, mediana, massimo **e quanti sono**.
+ * Il rapporto fra i crediti pagati e i crediti attesi su questi lotti.
  *
  * ⚠ **Niente contrazione bayesiana, niente prior, niente `k`.** La prima stesura
- * le aveva ed erano il punto esatto in cui l'evidenza diventava stima: con pochi
- * dati un termometro contratto dice un numero addolcito che ha la faccia di una
- * misura. Qui con pochi dati il termometro dice **«pochi dati»** — cioè `n` — e
- * lascia la deduzione a chi legge. È la frase dell'owner: *«il resto lo lascio
- * come deduzione dell'utente».*
+ * della macro le aveva ed erano il punto esatto in cui l'evidenza diventava
+ * stima: con pochi dati un termometro contratto dice un numero addolcito che ha
+ * la faccia di una misura. Qui con pochi dati il termometro dice **«pochi
+ * dati»** — cioè `n`, `pagato` e `atteso` — e lascia la deduzione a chi legge.
  *
- * `null` con nessun lotto informativo, e non uno zero: la UI ha una frase
- * («Nessun lotto informativo ancora»), non un `—` muto (§8).
+ * `null` con nessun lotto informativo, e non uno zero: la UI ha una frase o un
+ * `N/A`, non un `0%` che si legge come «in linea col foglio» (§8).
  */
 export function temperatura(lotti: LottoInformativo[]): Temperatura | null {
   if (lotti.length === 0) return null;
-  const rapporti = lotti.map((l) => l.rapporto);
-  return {
-    n: rapporti.length,
-    min: Math.min(...rapporti),
-    mediana: mediana(rapporti),
-    max: Math.max(...rapporti),
-  };
-}
-
-// ─── §3.3 — lo scatto dentro il ruolo ────────────────────────────────────────
-
-/**
- * L'inizio del ruolo contro l'adesso: due mediane, non un livello.
- *
- * ⚠ **Sotto gli 8 lotti informativi non si calcola e non si mostra.** Quattro
- * contro quattro è il minimo sotto cui due mediane sono due aneddoti; finché non
- * ci si arriva restano i punti osservati col loro numero accanto (§3.1).
- *
- * Con un numero dispari di lotti **il lotto di mezzo si scarta**, così le due
- * metà hanno la stessa numerosità: due mediane calcolate su 5 e su 4 punti
- * sarebbero confrontabili solo per finta.
- */
-export function scatto(lotti: LottoInformativo[]): Scatto | null {
-  const meta = Math.floor(lotti.length / 2);
-  if (meta < MIN_LOTTI_PER_PARTE) return null;
-  const rapporti = lotti.map((l) => l.rapporto);
-  return {
-    prima: mediana(rapporti.slice(0, meta)),
-    adesso: mediana(rapporti.slice(-meta)),
-  };
-}
-
-// ─── §3.2 — il saldo dei ruoli chiusi ────────────────────────────────────────
-
-/**
- * Quali ruoli sono finiti: quelli **prima** di `currentRole` nell'ordine, e
- * tutti se l'asta è finita.
- */
-function ruoliChiusi(snapshot: Snapshot): Role[] {
-  const ordine = snapshot.auction.roleOrder;
-  const corrente = snapshot.auction.currentRole;
-  if (corrente === null) {
-    // Nessun ruolo in corso: o l'asta è finita, o non è ancora partita. Nel
-    // secondo caso non c'è niente di speso e i saldi escono a zero da soli.
-    return snapshot.auction.status === "COMPLETED" ? [...ordine] : [];
-  }
-  const indice = ordine.indexOf(corrente);
-  return indice <= 0 ? [] : ordine.slice(0, indice);
+  const pagato = lotti.reduce((somma, l) => somma + l.price, 0);
+  const atteso = lotti.reduce((somma, l) => somma + l.atteso, 0);
+  // `atteso` non può essere zero: `lottiInformativi` tiene solo i lotti sopra la
+  // soglia in crediti, e la soglia è cinque.
+  return { n: lotti.length, pagato, atteso, rapporto: pagato / atteso };
 }
 
 /**
- * Il residuo che ogni ruolo chiuso ha lasciato sul tavolo.
+ * La temperatura di ogni ruolo e quella di tutta l'asta.
  *
- * È il ponte fra i due orologi di §3 — la temperatura si azzera a ogni ruolo, il
- * vincolo si accumula — e **funziona perché il budget è chiuso**: se la difesa
- * assorbe il 14% della spesa contro un piano del 20%, quei crediti non sono
- * spariti, sono in tasca a qualcuno e usciranno altrove. Non è una previsione, è
- * un'identità contabile.
+ * ⚠ **Il totale è la somma degli stessi lotti, e questo è un invariante che la
+ * mediana non poteva avere** (M23): con due mediane, «il totale» e «la media dei
+ * ruoli» sarebbero stati due numeri diversi senza che niente lo dicesse, e
+ * starebbero nella stessa tabella a contraddirsi. Qui `totale.pagato` è per
+ * costruzione la somma dei `pagato` di ogni ruolo — c'è un test che lo misura,
+ * perché è la ragione per cui il totale può stare in fondo alla stessa colonna.
  *
- * ⚠ **Solo per i ruoli finiti, e l'assenza è la difesa** (§3.2). A metà ruolo
- * `speso(R)` è un parziale, e confrontarlo con l'intero `piano(R)` direbbe
- * sempre «avanza tantissimo». È un errore che si scrive da solo riusando la
- * formula senza guardare quale ruolo si sta guardando, quindi il ruolo in corso
- * non compare **affatto** invece di comparire con un numero che sembra vero.
- *
- * ⚠ **Nello speso entrano anche le assegnazioni manuali**, al contrario di
- * `lottiInformativi`, e la differenza non è una svista: questo è **contabilità**
- * — quei crediti sono usciti dal tavolo davvero — mentre là si misurava un
- * prezzo di mercato, che un `manualAssign` non è.
+ * ⚠ **Un ruolo non ancora iniziato è `null`, non uno zero.** È la distinzione
+ * che la tabella scrive `N/A`: uno `0%` vorrebbe dire «si paga esattamente il
+ * PMA», che è un'affermazione, mentre qui non è ancora stato chiuso niente.
  */
-export function saldoRuoliChiusi(
+export function temperaturaPerRuolo(
   snapshot: Snapshot,
   pool: PoolPlayer[],
   budget: number,
-): Saldo[] {
-  const piano = pianoPerRuolo(pool);
-  const budgetTavolo = budget * snapshot.members.length;
-  const rose = tutteLeRose(snapshot);
-
-  return ruoliChiusi(snapshot).map((role) => {
-    const speso = rose
-      .filter((entry) => entry.role === role)
-      .reduce((somma, entry) => somma + entry.price, 0);
-    const pianoRuolo = Math.round(piano[role] * budgetTavolo);
-    return { role, piano: pianoRuolo, speso, saldo: pianoRuolo - speso };
-  });
+): TemperaturePerRuolo {
+  const perRuolo = {} as Record<Role, Temperatura | null>;
+  const tutti: LottoInformativo[] = [];
+  for (const role of ROLES) {
+    const lotti = lottiInformativi(snapshot, pool, budget, role);
+    perRuolo[role] = temperatura(lotti);
+    tutti.push(...lotti);
+  }
+  return { perRuolo, totale: temperatura(tutti) };
 }
 
-// ─── §3.5 — i due avvisi ─────────────────────────────────────────────────────
+/**
+ * La temperatura degli ultimi `finestra` lotti, cioè **come si sta pagando
+ * adesso** invece che dall'inizio del ruolo.
+ *
+ * ⚠ **Prende in ingresso i lotti di un ruolo solo, e non è un caso**: subito
+ * dopo un cambio di ruolo, «gli ultimi otto lotti dell'asta» sarebbero ancora
+ * del reparto precedente, e il numero direbbe come si pagavano i portieri a chi
+ * sta offrendo per un difensore. Chi chiama passa
+ * `lottiInformativi(…, ruoloInCorso)`.
+ *
+ * ⚠ **Sotto `finestra` lotti restituisce `null`**, che a schermo è `N/A`: con
+ * sette lotti chiusi la finestra sarebbe il ruolo intero, cioè lo stesso numero
+ * mostrato due volte accanto a se stesso.
+ *
+ * ⚠ **La coda si prende per `lotSeq`**, e vale perché `lottiInformativi` ordina
+ * già: le rose arrivano un membro alla volta, quindi l'ordine naturale dell'array
+ * è per proprietario e non per tempo. Un `slice(-8)` su quell'ordine
+ * restituirebbe otto lotti qualsiasi.
+ */
+export function temperaturaRecente(
+  lotti: LottoInformativo[],
+  finestra: number = FINESTRA_RECENTE,
+): Temperatura | null {
+  if (lotti.length < finestra) return null;
+  return temperatura(lotti.slice(-finestra));
+}
 
 /**
- * Gli avvisi, che sono **soglie su fatti** e non un modello.
+ * Il PMA di un giocatore in crediti, **corretto per come il tavolo sta
+ * pagando**: la cifra che i badge sotto il campo dell'offerta mostrano (M23 §1).
  *
- * Due soli casi, e fuori da questi **nessun avviso**: i numeri bastano e non si
- * inventa un terzo stato per riempire lo spazio.
+ * ⚠ **In un posto solo, come `pct`.** Ne escono due badge — uno col rapporto del
+ * ruolo, uno con quello della finestra recente — e un giorno forse un terzo: se
+ * la moltiplicazione stesse nei componenti, il primo che arrotonda diversamente
+ * darebbe due cifre per lo stesso giocatore nella stessa schermata.
  *
- * - **SCATTO** — dentro il ruolo in corso, `|adesso − prima| ≥ 0,25`.
- * - **CAMBIO D'ARIA** — il ruolo in corso paga 0,25 sopra o sotto quello
- *   **immediatamente precedente** nell'ordine, con almeno
- *   {@link MIN_LOTTI_PER_PARTE} lotti informativi per parte.
- *
- * ⚠ **Il confronto è fra mediane**, che §3.5 non diceva e §3.1 vieta di
- * risolvere con una media: è la stessa statistica dello scatto, così i due
- * avvisi non possono contraddirsi guardando gli stessi lotti.
- *
- * ⚠ **«Il ruolo precedente» è quello immediatamente prima, letteralmente.** Se
- * ha meno di quattro lotti informativi non si risale al penultimo per trovarne
- * uno abbastanza popolato: un confronto con un ruolo di due giri fa
- * risponderebbe a una domanda che nessuno ha fatto, e lo farebbe senza dirlo.
+ * ⚠ **Il pavimento a un credito non è simmetria con `pmaCrediti`: è che zero non
+ * è un'offerta valida.** Su un giocatore da un credito atteso e un ruolo che paga
+ * il 40% del foglio la moltiplicazione dà `0,4`, che arrotonda a zero — e accanto
+ * al campo comparirebbe una cifra che il server rifiuta (regola 6: la UI non
+ * propone quello che il server non accetta).
  */
-export function avvisi(
-  snapshot: Snapshot,
-  pool: PoolPlayer[],
-  budget: number,
-): Avviso[] {
-  const role = snapshot.auction.currentRole;
-  if (role === null) return [];
-
-  const fuori: Avviso[] = [];
-  const lotti = lottiInformativi(snapshot, pool, budget, role);
-
-  const s = scatto(lotti);
-  if (s !== null && Math.abs(s.adesso - s.prima) >= SOGLIA_AVVISO) {
-    fuori.push({ tipo: "SCATTO", prima: s.prima, adesso: s.adesso });
-  }
-
-  const ordine = snapshot.auction.roleOrder;
-  const precedente = ordine[ordine.indexOf(role) - 1];
-  if (precedente !== undefined) {
-    const prima = lottiInformativi(snapshot, pool, budget, precedente);
-    const qui = temperatura(lotti);
-    const là = temperatura(prima);
-    if (
-      qui !== null &&
-      là !== null &&
-      lotti.length >= MIN_LOTTI_PER_PARTE &&
-      prima.length >= MIN_LOTTI_PER_PARTE &&
-      Math.abs(qui.mediana - là.mediana) >= SOGLIA_AVVISO
-    ) {
-      fuori.push({
-        tipo: "CAMBIO_ARIA",
-        role,
-        precedente,
-        da: là.mediana,
-        a: qui.mediana,
-      });
-    }
-  }
-
-  return fuori;
+export function pmaAsta(pma: number, budget: number, rapporto: number): number {
+  return Math.max(1, Math.round(pmaCrediti(pma, budget) * rapporto));
 }
 
 // ─── §4 — le alternative del lotto in corso ──────────────────────────────────
@@ -876,31 +821,5 @@ export function scartoStrutturale(
     budgetTavolo,
     valoreListone,
     copertura: valoreListone === 0 ? 1 : budgetTavolo / valoreListone,
-  };
-}
-
-export type AlMinimo = { alMinimo: number; totale: number };
-
-/**
- * Quanti lotti del ruolo sono andati **al prezzo minimo**.
- *
- * ⚠ **È il complemento del filtro di §3.4, e va mostrato accanto e non
- * nascosto**: i lotti che il termometro scarta non spariscono, diventano un
- * fatto loro. «Nove degli ultimi dodici sono andati al minimo» è a sua volta una
- * temperatura — dice che il tavolo non sta contendendo niente — e chi legge un
- * `−15%` su quattro lotti informativi ha diritto di sapere che gli altri dodici
- * sono andati a un credito.
- *
- * ⚠ **Conta tutti i lotti del ruolo, informativi e no.** È deliberato: la
- * domanda è «quanto si sta contendendo», e un lotto scartato dal termometro
- * conta esattamente quanto gli altri per rispondere.
- */
-export function lottiAlMinimo(snapshot: Snapshot, role: Role): AlMinimo {
-  const lotti = tutteLeRose(snapshot).filter(
-    (entry) => entry.role === role && entry.lotSeq !== null,
-  );
-  return {
-    alMinimo: lotti.filter((entry) => entry.price === 1).length,
-    totale: lotti.length,
   };
 }

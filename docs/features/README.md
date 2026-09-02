@@ -20,6 +20,32 @@ Nessuna.
 
 ---
 
+**[M23](23-temperatura-aggregata.md) è in produzione da `v1.23.0`** (2026-09-02).
+
+⚠ **Senza branch di feature**, per scelta dell'owner: commit diretti su `dev`, poi `merge --no-ff` su
+`main`. Il punto di rollback non è un merge commit di macro, è il **tag `v1.23.0`**.
+
+Nasce da una revisione di M22 in produzione — *«non sono molto sicuro del dato visualizzato»* — e
+cambia il numero: la temperatura passa dalla **mediana dei rapporti lotto per lotto** al **rapporto
+fra le somme** (`Σ pagato ÷ Σ atteso`), esiste per **tutti i ruoli più il totale** invece che per il
+solo ruolo in corso, e sotto il campo dell'offerta compaiono tre badge in crediti — `PMA`,
+`PMA Ruolo`, `PMA Last 8`. Via il prima/adesso, gli avvisi, il saldo dei ruoli chiusi e la riga di
+testo. **Non tocca schema né motore**: il rilascio è il merge e basta. 1044 test.
+
+⚠ **La differenza fra le due statistiche non è di raffinatezza, è di segno**: sullo stesso paio di
+lotti la mediana dice `+25%` e l'aggregato `−25%`. Il test che tiene quel caso è la giustificazione
+della macro.
+
+⚠ **Tolte tutte e 12 le ombre del nostro codice** (owner). Una delle dodici stava facendo un lavoro
+— diceva «questa riga è sollevata» durante il trascinamento dell'ordine dei ruoli — ed è diventata
+un bordo. I `ring-*` non si toccano: sono il focus da tastiera.
+
+⚠ **La lezione trasferibile è in §3.1**: nel tema dell'app `--muted`, `--secondary` e `--accent`
+valgono **tutti** `oklch(0.97)`. Un badge grigio dentro un riquadro grigio è invisibile, e nessun
+mock con token propri può accorgersene — il banco va montato col CSS compilato da `pnpm build`.
+
+---
+
 **M22 è in produzione da `v1.22.0`** (2026-08-30): la temperatura dell'asta rispetto ai PMA, **per
 ruolo e azzerata a ogni ruolo**, più le alternative ancora libere del lotto in corso. Baseline 971
 test, chiusa a **1057**.

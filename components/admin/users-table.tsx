@@ -206,7 +206,7 @@ export function UsersTable({
               if (!next) setNotice(null);
             }}
             className={cn(
-              "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-bottom-2 data-[swipe=end]:animate-out flex items-start gap-3 rounded-lg border p-3 shadow-lg outline-none",
+              "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-bottom-2 data-[swipe=end]:animate-out flex items-start gap-3 rounded-lg border p-3 outline-none",
               notice.toast.kind === "ok" && "border-emerald-600/40",
               notice.toast.kind === "partial" && "border-amber-500/50",
               notice.toast.kind === "error" && "border-destructive/50",

@@ -90,7 +90,7 @@ export function StatusCard({
 
   return (
     <section
-      className="bg-card space-y-2 rounded-xl border p-3 shadow-sm"
+      className="bg-card space-y-2 rounded-xl border p-3"
       aria-label="Stato dell'asta"
     >
       {/* ── Riga 1: la fase e lo stato ─────────────────────────────────── */}
